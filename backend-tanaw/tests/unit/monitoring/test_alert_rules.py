@@ -139,7 +139,7 @@ def test_enterprise_insight_marks_unusual_activity() -> None:
         gatewayStatus="Connected",
     )
 
-    insight = visitor_enterprise_insight(telemetry, [20, 21, 19, 20])
+    insight = visitor_enterprise_insight(telemetry, 45, [20, 21, 19, 20])
 
     assert insight.activityLevel == "Busier Than Usual"
     assert insight.typicalVisitors == 20

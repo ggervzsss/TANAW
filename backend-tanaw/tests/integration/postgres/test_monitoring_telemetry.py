@@ -16,8 +16,10 @@ from app.features.accounts.models import (
 )
 from app.features.maintenance.retention import _delete_telemetry_snapshots
 from app.features.monitoring.models import EnterpriseTelemetrySnapshot
+from app.features.monitoring.router import ingest_desktop_telemetry, list_map_enterprises
 from app.features.monitoring.schemas import DesktopTelemetryIngest
 from app.features.monitoring.telemetry import ingest_telemetry, list_latest_telemetry
+from app.features.monitoring.visitor_insights import get_visitor_insights
 from app.features.realtime.models import RealtimeOutbox
 from tests.support.postgres import PostgresRuntime, postgres_test_database_url
 
@@ -129,6 +131,74 @@ async def test_ingestion_latest_lookup_and_enterprise_scope(
             first_profile.enterprise_id: 9,
             second_profile.enterprise_id: 4,
         }
+
+
+@pytest.mark.asyncio
+async def test_open_space_telemetry_reaches_the_map_and_visitor_history(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    now = datetime.now(UTC)
+    captured_at = now.replace(minute=0, second=0, microsecond=0) - timedelta(minutes=10)
+    enterprise = _enterprise("open-space")
+    async with postgres_runtime.sessions() as db:
+        db.add(enterprise)
+        await db.flush()
+
+        await ingest_desktop_telemetry(
+            DesktopTelemetryIngest.model_validate(
+                {"capturedAt": captured_at - timedelta(days=7), "metrics": {"uniqueCount": 7}}
+            ),
+            enterprise,
+            db,
+        )
+        await db.commit()
+
+        for minute, occupancy, unique in [(0, 4, 11), (1, None, None), (2, 0, 9)]:
+            payload = DesktopTelemetryIngest.model_validate(
+                {
+                    "capturedAt": captured_at + timedelta(minutes=minute),
+                    "metrics": {"currentOccupancy": occupancy, "uniqueCount": unique},
+                    "session": {"running": True, "status": "running"},
+                    "monitoring": {
+                        "status": "running",
+                        "configuredCameraCount": 1,
+                        "activeCameraCount": 1,
+                        "healthyCameraCount": 1,
+                        "cameras": [
+                            {
+                                "cameraId": 1,
+                                "cameraName": "Plaza",
+                                "status": "running",
+                                "running": True,
+                            }
+                        ],
+                    },
+                }
+            )
+            snapshot = await ingest_desktop_telemetry(payload, enterprise, db)
+            assert snapshot.entries is None and snapshot.exits is None
+            await db.commit()
+
+        (map_entry,) = await list_map_enterprises(enterprise, db)
+        assert map_entry["totalLiveOccupancy"] == 0
+        assert map_entry["estimatedUniqueCount"] == 9
+        assert map_entry["monitoringStatus"] == "Fully Monitoring"
+        assert map_entry["cameraMonitoring"]["healthyCameraCount"] == 1
+        assert (
+            await db.scalar(
+                select(RealtimeOutbox.sequence).where(
+                    RealtimeOutbox.event_type == "telemetry.updated",
+                    RealtimeOutbox.coalesce_key == f"telemetry:{enterprise.id}",
+                )
+            )
+            is not None
+        )
+
+        insights = await get_visitor_insights(db, "7d", enterprise_id=map_entry["id"], now=now)
+        (point,) = insights.series
+        assert point.averageVisitors == 2
+        assert point.peakVisitors == 4
+        assert point.estimatedUniqueCount == 9
 
 
 @pytest.mark.asyncio

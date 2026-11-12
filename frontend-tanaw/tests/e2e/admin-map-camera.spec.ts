@@ -65,8 +65,8 @@ const visitorInsights = {
   },
   busiestPeriodLabel: "Sun, Aug 9",
   series: [
-    { startAt: "2026-08-09T00:00:00+08:00", label: "Sun, Aug 9", averageVisitors: 4, peakVisitors: 6 },
-    { startAt: "2026-08-10T00:00:00+08:00", label: "Mon, Aug 10", averageVisitors: 3, peakVisitors: 5 },
+    { startAt: "2026-08-09T00:00:00+08:00", label: "Sun, Aug 9", averageVisitors: 4, peakVisitors: 6, estimatedUniqueCount: 24 },
+    { startAt: "2026-08-10T00:00:00+08:00", label: "Mon, Aug 10", averageVisitors: 3, peakVisitors: 5, estimatedUniqueCount: 19 },
   ],
   unusuallyBusy: [],
   lastUpdatedAt: "2026-08-13T11:30:00+08:00",
@@ -469,6 +469,10 @@ test("presents Visitor Insights as an accessible analytical workspace and highli
   await expect(insights.getByText("Busiest Right Now", { exact: true })).toBeVisible();
   await expect(insights.getByText("Busiest Period", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("visitor-insights-light.png"), fullPage: true });
+  const historyMetric = insights.getByLabel("History metric");
+  await historyMetric.selectOption({ label: "Estimated Unique" });
+  await expect(insights.getByText("Last daily estimate for each establishment")).toBeVisible();
+  await expect(insights.locator(".recharts-bar-rectangle")).toHaveCount(2);
 
   const selectedRange = insights.getByRole("tab", { name: "7 Days" });
   await expect(selectedRange).toHaveAttribute("aria-selected", "true");

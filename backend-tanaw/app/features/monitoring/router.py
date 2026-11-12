@@ -283,8 +283,10 @@ async def list_map_enterprises(
                 "fullAddress": profile.address or "Address not provided",
                 "lat": profile.latitude,
                 "lng": profile.longitude,
-                "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
-                "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
+                "totalLiveOccupancy": telemetry.currentOccupancy
+                if telemetry and telemetry.gatewayStatus == "Connected"
+                else None,
+                "estimatedUniqueCount": telemetry.uniqueCount if telemetry else None,
                 "monitoringStatus": monitoring_status_from_telemetry(telemetry),
                 "occupancyStatus": occupancy_status_from_telemetry(
                     telemetry, profile.building_capacity
@@ -379,6 +381,7 @@ def occupancy_status_from_telemetry(
         or telemetry.gatewayStatus != "Connected"
         or telemetry.error
         or telemetry.status == "error"
+        or telemetry.currentOccupancy is None
         or building_capacity <= 0
     ):
         return "No Data"

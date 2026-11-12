@@ -53,9 +53,10 @@ the app is open, signed in, and connected to the central API. Temporary internet
 interruptions do not discard saved local records. Sign-in and cloud features
 require access to the central service.
 
-Open-space analytics currently stay on the device. They are excluded from
-official entrance/exit reports and central monitoring updates. A desktop with
-only open-space cameras may therefore appear delayed or offline in LGU views.
+Both camera modes contribute to the same establishment occupancy and estimated
+visitor totals. These totals appear on the desktop and in LGU monitoring,
+visitor history, and submitted reports. Open Space cameras measure presence.
+Only Entrance / Exit cameras at a configured boundary measure arrivals and departures.
 
 ### Privacy and local storage
 
@@ -89,6 +90,17 @@ Central records and local device records have separate lifecycles.
 - **ml-service/scripts:** model setup and camera evaluation tools.
 - **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
 - **ml-service/tests:** Python camera-processing and local-storage tests.
+
+## Local storage and camera service
+
+On Windows the installed app stores its database, camera credentials, and sign-in
+state under `%APPDATA%\TANAW Enterprise Desktop` and starts its camera service on
+`127.0.0.1:8766`. Development uses `%APPDATA%\desktop-tanaw` and port `8765`.
+
+A Windows uninstall removes the installed app's profile and cached installer
+payload for the current Windows account. Unsynced reports are lost. Installing
+an update over an existing installation keeps the profile. The development
+profile and records already synced to the server are separate.
 
 ## Building installers
 

@@ -8,11 +8,11 @@ MAX_TELEMETRY_SERIALIZED_BYTES = 256 * 1024
 
 
 class DesktopMetricsSummary(BaseModel):
-    entries: int = Field(default=0, ge=0)
-    exits: int = Field(default=0, ge=0)
-    peakOccupancy: int = Field(default=0, ge=0)
-    currentOccupancy: int = Field(default=0, ge=0)
-    uniqueCount: int = Field(default=0, ge=0)
+    entries: int | None = Field(default=None, ge=0)
+    exits: int | None = Field(default=None, ge=0)
+    peakOccupancy: int | None = Field(default=None, ge=0)
+    currentOccupancy: int | None = Field(default=None, ge=0)
+    uniqueCount: int | None = Field(default=None, ge=0)
     confirmedUniqueCount: int = Field(default=0, ge=0)
     degradedUniqueCount: int = Field(default=0, ge=0)
     totalEvents: int = Field(default=0, ge=0)
@@ -102,11 +102,11 @@ class TelemetrySnapshotSummary(BaseModel):
     cameraName: str | None = None
     capturedAt: datetime
     receivedAt: datetime
-    entries: int
-    exits: int
-    currentOccupancy: int
-    peakOccupancy: int
-    uniqueCount: int
+    entries: int | None
+    exits: int | None
+    currentOccupancy: int | None
+    peakOccupancy: int | None
+    uniqueCount: int | None
     confirmedUniqueCount: int
     degradedUniqueCount: int
     totalEvents: int
@@ -128,8 +128,8 @@ class OperationalSummary(BaseModel):
     delayedGateways: int
     offlineGateways: int
     totalCurrentOccupancy: int
-    totalEntries: int
-    totalExits: int
+    totalEntries: int | None
+    totalExits: int | None
     totalUniqueCount: int
     activeReports: int
     pendingReports: int
@@ -144,8 +144,9 @@ VisitorActivityLevel = Literal["Usual", "Busier Than Usual", "No Recent Baseline
 class VisitorInsightPoint(BaseModel):
     startAt: datetime
     label: str
-    averageVisitors: int = Field(ge=0)
-    peakVisitors: int = Field(ge=0)
+    averageVisitors: int | None = Field(ge=0)
+    peakVisitors: int | None = Field(ge=0)
+    estimatedUniqueCount: int | None = Field(default=None, ge=0)
 
 
 class VisitorInsightEnterprise(BaseModel):
@@ -163,7 +164,7 @@ class VisitorInsightsSummary(BaseModel):
     scopeType: VisitorInsightScope
     scopeId: str | None = None
     scopeName: str
-    currentVisitors: int = Field(ge=0)
+    currentVisitors: int | None = Field(ge=0)
     typicalVisitors: int | None = Field(default=None, ge=0)
     differencePercent: int | None = None
     comparisonMessage: str

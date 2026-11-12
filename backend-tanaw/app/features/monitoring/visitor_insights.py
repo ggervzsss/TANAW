@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from statistics import fmean
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by, array_agg
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.date_time import PHILIPPINE_TIME_ZONE, ensure_aware
@@ -31,8 +32,9 @@ class HourlyVisitorObservation:
     enterprise_name: str
     barangay: str
     start_at: datetime
-    average_visitors: float
-    peak_visitors: int
+    average_visitors: float | None
+    peak_visitors: int | None
+    estimated_unique_count: int | None = None
 
 
 async def get_visitor_insights(
@@ -77,7 +79,11 @@ async def get_visitor_insights(
 
     baselines = visitor_baselines_by_enterprise(observations, local_now)
     enterprise_insights = [
-        visitor_enterprise_insight(item, baselines.get(item.enterpriseId, [])) for item in latest
+        visitor_enterprise_insight(
+            item, item.currentOccupancy, baselines.get(item.enterpriseId, [])
+        )
+        for item in latest
+        if item.gatewayStatus == "Connected" and item.currentOccupancy is not None
     ]
     enterprise_insights.sort(key=lambda item: item.currentVisitors, reverse=True)
     current_visitors = sum(item.currentVisitors for item in enterprise_insights)
@@ -94,14 +100,18 @@ async def get_visitor_insights(
     unusually_busy = [
         item for item in enterprise_insights if item.activityLevel == "Busier Than Usual"
     ]
-    busiest_period = max(series, key=lambda item: item.averageVisitors, default=None)
+    busiest_period = max(
+        (item for item in series if item.averageVisitors is not None),
+        key=lambda item: item.averageVisitors or 0,
+        default=None,
+    )
 
     return VisitorInsightsSummary(
         range=range_value,
         scopeType=scope_type,  # type: ignore[arg-type]
         scopeId=scope_id,
         scopeName=scope_name,
-        currentVisitors=current_visitors,
+        currentVisitors=current_visitors if enterprise_insights else None,
         typicalVisitors=typical_visitors,
         differencePercent=difference_percent,
         comparisonMessage=visitor_comparison_message(difference_percent),
@@ -121,6 +131,15 @@ async def load_hourly_visitor_observations(
         str(PHILIPPINE_TIME_ZONE), EnterpriseTelemetrySnapshot.captured_at
     )
     hour_bucket = func.date_trunc("hour", local_timestamp).label("hour_bucket")
+    snapshots = EnterpriseTelemetrySnapshot
+    latest_unique = array_agg(
+        aggregate_order_by(
+            snapshots.unique_count,
+            snapshots.captured_at.desc(),
+            snapshots.received_at.desc(),
+            snapshots.id.desc(),
+        )
+    ).filter(snapshots.unique_count.is_not(None))[1]
     statement = (
         select(
             EnterpriseTelemetrySnapshot.enterprise_profile_id,
@@ -130,6 +149,7 @@ async def load_hourly_visitor_observations(
             hour_bucket,
             func.avg(EnterpriseTelemetrySnapshot.current_occupancy),
             func.max(EnterpriseTelemetrySnapshot.current_occupancy),
+            latest_unique,
         )
         .join(
             EnterpriseProfile,
@@ -137,7 +157,8 @@ async def load_hourly_visitor_observations(
         )
         .where(
             EnterpriseTelemetrySnapshot.captured_at
-            >= current_time - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS)
+            >= current_time - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS),
+            or_(snapshots.current_occupancy.is_not(None), snapshots.unique_count.is_not(None)),
         )
         .group_by(
             EnterpriseTelemetrySnapshot.enterprise_profile_id,
@@ -156,8 +177,9 @@ async def load_hourly_visitor_observations(
             enterprise_name=row[2],
             barangay=row[3] or "Unassigned",
             start_at=_philippine_hour(row[4]),
-            average_visitors=max(0.0, float(row[5] or 0)),
-            peak_visitors=max(0, int(row[6] or 0)),
+            average_visitors=float(row[5]) if row[5] is not None else None,
+            peak_visitors=row[6],
+            estimated_unique_count=row[7],
         )
         for row in rows
     ]
@@ -170,6 +192,8 @@ def visitor_baselines_by_enterprise(
     values: dict[str, list[float]] = defaultdict(list)
     cutoff = local_now - timedelta(days=1)
     for observation in observations:
+        if observation.average_visitors is None:
+            continue
         if observation.start_at >= cutoff:
             continue
         if observation.start_at.weekday() != local_now.weekday():
@@ -182,16 +206,17 @@ def visitor_baselines_by_enterprise(
 
 def visitor_enterprise_insight(
     telemetry: TelemetrySnapshotSummary,
+    current_occupancy: int,
     baseline: Sequence[int | float],
 ) -> VisitorInsightEnterprise:
-    condition = visitor_activity_condition(telemetry.currentOccupancy, baseline)
+    condition = visitor_activity_condition(current_occupancy, baseline)
     typical_visitors = condition.typical_occupancy if condition else None
-    difference_percent = visitor_difference_percent(telemetry.currentOccupancy, typical_visitors)
+    difference_percent = visitor_difference_percent(current_occupancy, typical_visitors)
     return VisitorInsightEnterprise(
         enterpriseId=telemetry.enterpriseId,
         enterpriseName=telemetry.enterpriseName,
         barangay=telemetry.barangay or "Unassigned",
-        currentVisitors=telemetry.currentOccupancy,
+        currentVisitors=current_occupancy,
         typicalVisitors=typical_visitors,
         differencePercent=difference_percent,
         activityLevel=(
@@ -219,8 +244,9 @@ def visitor_insight_series(
             VisitorInsightPoint(
                 startAt=bucket,
                 label=bucket.strftime("%I %p").lstrip("0"),
-                averageVisitors=round(sum(item.average_visitors for item in items)),
-                peakVisitors=sum(item.peak_visitors for item in items),
+                averageVisitors=rounded_sum([item.average_visitors for item in items]),
+                peakVisitors=rounded_sum([item.peak_visitors for item in items]),
+                estimatedUniqueCount=rounded_sum([item.estimated_unique_count for item in items]),
             )
             for bucket, items in sorted(grouped.items())
         ]
@@ -235,23 +261,40 @@ def visitor_insight_series(
         if day >= start_at:
             daily_enterprise[(day, observation.enterprise_id)].append(observation)
 
-    daily_totals: dict[datetime, tuple[float, int]] = defaultdict(lambda: (0.0, 0))
+    daily_totals: dict[datetime, list[tuple[float | None, int | None, int | None]]] = defaultdict(
+        list
+    )
     for (day, _enterprise_id), items in daily_enterprise.items():
-        total_average, total_peak = daily_totals[day]
-        daily_totals[day] = (
-            total_average + fmean(item.average_visitors for item in items),
-            total_peak + max(item.peak_visitors for item in items),
+        averages = [item.average_visitors for item in items if item.average_visitors is not None]
+        peaks = [item.peak_visitors for item in items if item.peak_visitors is not None]
+        latest_unique = max(
+            (item for item in items if item.estimated_unique_count is not None),
+            key=lambda item: item.start_at,
+            default=None,
+        )
+        daily_totals[day].append(
+            (
+                fmean(averages) if averages else None,
+                max(peaks, default=None),
+                latest_unique.estimated_unique_count if latest_unique else None,
+            )
         )
 
     return [
         VisitorInsightPoint(
             startAt=day,
             label=day.strftime("%a, %b %d").replace(" 0", " "),
-            averageVisitors=round(values[0]),
-            peakVisitors=values[1],
+            averageVisitors=rounded_sum([average for average, _, _ in values]),
+            peakVisitors=rounded_sum([peak for _, peak, _ in values]),
+            estimatedUniqueCount=rounded_sum([unique for _, _, unique in values]),
         )
         for day, values in sorted(daily_totals.items())
     ]
+
+
+def rounded_sum(values: Sequence[int | float | None]) -> int | None:
+    measured = [value for value in values if value is not None]
+    return round(sum(measured)) if measured else None
 
 
 def visitor_difference_percent(current: int, typical: int | None) -> int | None:

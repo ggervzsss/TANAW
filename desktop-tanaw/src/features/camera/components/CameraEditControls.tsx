@@ -93,7 +93,7 @@ export function CameraEditControls({ cameras = [], cameraIpError, editForm, hasE
             />
           </CompactField>
           <CameraConnectionFields value={editForm} hostError={cameraIpError} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
-          <CameraCoverageControls cameraId={editForm.id} cameras={cameras} value={editForm.coverage} onChange={(coverage) => onEditFormChange({ ...editForm, coverage })} />
+          <CameraCoverageControls cameraId={editForm.id} analysisMode={editForm.analysisMode} cameras={cameras} value={editForm.coverage} onChange={(coverage) => onEditFormChange({ ...editForm, coverage })} />
           <details className="rounded-xl border border-gray-200 bg-gray-50 p-2.5">
             <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
             <div className="mt-2 space-y-2">

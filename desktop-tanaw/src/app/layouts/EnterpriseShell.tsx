@@ -11,7 +11,6 @@ import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
-import { usePersistentIssue } from "../../features/toasts/services/persistent-issue";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
@@ -73,6 +72,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
+  const [mlContextAttempt, setMlContextAttempt] = useState(0);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
   const initials = getInitials(displayName);
@@ -83,12 +83,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   );
 
   useDesktopCloudSync(mlContextReady);
-  usePersistentIssue({
-    id: "ml-enterprise-context",
-    message: mlContextError,
-    title: "Camera service unavailable",
-    tone: "error",
-  });
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -192,7 +186,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     return () => {
       disposed = true;
     };
-  }, [user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
+  }, [mlContextAttempt, user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
 
   useEffect(() => {
     if (!mlContextReady) return;
@@ -316,6 +310,23 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
           className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
+            {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
+              <section className="mx-auto mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900" role={mlContextError ? "alert" : "status"}>
+                <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
+                {mlContextError && (
+                  <>
+                    <p className="mt-2 break-words text-sm">{mlContextError}</p>
+                    <button
+                      type="button"
+                      className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                      onClick={() => setMlContextAttempt((attempt) => attempt + 1)}
+                    >
+                      Try again
+                    </button>
+                  </>
+                )}
+              </section>
+            )}
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
               {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
               {activeView === "cameras" && mlContextReady && (

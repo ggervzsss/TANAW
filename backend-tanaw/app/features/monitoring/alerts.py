@@ -222,6 +222,7 @@ async def load_matching_visitor_baseline(
         select(func.avg(EnterpriseTelemetrySnapshot.current_occupancy))
         .where(
             EnterpriseTelemetrySnapshot.enterprise_profile_id == enterprise_profile_id,
+            EnterpriseTelemetrySnapshot.current_occupancy.is_not(None),
             EnterpriseTelemetrySnapshot.captured_at
             >= reference - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS),
             EnterpriseTelemetrySnapshot.captured_at < reference - timedelta(days=1),
@@ -241,6 +242,9 @@ async def evaluate_telemetry_alerts(
     *,
     baseline_occupancies: Sequence[int | float] | None = None,
 ) -> list[tuple[str, OperationalAlertSummary]]:
+    occupancy = payload.metrics.currentOccupancy
+    if occupancy is None:
+        return []
     source_id = f"visitor-activity:{account.id}"
     existing = await db.scalar(
         select(OperationalAlert).where(
@@ -255,7 +259,7 @@ async def evaluate_telemetry_alerts(
         if baseline_occupancies is not None
         else await load_matching_visitor_baseline(db, account.id, reference_time)
     )
-    condition = visitor_activity_condition(payload.metrics.currentOccupancy, baseline)
+    condition = visitor_activity_condition(occupancy, baseline)
 
     if condition is not None and condition.breached:
         if existing is not None:

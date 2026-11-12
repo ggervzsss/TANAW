@@ -11,10 +11,13 @@ vi.mock("../../../electron/ml-service-diagnostics", () => ({
 }));
 
 describe("ML service startup recovery", () => {
+  const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers();
     vi.stubEnv("APP_ROOT", "test-app");
+    vi.stubEnv("TANAW_ML_SERVICE_PORT", undefined);
+    Object.defineProperty(process, "resourcesPath", { configurable: true, value: "test-resources" });
     mocks.spawn.mockReset();
     mocks.write.mockReset();
   });
@@ -22,6 +25,8 @@ describe("ML service startup recovery", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    if (originalResourcesPath) Object.defineProperty(process, "resourcesPath", originalResourcesPath);
+    else Reflect.deleteProperty(process, "resourcesPath");
   });
 
   async function setup(readyAt: number) {
@@ -30,11 +35,11 @@ describe("ML service startup recovery", () => {
     mocks.spawn.mockReturnValue(child);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn(async (url: string | URL) => {
         if (Date.now() - start < readyAt) throw new Error("not listening yet");
         return new Response(
           JSON.stringify(
-            url.endsWith("/health")
+            String(url).endsWith("/health")
               ? { api_contract_version: 2, tripwire_hot_update: true, max_configured_cameras: 6, max_concurrent_cameras: 2 }
               : { cameras: [], pending_camera_ids: [], enterprise_occupancy: 0 },
           ),
@@ -52,7 +57,26 @@ describe("ML service startup recovery", () => {
     await starting;
     expect(await service.getMlServiceStatusPayload()).toMatchObject({ running: true, error: null });
     expect(mocks.write).toHaveBeenCalledWith("ML service is ready.");
-    expect(mocks.spawn).toHaveBeenCalledWith(expect.any(String), [], expect.objectContaining({ env: expect.objectContaining({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }) }));
+    expect(mocks.spawn).toHaveBeenCalledWith(expect.stringContaining("test-resources"), [], expect.objectContaining({
+      env: expect.objectContaining({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8", TANAW_ML_SERVICE_PORT: "8766" }),
+    }));
+  });
+
+  it("waits for the packaged runtime before binding an enterprise on early sign-in", async () => {
+    const { service } = await setup(4000);
+    const starting = service.startMlService();
+    const binding = service.proxyMlServiceJsonRequest({
+      url: "http://127.0.0.1:8766/context/enterprise",
+      method: "POST",
+      body: '{"enterprise_id":"test"}',
+    });
+    const bindingRequests = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/context/enterprise"));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(bindingRequests()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(4000);
+    await starting;
+    expect(await binding).toMatchObject({ ok: true });
+    expect(bindingRequests()).toHaveLength(1);
   });
 
   it("recovers automatically when the service becomes healthy after the startup deadline", async () => {

@@ -46,11 +46,11 @@ class EnterpriseTelemetrySnapshot(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True, nullable=False
     )
-    entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    exits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    current_occupancy: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    peak_occupancy: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    entries: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    exits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_occupancy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    peak_occupancy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unique_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     confirmed_unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     degraded_unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

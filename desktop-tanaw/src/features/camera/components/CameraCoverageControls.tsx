@@ -3,6 +3,7 @@ import { EMPTY_CAMERA_COVERAGE } from "../utils/camera-coverage";
 
 type Props = {
   cameraId?: number;
+  analysisMode?: Camera["analysisMode"];
   cameras: Camera[];
   value?: CameraCoverage;
   onChange: (value: CameraCoverage) => void;
@@ -11,8 +12,9 @@ type Props = {
 const fieldClass =
   "mt-1 w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-800 focus:border-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 
-export function CameraCoverageControls({ cameraId, cameras, value, onChange }: Props) {
+export function CameraCoverageControls({ cameraId, analysisMode, cameras, value, onChange }: Props) {
   const coverage = value ?? EMPTY_CAMERA_COVERAGE;
+  const measuresMovement = analysisMode !== "open_space" && coverage.role === "external_boundary";
   const others = cameras.filter((camera) => camera.id !== cameraId);
   const linked = ["contained", "overlapping", "alternative"].includes(coverage.relationship);
   const related = others.find((camera) => camera.id === coverage.related_camera_id);
@@ -24,7 +26,7 @@ export function CameraCoverageControls({ cameraId, cameras, value, onChange }: P
         What does this camera watch?
         <select className={fieldClass} value={coverage.role} onChange={(event) => onChange({ ...coverage, role: event.target.value as CameraCoverage["role"] })}>
           <option value="unconfigured">Choose a counting role</option>
-          <option value="external_boundary">People entering or leaving the establishment</option>
+          <option value="external_boundary">{analysisMode === "open_space" ? "An area at the establishment boundary" : "People entering or leaving the establishment"}</option>
           <option value="internal_observation">People in an area inside the establishment</option>
         </select>
       </label>
@@ -69,9 +71,9 @@ export function CameraCoverageControls({ cameraId, cameras, value, onChange }: P
       <p aria-live="polite" className="border-l-2 border-emerald-700 pl-3 leading-relaxed text-slate-600 dark:border-emerald-400 dark:text-slate-300">
         {coverage.role === "unconfigured" || coverage.relationship === "unknown"
           ? "Choose a role and coverage relationship to complete establishment counting setup."
-          : coverage.role === "internal_observation"
-            ? "Visitors observed here contribute to the daily visitor estimate. Moving within this area does not add an establishment arrival or departure."
-            : "Observed arrivals and departures contribute to establishment movement. A recognized visitor contributes once to the daily visitor estimate."}
+          : measuresMovement
+            ? "Observed arrivals and departures contribute to establishment movement. A recognized visitor contributes once to the daily visitor estimate."
+            : "Visitors observed here contribute to occupancy and the daily visitor estimate. Moving within this area does not add an establishment arrival or departure."}
         {related && coverage.relationship === "contained" && ` Occupancy is already included in ${related.name}'s measured area.`}
         {related && coverage.relationship === "overlapping" && ` Occupancy reconciles shared people with ${related.name}; unresolved overlap is shown as partial.`}
         {related && coverage.relationship === "alternative" && ` Occupancy uses ${related.name} while available, then this backup view. The two measurements are not added together.`}

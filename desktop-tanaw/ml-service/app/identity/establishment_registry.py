@@ -234,8 +234,10 @@ class EstablishmentRegistry:
                 if reclassified:
                     self.repository.reconcile_occupancy_day(business_date, observed_at)
                 self.repository.rebuild_day(business_date, observed_at)
-                if coverage.role != "unconfigured" and (
-                    kind in {"entry", "exit"} or arrival_observed or departure_observed
+                if (
+                    analysis_mode == "entrance_exit"
+                    and coverage.role != "unconfigured"
+                    and (kind in {"entry", "exit"} or arrival_observed or departure_observed)
                 ):
                     self.repository.checkpoint_boundary_change(camera_id, observed_at)
             return decision
