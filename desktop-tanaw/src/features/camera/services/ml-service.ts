@@ -1,4 +1,6 @@
 import type { AreaMetrics } from "../../open-space/types";
+import type { EstablishmentLive, EstablishmentSummary } from "./establishment.types";
+import type { EstablishmentReportPeriod } from "./establishment.types";
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
@@ -23,6 +25,7 @@ import {
 } from "./ml-service.types";
 
 export * from "./ml-service.types";
+export type { EstablishmentLive, EstablishmentSummary, DailyEstablishmentMetrics } from "./establishment.types";
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
 
@@ -95,6 +98,19 @@ export async function getMlCameraStates(baseUrl: string): Promise<MlCameraStates
   return requestJson<MlCameraStates>(`${baseUrl}/cameras/runtime`, { method: "GET" }, 2500);
 }
 
+export async function getEstablishmentSummary(baseUrl: string, range: { start: string; end: string } | { period: string }): Promise<EstablishmentSummary> {
+  const query = new URLSearchParams(range);
+  return requestJson<EstablishmentSummary>(`${baseUrl}/metrics/establishment/summary?${query}`, { method: "GET" }, 10000);
+}
+
+export async function getEstablishmentLive(baseUrl: string): Promise<EstablishmentLive> {
+  return requestJson<EstablishmentLive>(`${baseUrl}/metrics/establishment/live`, { method: "GET" }, 5000);
+}
+
+export async function getEstablishmentReportPeriods(baseUrl: string): Promise<EstablishmentReportPeriod[]> {
+  return requestJson<EstablishmentReportPeriod[]>(`${baseUrl}/metrics/establishment/periods`, { method: "GET" }, 10000);
+}
+
 export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: string, enterpriseName?: string | null): Promise<MlEnterpriseContext> {
   return requestJson<MlEnterpriseContext>(
     `${baseUrl}/context/enterprise`,
@@ -151,7 +167,9 @@ export async function getLocalMetricsHistory(baseUrl: string, options: { include
 export async function recordLocalReportSubmission(
   baseUrl: string,
   payload: {
-    metrics: { entries: number; exits: number; peakOccupancy: number; uniqueCount: number };
+    metrics: { entries: number | null; exits: number | null; peakOccupancy: number | null; uniqueCount: number };
+    requestId?: string;
+    expectedSnapshotVersion?: string;
     notes: string;
     period: string;
     reportId: string;
@@ -163,6 +181,8 @@ export async function recordLocalReportSubmission(
     {
       method: "POST",
       body: JSON.stringify({
+        request_id: payload.requestId,
+        expected_snapshot_version: payload.expectedSnapshotVersion,
         metrics: {
           entries: payload.metrics.entries,
           exits: payload.metrics.exits,
@@ -208,11 +228,7 @@ export async function deleteLocalReportDraft(baseUrl: string, draftKey: string):
 }
 
 export async function markLocalReportSynced(baseUrl: string, reportId: string, submissionId: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(
-    `${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/synced`,
-    { method: "POST" },
-    2500,
-  );
+  return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/synced`, { method: "POST" }, 2500);
 }
 
 export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {
@@ -275,7 +291,8 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
   const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
     analysis_mode: camera.analysisMode ?? "entrance_exit",
-    open_space: camera.analysisMode === "open_space" ? camera.openSpace ?? null : null,
+    coverage: camera.coverage,
+    open_space: camera.analysisMode === "open_space" ? (camera.openSpace ?? null) : null,
     preview_only: camera.analysisMode === "open_space" && !camera.openSpace,
     camera_name: camera.name,
     camera_zone: camera.zone,
@@ -415,10 +432,7 @@ async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number)
         url,
       });
       if (!response.ok) {
-        throw await getRequestError(
-          new Response(response.body, { status: response.status, statusText: response.statusText }),
-          url,
-        );
+        throw await getRequestError(new Response(response.body, { status: response.status, statusText: response.statusText }), url);
       }
       return JSON.parse(response.body) as T;
     } catch (error) {
@@ -520,10 +534,10 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
   return supported.includes(value as MlServiceErrorCode) ? (value as MlServiceErrorCode) : fallback;
 }
 
-export function getOpenSpaceMetrics(baseUrl:string,cameraId:number,days:number,revisionId="",offset=0) {
-  const end=new Date();
-  const start=new Date(end.getTime()-days*86400000);
-  const query=new URLSearchParams({camera_id:String(cameraId),start:start.toISOString(),end:end.toISOString(),limit:"20",offset:String(offset)});
-  if(revisionId) query.set("revision_id",revisionId);
+export function getOpenSpaceMetrics(baseUrl: string, cameraId: number, days: number, revisionId = "", offset = 0) {
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86400000);
+  const query = new URLSearchParams({ camera_id: String(cameraId), start: start.toISOString(), end: end.toISOString(), limit: "20", offset: String(offset) });
+  if (revisionId) query.set("revision_id", revisionId);
   return requestJson<AreaMetrics>(`${baseUrl}/metrics/open-space/summary?${query}`, {}, 10000);
 }

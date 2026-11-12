@@ -488,7 +488,7 @@ test("keeps Staff Reporting Period as a real control beside unified metrics", as
 
   await page.goto("/staff/analytics");
   const analyticsHeader = page.locator("[data-unified-metrics-header]");
-  await expectUnifiedHeader(analyticsHeader, ["Total Aggregated Entries", "Est. Unique People", "Reports Compliance"], 3);
+  await expectUnifiedHeader(analyticsHeader, ["Total Aggregated Entries", "Estimated Daily Visitors", "Reports Compliance"], 3);
   const reportingPeriod = page.getByRole("combobox", { name: "Reporting period" });
   await expect(reportingPeriod).toBeVisible();
   await reportingPeriod.click();

@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from app.config.camera_coverage import validate_camera_coverages
 from app.storage.local_data_serialization import (
     _load_json_object,
     _normalized_camera_profile,
@@ -113,6 +114,7 @@ class CameraRepository:
         camera_ids = [int(camera["id"]) for camera in normalized]
         if len(camera_ids) != len(set(camera_ids)):
             raise ValueError("Camera IDs must be unique.")
+        validate_camera_coverages(normalized)
         updated_at = _utc_now()
         with self._database.connection() as connection:
             if camera_ids:

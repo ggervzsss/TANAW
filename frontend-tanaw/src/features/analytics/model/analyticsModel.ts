@@ -4,7 +4,7 @@ const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "Ju
 
 export type AnalyticsPeriod = { key: string; label: string; monthIndex: number; reports: IntakeReport[]; year: string };
 export type EnterpriseReportRow = { enterprise: ReportEnterprise; reports: IntakeReport[]; submitted: boolean };
-export type EnterpriseTrafficRow = { entries: number; name: string; status: "Missing" | "Submitted"; unique: number };
+export type EnterpriseTrafficRow = { entries: number | null; name: string; status: "Missing" | "Submitted"; unique: number };
 export type BarangayComplianceRow = { barangay: string; complete: number; pending: number; total: number };
 
 export function getCurrentAnalyticsPeriod(date = new Date()): AnalyticsPeriod {
@@ -27,14 +27,18 @@ export function getAnalyticsPeriods(reports: IntakeReport[], currentPeriod: Anal
   return Array.from(periods.values()).sort((left, right) => Number(right.year) - Number(left.year) || right.monthIndex - left.monthIndex);
 }
 
-export function sumReportMetric(reports: IntakeReport[], metric: "entry" | "unique") {
-  return reports.reduce((total, report) => total + report.metrics[metric], 0);
+export function sumReportMetric(reports: IntakeReport[], metric: "unique"): number;
+export function sumReportMetric(reports: IntakeReport[], metric: "entry"): number | null;
+export function sumReportMetric(reports: IntakeReport[], metric: "entry" | "unique"): number | null {
+  if (reports.some((report) => report.metrics[metric] === null)) return null;
+  return reports.reduce((total, report) => total + (report.metrics[metric] ?? 0), 0);
 }
 
 export function getTrendLabel(activeReports: IntakeReport[], comparisonPeriod?: AnalyticsPeriod) {
   if (!comparisonPeriod) return "No earlier reporting period";
   const activeEntries = sumReportMetric(activeReports, "entry");
   const comparisonEntries = sumReportMetric(comparisonPeriod.reports, "entry");
+  if (activeEntries === null || comparisonEntries === null) return "Movement is not measured by every establishment report";
   if (comparisonEntries === 0) return `Compared with ${comparisonPeriod.label}`;
   const difference = Math.round(((activeEntries - comparisonEntries) / comparisonEntries) * 100);
   return `${difference > 0 ? "+" : ""}${difference}% vs ${comparisonPeriod.label}`;

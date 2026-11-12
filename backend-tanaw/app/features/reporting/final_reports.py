@@ -10,6 +10,7 @@ from sqlalchemy.orm import raiseload
 
 from app.core.date_time import ensure_aware
 from app.features.accounts.models import Account, AccountRole
+from app.features.reporting.counting import complete_sum
 from app.features.reporting.errors import (
     InvalidReportWorkflowError,
     ReportAlreadyConsolidatedError,
@@ -146,8 +147,8 @@ async def create_final_report(
         prepared_by=payload.preparedBy,
         prepared_role="Staff Processing Division",
         status="Draft",
-        total_entry=sum(item.entries for item in source_reports),
-        total_exit=sum(item.exits for item in source_reports),
+        total_entry=complete_sum(item.entries for item in source_reports),
+        total_exit=complete_sum(item.exits for item in source_reports),
         total_unique=sum(item.unique_count for item in source_reports),
         enterprise_count=len({item.enterprise_profile_id for item in source_reports}),
     )
@@ -211,8 +212,8 @@ async def reconsolidate_returned_final_report(
     report.prepared_role = "Staff Processing Division"
     report.status = "Draft"
     report.archived_from_status = None
-    report.total_entry = sum(item.entries for item in source_reports)
-    report.total_exit = sum(item.exits for item in source_reports)
+    report.total_entry = complete_sum(item.entries for item in source_reports)
+    report.total_exit = complete_sum(item.exits for item in source_reports)
     report.total_unique = sum(item.unique_count for item in source_reports)
     report.enterprise_count = len({item.enterprise_profile_id for item in source_reports})
 
@@ -348,6 +349,7 @@ def final_report_summary(
                 entry=source.entries,
                 exit=source.exits,
                 demographics=source_demographics(source),
+                counting=source.counting_json,
             )
             for source in sources
         ],
@@ -394,9 +396,9 @@ def update_final_report_source_snapshot(
     snapshot.unique_count = source.unique_count
     snapshot.entries = source.entries
     snapshot.exits = source.exits
-    demographics = report_demographics_from_payload(
-        parse_report_payload(source.payload_json), source.unique_count
-    )
+    payload = parse_report_payload(source.payload_json) or {}
+    snapshot.counting_json = payload.get("counting")
+    demographics = report_demographics_from_payload(payload, source.unique_count)
     snapshot.this_prov_male = demographics.thisProvMale if demographics else None
     snapshot.this_prov_female = demographics.thisProvFemale if demographics else None
     snapshot.other_prov_male = demographics.otherProvMale if demographics else None

@@ -7,16 +7,19 @@ import {
   DESKTOP_RELEASE_PLATFORM,
   DESKTOP_RELEASE_TARGET,
   inspectMlReleaseResources,
+  inspectOfflineInstaller,
   REQUIRED_MODEL_ASSETS,
   writeReleaseChecksums,
 } from "../release.config.ts";
 
 type BuilderConfiguration = {
+  artifactBuildCompleted?: string;
   electronLanguages?: string[];
   extraResources?: Array<{ filter?: string[]; from?: string; to?: string }>;
   forceCodeSigning?: boolean;
   linux?: unknown;
   mac?: unknown;
+  nsis?: { include?: string; deleteAppDataOnUninstall?: boolean };
   win?: {
     signAndEditExecutable?: boolean;
     signtoolOptions?: {
@@ -50,6 +53,8 @@ if (stage === "configuration") {
     path.join(releaseDirectory, "win-unpacked", "resources", "ml-service", "models"),
   );
   console.log(`Packaged ML resources verified: ${formatBytes(sizes.runtimeBytes + sizes.modelBytes)}.`);
+  const installerBytes = await inspectOfflineInstaller(releaseDirectory, packageVersion.version);
+  console.log(`Complete offline installer verified: ${formatBytes(installerBytes)}.`);
 } else if (stage === "checksums") {
   const lines = await writeReleaseChecksums(releaseDirectory);
   console.log(`Wrote SHA256SUMS.txt for ${lines.length} Windows release artifact(s).`);
@@ -69,6 +74,12 @@ function verifyBuilderConfiguration(configuration: BuilderConfiguration): void {
   }
   if (configuration.forceCodeSigning !== false) {
     throw new Error("Local packaging must remain available; signed release mode enables forceCodeSigning explicitly.");
+  }
+  if (configuration.artifactBuildCompleted !== "./scripts/build-offline-installer.mjs" || configuration.nsis?.include !== "build/offline-installer.nsh") {
+    throw new Error("The complete offline installer hook and local-payload validation must be enabled.");
+  }
+  if (configuration.nsis?.deleteAppDataOnUninstall !== false) {
+    throw new Error("Use TANAW's targeted uninstall hook to avoid deleting the development profile.");
   }
   if (JSON.stringify(configuration.electronLanguages) !== JSON.stringify(DESKTOP_RELEASE_LOCALES)) {
     throw new Error("Electron locale packaging does not match the supported release locale list.");

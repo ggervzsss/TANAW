@@ -87,6 +87,7 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     }
     normalize_rtsp_source(source)
 
+    from app.config.camera_coverage import CameraCoverage
     from app.config.open_space_config import OpenSpaceConfig
 
     mode = camera.get("analysisMode", "entrance_exit")
@@ -100,6 +101,11 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
 
     return {
         **camera,
+        **(
+            {"coverage": CameraCoverage.model_validate(camera["coverage"]).model_dump(mode="json")}
+            if "coverage" in camera
+            else {}
+        ),
         **({"analysisMode": mode, "openSpace": area} if "analysisMode" in camera else {}),
         "id": int(camera["id"]),
         "status": status,
@@ -135,7 +141,7 @@ def _summary_with_report_metrics(
     summary: dict[str, Any], metrics: dict[str, Any]
 ) -> dict[str, Any]:
     entries = _safe_int(metrics.get("entries"))
-    exits = min(_safe_int(metrics.get("exits")), entries)
+    exits = _safe_int(metrics.get("exits"))
     peak_occupancy = _safe_int(metrics.get("peak_occupancy", metrics.get("peakOccupancy")))
     unique_count = _safe_int(metrics.get("unique_count", metrics.get("uniqueCount")))
     return {
@@ -237,9 +243,9 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "submission_id": row["submission_id"],
         "period": row["period"],
         "submitted_at": row["submitted_at"],
-        "entries": _safe_int(row["entries"]),
-        "exits": _safe_int(row["exits"]),
-        "peak_occupancy": _safe_int(row["peak_occupancy"]),
+        "entries": row["entries"],
+        "exits": row["exits"],
+        "peak_occupancy": row["peak_occupancy"],
         "unique_count": _safe_int(row["unique_count"]),
         "notes": row["notes"],
         "payload": payload if isinstance(payload, dict) else {},

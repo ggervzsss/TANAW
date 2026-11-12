@@ -3,6 +3,8 @@ import { motion } from "motion/react";
 import { ModalPortal } from "@/shared/components/ui";
 import type { FinalReport } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { CountingSummary } from "./CountingSummary";
+import { measuredCount } from "../utils/counting";
 import { DotFinalReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { useFinalReportViewer } from "../hooks";
@@ -177,6 +179,21 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </p>
 
               <DotFinalReportTable report={report} />
+              <p className="mt-4 text-xs leading-6">
+                Each establishment report contributes once. Citywide arrivals: {measuredCount(report.totalEntry)}. Citywide departures: {measuredCount(report.totalExit)}. A total is unmeasured when
+                any source lacks that measurement; camera evidence is never added again.
+              </p>
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm font-semibold">Establishment counting details</summary>
+                {report.sources.map((source) => (
+                  <div key={source.id} className="mt-4">
+                    <h3 className="text-sm font-semibold">
+                      {source.enterprise} · {source.code}
+                    </h3>
+                    <CountingSummary snapshot={source.counting} />
+                  </div>
+                ))}
+              </details>
 
               <div className="mt-auto pt-10">
                 <div className="mb-8 flex items-end justify-between">

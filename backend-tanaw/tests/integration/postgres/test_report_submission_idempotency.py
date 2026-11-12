@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,12 +26,14 @@ from app.features.activity_logs.models import ActivityLog
 from app.features.notifications.models import UserNotification
 from app.features.realtime.models import RealtimeOutbox
 from app.features.reporting import router as reporting_router
+from app.features.reporting.counting import snapshot_digest
 from app.features.reporting.intake import update_report_status
 from app.features.reporting.models import (
     EnterpriseReportSubmission,
     ReportSubmissionOperation,
 )
 from app.features.reporting.schemas import IntakeReportSummary, ReportStatusUpdate
+from tests.support.counting import counting_snapshot
 from tests.support.postgres import PostgresRuntime, postgres_test_database_url
 
 TEST_EMAIL_PATTERN = "tanaw-idempotency-pg-%@example.com"
@@ -40,6 +43,7 @@ TEST_EMAIL_PATTERN = "tanaw-idempotency-pg-%@example.com"
 class CreatedAccount:
     id: str
     email: str
+    enterprise_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -178,7 +182,11 @@ async def _create_accounts(runtime: PostgresRuntime, *, label: str) -> tuple[Cre
             )
             or 0
         )
-    return CreatedAccount(id=enterprise.id, email=enterprise.email), staff_count
+    return CreatedAccount(
+        id=enterprise.id,
+        email=enterprise.email,
+        enterprise_key=enterprise.enterprise_profile.enterprise_id,
+    ), staff_count
 
 
 def _create_test_app(runtime: PostgresRuntime) -> FastAPI:
@@ -222,6 +230,7 @@ def _submission(
         "notes": notes,
         "syncStatus": "pending_cloud_sync",
         "payload": {
+            "counting": counting_snapshot("June 2026", entries=entries, exits=7, peak=5, unique=6),
             "status": status,
             "demo": {
                 "thisProvMale": str(unique_count),
@@ -246,6 +255,10 @@ async def _post_submission(
     enterprise: CreatedAccount,
     payload: dict[str, object],
 ) -> Response:
+    payload = copy.deepcopy(payload)
+    snapshot = payload["payload"]["counting"]
+    snapshot["enterprise_id"] = enterprise.enterprise_key
+    snapshot["snapshot_version"] = snapshot_digest(snapshot)
     return await client.post(
         "/operational/desktop/report-submissions",
         headers=_authorization(enterprise),

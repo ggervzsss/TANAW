@@ -14,7 +14,7 @@ type ReportsViewProps = {
   setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>>;
 };
 
-export function ReportsView({ cameras = [], enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
+export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
   const {
     activeLedgerKey,
     activeReport,
@@ -34,6 +34,7 @@ export function ReportsView({ cameras = [], enterpriseName, reportsHistory, setR
     period,
     previewReport,
     previousDemo,
+    refreshRevisionCounts,
     setDemo,
     setNotes,
     setPreviewReport,
@@ -42,17 +43,6 @@ export function ReportsView({ cameras = [], enterpriseName, reportsHistory, setR
     validationError,
   } = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
 
-  if (cameras.length > 0 && cameras.every((c) => c.analysisMode === "open_space") && !ledgerRows.some((row) => row.kind === "history" || row.kind === "pending")) {
-    return (
-      <section className="rounded-xl border bg-white p-6 dark:bg-slate-900">
-        <h2 className="text-xl font-bold">Establishment Reports</h2>
-        <p className="mt-3">
-          Zone occupancy and count history are available in Enterprise Analytics. Establishment reports require Entrance / Exit measurements; open-space observations are not submitted as establishment
-          counts.
-        </p>
-      </section>
-    );
-  }
   return (
     <div className="tanaw-reports-workspace animate-in fade-in space-y-5 font-sans duration-500" data-reports-surface="camera-setup-generation">
       {previewReport && (
@@ -91,6 +81,7 @@ export function ReportsView({ cameras = [], enterpriseName, reportsHistory, setR
           previousDemo={previousDemo}
           validationError={validationError}
           onSubmitPrompt={() => setShowConfirm(true)}
+          onRefreshCounts={refreshRevisionCounts}
           setDemo={setDemo}
           setNotes={setNotes}
         />

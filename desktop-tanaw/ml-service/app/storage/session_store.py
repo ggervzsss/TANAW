@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.storage.local_data_store import LocalDataStore
+from app.storage.local_database import LocalDatabase
 
 
 class SessionStore:
@@ -10,9 +11,11 @@ class SessionStore:
         app_data_dir: str | None = None,
         enterprise_id: str | None = None,
         camera_id: int | None = None,
+        *,
+        database: LocalDatabase | None = None,
     ) -> None:
         self._camera_id = camera_id
-        self._data_store = LocalDataStore(app_data_dir, enterprise_id)
+        self._data_store = LocalDataStore(app_data_dir, enterprise_id, database=database)
 
     def load_session(self) -> dict[str, Any] | None:
         return self._data_store.load_monitoring_state(self._camera_id)

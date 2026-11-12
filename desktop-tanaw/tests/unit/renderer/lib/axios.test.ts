@@ -96,4 +96,17 @@ describe("staff API authentication failures", () => {
     });
     expect(clearPersistedSession).not.toHaveBeenCalled();
   });
+
+  it("keeps the enterprise session available for retry after a request timeout", async () => {
+    const error = Object.assign(new Error("Request timed out"), { code: "ECONNABORTED" });
+
+    await expect(requestRejectingWith(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState()).toMatchObject({
+      status: "authenticated",
+      token: "valid-desktop-session-token",
+      user: authenticatedUser,
+    });
+    expect(clearPersistedSession).not.toHaveBeenCalled();
+  });
 });

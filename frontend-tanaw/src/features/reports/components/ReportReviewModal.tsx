@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { IntakeReport } from "@/shared/types";
+import { CountingSummary } from "./CountingSummary";
+import { measuredCount } from "../utils/counting";
 import { DotSingleReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
@@ -100,44 +102,15 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                 </div>
                 <DotSingleReportTable report={report} />
                 <div className="mt-6 border-t border-current/30 pt-4 text-xs leading-6">
-                  <h2 className="text-sm font-bold">Live Count Summary</h2>
+                  <h2 className="text-sm font-bold">Saved Establishment Summary</h2>
                   <p>
-                    Entries: {report.metrics.entry.toLocaleString()} | Exits: {report.metrics.exit.toLocaleString()} | Peak Occupancy: {report.metrics.peak}
+                    Entries: {measuredCount(report.metrics.entry)} | Exits: {measuredCount(report.metrics.exit)} | Peak Occupancy: {measuredCount(report.metrics.peak)}
                   </p>
                   <p>Remarks: {report.remarks || report.notes || "None recorded."}</p>
                 </div>
               </section>
 
-              <div className="mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="text-tanaw-navy mb-4 text-sm font-semibold">Data Sources</h4>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-gray-200 text-gray-500">
-                      <tr>
-                        <th className="pb-2 font-semibold">Camera Source</th>
-                        <th className="pb-2 font-semibold">Last Update Time</th>
-                        <th className="pb-2 text-right font-semibold">Unique Pax Contributed</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      <tr>
-                        <td className="py-2 font-medium text-gray-800">Zone A - Main Entrance</td>
-                        <td className="py-2 font-mono text-gray-500">
-                          {report.month} 31, {timeFormat === "12-hour" ? "11:55 PM" : "23:55"} Philippine Time
-                        </td>
-                        <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{Math.floor(report.metrics.unique * 0.7).toLocaleString()}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 font-medium text-gray-800">Zone B - Rear Exit</td>
-                        <td className="py-2 font-mono text-gray-500">
-                          {report.month} 31, {timeFormat === "12-hour" ? "11:58 PM" : "23:58"} Philippine Time
-                        </td>
-                        <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{(report.metrics.unique - Math.floor(report.metrics.unique * 0.7)).toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <CountingSummary snapshot={report.payload?.counting} />
 
               <div className="mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <h4 className="text-tanaw-navy mb-2 text-sm font-semibold">Data Protection & Remarks</h4>

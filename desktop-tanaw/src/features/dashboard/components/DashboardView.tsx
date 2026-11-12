@@ -1,241 +1,160 @@
-import { createPageStateKey, readPageState, writePageState } from "../../../utils/page-state";
-import { useAuthStore } from "../../login/stores/auth-store";
 import { useCallback, useEffect, useState } from "react";
+import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import { DotFormModal } from "../../reports/components/DotFormModal";
-import { DashboardHeader } from "./DashboardHeader";
-import { DashboardMetricsGrid } from "./DashboardMetricsGrid";
-import { DemographicsBreakdownChart } from "./DemographicsBreakdownChart";
-import { HistoricalTrendChart } from "./HistoricalTrendChart";
-import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
-import type { TrendFilter } from "../types/dashboard";
-import { EMPTY_LOCAL_METRICS_HISTORY } from "../../../lib/operationalDefaults";
-import {
-  DEFAULT_ML_SERVICE_BASE_URL,
-  getLocalMetricsHistory,
-  getLocalMetricsSummary,
-  getMlCameraStates,
-  getMlServiceStatus,
-  getOpenSpaceMetrics,
-  listLocalReportSubmissions,
-} from "../../camera/services/ml-service";
-import type { LocalMetricsHistory, LocalMetricsSummary, MlCameraStates } from "../../camera/services/ml-service";
-import type { AreaLive, AreaMetrics } from "../../open-space/types";
-import type { Camera } from "../../../types/enterprise";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
-import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
-import { combineLiveOccupancy } from "../utils/combinedOccupancy";
+import { useAuthStore } from "../../login/stores/auth-store";
+import { countingFromPayload } from "../../reports/model/report-workspace";
+import { useEstablishmentAnalytics } from "../hooks/useEstablishmentAnalytics";
+import type { TrendFilter } from "../types/dashboard";
+import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
+import { DashboardHeader } from "./DashboardHeader";
+import { DemographicsBreakdownChart } from "./DemographicsBreakdownChart";
+import { EstablishmentMetrics } from "./EstablishmentMetrics";
+import { EstablishmentTrendChart } from "./EstablishmentTrendChart";
+import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
 
-type DotPreviewState = {
-  demo: DemoBreakdown;
-  metrics: Metrics;
-  notes: string;
-  period: SystemLogPeriod;
-  reportId: string;
-};
+type DotPreviewState = { enterpriseId: string | null | undefined; demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName: string; cameras?: Camera[] }) {
-  const user = useAuthStore((state) => state.user);
-  const sourceKey = createPageStateKey({ portal: "desktop", role: "enterprise", userId: user?.id ?? "anonymous" }, "dashboard", "history-source");
-  const [source, setSource] = useState(() => readPageState(sourceKey, 1, (value): value is string => typeof value === "string") ?? "entrance_exit");
-  const openCameras = cameras.filter((camera) => camera.analysisMode === "open_space");
-  const hasEntrance = cameras.some((camera) => camera.analysisMode !== "open_space");
-  const selectedArea = openCameras.find((camera) => `camera:${camera.id}` === source) ?? (!hasEntrance ? openCameras[0] : undefined);
-  const selectedSource = selectedArea ? `camera:${selectedArea.id}` : "entrance_exit";
-  const areaId = selectedArea?.id;
-  const openCameraIds = openCameras.map((camera) => camera.id).join(",");
-  const [trendFilter, setTrendFilter] = useState<TrendFilter>("Week");
-  const [summary, setSummary] = useState<LocalMetricsSummary | null>(null);
-  const [history, setHistory] = useState<LocalMetricsHistory>(EMPTY_LOCAL_METRICS_HISTORY);
-  const [ledgerReports, setLedgerReports] = useState<ReportRecord[]>([]);
-  const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TrendFilter>("Week");
+  const { summary, live, range, error, loading } = useEstablishmentAnalytics(cameras, filter);
+  const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
+  const [ledger, setLedger] = useState<{ enterpriseId: typeof enterpriseId; reports: ReportRecord[] } | null>(null);
+  const reports = ledger && ledger.enterpriseId === enterpriseId ? ledger.reports : [];
+  const [preview, setPreview] = useState<DotPreviewState | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
-  const [areaData, setAreaData] = useState<{ cameraId: number; period: TrendFilter; metrics: AreaMetrics; live: AreaLive | null } | null>(null);
-  const selectedAreaData = areaData?.cameraId === areaId && areaData?.period === trendFilter ? areaData : null;
-  const areaMetrics = selectedAreaData?.metrics ?? null;
-  const areaLive = selectedAreaData?.live ?? null;
-  const [areaError, setAreaError] = useState<string | null>(null);
-  const [areaStates, setAreaStates] = useState<MlCameraStates | null>(null);
-  const combinedOccupancy =
-    openCameras.length > 0
-      ? combineLiveOccupancy(
-          hasEntrance ? (metricsError ? null : (summary?.current_occupancy ?? null)) : 0,
-          openCameras.map((camera) => areaStates?.cameras.find((state) => state.camera_id === camera.id)?.area),
-        )
-      : undefined;
+  usePersistentIssue({ id: "dashboard-report-previews", message: ledgerError, title: "Report previews unavailable", tone: "warning" });
 
-  usePersistentIssue({
-    id: "dashboard-visitor-counts",
-    message: openCameras.length > 0 ? (areaError ?? (hasEntrance ? metricsError : null)) : metricsError,
-    title: "Visitor counts unavailable",
-    tone: "error",
-  });
-  usePersistentIssue({
-    id: "dashboard-report-previews",
-    message: ledgerError,
-    title: "Report previews unavailable",
-    tone: "warning",
-  });
-
-  const refreshDashboardMetrics = useCallback(async () => {
-    try {
-      const status = await getMlServiceStatus();
-      const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-      const [nextSummary, nextHistory] = await Promise.all([getLocalMetricsSummary(baseUrl, { includeSubmitted: true }), getLocalMetricsHistory(baseUrl, { includeSubmitted: true })]);
-
-      setSummary(nextSummary);
-      setHistory(nextHistory);
-      setMetricsError(status.error);
-    } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
-    }
-  }, []);
-
-  const refreshDashboardReports = useCallback(async () => {
-    try {
-      const status = await getMlServiceStatus();
-      const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-      const submissions = await listLocalReportSubmissions(baseUrl);
-      setLedgerReports(sortReportsBySubmittedAt(submissions.map(reportFromLocalSubmission)));
-      setLedgerError(null);
-    } catch (error) {
-      setLedgerError(error instanceof Error ? error.message : "Unable to load submitted report previews.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hasEntrance && openCameraIds) return;
-    void refreshDashboardMetrics();
-    const intervalId = window.setInterval(() => void refreshDashboardMetrics(), 5000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshDashboardMetrics, hasEntrance, openCameraIds]);
+  const refreshReports = useCallback(async () => {
+    const status = await getMlServiceStatus();
+    const submissions = await listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
+    if (
+      submissions.some((item) => {
+        const data = countingFromPayload(item.payload.counting);
+        return data && data.enterprise_id !== enterpriseId;
+      })
+    )
+      throw new Error("Saved reports belong to another establishment.");
+    return sortReportsBySubmittedAt(submissions.map(reportFromLocalSubmission));
+  }, [enterpriseId]);
 
   useEffect(() => {
     let disposed = false;
     let busy = false;
-    setAreaData(null);
-    setAreaError(null);
-    if (!openCameraIds) return;
     const refresh = async () => {
       if (busy) return;
       busy = true;
       try {
-        const status = await getMlServiceStatus();
-        const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-        const [nextMetrics, states] = await Promise.all([
-          areaId === undefined ? Promise.resolve(null) : getOpenSpaceMetrics(baseUrl, areaId, trendFilter === "Today" ? 1 : trendFilter === "Week" ? 7 : 30, "", 0),
-          getMlCameraStates(baseUrl),
-        ]);
+        const next = await refreshReports();
         if (!disposed) {
-          setAreaStates(states);
-          if (areaId !== undefined && nextMetrics)
-            setAreaData({ cameraId: areaId, period: trendFilter, metrics: nextMetrics, live: states.cameras.find((camera) => camera.camera_id === areaId)?.area ?? null });
-          setAreaError(status.error);
+          setLedger({ enterpriseId, reports: next });
+          setLedgerError(null);
         }
-      } catch (error) {
-        if (!disposed) {
-          setAreaData((current) => (current ? { ...current, live: null } : null));
-          setAreaStates(null);
-          setAreaError(error instanceof Error ? error.message : "Unable to load zone occupancy.");
-        }
+      } catch (issue) {
+        if (!disposed) setLedgerError(issue instanceof Error ? issue.message : "Unable to load submitted reports.");
       } finally {
         busy = false;
       }
     };
     void refresh();
-    const intervalId = window.setInterval(() => void refresh(), 5000);
+    const timer = window.setInterval(() => void refresh(), 15000);
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      window.clearInterval(timer);
     };
-  }, [areaId, trendFilter, openCameraIds]);
+  }, [refreshReports, enterpriseId]);
 
-  useEffect(() => {
-    void refreshDashboardReports();
-    const intervalId = window.setInterval(() => void refreshDashboardReports(), 15000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshDashboardReports]);
-
-  const demographicsReport = ledgerReports.find(hasDemographics) ?? ledgerReports[0] ?? null;
-
-  const handlePreviewReport = (report: ReportRecord) => {
-    setPreviewReport({
-      demo: report.demo ?? emptyDemo(),
-      metrics: metricsFromReport(report),
-      notes: report.notes ?? "",
-      period: report.period ?? report.date,
-      reportId: report.id,
-    });
-  };
-
+  const demographicsReport = reports.find(hasDemographics) ?? reports[0] ?? null;
+  const needsSetup = live?.state === "configuration_required" || summary?.reconciliation_state === "configuration_required";
+  const partial = live?.state === "partial" || summary?.reconciliation_state === "partial";
   return (
     <div className="animate-in fade-in space-y-6 font-sans duration-500">
-      {previewReport && (
+      {preview && preview.enterpriseId === enterpriseId && (
         <DotFormModal
-          demo={previewReport.demo}
+          demo={preview.demo}
           enterpriseName={enterpriseName}
-          metrics={previewReport.metrics}
-          notes={previewReport.notes}
-          period={previewReport.period}
-          reportId={previewReport.reportId}
-          validationMessage={getDemographicAllocationStatus(previewReport.demo, previewReport.metrics.unique).validationMessage}
-          onClose={() => setPreviewReport(null)}
+          metrics={preview.metrics}
+          notes={preview.notes}
+          period={preview.period}
+          reportId={preview.reportId}
+          validationMessage={getDemographicAllocationStatus(preview.demo, preview.metrics.unique).validationMessage}
+          onClose={() => setPreview(null)}
         />
       )}
-
-      <DashboardHeader summary={summary} description={openCameras.length > 0 ? "Live occupancy across separate, non-overlapping monitored areas." : undefined} />
-      {openCameras.length > 0 && (
-        <div className="space-y-2 text-sm text-gray-600 dark:text-slate-300">
-          <label className="flex flex-wrap items-center gap-3 font-semibold">
-            Activity history
-            <select
-              aria-label="Activity history source"
-              value={selectedSource}
-              onChange={(event) => {
-                setSource(event.target.value);
-                writePageState(sourceKey, 1, event.target.value);
-              }}
-              className="max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              {(hasEntrance || cameras.length === 0) && <option value="entrance_exit">Entrance / Exit · establishment</option>}
-              {openCameras.map((camera) => (
-                <option key={camera.id} value={`camera:${camera.id}`}>
-                  {camera.name} · {camera.openSpace?.zone_name || camera.zone}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="text-xs">
-            Live Occupancy combines the Entrance / Exit balance and observed people in all separate Open Space zones. Other figures and history use the selected source. Tracking gaps are excluded;
-            unavailable areas are not treated as empty.
+      <DashboardHeader summary={null} description="One establishment tally from all configured cameras." />
+      <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
+      <section aria-label="Counting coverage" className="space-y-2 border-l-2 border-emerald-700 pl-4 text-sm text-slate-600 dark:border-emerald-400 dark:text-slate-300">
+        {needsSetup ? (
+          <p>
+            Complete the camera counting roles and coverage relationships so TANAW can reconcile shared visitors.{" "}
+            <a className="font-semibold text-emerald-800 underline underline-offset-2 dark:text-emerald-300" href="#/enterprise/cameras">
+              Open Camera Setup
+            </a>
+            .
           </p>
-        </div>
+        ) : (
+          <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
+        )}
+        {partial && <p>Some observations or visitor matches are incomplete. These figures are partial estimates.</p>}
+        {summary && (
+          <p className="text-xs">
+            Observation coverage: {summary.coverage_ratio > 0 && summary.coverage_ratio < 0.01 ? "<1" : Math.round(summary.coverage_ratio * 100)}% of the selected period. Unresolved observations:{" "}
+            {summary.unresolved_observations.toLocaleString()}. Live occupancy shows the current observation; other figures follow the period below.
+          </p>
+        )}
+      </section>
+      <EstablishmentTrendChart summary={summary} range={range} filter={filter} onFilterChange={setFilter} unavailable={Boolean(error)} />
+      {cameras.length > 0 && (
+        <details className="rounded-xl border border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
+          <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera coverage and contributions</summary>
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">These details explain the establishment tally. Camera figures are not separate report totals.</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="py-2 pr-4 font-semibold">Camera</th>
+                  <th className="py-2 pr-4 font-semibold">Mode</th>
+                  <th className="py-2 pr-4 font-semibold">Counting role</th>
+                  <th className="py-2 font-semibold">Occupancy contribution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cameras.map((camera) => {
+                  const contribution = live?.contributions.find((item) => item.camera_ids.includes(camera.id));
+                  const excluded = live?.excluded_camera_ids.includes(camera.id);
+                  return (
+                    <tr key={camera.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                      <td className="py-3 pr-4">{camera.name}</td>
+                      <td className="py-3 pr-4">{camera.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"}</td>
+                      <td className="py-3 pr-4">
+                        {camera.coverage?.role === "external_boundary" ? "Establishment boundary" : camera.coverage?.role === "internal_observation" ? "Internal observation" : "Setup required"}
+                      </td>
+                      <td className="py-3">
+                        {contribution
+                          ? `${contribution.occupancy.toLocaleString()}${contribution.camera_ids.length > 1 ? " in a shared population" : ""}${contribution.state === "partial" ? " · partial" : ""}`
+                          : excluded
+                            ? "Not added separately"
+                            : "Unavailable"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </details>
       )}
-      <DashboardMetricsGrid summary={summary} area={selectedArea ? { live: areaLive, metrics: areaMetrics } : undefined} combinedOccupancy={combinedOccupancy} />
-      <HistoricalTrendChart
-        data={history.historical[trendFilter]}
-        summary={summary}
-        trendFilter={trendFilter}
-        unavailable={Boolean(selectedArea ? areaError : metricsError)}
-        onTrendFilterChange={setTrendFilter}
-        areaHistory={
-          selectedArea
-            ? (areaMetrics?.history ?? []).map((row) => ({
-                label: new Date(row.at).toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit" }),
-                occupancy: row.covered_ms > 0 ? row.peak_presence : null,
-              }))
-            : undefined
-        }
-        liveOccupancy={areaLive?.available ? areaLive.presence : null}
-      />
-      {(hasEntrance || cameras.length === 0 || ledgerReports.length > 0) && (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <SubmissionLedgerPreview reports={ledgerReports} onPreviewReport={handlePreviewReport} />
-          <DemographicsBreakdownChart report={demographicsReport} />
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <SubmissionLedgerPreview
+          reports={reports}
+          onPreviewReport={(report) =>
+            setPreview({ enterpriseId, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
+          }
+        />
+        <DemographicsBreakdownChart report={demographicsReport} />
+      </div>
     </div>
   );
 }

@@ -22,15 +22,18 @@ router = APIRouter(tags=["reporting"])
 def record_occupancy_correction(
     payload: OccupancyCorrectionRequest, request: Request
 ) -> OccupancyCorrectionResponse:
-    return OccupancyCorrectionResponse(
-        **registry(request).record_occupancy_correction(
-            new_occupancy=payload.new_occupancy,
-            reason=payload.reason,
-            actor_id=payload.actor_id,
-            actor_name=payload.actor_name,
-            camera_id=payload.camera_id,
+    try:
+        return OccupancyCorrectionResponse(
+            **registry(request).record_occupancy_correction(
+                new_occupancy=payload.new_occupancy,
+                reason=payload.reason,
+                actor_id=payload.actor_id,
+                actor_name=payload.actor_name,
+                camera_id=payload.camera_id,
+            )
         )
-    )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/occupancy/corrections", response_model=list[OccupancyCorrectionResponse])
@@ -53,6 +56,8 @@ def record_local_report_submission(
                 payload.notes,
                 payload.payload,
                 metrics=payload.metrics.model_dump() if payload.metrics else None,
+                request_id=str(payload.request_id) if payload.request_id else None,
+                expected_snapshot_version=payload.expected_snapshot_version,
             )
         )
     except ValueError as exc:

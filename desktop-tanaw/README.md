@@ -53,9 +53,10 @@ the app is open, signed in, and connected to the central API. Temporary internet
 interruptions do not discard saved local records. Sign-in and cloud features
 require access to the central service.
 
-Open-space analytics currently stay on the device. They are excluded from
-official entrance/exit reports and central monitoring updates. A desktop with
-only open-space cameras may therefore appear delayed or offline in LGU views.
+Both camera modes contribute to the same establishment occupancy and estimated
+visitor totals. These totals appear on the desktop and in LGU monitoring,
+visitor history, and submitted reports. Open Space cameras measure presence.
+Only Entrance / Exit cameras at a configured boundary measure arrivals and departures.
 
 ### Privacy and local storage
 
@@ -89,6 +90,40 @@ Central records and local device records have separate lifecycles.
 - **ml-service/scripts:** model setup and camera evaluation tools.
 - **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
 - **ml-service/tests:** Python camera-processing and local-storage tests.
+
+## Local storage and camera service
+
+On Windows the installed app stores its database, camera credentials, and sign-in
+state under `%APPDATA%\TANAW Enterprise Desktop` and starts its camera service on
+`127.0.0.1:8766`. Development uses `%APPDATA%\desktop-tanaw` and port `8765`.
+
+A Windows uninstall removes the installed app's profile and cached installer
+payload for the current Windows account. Unsynced reports are lost. Installing
+an update over an existing installation keeps the profile. The development
+profile and records already synced to the server are separate.
+
+## Building installers
+
+Run these commands from `desktop-tanaw` after installing npm dependencies and
+preparing the model assets. Distribution builds require a production
+`VITE_API_BASE_URL`, for example in `.env.production.local`.
+
+- `npm run dist`: build the Windows x64 offline installer on Windows.
+- `npm run dist:linux`: build an Ubuntu/Debian x64 `.deb`. On Windows this uses
+  Docker Desktop's Linux engine and an Ubuntu 22.04 builder. On Linux it uses
+  the local Node.js 22.12+ and uv toolchain; use Ubuntu 22.04 for the same
+  compatibility baseline.
+
+The Linux command bundles a native Python service and every supported model,
+checks CPU inference, and writes the package and `SHA256SUMS.txt` under
+`release/<version>/linux-deb/`. The Linux runtime uses CPU inference. Windows
+and Linux native dependencies and outputs remain separate. Build commands do
+not publish artifacts.
+
+Install the `.deb` with `sudo apt install ./TANAW-Enterprise-Desktop-<version>-linux-amd64.deb`.
+APT installs required system libraries and GNOME Keyring if missing. A desktop
+session with an unlocked supported keyring is required for protected credential
+storage; Python, Node.js, and model downloads are not required on the target PC.
 
 ## Credits
 

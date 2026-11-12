@@ -34,8 +34,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
-            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount.toLocaleString()} />
+            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy?.toLocaleString() ?? "Unavailable"} />
+            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount?.toLocaleString() ?? "Unavailable"} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Camera Monitoring" value={<MonitoringStatusBadge status={enterprise.monitoringStatus} />} />
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Occupancy Alert" value={<OccupancyStatusBadge status={enterprise.occupancyStatus} />} />
           </div>

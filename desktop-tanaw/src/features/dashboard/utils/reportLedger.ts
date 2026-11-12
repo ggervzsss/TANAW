@@ -1,6 +1,7 @@
 import type { LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { getDemographicTotals } from "../../reports/utils/demographics";
+import { countingFromPayload } from "../../reports/model/report-workspace";
 
 export function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
   const payload = submission.payload;
@@ -16,6 +17,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
     exits: metrics.exits,
     peak: metrics.peak,
     unique: metrics.unique,
+    counting: metrics.counting,
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
@@ -25,6 +27,8 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 }
 
 function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+  const counting = countingFromPayload(submission.payload.counting);
+  if (counting) return { entries: submission.entries, exits: submission.exits, peak: submission.peak_occupancy, unique: submission.unique_count, counting };
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;
@@ -33,7 +37,7 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
     const peak = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
     const unique = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
     if (entries !== null && exits !== null && peak !== null && unique !== null) {
-      return { entries, exits: Math.min(exits, entries), peak, unique };
+      return { entries, exits, peak, unique };
     }
   }
 
@@ -59,9 +63,10 @@ export function emptyDemo(): DemoBreakdown {
 export function metricsFromReport(report: ReportRecord): Metrics {
   return {
     entries: report.entries,
-    exits: report.exits ?? 0,
-    peak: report.peak ?? Math.max(0, report.entries - (report.exits ?? 0)),
+    exits: report.exits ?? null,
+    peak: report.peak ?? null,
     unique: report.unique,
+    counting: report.counting,
   };
 }
 

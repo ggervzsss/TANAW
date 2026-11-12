@@ -23,7 +23,7 @@ export default defineConfig({
     command: `npm run build && npm run preview:web -- --host ${web.hostname} --port ${web.port || "5175"}`,
     url: webUrl,
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 240_000,
     env: {
       ...process.env,
       TANAW_RENDERER_ONLY: "true",

@@ -12,6 +12,11 @@ import {
 } from "../../../../../../src/features/camera/utils/camera-update";
 
 describe("camera update classification", () => {
+  it("restarts counting when coverage changes without invalidating camera credentials", () => {
+    const next: Camera = { ...camera, coverage: { role: "internal_observation", area_name: "Lobby", relationship: "independent", related_camera_id: null, travel_seconds: {} } };
+    expect(hasCameraConnectionChange(camera, next)).toBe(false);
+    expect(getCameraSaveRuntimeAction(camera, next, { isRunning: true })).toBe("restart");
+  });
   it("restarts a running camera when its connection brand or Tenda profile changes", () => {
     expect(getCameraSaveRuntimeAction(camera, { ...camera, cameraBrand: "tenda" }, { isRunning: true })).toBe("restart");
     expect(getCameraSaveRuntimeAction(camera, { ...camera, connectionProfile: "profile" }, { isRunning: true })).toBe("restart");

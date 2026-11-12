@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readdir, stat, writeFile } from "node:fs/promises";
+import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const DESKTOP_RELEASE_PLATFORM = "win32" as const;
@@ -53,17 +53,19 @@ export function releaseBuilderArguments(requireSigning: boolean): string[] {
   return requireSigning ? ["--config.forceCodeSigning=true"] : [];
 }
 
-export async function inspectMlReleaseResources(runtimeDirectory: string, modelsDirectory: string): Promise<{ modelBytes: number; runtimeBytes: number }> {
+export async function inspectMlReleaseResources(runtimeDirectory: string, modelsDirectory: string, platform: "win32" | "linux" = "win32"): Promise<{ modelBytes: number; runtimeBytes: number }> {
   const runtimeFiles = await listRelativeFiles(runtimeDirectory);
   const modelFiles = await listRelativeFiles(modelsDirectory);
 
-  if (!runtimeFiles.includes(DESKTOP_RELEASE_EXECUTABLE)) {
-    throw new Error(`The packaged ML runtime is missing ${DESKTOP_RELEASE_EXECUTABLE}.`);
+  const executable = platform === "linux" ? "tanaw-ml-service" : DESKTOP_RELEASE_EXECUTABLE;
+  if (!runtimeFiles.includes(executable)) {
+    throw new Error(`The packaged ML runtime is missing ${executable}.`);
   }
   if (!runtimeFiles.some((file) => file.startsWith("_internal/"))) {
     throw new Error("The packaged ML runtime is missing its _internal dependency directory.");
   }
-  if (!runtimeFiles.some((file) => /^_internal\/lap\/_lapjv.*\.pyd$/.test(file))) {
+  const trackerExtension = platform === "linux" ? /^_internal\/lap\/_lapjv.*\.so$/ : /^_internal\/lap\/_lapjv.*\.pyd$/;
+  if (!runtimeFiles.some((file) => trackerExtension.test(file))) {
     throw new Error("The packaged ML runtime is missing the native lap tracker dependency.");
   }
 
@@ -90,19 +92,58 @@ export async function inspectMlReleaseResources(runtimeDirectory: string, models
 }
 
 export async function writeReleaseChecksums(releaseDirectory: string): Promise<string[]> {
-  const artifactDirectory = path.join(releaseDirectory, DESKTOP_RELEASE_TARGET);
-  const files = (await listRelativeFiles(artifactDirectory)).filter((file) => file.endsWith(".exe") || file.endsWith(".nsis.7z"));
+  const artifactDirectory = path.join(releaseDirectory, "offline");
+  const files = (await listRelativeFiles(artifactDirectory)).filter((file) => file.endsWith("-Offline-Setup.exe"));
   if (files.length === 0) {
     throw new Error(`No Windows release artifacts were found under ${artifactDirectory}.`);
   }
 
   const lines: string[] = [];
   for (const file of files.sort()) {
-    const relativeArtifactPath = path.posix.join(DESKTOP_RELEASE_TARGET, file);
+    const relativeArtifactPath = path.posix.join("offline", file);
     lines.push(`${await sha256File(path.join(artifactDirectory, file))}  ${relativeArtifactPath}`);
   }
   await writeFile(path.join(releaseDirectory, "SHA256SUMS.txt"), `${lines.join("\n")}\n`, "utf8");
   return lines;
+}
+
+export async function inspectOfflineInstaller(releaseDirectory: string, version: string): Promise<number> {
+  const directory = path.join(releaseDirectory, "offline");
+  const manifest = JSON.parse(await readFile(path.join(directory, "installer-manifest.json"), "utf8")) as {
+    version: string;
+    installer: string;
+    bytes: number;
+    sha256: string;
+    offline: boolean;
+    payload: string;
+    payloadSha256: string;
+    bootstrapper: string;
+    bootstrapperSha256: string;
+  };
+  const expectedInstaller = `TANAW Enterprise Desktop-Windows-${version}-Offline-Setup.exe`;
+  if (
+    manifest.version !== version ||
+    manifest.installer !== expectedInstaller ||
+    manifest.offline !== true ||
+    manifest.payload !== `desktop-tanaw-${version}-x64.nsis.7z` ||
+    manifest.bootstrapper !== `TANAW Enterprise Desktop-Windows-${version}-Setup.exe`
+  ) {
+    throw new Error("The complete offline installer manifest does not match this release.");
+  }
+  const installer = path.join(directory, expectedInstaller);
+  const bytes = (await stat(installer)).size;
+  if (bytes !== manifest.bytes || bytes >= 4 * 1024 ** 3 || (await sha256File(installer)) !== manifest.sha256) {
+    throw new Error("The complete offline installer size or SHA-256 does not match its manifest.");
+  }
+  for (const [file, hash] of [
+    [manifest.payload, manifest.payloadSha256],
+    [manifest.bootstrapper, manifest.bootstrapperSha256],
+  ] as const) {
+    if ((await sha256File(path.join(releaseDirectory, DESKTOP_RELEASE_TARGET, file))) !== hash) {
+      throw new Error("The offline installer references a stale NSIS payload or bootstrapper.");
+    }
+  }
+  return bytes;
 }
 
 async function sha256File(file: string): Promise<string> {

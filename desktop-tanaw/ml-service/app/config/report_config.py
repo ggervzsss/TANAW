@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from calendar import month_abbr, month_name, monthrange
 from datetime import date, datetime, timedelta
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, model_validator
@@ -120,19 +121,15 @@ def _format_period_date(value: date) -> str:
 
 
 class ReportSubmissionMetrics(BaseModel):
-    entries: int = Field(ge=0, le=100_000)
-    exits: int = Field(ge=0, le=100_000)
-    peak_occupancy: int = Field(ge=0, le=100_000)
+    entries: int | None = Field(ge=0, le=100_000)
+    exits: int | None = Field(ge=0, le=100_000)
+    peak_occupancy: int | None = Field(ge=0, le=100_000)
     unique_count: int = Field(ge=0, le=100_000)
-
-    @model_validator(mode="after")
-    def validate_counts(self) -> ReportSubmissionMetrics:
-        if self.exits > self.entries:
-            raise ValueError("Total exits cannot exceed total entries.")
-        return self
 
 
 class ReportSubmissionRequest(BaseModel):
+    request_id: UUID | None = None
+    expected_snapshot_version: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     report_id: str = Field(..., min_length=3, max_length=80)
     period: str = Field(min_length=1, max_length=120)
     notes: str | None = Field(default=None, max_length=5000)
@@ -153,12 +150,13 @@ class ReportSubmissionRequest(BaseModel):
             "foreignMale",
             "foreignFemale",
         )
-        if not isinstance(demo, dict) or any(
-            str(demo.get(field, "")).strip() == "" for field in fields
-        ):
+        if not isinstance(demo, dict) or any(field not in demo for field in fields):
             raise ValueError("All demographics fields are required.")
+        demo = {field: "0" if demo[field] == "" else demo[field] for field in fields}
         if any(not str(demo[field]).strip().isdigit() for field in fields):
             raise ValueError("Demographics values must be non-negative whole numbers.")
+        assert self.payload is not None
+        self.payload["demo"] = demo
         return self
 
 
@@ -172,11 +170,18 @@ class ReportCameraTotalResponse(BaseModel):
     total_events: int
 
 
-class ReportSubmissionResponse(MetricsSummaryResponse):
+class ReportSubmissionResponse(BaseModel):
     report_id: str
     submission_id: str
     submitted_at: str
     sync_status: str
+    period: str
+    entries: int | None
+    exits: int | None
+    peak_occupancy: int | None
+    unique_count: int
+    payload: dict
+    counting: dict
     camera_breakdown: list[ReportCameraTotalResponse] = Field(default_factory=list)
 
 
@@ -214,9 +219,9 @@ class ReportSubmissionRecordResponse(BaseModel):
     submission_id: str
     period: str
     submitted_at: str
-    entries: int
-    exits: int
-    peak_occupancy: int
+    entries: int | None
+    exits: int | None
+    peak_occupancy: int | None
     unique_count: int
     notes: str | None = None
     payload: dict = Field(default_factory=dict)

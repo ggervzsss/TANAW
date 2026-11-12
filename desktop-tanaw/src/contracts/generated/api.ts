@@ -1542,45 +1542,30 @@ export interface components {
              * @default 0
              */
             confirmedUniqueCount: number;
-            /**
-             * Currentoccupancy
-             * @default 0
-             */
-            currentOccupancy: number;
+            /** Currentoccupancy */
+            currentOccupancy?: number | null;
             /**
              * Degradeduniquecount
              * @default 0
              */
             degradedUniqueCount: number;
-            /**
-             * Entries
-             * @default 0
-             */
-            entries: number;
-            /**
-             * Exits
-             * @default 0
-             */
-            exits: number;
+            /** Entries */
+            entries?: number | null;
+            /** Exits */
+            exits?: number | null;
             /** Firsteventat */
             firstEventAt?: string | null;
             /** Lasteventat */
             lastEventAt?: string | null;
-            /**
-             * Peakoccupancy
-             * @default 0
-             */
-            peakOccupancy: number;
+            /** Peakoccupancy */
+            peakOccupancy?: number | null;
             /**
              * Totalevents
              * @default 0
              */
             totalEvents: number;
-            /**
-             * Uniquecount
-             * @default 0
-             */
-            uniqueCount: number;
+            /** Uniquecount */
+            uniqueCount?: number | null;
             /**
              * Unsubmittedevents
              * @default 0
@@ -1594,27 +1579,21 @@ export interface components {
         };
         /** DesktopReportSubmissionIngest */
         DesktopReportSubmissionIngest: {
-            /**
-             * Entries
-             * @default 0
-             */
-            entries: number;
-            /**
-             * Exits
-             * @default 0
-             */
-            exits: number;
+            /** Entries */
+            entries: number | null;
+            /** Exits */
+            exits: number | null;
             /** Notes */
             notes?: string | null;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
             /**
-             * Peakoccupancy
-             * @default 0
+             * Payload
+             * @description Frozen establishment counting snapshot, matching metrics, and demographic allocation.
              */
-            peakOccupancy: number;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Peakoccupancy */
+            peakOccupancy: number | null;
             /** Period */
             period: string;
             /** Reportid */
@@ -1631,10 +1610,7 @@ export interface components {
             submittedAt: string;
             /** Syncstatus */
             syncStatus?: string | null;
-            /**
-             * Uniquecount
-             * @default 0
-             */
+            /** Uniquecount */
             uniqueCount: number;
         };
         /** DesktopSessionSummary */
@@ -1838,13 +1814,17 @@ export interface components {
         FinalReportSourceSummary: {
             /** Code */
             code: string;
+            /** Counting */
+            counting?: {
+                [key: string]: unknown;
+            } | null;
             demographics?: components["schemas"]["ReportDemographicsSummary"] | null;
             /** Enterprise */
             enterprise: string;
             /** Entry */
-            entry: number;
+            entry: number | null;
             /** Exit */
-            exit: number;
+            exit: number | null;
             /** Id */
             id: string;
             /** Unique */
@@ -1884,9 +1864,9 @@ export interface components {
             /** Title */
             title: string;
             /** Totalentry */
-            totalEntry: number;
+            totalEntry: number | null;
             /** Totalexit */
-            totalExit: number;
+            totalExit: number | null;
             /** Totalunique */
             totalUnique: number;
         };
@@ -1952,7 +1932,7 @@ export interface components {
             id: string;
             /** Metrics */
             metrics: {
-                [key: string]: number | string;
+                [key: string]: number | string | null;
             };
             /** Month */
             month: string;
@@ -2126,9 +2106,9 @@ export interface components {
             /** Totalcurrentoccupancy */
             totalCurrentOccupancy: number;
             /** Totalentries */
-            totalEntries: number;
+            totalEntries: number | null;
             /** Totalexits */
-            totalExits: number;
+            totalExits: number | null;
             /** Totaluniquecount */
             totalUniqueCount: number;
         };
@@ -2482,7 +2462,7 @@ export interface components {
             /** Confirmeduniquecount */
             confirmedUniqueCount: number;
             /** Currentoccupancy */
-            currentOccupancy: number;
+            currentOccupancy: number | null;
             /** Degradeduniquecount */
             degradedUniqueCount: number;
             /** Enterpriseid */
@@ -2490,18 +2470,18 @@ export interface components {
             /** Enterprisename */
             enterpriseName: string;
             /** Entries */
-            entries: number;
+            entries: number | null;
             /** Error */
             error?: string | null;
             /** Exits */
-            exits: number;
+            exits: number | null;
             /** Gatewaystatus */
             gatewayStatus: string;
             /** Id */
             id: string;
             monitoring?: components["schemas"]["DesktopCameraMonitoringSummary"];
             /** Peakoccupancy */
-            peakOccupancy: number;
+            peakOccupancy: number | null;
             /**
              * Receivedat
              * Format: date-time
@@ -2514,7 +2494,7 @@ export interface components {
             /** Totalevents */
             totalEvents: number;
             /** Uniquecount */
-            uniqueCount: number;
+            uniqueCount: number | null;
             /** Unsubmittedevents */
             unsubmittedEvents: number;
             /** Unsyncedevents */
@@ -2588,11 +2568,13 @@ export interface components {
         /** VisitorInsightPoint */
         VisitorInsightPoint: {
             /** Averagevisitors */
-            averageVisitors: number;
+            averageVisitors: number | null;
+            /** Estimateduniquecount */
+            estimatedUniqueCount?: number | null;
             /** Label */
             label: string;
             /** Peakvisitors */
-            peakVisitors: number;
+            peakVisitors: number | null;
             /**
              * Startat
              * Format: date-time
@@ -2607,7 +2589,7 @@ export interface components {
             /** Comparisonmessage */
             comparisonMessage: string;
             /** Currentvisitors */
-            currentVisitors: number;
+            currentVisitors: number | null;
             /** Differencepercent */
             differencePercent?: number | null;
             /** Lastupdatedat */

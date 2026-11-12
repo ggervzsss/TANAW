@@ -26,6 +26,7 @@ from app.features.accounts.models import (
 )
 from app.features.realtime.models import RealtimeOutbox
 from app.features.reporting import router as reporting_router
+from app.features.reporting.counting import snapshot_digest
 from app.features.reporting.errors import (
     InvalidReportWorkflowError,
     ReportAlreadyConsolidatedError,
@@ -50,6 +51,7 @@ from app.features.reporting.schemas import (
     IntakeReportSummary,
     ReportStatusUpdate,
 )
+from tests.support.counting import counting_snapshot
 from tests.support.postgres import PostgresRuntime, postgres_test_database_url
 
 TEST_EMAIL_PATTERN = "tanaw-reporting-pg-%@example.com"
@@ -60,6 +62,7 @@ TEST_PREPARED_BY_PREFIX = "Reporting PG"
 class CreatedEnterprise:
     id: str
     email: str
+    enterprise_key: str
 
 
 @dataclass(frozen=True)
@@ -189,7 +192,9 @@ async def _create_enterprise(runtime: PostgresRuntime, *, label: str) -> Created
     async with runtime.sessions() as db:
         db.add(account)
         await db.commit()
-    return CreatedEnterprise(id=account.id, email=account.email)
+    return CreatedEnterprise(
+        id=account.id, email=account.email, enterprise_key=account.enterprise_profile.enterprise_id
+    )
 
 
 def _submission(
@@ -197,6 +202,7 @@ def _submission(
     period: str,
     *,
     status: str = "Submitted",
+    enterprise_key: str = "workflow-fixture",
     entries: int = 12,
     exits: int = 7,
     unique_count: int = 6,
@@ -225,6 +231,14 @@ def _submission(
         peakOccupancy=max(entries - exits, 1),
         uniqueCount=unique_count,
         payload={
+            "counting": counting_snapshot(
+                period,
+                enterprise_id=enterprise_key,
+                entries=entries,
+                exits=exits,
+                peak=max(entries - exits, 1),
+                unique=unique_count,
+            ),
             "status": status,
             "demo": demographics,
             "metrics": {
@@ -245,6 +259,9 @@ async def _ingest(
     async with runtime.sessions() as db:
         account = await db.get(Account, enterprise.id)
         assert account is not None
+        snapshot = payload.payload["counting"]
+        snapshot["enterprise_id"] = enterprise.enterprise_key
+        snapshot["snapshot_version"] = snapshot_digest(snapshot)
         try:
             report = await ingest_report_submission(db, account, payload)
             await db.commit()
@@ -423,8 +440,12 @@ async def test_concurrent_same_enterprise_period_accepts_exactly_one_request(
     enterprise = await _create_enterprise(postgres_runtime, label="period-race")
     application = _create_test_app(postgres_runtime)
     transport = ASGITransport(app=application)
-    first = _submission("REP-RACE-001", "June 2026").model_dump(mode="json")
-    second = _submission("REP-RACE-002", "June 2026").model_dump(mode="json")
+    first = _submission(
+        "REP-RACE-001", "June 2026", enterprise_key=enterprise.enterprise_key
+    ).model_dump(mode="json")
+    second = _submission(
+        "REP-RACE-002", "June 2026", enterprise_key=enterprise.enterprise_key
+    ).model_dump(mode="json")
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         responses = await asyncio.gather(
@@ -446,7 +467,9 @@ async def test_concurrent_same_enterprise_period_accepts_exactly_one_request(
         repeated = await client.post(
             "/operational/desktop/report-submissions",
             headers=_authorization(enterprise),
-            json=_submission("REP-RACE-003", "June 2026").model_dump(mode="json"),
+            json=_submission(
+                "REP-RACE-003", "June 2026", enterprise_key=enterprise.enterprise_key
+            ).model_dump(mode="json"),
         )
         assert repeated.status_code == 409
 
@@ -1062,3 +1085,57 @@ async def test_final_report_listing_query_count_is_bounded(
         "enterprise_report_submissions" not in statement.lower()
         for statement in twenty_report_statements
     )
+
+
+@pytest.mark.asyncio
+async def test_unified_open_space_report_round_trip_and_single_staff_consolidation(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    from pathlib import Path
+
+    enterprise = await _create_enterprise(postgres_runtime, label="open-space")
+    fixture_path = (
+        Path(__file__).resolve().parents[4] / "test-fixtures/open-space-establishment-report.json"
+    )
+    saved = json.loads(fixture_path.read_text())
+    async with postgres_runtime.sessions() as db:
+        account = await db.get(Account, enterprise.id)
+        assert account is not None
+        saved["payload"]["counting"]["enterprise_id"] = account.enterprise_profile.enterprise_id
+    counting = saved["payload"]["counting"]
+    counting["snapshot_version"] = snapshot_digest(counting)
+    payload = DesktopReportSubmissionIngest(
+        submissionId=saved["submission_id"],
+        reportId=saved["report_id"],
+        period=saved["period"],
+        submittedAt=saved["submitted_at"],
+        entries=None,
+        exits=None,
+        peakOccupancy=2,
+        uniqueCount=2,
+        payload=saved["payload"],
+    )
+    report = await _ready_report(postgres_runtime, enterprise, payload)
+    assert report.metrics == {"entry": None, "exit": None, "peak": "2", "unique": 2}
+    assert report.payload["counting"]["snapshot_version"] == counting["snapshot_version"]
+    assert report.demographics.thisProvMale == report.demographics.thisProvFemale == 1
+    final = await _consolidate(
+        postgres_runtime, [report.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} unified"
+    )
+    assert final.enterpriseCount == 1
+    assert final.totalUnique == 2
+    assert final.totalEntry is final.totalExit is None
+    assert len(final.sources) == 1
+    assert final.sources[0].counting == counting
+    assert final.sources[0].unique == 2
+    # The finalized source stores its own frozen snapshot rather than reading a mutable intake payload.
+    async with postgres_runtime.sessions() as db:
+        source = await db.get(EnterpriseReportSubmission, report.id)
+        source.payload_json = "{}"
+        await db.commit()
+    async with postgres_runtime.sessions() as db:
+        account = await db.get(Account, enterprise.id)
+        assert account is not None
+        found = await list_final_reports(db, account)
+        retained = next(item for item in found if item.id == final.id)
+        assert retained.sources[0].counting == counting

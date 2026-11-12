@@ -7,19 +7,20 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { getMlServiceCommand } from "../ml-service-command";
-import { validateMlServiceRequest } from "../ml-service-request-policy";
+import { validateMlServiceRequest, type ValidatedMlServiceRequest } from "../ml-service-request-policy";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "../ml-service-contract";
 import { classifyMlServiceStderr } from "../ml-service-log";
+import { createMlDiagnosticLog, createMlDiagnosticOutput } from "../ml-service-diagnostics";
 import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "../ml-service-process";
 import { getCameraCredential, normalizeCameraCredentialId } from "../stores/camera-credential-store";
 import { SerializedOperationQueue } from "./serialized-operation-queue";
 import { MlReportLiveEventStream } from "./ml-report-live-events";
 
 const desktopBuild = getDesktopBuildFingerprint();
-const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
+const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? (app.isPackaged ? "8766" : "8765"));
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const mlServiceAccessToken = randomBytes(32).toString("hex");
-const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
+const ML_SERVICE_STARTUP_TIMEOUT_MS = 90_000;
 const execFileAsync = promisify(execFile);
 const lifecycleOperations = new SerializedOperationQueue();
 const reportLiveEvents = new MlReportLiveEventStream({
@@ -41,12 +42,7 @@ export function setMlServiceStatusChangeListener(listener: () => void) {
 }
 
 function getMlServiceDir() {
-  const developmentPath = path.join(process.env.APP_ROOT, "ml-service");
-  if (existsSync(developmentPath)) {
-    return developmentPath;
-  }
-
-  return path.join(process.resourcesPath, "ml-service");
+  return path.join(app.isPackaged ? process.resourcesPath : process.env.APP_ROOT, "ml-service");
 }
 
 export function startMlService() {
@@ -89,6 +85,8 @@ async function startMlServiceUnlocked() {
   }
 
   const { command, args } = getMlServiceCommand({ isPackaged: app.isPackaged, serviceDir });
+  const diagnostic = createMlDiagnosticLog(path.join(app.getPath("userData"), "logs"));
+  diagnostic.write(`Starting ML service: desktop=${app.getVersion()} platform=${process.platform} arch=${process.arch} runtime=${command}`);
   mlServiceError = null;
   mlServiceConnectedExternally = false;
 
@@ -97,6 +95,8 @@ async function startMlServiceUnlocked() {
     env: {
       ...process.env,
       PYTHONUNBUFFERED: "1",
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8",
       TANAW_APP_DATA_DIR: app.getPath("userData"),
       TANAW_ML_SERVICE_HOST: process.env["TANAW_ML_SERVICE_HOST"] ?? "127.0.0.1",
       TANAW_ML_MODEL_DIR: path.join(serviceDir, "models"),
@@ -109,16 +109,19 @@ async function startMlServiceUnlocked() {
   mlServiceProcess = child;
   notifyStatusChange();
 
-  child.stdout?.on("data", (chunk) => {
-    console.info(`[tanaw-ml] ${String(chunk).trim()}`);
+  const stdout = createMlDiagnosticOutput((message) => {
+    diagnostic.write(message);
+    console.info(`[tanaw-ml] ${message}`);
   });
-
-  child.stderr?.on("data", (chunk) => {
-    const message = String(chunk).trim();
-    if (!message) {
-      return;
-    }
+  const stderr = createMlDiagnosticOutput((message) => {
+    diagnostic.write(message);
     console[classifyMlServiceStderr(message)](`[tanaw-ml] ${message}`);
+  });
+  child.stdout?.on("data", stdout.push);
+  child.stderr?.on("data", stderr.push);
+  child.on("close", () => {
+    stdout.flush();
+    stderr.flush();
   });
 
   child.on("error", (error) => {
@@ -127,6 +130,7 @@ async function startMlServiceUnlocked() {
     }
 
     mlServiceError = error.message;
+    diagnostic.write(`ML service launch failed: ${error.message}`);
     mlServiceProcess = null;
     mlServiceConnectedExternally = false;
     notifyStatusChange();
@@ -137,18 +141,22 @@ async function startMlServiceUnlocked() {
       return;
     }
 
-    if (code && code !== 0) {
-      mlServiceError = `ML service exited with code ${code}${signal ? ` (${signal})` : ""}.`;
-    }
+    const exit = code === null ? `signal ${signal ?? "unknown"}` : `code ${code} (0x${(code >>> 0).toString(16)})`;
+    mlServiceError = `ML service exited with ${exit}. Details: ${diagnostic.file}`;
+    diagnostic.write(mlServiceError);
     mlServiceProcess = null;
     mlServiceConnectedExternally = false;
     notifyStatusChange();
   });
 
-  if (!(await waitForCompatibleMlService(ML_SERVICE_STARTUP_TIMEOUT_MS))) {
+  if (!(await waitForCompatibleMlService(ML_SERVICE_STARTUP_TIMEOUT_MS, () => mlServiceProcess === child))) {
+    // A process launch/crash error is more useful than a generic timeout.
+    if (mlServiceProcess !== child) return;
     mlServiceError = "The local ML service started but did not expose the required camera runtime API.";
+    diagnostic.write(mlServiceError);
     notifyStatusChange();
   } else {
+    diagnostic.write("ML service is ready.");
     reportLiveEvents.reconnectAfterServiceRestart();
   }
 }
@@ -186,6 +194,13 @@ export function isMlServiceRunning() {
 }
 
 export async function getMlServiceStatusPayload() {
+  // A slow first launch can become healthy after the initial deadline. Clear
+  // the startup error only after checking the actual authenticated API.
+  if (mlServiceError && isMlServiceRunning() && (await probeMlServiceCompatibility()).compatible) {
+    mlServiceError = null;
+    reportLiveEvents.reconnectAfterServiceRestart();
+    notifyStatusChange();
+  }
   return {
     baseUrl: mlServiceUrl,
     desktopBuild,
@@ -198,7 +213,31 @@ export async function getMlServiceStatusPayload() {
 }
 
 export async function proxyMlServiceJsonRequest(requestInput: unknown) {
-  const { body, method, timeoutMs, url } = validateMlServiceRequest(requestInput, mlServiceUrl);
+  const request = validateMlServiceRequest(requestInput, mlServiceUrl);
+  if (request.method !== "POST" || request.url.pathname !== "/context/enterprise") {
+    return sendMlServiceJsonRequest(request);
+  }
+
+  // Sign-in can finish while the native service is still starting. Keep the
+  // first enterprise binding behind startup and any in-progress restart.
+  return lifecycleOperations.run(async () => {
+    await startMlServiceUnlocked();
+    const status = await getMlServiceStatusPayload();
+    if (status.error || !status.running) {
+      return {
+        body: JSON.stringify({ code: "service_unavailable", message: status.error ?? "The local ML service could not start." }),
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+      };
+    }
+    const response = await sendMlServiceJsonRequest(request);
+    if (response.ok) reportLiveEvents.reconnectAfterServiceRestart();
+    return response;
+  });
+}
+
+async function sendMlServiceJsonRequest({ body, method, timeoutMs, url }: ValidatedMlServiceRequest) {
   const response = await fetch(url, {
     body,
     cache: "no-store",
@@ -206,9 +245,6 @@ export async function proxyMlServiceJsonRequest(requestInput: unknown) {
     method,
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (response.ok && method === "POST" && new URL(url).pathname === "/context/enterprise") {
-    reportLiveEvents.reconnectAfterServiceRestart();
-  }
   return {
     body: await response.text(),
     ok: response.ok,
@@ -285,10 +321,11 @@ async function probeMlServiceCompatibility(timeoutMs = 1200) {
   }
 }
 
-async function waitForCompatibleMlService(timeoutMs: number) {
+async function waitForCompatibleMlService(timeoutMs: number, isCurrentProcess: () => boolean) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if ((await probeMlServiceCompatibility()).compatible) {
+    if (!isCurrentProcess()) return false;
+    if ((await probeMlServiceCompatibility()).compatible && isCurrentProcess()) {
       mlServiceError = null;
       return true;
     }

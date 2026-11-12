@@ -8,8 +8,24 @@ export function AnalyticsMetrics({ analytics }: { analytics: StaffAnalyticsViewM
     <UnifiedMetricsHeader
       ariaLabel="Staff reporting overview"
       metrics={[
-        { id: "entries", title: "Total Aggregated Entries", value: analytics.entries, description: analytics.trendLabel, tone: "success", icon: Activity, isLoading: analytics.reportsLoading },
-        { id: "unique", title: "Est. Unique People", value: analytics.unique, description: "From reporting submissions", tone: "info", icon: Users, isLoading: analytics.reportsLoading },
+        {
+          id: "entries",
+          title: "Total Aggregated Entries",
+          value: analytics.entries ?? "Not measured",
+          description: analytics.trendLabel,
+          tone: "success",
+          icon: Activity,
+          isLoading: analytics.reportsLoading,
+        },
+        {
+          id: "unique",
+          title: "Estimated Daily Visitors",
+          value: analytics.unique,
+          description: "Sum of submitted daily visitor estimates",
+          tone: "info",
+          icon: Users,
+          isLoading: analytics.reportsLoading,
+        },
         {
           id: "compliance",
           title: "Reports Compliance",

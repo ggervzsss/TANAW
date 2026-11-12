@@ -78,6 +78,10 @@ class LocalDatabase:
                 self._transaction.reset(token)
 
     @property
+    def in_transaction(self) -> bool:
+        return self._transaction.get() is not None
+
+    @property
     def change_version(self) -> int:
         """Shared invalidation across all service stores for this database."""
         with _CHANGES_LOCK:

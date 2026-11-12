@@ -7,6 +7,7 @@
   productName: "TANAW Enterprise Desktop",
   electronLanguages: ["en-US", "fil"],
   forceCodeSigning: false,
+  artifactBuildCompleted: "./scripts/build-offline-installer.mjs",
   directories: {
     output: "release/${version}",
   },
@@ -61,9 +62,11 @@
     artifactName: "${productName}-Windows-${version}-Setup.${ext}",
   },
   nsis: {
+    include: "build/offline-installer.nsh",
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,
     deleteAppDataOnUninstall: false,
+    runAfterFinish: false,
   },
 }

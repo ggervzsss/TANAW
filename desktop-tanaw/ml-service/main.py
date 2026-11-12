@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import sys
 
 import uvicorn
 
@@ -18,4 +19,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    main()
+    if sys.argv[1:] == ["--verify-models"]:
+        from app.runtime.verify_models import verify_models
+
+        verify_models()
+    else:
+        main()

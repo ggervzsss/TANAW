@@ -25,11 +25,36 @@ from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     FinalReportCreate,
 )
+from tests.support.counting import counting_snapshot
 
 
 def test_pending_report_can_be_accepted_or_returned() -> None:
     validate_report_review_transition("Pending Review", "Ready to Consolidate")
     validate_report_review_transition("Pending Review", "Returned")
+
+
+def test_departures_of_previous_period_visitors_are_preserved() -> None:
+    report = DesktopReportSubmissionIngest(
+        submissionId=uuid4(),
+        reportId="REP-CARRYOVER",
+        period="June 2026",
+        submittedAt=datetime(2026, 7, 2, tzinfo=UTC),
+        entries=2,
+        exits=5,
+        peakOccupancy=5,
+        uniqueCount=1,
+        payload={
+            "counting": counting_snapshot("June 2026", entries=2, exits=5, peak=5, unique=1),
+            "demo": {"thisProvMale": "1"},
+            "metrics": {
+                "entries": 2,
+                "exits": 5,
+                "peak": 5,
+                "unique": 1,
+            },
+        },
+    )
+    assert report.exits == 5
 
 
 @pytest.mark.parametrize("current_status", ["Ready to Consolidate", "Returned", "Consolidated"])
@@ -108,17 +133,18 @@ def test_returned_final_report_can_be_archived_and_restored() -> None:
     ) == ("Returned for Revision", None)
 
 
-def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() -> None:
+def test_desktop_resubmission_uses_the_frozen_snapshot_for_demographic_validation() -> None:
     payload = DesktopReportSubmissionIngest(
         submissionId=uuid4(),
         reportId="REP-963735",
         period="June 2026",
         submittedAt=datetime(2026, 7, 5, 8, 43, 12, tzinfo=UTC),
-        entries=747,
-        exits=702,
-        peakOccupancy=61,
-        uniqueCount=532,
+        entries=660,
+        exits=625,
+        peakOccupancy=58,
+        uniqueCount=525,
         payload={
+            "counting": counting_snapshot("June 2026", entries=660, exits=625, peak=58, unique=525),
             "demo": {
                 "foreignFemale": "37",
                 "foreignMale": "42",
@@ -234,6 +260,10 @@ def test_desktop_submission_rejects_noncanonical_period_format() -> None:
             submissionId=uuid4(),
             reportId="REP-260601",
             period="Jun 1 - Jun 30, 2026",
+            entries=0,
+            exits=0,
+            peakOccupancy=0,
+            uniqueCount=0,
             submittedAt=datetime(2026, 7, 1, 0, 0, tzinfo=UTC),
             payload={"demo": {}},
         )

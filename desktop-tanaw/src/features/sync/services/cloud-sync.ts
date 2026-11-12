@@ -1,8 +1,11 @@
 import { apiPaths, type ApiDesktopReportSubmission, type ApiDesktopTelemetry, type ApiSchemas } from "../../../contracts/api";
 import { staffApi } from "../../../lib/axios";
+import { DAY_MS, philippineDayStart } from "../../../utils/date-time";
 import { useAuthStore } from "../../login/stores/auth-store";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
+  getEstablishmentLive,
+  getEstablishmentSummary,
   getLocalMetricsSummary,
   getMlCameraStates,
   getMlHealth,
@@ -78,51 +81,43 @@ function selectSamplePreparationCounts(preparation: BackendSamplePreparation, pe
 }
 
 export async function syncDesktopTelemetry() {
+  const capturedAt = new Date();
+  const enterpriseId = useAuthStore.getState().user?.enterpriseId;
+  const today = philippineDayStart(capturedAt);
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const profiles = await listLocalCameras(baseUrl);
-  if (profiles?.length && profiles.every((camera) => camera.analysisMode === "open_space")) return null;
-  const cameras = (profiles ?? []).filter((camera) => camera.analysisMode !== "open_space");
-  const [metrics, originalSession, originalHealth, allStates] = await Promise.all([
+  const [profiles, live, summary, localMetrics, session, health, cameraStates] = await Promise.all([
+    listLocalCameras(baseUrl),
+    getEstablishmentLive(baseUrl),
+    getEstablishmentSummary(baseUrl, { start: new Date(today).toISOString(), end: new Date(today + DAY_MS).toISOString() }),
     getLocalMetricsSummary(baseUrl, { includeSubmitted: true }),
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
     resolveOptional(() => getMlCameraStates(baseUrl)),
   ]);
-  const ids = new Set(cameras.map((camera) => camera.id));
-  const doorwayStates = allStates?.cameras.filter((state) => ids.has(state.camera_id) && state.analysis_mode !== "open_space") ?? [];
-  const cameraStates = allStates ? { ...allStates, cameras: doorwayStates, pending_camera_ids: allStates.pending_camera_ids.filter((id) => ids.has(id)) } : null;
-  const monitoring = buildCameraMonitoringSummary(cameras, cameraStates, serviceStatus);
-  const session = profiles?.some((camera) => camera.analysisMode === "open_space")
-    ? (doorwayStates[0]?.session ?? {
-        ...originalSession,
-        running: false,
-        status: "stopped",
-        error: null,
-        camera_id: null,
-        camera_name: null,
-        updated_at: null,
-        counts: { entry: 0, exit: 0, occupancy: 0, running: false, status: "stopped", started_at: null, error: null },
-      })
-    : originalSession;
-  const health = doorwayStates[0]?.health ?? (profiles?.some((camera) => camera.analysisMode === "open_space") ? null : originalHealth);
+  if (enterpriseId !== useAuthStore.getState().user?.enterpriseId || (enterpriseId && (live.enterprise_id !== enterpriseId || summary.enterprise_id !== enterpriseId))) {
+    throw new Error("Local counts belong to a different establishment.");
+  }
+  const monitoring = buildCameraMonitoringSummary(profiles, cameraStates, serviceStatus);
+  const hasMovement = summary.movement_state !== "unavailable";
+  const hasUniqueEstimate = summary.identification_state !== "unavailable" && (summary.reconciliation_state === "estimated" || summary.reconciliation_state === "partial");
 
   const payload: DesktopTelemetryPayload = {
     deviceId: getDesktopDeviceId(),
-    capturedAt: new Date().toISOString(),
+    capturedAt: capturedAt.toISOString(),
     metrics: {
-      entries: metrics.entries,
-      exits: metrics.exits,
-      peakOccupancy: metrics.peak_occupancy,
-      currentOccupancy: metrics.current_occupancy,
-      uniqueCount: metrics.unique_count,
-      confirmedUniqueCount: metrics.confirmed_unique_count,
-      degradedUniqueCount: metrics.degraded_unique_count,
-      totalEvents: metrics.total_events,
-      unsubmittedEvents: metrics.unsubmitted_events,
-      unsyncedEvents: metrics.unsynced_events,
-      firstEventAt: metrics.first_event_at,
-      lastEventAt: metrics.last_event_at,
+      entries: hasMovement ? summary.entries : null,
+      exits: hasMovement ? summary.exits : null,
+      peakOccupancy: summary.peak_occupancy,
+      currentOccupancy: live.occupancy,
+      uniqueCount: hasUniqueEstimate ? summary.unique_count : null,
+      confirmedUniqueCount: hasUniqueEstimate ? summary.confirmed_unique_count : 0,
+      degradedUniqueCount: hasUniqueEstimate ? summary.unique_count - summary.confirmed_unique_count : 0,
+      totalEvents: summary.qualified_observations,
+      unsubmittedEvents: localMetrics.unsubmitted_events,
+      unsyncedEvents: localMetrics.unsynced_events,
+      firstEventAt: summary.days[0]?.first_event_at ?? null,
+      lastEventAt: summary.days[0]?.last_event_at ?? null,
     },
     session: sessionSummary(session, serviceStatus),
     health: healthSummary(health),
@@ -197,6 +192,13 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
 }
 
 function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
+  if (submission.payload.counting)
+    return {
+      entries: submission.entries,
+      exits: submission.exits,
+      peakOccupancy: submission.peak_occupancy,
+      uniqueCount: submission.unique_count,
+    };
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;
@@ -207,7 +209,7 @@ function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
     if (entries !== null && exits !== null && peakOccupancy !== null && uniqueCount !== null) {
       return {
         entries,
-        exits: Math.min(exits, entries),
+        exits,
         peakOccupancy,
         uniqueCount,
       };

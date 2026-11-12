@@ -42,6 +42,9 @@ async def ingest_report_submission(
     db: AsyncSession, account: Account, payload: DesktopReportSubmissionIngest
 ) -> IntakeReportSummary:
     profile = require_enterprise_profile(account)
+    snapshot = (payload.payload or {}).get("counting")
+    if snapshot is not None and snapshot.get("enterprise_id") != profile.enterprise_id:
+        raise InvalidReportWorkflowError("The counting snapshot belongs to another establishment.")
     existing = await db.scalar(
         select(EnterpriseReportSubmission)
         .where(
@@ -193,7 +196,7 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
             "entry": report.entries,
             "exit": report.exits,
             "unique": report.unique_count,
-            "peak": str(report.peak_occupancy),
+            "peak": str(report.peak_occupancy) if report.peak_occupancy is not None else None,
         },
         payload=payload,
         demographics=report_demographics_from_payload(payload, report.unique_count),

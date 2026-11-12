@@ -253,7 +253,14 @@ export type LocalMetricsHistory = {
   };
 };
 
-export type LocalReportSubmission = LocalMetricsSummary & {
+export type LocalReportSubmission = {
+  entries: number | null;
+  exits: number | null;
+  peak_occupancy: number | null;
+  unique_count: number;
+  period: string;
+  payload: Record<string, unknown>;
+  counting: import("./establishment.types").EstablishmentSummary;
   report_id: string;
   submission_id: string;
   submitted_at: string;
@@ -276,9 +283,9 @@ export type LocalReportSubmissionRecord = {
   submission_id: string;
   period: string;
   submitted_at: string;
-  entries: number;
-  exits: number;
-  peak_occupancy: number;
+  entries: number | null;
+  exits: number | null;
+  peak_occupancy: number | null;
   unique_count: number;
   notes: string | null;
   payload: Record<string, unknown>;

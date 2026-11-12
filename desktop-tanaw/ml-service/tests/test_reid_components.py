@@ -12,9 +12,18 @@ from app.reid import (
     get_reid_model_availability,
     get_reid_model_profile,
 )
+from app.reid.person_reid import model_artifact_digest
 
 
 class ReIdComponentsTest(unittest.TestCase):
+    def test_replacing_weights_under_the_same_filename_changes_the_feature_space(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.onnx"
+            path.write_bytes(b"first weights")
+            first = model_artifact_digest(path)
+            path.write_bytes(b"other weights")
+            self.assertNotEqual(first, model_artifact_digest(path))
+
     def test_missing_reid_model_degrades_without_raising(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             reidentifier = PersonReIdentifier(model_path=str(Path(directory) / "missing.onnx"))

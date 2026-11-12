@@ -134,6 +134,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </div>
         <div className="min-h-0">
           <CameraPreviewPanel
+            cameras={cameras}
             area={area}
             activeCam={activeCam}
             cameraIpError={editedCameraIpConflict ? CAMERA_IP_CONFLICT_MESSAGE : undefined}

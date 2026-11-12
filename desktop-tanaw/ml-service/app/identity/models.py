@@ -55,7 +55,9 @@ class VisitorModelEmbedding:
 
 def normalize_embedding(embedding: np.ndarray) -> np.ndarray | None:
     normalized = np.asarray(embedding, dtype=np.float32).reshape(-1)
+    if not normalized.size or not np.all(np.isfinite(normalized)):
+        return None
     norm = float(np.linalg.norm(normalized))
-    if norm <= 1e-9:
+    if not np.isfinite(norm) or norm <= 1e-9:
         return None
     return (normalized / norm).astype(np.float32)

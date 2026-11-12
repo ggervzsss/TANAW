@@ -111,7 +111,7 @@ export function StaffFinalReportsAuditPage() {
                     <ExpandableTableText primary={report.preparedBy} ariaLabel="report preparer" />
                   </td>
                   <td className="px-6 py-4 font-mono text-xs">
-                    <div>Entry: {report.totalEntry.toLocaleString()}</div>
+                    <div>Entry: {report.totalEntry?.toLocaleString() ?? "Not measured"}</div>
                     <div>Unique: {report.totalUnique.toLocaleString()}</div>
                   </td>
                   <td className="px-6 py-4">

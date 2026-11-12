@@ -1,10 +1,12 @@
 export type SystemLogPeriod = string;
+import type { EstablishmentSummary } from "../features/camera/services/establishment.types";
 
 export type Metrics = {
-  entries: number;
-  exits: number;
-  peak: number;
+  entries: number | null;
+  exits: number | null;
+  peak: number | null;
   unique: number;
+  counting?: EstablishmentSummary;
 };
 
 export type DemoBreakdown = {
@@ -26,9 +28,10 @@ export type ReportRecord = {
   id: string;
   date: string;
   status: string;
-  entries: number;
-  exits?: number;
-  peak?: number;
+  entries: number | null;
+  exits?: number | null;
+  peak?: number | null;
+  counting?: EstablishmentSummary;
   unique: number;
   period?: SystemLogPeriod;
   deadline?: string;
@@ -60,6 +63,13 @@ export type CameraBrand = "tapo" | "tenda" | "dahua" | "custom";
 export type CameraConnectionProfile = "channel" | "channel_ampersand" | "profile" | "h264" | "manual";
 
 export type AnalysisMode = "entrance_exit" | "open_space";
+export type CameraCoverage = {
+  role: "unconfigured" | "external_boundary" | "internal_observation";
+  area_name: string;
+  relationship: "unknown" | "independent" | "contained" | "overlapping" | "alternative";
+  related_camera_id: number | null;
+  travel_seconds: Record<string, number>;
+};
 export type OpenSpaceSettings = {
   zone_id: string;
   zone_name: string;
@@ -72,6 +82,7 @@ export type OpenSpaceSettings = {
 };
 
 type CameraConnectionAndProcessing = {
+  coverage?: CameraCoverage;
   id: number;
   name: string;
   status: CameraStatus;
@@ -105,10 +116,7 @@ type CameraConnectionAndProcessing = {
 };
 // Existing entrance profiles may omit the discriminator at the construction boundary.
 // Public-area profiles always declare their mode and setup/zone state explicitly.
-export type Camera = CameraConnectionAndProcessing & (
-  | { analysisMode?: "entrance_exit"; openSpace?: null }
-  | { analysisMode: "open_space"; openSpace: OpenSpaceSettings | null }
-);
+export type Camera = CameraConnectionAndProcessing & ({ analysisMode?: "entrance_exit"; openSpace?: null } | { analysisMode: "open_space"; openSpace: OpenSpaceSettings | null });
 
 export type ThemePreference = "light" | "dark" | "system";
 export type EnterpriseView = "dashboard" | "cameras" | "reports" | "profile" | "security" | "notifications" | "tickets" | "display-preferences" | "help";

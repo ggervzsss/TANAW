@@ -103,6 +103,21 @@ class UniqueVisitorRegistry:
     def reset_session_tracks(self) -> None:
         self._track_visitors.clear()
 
+    def refresh_gallery(self, camera_id: int | None, now: datetime) -> None:
+        """Reload persisted identities without discarding current physical-track bindings."""
+        self.prepare(camera_id, now)
+        self._gallery = self._load_gallery(self.business_date_for(now), camera_id, now)
+        self._quality_gallery = self._load_quality_gallery(
+            self.business_date_for(now), camera_id, now
+        )
+        valid = {identity.visitor_id for identity in self._gallery}
+        self._track_visitors = {
+            track: visitor for track, visitor in self._track_visitors.items() if visitor in valid
+        }
+
+    def forget_session_track(self, track_id: int) -> None:
+        self._track_visitors.pop(track_id, None)
+
     def confirmed_visitor_count(self, camera_id: int | None, now: datetime | None = None) -> int:
         now = now or datetime.now(UTC)
         if self.business_date_for(now) != self._business_date or camera_id != self._camera_id:
@@ -356,9 +371,10 @@ class UniqueVisitorRegistry:
         if identity is None:
             return False
         existing = self._quality_gallery.get(visitor_id)
-        if existing is not None and float(
-            existing.embedding @ normalized
-        ) < self._quality_match_threshold(identity):
+        if existing is not None and (
+            existing.embedding.shape != normalized.shape
+            or float(existing.embedding @ normalized) < self._quality_match_threshold(identity)
+        ):
             return False
         self._update_quality_embedding(visitor_id, normalized, now or datetime.now(UTC))
         return True
@@ -433,6 +449,8 @@ class UniqueVisitorRegistry:
             self._update_quality_embedding(identity.visitor_id, embedding, now)
             return
 
+        if existing.embedding.shape != embedding.shape:
+            return
         score = float(existing.embedding @ embedding)
         if score >= self._quality_match_threshold(identity):
             self._update_quality_embedding(identity.visitor_id, embedding, now)
@@ -548,6 +566,7 @@ class UniqueVisitorRegistry:
             entry
             for entry in self._quality_gallery.values()
             if entry.visitor_id not in excluded_visitor_ids
+            and entry.embedding.shape == embedding.shape
         ]
         if not quality_entries:
             return None, None, 1.0
@@ -580,8 +599,14 @@ class UniqueVisitorRegistry:
         self._persist_identity(identity, now)
 
     def _identity_score(self, identity: VisitorIdentity, embedding: np.ndarray) -> float:
+        if identity.embedding.shape != embedding.shape:
+            return -1.0
         scores = [float(identity.embedding @ embedding)]
-        scores.extend(float(prototype.embedding @ embedding) for prototype in identity.prototypes)
+        scores.extend(
+            float(prototype.embedding @ embedding)
+            for prototype in identity.prototypes
+            if prototype.embedding.shape == embedding.shape
+        )
         return max(scores)
 
     def _update_prototype(
@@ -674,9 +699,15 @@ class UniqueVisitorRegistry:
         candidate_quality = self._quality_gallery.get(candidate.visitor_id)
         if provisional_quality is None or candidate_quality is None:
             return None
+        if provisional_quality.embedding.shape != candidate_quality.embedding.shape:
+            return False
 
         quality_candidates = [
-            identity for identity in confirmed if identity.visitor_id in self._quality_gallery
+            identity
+            for identity in confirmed
+            if identity.visitor_id in self._quality_gallery
+            and self._quality_gallery[identity.visitor_id].embedding.shape
+            == provisional_quality.embedding.shape
         ]
         scores = [
             float(
