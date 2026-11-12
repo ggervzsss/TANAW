@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { getMlServiceCommand } from "../ml-service-command";
-import { validateMlServiceRequest } from "../ml-service-request-policy";
+import { validateMlServiceRequest, type ValidatedMlServiceRequest } from "../ml-service-request-policy";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "../ml-service-contract";
 import { classifyMlServiceStderr } from "../ml-service-log";
 import { createMlDiagnosticLog, createMlDiagnosticOutput } from "../ml-service-diagnostics";
@@ -17,7 +17,7 @@ import { SerializedOperationQueue } from "./serialized-operation-queue";
 import { MlReportLiveEventStream } from "./ml-report-live-events";
 
 const desktopBuild = getDesktopBuildFingerprint();
-const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
+const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? (app.isPackaged ? "8766" : "8765"));
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const mlServiceAccessToken = randomBytes(32).toString("hex");
 const ML_SERVICE_STARTUP_TIMEOUT_MS = 90_000;
@@ -42,12 +42,7 @@ export function setMlServiceStatusChangeListener(listener: () => void) {
 }
 
 function getMlServiceDir() {
-  const developmentPath = path.join(process.env.APP_ROOT, "ml-service");
-  if (existsSync(developmentPath)) {
-    return developmentPath;
-  }
-
-  return path.join(process.resourcesPath, "ml-service");
+  return path.join(app.isPackaged ? process.resourcesPath : process.env.APP_ROOT, "ml-service");
 }
 
 export function startMlService() {
@@ -218,7 +213,31 @@ export async function getMlServiceStatusPayload() {
 }
 
 export async function proxyMlServiceJsonRequest(requestInput: unknown) {
-  const { body, method, timeoutMs, url } = validateMlServiceRequest(requestInput, mlServiceUrl);
+  const request = validateMlServiceRequest(requestInput, mlServiceUrl);
+  if (request.method !== "POST" || request.url.pathname !== "/context/enterprise") {
+    return sendMlServiceJsonRequest(request);
+  }
+
+  // Sign-in can finish while the native service is still starting. Keep the
+  // first enterprise binding behind startup and any in-progress restart.
+  return lifecycleOperations.run(async () => {
+    await startMlServiceUnlocked();
+    const status = await getMlServiceStatusPayload();
+    if (status.error || !status.running) {
+      return {
+        body: JSON.stringify({ code: "service_unavailable", message: status.error ?? "The local ML service could not start." }),
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+      };
+    }
+    const response = await sendMlServiceJsonRequest(request);
+    if (response.ok) reportLiveEvents.reconnectAfterServiceRestart();
+    return response;
+  });
+}
+
+async function sendMlServiceJsonRequest({ body, method, timeoutMs, url }: ValidatedMlServiceRequest) {
   const response = await fetch(url, {
     body,
     cache: "no-store",
@@ -226,9 +245,6 @@ export async function proxyMlServiceJsonRequest(requestInput: unknown) {
     method,
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (response.ok && method === "POST" && new URL(url).pathname === "/context/enterprise") {
-    reportLiveEvents.reconnectAfterServiceRestart();
-  }
   return {
     body: await response.text(),
     ok: response.ok,

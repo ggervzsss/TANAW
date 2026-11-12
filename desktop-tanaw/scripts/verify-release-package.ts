@@ -79,7 +79,7 @@ function verifyBuilderConfiguration(configuration: BuilderConfiguration): void {
     throw new Error("The complete offline installer hook and local-payload validation must be enabled.");
   }
   if (configuration.nsis?.deleteAppDataOnUninstall !== false) {
-    throw new Error("Uninstallation must preserve cameras and unsynchronized local records.");
+    throw new Error("Use TANAW's targeted uninstall hook to avoid deleting the development profile.");
   }
   if (JSON.stringify(configuration.electronLanguages) !== JSON.stringify(DESKTOP_RELEASE_LOCALES)) {
     throw new Error("Electron locale packaging does not match the supported release locale list.");

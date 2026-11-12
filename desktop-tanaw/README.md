@@ -91,6 +91,17 @@ Central records and local device records have separate lifecycles.
 - **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
 - **ml-service/tests:** Python camera-processing and local-storage tests.
 
+## Local storage and camera service
+
+On Windows the installed app stores its database, camera credentials, and sign-in
+state under `%APPDATA%\TANAW Enterprise Desktop` and starts its camera service on
+`127.0.0.1:8766`. Development uses `%APPDATA%\desktop-tanaw` and port `8765`.
+
+A Windows uninstall removes the installed app's profile and cached installer
+payload for the current Windows account. Unsynced reports are lost. Installing
+an update over an existing installation keeps the profile. The development
+profile and records already synced to the server are separate.
+
 ## Building installers
 
 Run these commands from `desktop-tanaw` after installing npm dependencies and
