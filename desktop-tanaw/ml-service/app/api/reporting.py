@@ -132,7 +132,6 @@ def prepare_sample_counts(payload: SamplePrepareRequest, request: Request) -> Sa
                 entries=payload.entries,
                 exits=payload.exits,
                 unique_count=payload.unique_count,
-                peak_occupancy=payload.peak_occupancy,
                 period=payload.period,
             )
         )

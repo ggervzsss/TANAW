@@ -88,7 +88,16 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           />
         )}
         <DashboardHeader filter={filter} onFilterChange={setFilter} />
-        <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
+        {needsSetup && (
+          <p role="status" className="mx-4.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Camera counts are being withheld because a camera has no counting role or coverage relationship yet. Choose them under Settings in{" "}
+            <a className="font-semibold underline underline-offset-2" href="#/enterprise/cameras">
+              Camera Setup
+            </a>
+            . Counts recorded before the role was set stay withheld for that day.
+          </p>
+        )}
+        <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} needsSetup={needsSetup} />
         <EstablishmentTrendChart summary={summary} range={range} filter={filter} unavailable={Boolean(error)} />
         <div className="overview-secondary">
           <DemographicsBreakdownChart report={demographicsReport} />

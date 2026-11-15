@@ -720,45 +720,6 @@ class CameraProcessingManager:
             "runtime_capabilities": cached_runtime_capabilities(),
         }
 
-    def prepare_sample_counts(
-        self,
-        *,
-        report_id: str,
-        enterprise_id: str,
-        enterprise_name: str | None,
-        entries: int,
-        exits: int,
-        unique_count: int,
-        peak_occupancy: int,
-        period: str,
-    ) -> dict:
-        with self._lock:
-            if self._enterprise_id != enterprise_id:
-                raise ValueError(
-                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
-                    f"Log into {enterprise_name or enterprise_id} before preparing counts."
-                )
-            camera_id = self._config.camera_id if self._config else None
-            camera_name = self._config.camera_name if self._config else None
-
-        summary = self._session_store.prepare_sample_counts(
-            report_id=report_id,
-            entries=entries,
-            exits=exits,
-            unique_count=unique_count,
-            peak_occupancy=peak_occupancy,
-            camera_id=camera_id,
-            camera_name=camera_name,
-            period=period,
-        )
-        return {
-            **summary,
-            "enterprise_id": enterprise_id,
-            "enterprise_name": enterprise_name,
-            "period": period,
-            "prepared": bool(summary.get("prepared")),
-        }
-
     def restore_last_session(self) -> bool:
         if self.running or self._restoring_session:
             return False

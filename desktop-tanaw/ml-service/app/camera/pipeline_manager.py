@@ -27,6 +27,7 @@ from app.storage.repositories.area_repository import AreaRepository
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
 from app.storage.repositories.establishment_repository import TIMEZONE as REPORTING_TIMEZONE
 from app.storage.repositories.establishment_repository import EstablishmentRepository
+from app.storage.repositories.establishment_sample_repository import prepare_sample_period
 
 logger = logging.getLogger(__name__)
 
@@ -896,8 +897,17 @@ class CameraPipelineRegistry:
     def mark_events_synced(self) -> int:
         return self._reporting.mark_events_synced()
 
-    def prepare_sample_counts(self, **values: Any) -> dict[str, Any]:
-        return self._reporting.prepare_sample_counts(**values)
+    def prepare_sample_counts(
+        self, *, enterprise_id: str, enterprise_name: str | None, **values: Any
+    ) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            if self._enterprise_id != enterprise_id:
+                raise ValueError(
+                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
+                    f"Log into {enterprise_name or enterprise_id} before preparing counts."
+                )
+            result = prepare_sample_period(self.establishment_repository(), **values)
+        return {**result, "enterprise_id": enterprise_id, "enterprise_name": enterprise_name}
 
     def aggregate_session(self) -> dict[str, Any]:
         states = self.camera_states()

@@ -88,22 +88,5 @@ class LocalOperationsService:
     def mark_events_synced(self) -> int:
         return self._store.mark_events_synced()
 
-    def prepare_sample_counts(self, **values: Any) -> dict[str, Any]:
-        enterprise_id = values.pop("enterprise_id")
-        enterprise_name = values.pop("enterprise_name")
-        if self._enterprise_id != enterprise_id:
-            raise ValueError(
-                f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
-                f"Log into {enterprise_name or enterprise_id} before preparing counts."
-            )
-        summary = self._store.prepare_sample_counts(**values, camera_id=None, camera_name=None)
-        return {
-            **summary,
-            "enterprise_id": enterprise_id,
-            "enterprise_name": enterprise_name,
-            "period": values["period"],
-            "prepared": bool(summary.get("prepared")),
-        }
-
     def close(self) -> None:
         return

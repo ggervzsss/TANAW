@@ -3,8 +3,8 @@ import type { EstablishmentLive, EstablishmentSummary } from "../../camera/servi
 import type { TrendFilter } from "../types/dashboard";
 import { motion, useReducedMotion } from "motion/react";
 
-type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean };
-export function EstablishmentMetrics({ summary, live, filter, loading }: Props) {
+type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean; needsSetup?: boolean };
+export function EstablishmentMetrics({ summary, live, filter, loading, needsSetup = false }: Props) {
   const reduceMotion = useReducedMotion();
   const visitorsAvailable = summary && !["not_collected", "configuration_required"].includes(summary.reconciliation_state) && summary.identification_state !== "unavailable";
   const movementAvailable = summary && summary.movement_state !== "unavailable";
@@ -45,7 +45,7 @@ export function EstablishmentMetrics({ summary, live, filter, loading }: Props) 
             <motion.strong key={`${loading}-${value}`} initial={{ opacity: reduceMotion ? 1 : 0.6 }} animate={{ opacity: 1 }} transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}>
               {loading ? <span className="design-skeleton" aria-label="Loading count" /> : value == null ? "—" : value.toLocaleString()}
             </motion.strong>
-            <p>{value == null && !loading ? "Unavailable" : description}</p>
+            <p>{value == null && !loading ? (needsSetup ? "Counting setup required" : "Unavailable") : description}</p>
           </div>
         </article>
       ))}

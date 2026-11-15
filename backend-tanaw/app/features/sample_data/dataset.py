@@ -32,9 +32,11 @@ def prepared_counts(
         .astimezone(PHILIPPINE_TIME_ZONE)
         .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     )
+    # Four completed months to report, plus the current month so recent Dashboard days have
+    # history. The desktop records only elapsed days of the current month.
     return [
         _counts_for_period(enterprise_id, _add_months(current, month_offset))
-        for month_offset in range(-4, 0)
+        for month_offset in range(-4, 1)
     ]
 
 

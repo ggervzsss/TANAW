@@ -12,12 +12,14 @@ import {
   getLocalMetricsSummary,
   listLocalReportSubmissions,
   markLocalReportSynced,
+  prepareLocalSampleCounts,
   type LocalReportSubmissionRecord,
 } from "../../../../../../src/features/camera/services/ml-service";
 import { syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
 
 vi.mock("../../../../../../src/lib/axios", () => ({
   staffApi: {
+    get: vi.fn(),
     post: vi.fn(),
   },
 }));
@@ -174,10 +176,53 @@ describe("establishment telemetry", () => {
     expect(markLocalEventsSynced).toHaveBeenCalledOnce();
   });
 
-  it("does not prepare synthetic doorway samples for Open Space cameras", async () => {
-    vi.mocked(listLocalCameras).mockResolvedValue([{ id: 1, analysisMode: "open_space" }] as Awaited<ReturnType<typeof listLocalCameras>>);
-    await expect(prepareDesktopSampleCounts()).resolves.toBeNull();
-    expect(staffApi.post).not.toHaveBeenCalled();
-    expect(getLocalMetricsSummary).not.toHaveBeenCalled();
+  it("does not touch the local ledger when the backend has no sample dataset", async () => {
+    vi.mocked(staffApi.get).mockResolvedValue({ data: null });
+    await expect(prepareDesktopSampleCounts()).resolves.toBe(0);
+    expect(prepareLocalSampleCounts).not.toHaveBeenCalled();
+  });
+
+  it("records every pending sample month once per local day", async () => {
+    const counts = (period: string, reportId: string) => ({ entries: 700, exits: 680, uniqueCount: 520, peakOccupancy: 60, period, reportId });
+    vi.mocked(staffApi.get).mockResolvedValue({
+      data: {
+        enterpriseId: "ENT-SAMPLE",
+        enterpriseName: "Sample Park",
+        counts: counts("September 2026", "SAMPLE-REP-SEP"),
+        pendingCounts: [counts("September 2026", "SAMPLE-REP-SEP"), counts("October 2026", "SAMPLE-REP-OCT")],
+      },
+    });
+    vi.mocked(prepareLocalSampleCounts).mockResolvedValue({ enterprise_id: "ENT-SAMPLE", enterprise_name: "Sample Park", period: "September 2026", prepared: true, days: 30 });
+
+    await expect(prepareDesktopSampleCounts()).resolves.toBe(60);
+    expect(prepareLocalSampleCounts).toHaveBeenCalledTimes(2);
+    expect(prepareLocalSampleCounts).toHaveBeenCalledWith("http://127.0.0.1:8765", {
+      enterpriseId: "ENT-SAMPLE",
+      enterpriseName: "Sample Park",
+      entries: 700,
+      exits: 680,
+      uniqueCount: 520,
+      period: "October 2026",
+      reportId: "SAMPLE-REP-OCT",
+    });
+
+    await expect(prepareDesktopSampleCounts()).resolves.toBe(0);
+    expect(prepareLocalSampleCounts).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes the current month on every call so today keeps up", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-16T04:00:00Z"));
+    try {
+      const current = { entries: 700, exits: 680, uniqueCount: 520, peakOccupancy: 60, period: "November 2026", reportId: "SAMPLE-REP-NOV" };
+      vi.mocked(staffApi.get).mockResolvedValue({ data: { enterpriseId: "ENT-NOW", enterpriseName: "Now Park", counts: current, pendingCounts: [current] } });
+      vi.mocked(prepareLocalSampleCounts).mockResolvedValue({ enterprise_id: "ENT-NOW", enterprise_name: "Now Park", period: "November 2026", prepared: true, days: 1 });
+
+      await prepareDesktopSampleCounts();
+      await prepareDesktopSampleCounts();
+      expect(prepareLocalSampleCounts).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

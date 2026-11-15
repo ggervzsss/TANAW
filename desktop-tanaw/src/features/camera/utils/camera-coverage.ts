@@ -8,6 +8,19 @@ export const EMPTY_CAMERA_COVERAGE: CameraCoverage = {
   travel_seconds: {},
 };
 
+/**
+ * Counting role for a newly added camera. Without one, every observation is withheld from
+ * establishment totals. The role follows the camera mode; "separate area" is only safe to
+ * assume for the first camera, so a later camera still asks how it relates to the others.
+ */
+export function defaultCameraCoverage(analysisMode: "entrance_exit" | "open_space", hasOtherCameras: boolean): CameraCoverage {
+  return {
+    ...EMPTY_CAMERA_COVERAGE,
+    role: analysisMode === "open_space" ? "internal_observation" : "external_boundary",
+    relationship: hasOtherCameras ? "unknown" : "independent",
+  };
+}
+
 export function validateCameraCoverage(coverage: CameraCoverage | undefined, cameraId: number): string | null {
   if (!coverage) return null;
   const requiresCamera = ["contained", "overlapping", "alternative"].includes(coverage.relationship);

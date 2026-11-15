@@ -22,6 +22,7 @@ import {
   type MlServiceStatus,
   type MlSession,
   type SamplePreparationRequest,
+  type SamplePreparationResult,
 } from "./ml-service.types";
 
 export * from "./ml-service.types";
@@ -239,8 +240,8 @@ export async function markLocalEventsSynced(baseUrl: string): Promise<{ updated:
   return requestJson<{ updated: number }>(`${baseUrl}/metrics/mark-synced`, { method: "POST" }, 2500);
 }
 
-export async function prepareLocalSampleCounts(baseUrl: string, payload: SamplePreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
-  return requestJson<LocalMetricsSummary & { prepared: boolean }>(
+export async function prepareLocalSampleCounts(baseUrl: string, payload: SamplePreparationRequest): Promise<SamplePreparationResult> {
+  return requestJson<SamplePreparationResult>(
     `${baseUrl}/sample/prepare`,
     {
       method: "POST",
@@ -250,7 +251,6 @@ export async function prepareLocalSampleCounts(baseUrl: string, payload: SampleP
         entries: payload.entries,
         exits: payload.exits,
         unique_count: payload.uniqueCount,
-        peak_occupancy: payload.peakOccupancy,
         period: payload.period,
         report_id: payload.reportId,
       }),

@@ -1,7 +1,6 @@
 import type { DemoBreakdown } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, saveLocalReportDraft } from "../../camera/services/ml-service";
-import { prepareDesktopSampleCounts, syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
-import { isPreparedMetrics } from "../model/report-workspace";
+import { syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
 
 const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
 
@@ -42,14 +41,5 @@ export async function syncSubmittedReportToCloud(reportId: string) {
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "The backend could not be reached.";
-  }
-}
-
-export async function prepareNextWorkspaceMetrics() {
-  try {
-    const prepared = await prepareDesktopSampleCounts();
-    return isPreparedMetrics(prepared) ? prepared : null;
-  } catch {
-    return null;
   }
 }

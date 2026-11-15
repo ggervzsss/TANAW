@@ -79,15 +79,14 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
           },
         ],
       });
-    if (path.endsWith("/desktop/sample-preparation")) {
-      sampleRequests += 1;
-      return route.fulfill({ json: null });
-    }
+    if (path.endsWith("/desktop/sample-preparation")) return route.fulfill({ json: null });
     return route.fulfill({ json: [] });
   });
   await mockMlRequest(page, "*", (request) => {
     const path = new URL(request.url).pathname;
     const reply = (body: unknown, status = 200) => mlResponse({ status, body: JSON.stringify(body) });
+    // Without a backend sample dataset, nothing synthetic may enter the local ledger.
+    if (path === "/sample/prepare") sampleRequests += 1;
     if (path === "/context/enterprise") return reply({ enterprise_id: user.enterpriseId, enterprise_name: user.enterpriseName });
     if (path === "/cameras") return reply(mode === "mixed" ? [profile(1, "entrance_exit"), profile(2, "open_space")] : [profile(1, mode)]);
     if (path === "/cameras/runtime")

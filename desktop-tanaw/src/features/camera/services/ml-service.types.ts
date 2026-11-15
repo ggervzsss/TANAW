@@ -309,9 +309,16 @@ export type SamplePreparationRequest = {
   entries: number;
   exits: number;
   uniqueCount: number;
-  peakOccupancy: number;
   period: string;
   reportId: string;
+};
+
+export type SamplePreparationResult = {
+  enterprise_id: string;
+  enterprise_name: string | null;
+  period: string;
+  prepared: boolean;
+  days: number;
 };
 
 export type CameraTestResult = {

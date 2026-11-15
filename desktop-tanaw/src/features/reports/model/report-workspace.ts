@@ -80,10 +80,6 @@ export function metricsFromPendingCounts(counts: PreparedReportCounts): Metrics 
   };
 }
 
-export function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { prepared: boolean } {
-  return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
-}
-
 export function getDemographicDraftKey(activeReportId: string | null, period: string) {
   return activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
 }

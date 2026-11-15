@@ -203,15 +203,15 @@ class SamplePrepareRequest(BaseModel):
     entries: int = Field(ge=1, le=100_000)
     exits: int = Field(ge=0, le=100_000)
     unique_count: int = Field(ge=0, le=100_000)
-    peak_occupancy: int = Field(ge=1, le=100_000)
     period: str = Field(min_length=1, max_length=120)
 
 
-class SamplePrepareResponse(MetricsSummaryResponse):
+class SamplePrepareResponse(BaseModel):
     enterprise_id: str
     enterprise_name: str | None = None
-    period: str | None = None
-    prepared: bool = True
+    period: str
+    prepared: bool
+    days: int
 
 
 class ReportSubmissionRecordResponse(BaseModel):

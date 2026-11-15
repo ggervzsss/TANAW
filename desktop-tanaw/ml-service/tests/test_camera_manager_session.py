@@ -58,40 +58,6 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertTrue(second["changed"])
             self.assertEqual(manager.metrics_summary()["entries"], 0)
 
-    def test_prepared_counts_require_matching_enterprise_but_not_camera(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            manager._enterprise_id = "target@tanaw.test"
-            manager._enterprise_name = "Target Enterprise"
-            manager._session_store = SessionStore(directory, "target@tanaw.test")
-
-            result = manager.prepare_sample_counts(
-                report_id="SAMPLE-REPORT-1",
-                enterprise_id="target@tanaw.test",
-                enterprise_name="Target Enterprise",
-                entries=20,
-                exits=15,
-                unique_count=12,
-                peak_occupancy=8,
-                period="Current Period",
-            )
-
-            self.assertEqual(result["entries"], 20)
-            self.assertEqual(result["exits"], 15)
-            self.assertEqual(result["enterprise_id"], "target@tanaw.test")
-
-            with self.assertRaisesRegex(ValueError, "Desktop is bound"):
-                manager.prepare_sample_counts(
-                    report_id="SAMPLE-REPORT-1",
-                    enterprise_id="other@tanaw.test",
-                    enterprise_name="Other Enterprise",
-                    entries=20,
-                    exits=15,
-                    unique_count=12,
-                    peak_occupancy=8,
-                    period="Current Period",
-                )
-
     def test_stale_session_cannot_publish_raw_frame(self) -> None:
         manager = CameraProcessingManager()
         current_session = _session(1)

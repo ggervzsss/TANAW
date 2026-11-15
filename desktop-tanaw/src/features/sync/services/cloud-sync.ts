@@ -22,6 +22,7 @@ import {
   type MlServiceStatus,
   type MlSession,
 } from "../../camera/services/ml-service";
+import { getCurrentReportingPeriod } from "../../reports/model/reporting-calendar";
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 import { isSameReportingMonth } from "../../reports/utils/reporting-period";
 import { buildCameraMonitoringSummary } from "./camera-monitoring";
@@ -40,44 +41,39 @@ export async function getDesktopSamplePreparation() {
   return response.data;
 }
 
-export async function prepareDesktopSampleCounts(period?: string) {
+const preparedSamplePeriods = new Set<string>();
+
+/**
+ * Records the backend sample dataset's months in the local establishment ledger.
+ * The local service leaves days with camera counts alone, so repeated calls are safe.
+ * Completed months are sent once per local day; the current month is sent on every
+ * call so today's sample visits keep up with the clock.
+ */
+export async function prepareDesktopSampleCounts() {
+  const preparation = await getDesktopSamplePreparation();
+  const pending = preparation?.pendingCounts ?? [];
+  if (!preparation || !pending.length) return 0;
+  const today = philippineDayStart(new Date());
+  const currentPeriod = getCurrentReportingPeriod();
+  const periods = pending.filter((counts) => isSameReportingMonth(counts.period, currentPeriod) || !preparedSamplePeriods.has(`${preparation.enterpriseId}|${counts.reportId}|${today}`));
+  if (!periods.length) return 0;
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const profiles = await listLocalCameras(baseUrl);
-  if (profiles?.length && profiles.every((camera) => camera.analysisMode === "open_space")) return null;
-  const preparation = await getDesktopSamplePreparation();
-  if (!preparation) return null;
-
-  if (!period) {
-    const currentMetrics = await getLocalMetricsSummary(baseUrl);
-    const pendingPeriods = preparation.pendingCounts?.map((counts) => counts.period) ?? (preparation.counts ? [preparation.counts.period] : []);
-    if (currentMetrics.period && pendingPeriods.includes(currentMetrics.period) && currentMetrics.unsubmitted_events > 0) {
-      return null;
-    }
+  let preparedDays = 0;
+  for (const counts of periods) {
+    const result = await prepareLocalSampleCounts(baseUrl, {
+      enterpriseId: preparation.enterpriseId,
+      enterpriseName: preparation.enterpriseName,
+      entries: counts.entries,
+      exits: counts.exits,
+      uniqueCount: counts.uniqueCount,
+      period: counts.period,
+      reportId: counts.reportId,
+    });
+    preparedSamplePeriods.add(`${preparation.enterpriseId}|${counts.reportId}|${today}`);
+    preparedDays += result.days;
   }
-  const counts = selectSamplePreparationCounts(preparation, period);
-  if (!counts) return null;
-
-  return prepareLocalSampleCounts(baseUrl, {
-    enterpriseId: preparation.enterpriseId,
-    enterpriseName: preparation.enterpriseName,
-    entries: counts.entries,
-    exits: counts.exits,
-    uniqueCount: counts.uniqueCount,
-    peakOccupancy: counts.peakOccupancy,
-    period: counts.period,
-    reportId: counts.reportId,
-  });
-}
-
-function selectSamplePreparationCounts(preparation: BackendSamplePreparation, period?: string) {
-  if (!period) {
-    return preparation.counts ?? preparation.pendingCounts?.[0] ?? null;
-  }
-  return (
-    preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, period)) ??
-    (preparation.counts && isSameReportingMonth(preparation.counts.period, period) ? preparation.counts : null)
-  );
+  return preparedDays;
 }
 
 export async function syncDesktopTelemetry() {

@@ -225,10 +225,15 @@ Supporting sample accounts use **Visitor sample access phrase 2026**:
 | Admin        | system.admin@tanaw.test  |
 | IT Personnel | it.operations@tanaw.test |
 
-In the desktop, wait for prepared counts and choose the oldest unfinished month
-under **Reports & Submissions**. Complete the demographic fields and submit.
-After synchronization, the next prepared month can load. Repeat for each available
-month; the sample dataset can contain several overdue periods.
+Within about a minute of signing in, the desktop records the prepared counts
+in its local ledger: four completed months to report, plus the current month up
+to now. Sample visits happen between 7:00 AM and 8:00 PM, so **Today** on the
+Dashboard stays empty before opening time; the 7-day and 30-day ranges show the
+earlier days. Today keeps updating every minute while the desktop is open.
+Dashboard shows the counts as the **Sample data** source, and
+**Reports & Submissions** lists each completed month as an overdue period.
+Complete the demographic fields for a month and submit; repeat for the others.
+A day where a camera records keeps only the camera's counts.
 
 In the portal, sign in as the sample LGU Staff account. Review the submissions
 under **Batch Reports**, mark eligible records **Ready to Consolidate**, generate
@@ -275,7 +280,8 @@ its environment value. The --seed option changes random sample values, not
 account selection.
 
 Generated data uses reserved identifiers. Do not reuse those identifiers for
-ordinary records. Central sample cleanup does not delete desktop records.
+ordinary records. Central sample cleanup does not delete desktop records; use
+local-mockdata-off to remove sample days from the desktop.
 
 From desktop-tanaw:
 
@@ -388,6 +394,6 @@ It does not clear desktop data.
 - **Dependency paths are too long:** move the checkout to a shorter path outside synchronized folders.
 - **The backend cannot connect:** keep DATABASE_URL on db:5432 and match its password to POSTGRES_PASSWORD.
 - **A service port is occupied:** inspect docker compose ps and stop an older instance before starting another.
-- **Prepared counts do not appear:** sign in as the exact sample-data target and allow time for synchronization.
+- **Prepared counts do not appear:** sign in as the exact sample-data target and allow up to a minute. Days that already had local counts keep them.
 - **API checks against the local ML service fail:** Electron authenticates that service; use the desktop or local-data inspection rather than unauthenticated requests.
 - **A sample dataset already exists:** use mockdata-reset with the target or remove the current sample dataset first.
