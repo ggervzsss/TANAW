@@ -14,9 +14,7 @@ import { CountingDetails } from "./CountingDetails";
 
 type Props = {
   enterpriseName: string;
-  attractionType?: string;
   reviewed?: boolean;
-  isMock?: boolean;
   activeReport: ReportRecord | null;
   activeReportId: string | null;
   demo: DemoBreakdown;
@@ -37,9 +35,7 @@ type Props = {
 
 export function ReportDraftPanel({
   enterpriseName,
-  attractionType,
   reviewed = false,
-  isMock = false,
   activeReport,
   activeReportId,
   demo,
@@ -58,7 +54,7 @@ export function ReportDraftPanel({
   setNotes,
 }: Props) {
   const category = useAuthStore((state) => state.user?.category);
-  const complete = getDemographicAllocationStatus(demo, metrics.unique).isComplete && (!metricsError || isMock) && !isPeriodChanging;
+  const complete = getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
   const steps = [
     { label: "Complete Visitor Details", done: complete },
@@ -92,7 +88,7 @@ export function ReportDraftPanel({
               <dt>Tourism Attraction</dt>
               <dd>
                 <Landmark aria-hidden="true" />
-                <span>{(attractionType ?? category) || "Not recorded"}</span>
+                <span>{category || "Not recorded"}</span>
               </dd>
             </div>
           </dl>

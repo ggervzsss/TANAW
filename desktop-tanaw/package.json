@@ -42,8 +42,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:electron": "npm run build && playwright test --config=playwright.electron.config.ts",
-    "type": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test:dashboard-mock": "playwright test --config=playwright.mock.config.ts"
+    "type": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.10",

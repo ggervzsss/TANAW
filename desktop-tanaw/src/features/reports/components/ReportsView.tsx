@@ -7,9 +7,6 @@ import { SubmitReportDialog } from "./SubmitReportDialog";
 import type { Camera, ReportRecord } from "../../../types/enterprise";
 import { useReportsWorkspace } from "../hooks/useReportsWorkspace";
 import { validateDemographicAllocation } from "../model/report-workspace";
-import { USE_MOCK_DATA } from "../../dashboard/data/dashboardMockData";
-import { REPORTS_MOCK_DATA } from "../data/reportsMockData";
-import { useMockReportsWorkspace } from "../hooks/useMockReportsWorkspace";
 
 type ReportsViewProps = {
   cameras?: Camera[];
@@ -18,18 +15,11 @@ type ReportsViewProps = {
   setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>>;
 };
 
-export function ReportsView(props: ReportsViewProps) {
-  return USE_MOCK_DATA ? <MockReportsView /> : <RealReportsView {...props} />;
-}
-function RealReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
+export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
   const workspace = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
   return <ReportsWorkspace workspace={workspace} />;
 }
-function MockReportsView() {
-  const workspace = useMockReportsWorkspace();
-  return <ReportsWorkspace workspace={workspace} isMock />;
-}
-function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType<typeof useReportsWorkspace>; isMock?: boolean }) {
+function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useReportsWorkspace> }) {
   const [tab, setTab] = useState<"create" | "history">("create");
   const [reviewedKey, setReviewedKey] = useState("");
   const [previewedLedgerKey, setPreviewedLedgerKey] = useState<string | null>(null);
@@ -72,7 +62,7 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
   };
 
   return (
-    <div className="tanaw-reports-workspace" data-reports-surface="var1-workspace" data-reports-source={isMock ? "mock" : "real"}>
+    <div className="tanaw-reports-workspace" data-reports-surface="var1-workspace">
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
@@ -82,8 +72,6 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
           period={previewReport.period}
           reportId={previewReport.reportId}
           validationMessage={validateDemographicAllocation(previewReport.metrics, previewReport.demo)}
-          sampleDaily={previewReport.sampleDaily}
-          attractionType={isMock ? REPORTS_MOCK_DATA.attractionType : undefined}
           onClose={() => {
             if (
               previewReport.reportId === (activeReportId ?? "TANAW-DRAFT") &&
@@ -96,7 +84,7 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
         />
       )}
 
-      {!isMock && showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
+      {showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
 
       <div className="reports-heading">
         <div>
@@ -105,11 +93,6 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
         </div>
       </div>
 
-      {isMock && (
-        <p className="report-mock-banner" role="status" title={REPORTS_MOCK_DATA.disclosure}>
-          {REPORTS_MOCK_DATA.disclosure}
-        </p>
-      )}
       <div className="reports-tabs" role="tablist" aria-label="Reports workspace">
         {(
           [
@@ -143,9 +126,7 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
       <div id="reports-panel-create" role="tabpanel" aria-labelledby="reports-tab-create" hidden={tab !== "create"} className="reports-tab-panel">
         <ReportDraftPanel
           enterpriseName={enterpriseName}
-          attractionType={isMock ? REPORTS_MOCK_DATA.attractionType : undefined}
           reviewed={reviewedKey === reviewKey}
-          isMock={isMock}
           activeReport={activeReport}
           activeReportId={activeReportId}
           demo={demo}
@@ -165,7 +146,6 @@ function ReportsWorkspace({ workspace, isMock = false }: { workspace: ReturnType
               notes,
               period,
               reportId: activeReportId ?? "TANAW-DRAFT",
-              sampleDaily: isMock ? [REPORTS_MOCK_DATA.current, ...REPORTS_MOCK_DATA.reports].find((record) => record.id === activeReportId)?.daily : undefined,
             })
           }
           onRefreshCounts={refreshRevisionCounts}

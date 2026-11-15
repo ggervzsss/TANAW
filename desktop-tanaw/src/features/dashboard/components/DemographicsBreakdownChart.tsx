@@ -1,43 +1,33 @@
 import { useState } from "react";
-import { MapPin, Plane, Trees, Building2 } from "lucide-react";
+import { MapPin, Plane, Trees } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import type { ReportRecord } from "../../../types/enterprise";
 import { getDemographicTotals, getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { emptyDemo } from "../utils/reportLedger";
 
-import type { DashboardMockData } from "../data/dashboardMockData";
-
-export function DemographicsBreakdownChart({ report, mockData }: { report: ReportRecord | null; mockData?: DashboardMockData["demographics"] }) {
+export function DemographicsBreakdownChart({ report }: { report: ReportRecord | null }) {
   const totals = getDemographicTotals(report?.demo ?? emptyDemo());
   const reduceMotion = useReducedMotion();
   const [active, setActive] = useState<string | null>(null);
   const colors = ["var(--dashboard-demographic-female, #06513e)", "var(--dashboard-demographic-male, #16bd93)", "var(--dashboard-demographic-others, #1bc79a)"];
-  const total = mockData?.total ?? totals.grandTotal;
-  const gender = mockData
-    ? mockData.gender.map((slice, index) => ({ label: slice.label, value: slice.percent, color: colors[index % colors.length] }))
-    : [
-        { label: "Female", value: totals.female, color: colors[0] },
-        { label: "Male", value: totals.male, color: colors[1] },
-      ];
-  const residence = mockData
-    ? mockData.residence.map((slice) => ({
-        label: slice.label,
-        value: slice.percent,
-        icon: slice.label === "Foreign" ? Plane : slice.label === "Other Provinces" ? Trees : slice.label === "Other City" ? Building2 : MapPin,
-      }))
-    : [
-        { label: "This Province", value: totals.thisProvince, icon: MapPin },
-        { label: "Other Provinces", value: totals.otherProvince, icon: Trees },
-        { label: "Foreign", value: totals.foreign, icon: Plane },
-      ];
-  const percent = (value: number) => (mockData ? `${value.toFixed(1)}%` : totals.grandTotal ? `${((value / totals.grandTotal) * 100).toFixed(1)}%` : "—");
-  const allocation = !mockData && report ? getDemographicAllocationStatus(report.demo ?? emptyDemo(), report.unique) : null;
+  const total = totals.grandTotal;
+  const gender = [
+    { label: "Female", value: totals.female, color: colors[0] },
+    { label: "Male", value: totals.male, color: colors[1] },
+  ];
+  const residence = [
+    { label: "This Province", value: totals.thisProvince, icon: MapPin },
+    { label: "Other Provinces", value: totals.otherProvince, icon: Trees },
+    { label: "Foreign", value: totals.foreign, icon: Plane },
+  ];
+  const percent = (value: number) => (totals.grandTotal ? `${((value / totals.grandTotal) * 100).toFixed(1)}%` : "—");
+  const allocation = report ? getDemographicAllocationStatus(report.demo ?? emptyDemo(), report.unique) : null;
   return (
     <section className="design-card overview-demographics">
       <header>
         <h3>Demographic Breakdown</h3>
-        <p>{mockData ? mockData.description : report ? `Visitor distribution · ${report.period ?? report.date}` : "Visitor distribution from submitted reports"}</p>
+        <p>{report ? `Visitor distribution · ${report.period ?? report.date}` : "Visitor distribution from submitted reports"}</p>
       </header>
       {total > 0 ? (
         <>
@@ -78,8 +68,8 @@ export function DemographicsBreakdownChart({ report, mockData }: { report: Repor
               {gender.map((slice) => (
                 <li
                   key={slice.label}
-                  title={mockData ? `${slice.label}: ${percent(slice.value)}` : `${slice.label}: ${slice.value.toLocaleString()} visitors`}
-                  aria-label={mockData ? `${slice.label}: ${percent(slice.value)}` : `${slice.label}: ${slice.value.toLocaleString()} visitors, ${percent(slice.value)}`}
+                  title={`${slice.label}: ${slice.value.toLocaleString()} visitors`}
+                  aria-label={`${slice.label}: ${slice.value.toLocaleString()} visitors, ${percent(slice.value)}`}
                   tabIndex={0}
                   onFocus={() => setActive(slice.label)}
                   onBlur={() => setActive(null)}

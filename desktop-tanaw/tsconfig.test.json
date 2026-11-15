@@ -4,5 +4,5 @@
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src", "electron", "tests", "vitest.config.ts", "playwright.config.ts", "playwright.mock.config.ts", "playwright.electron.config.ts"]
+  "include": ["src", "electron", "tests", "vitest.config.ts", "playwright.config.ts", "playwright.electron.config.ts"]
 }

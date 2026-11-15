@@ -33,8 +33,6 @@ import {
   scheduleEnterpriseViewPreload,
 } from "../router/enterprise-view-modules";
 
-import { USE_MOCK_DATA } from "../../features/dashboard/data/dashboardMockData";
-
 type EnterpriseShellProps = {
   initialView?: EnterpriseView;
 };
@@ -81,8 +79,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     [activeView, user?.id, user?.role],
   );
 
-  const frontendMockMode = USE_MOCK_DATA && (activeView === "dashboard" || activeView === "reports");
-  useDesktopCloudSync(mlContextReady && !frontendMockMode);
+  useDesktopCloudSync(mlContextReady);
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -141,7 +138,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
   useEffect(() => {
     const enterpriseId = user?.enterpriseId || user?.id;
-    if (!enterpriseId || frontendMockMode) {
+    if (!enterpriseId) {
       setMlContextReady(false);
       setMlContextError(null);
       return;
@@ -171,10 +168,10 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     return () => {
       disposed = true;
     };
-  }, [frontendMockMode, mlContextAttempt, user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
+  }, [mlContextAttempt, user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
 
   useEffect(() => {
-    if (!mlContextReady || frontendMockMode) return;
+    if (!mlContextReady) return;
     let disposed = false;
     void getMlServiceStatus()
       .then((status) => Promise.all([listLocalCameras(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL), loadCameraCredentialMetadata(enterpriseCameraStorageKey)]))
@@ -189,7 +186,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     return () => {
       disposed = true;
     };
-  }, [mlContextReady, frontendMockMode, enterpriseCameraStorageKey]);
+  }, [mlContextReady, enterpriseCameraStorageKey]);
 
   useLayoutEffect(() => {
     const container = contentScrollRef.current;
@@ -283,7 +280,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
           className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
-            {!frontendMockMode && !mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
+            {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
               <section className="mx-auto mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900" role={mlContextError ? "alert" : "status"}>
                 <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
                 {mlContextError && (
@@ -301,13 +298,11 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
               </section>
             )}
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
-              {activeView === "dashboard" && (mlContextReady || frontendMockMode) && <DashboardView enterpriseName={displayName} cameras={cameras} />}
+              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
               {activeView === "cameras" && mlContextReady && (
                 <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
               )}
-              {activeView === "reports" && (mlContextReady || frontendMockMode) && (
-                <ReportsView cameras={cameras} enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />
-              )}
+              {activeView === "reports" && mlContextReady && <ReportsView cameras={cameras} enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}

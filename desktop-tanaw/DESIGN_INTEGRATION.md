@@ -15,7 +15,7 @@ The Figma plugin was confirmed installed, but no Figma reading tools were expose
 
 ## Data and service constraints
 
-- Camera runtime data is never replaced with reference-screen numbers. The shared `VITE_USE_MOCK_DATA` flag now controls both Dashboard and Reports visualization. Reports samples live in a separate frontend data file and an in-memory hook that never mounts real reporting service hooks; submission stays disabled. Disabling the flag restores the original reporting services. Empty and unavailable real-data states remain explicit.
+- Camera runtime data is never replaced with reference-screen numbers. Dashboard and Reports always use the real reporting services; development sample data comes from the repository `scripts/mockdata-*` backend scripts. Empty and unavailable real-data states remain explicit.
 - The establishment API provides daily summaries. The occupancy chart shows daily observed peaks; it does not fabricate hourly occupancy. Busiest hour is marked unavailable. Entries and exits remain unavailable for configurations without measured boundary movement.
 - The existing demographic schema has male/female counts by province and foreign residence. The dashboard uses those categories instead of inventing city or other-gender data.
 - The assistant interface works with grounded local summaries and saved reports. There is no AI chat endpoint in the existing application. Its disclosure identifies this limitation; it does not present local summaries as model-generated analysis.
@@ -49,12 +49,10 @@ Allocation Tools and search use fixed viewport-aware portals with internal scrol
 upward placement, shared outside-click/Escape dismissal and retained form state.
 Closing a popup consumes the outside action unless switching to another popup.
 Next Steps checks use validated allocation, completed review of the current draft,
-and saved submission status; edits invalidate review credit. Mock records share
-identities/statuses with Dashboard previews and never enter real report state.
+and saved submission status; edits invalidate review credit.
 
-For native verification, build with `VITE_USE_MOCK_DATA=true` and run the Electron
-`reports-mock` test. Build with `VITE_USE_MOCK_DATA=false` for `reports-layout`.
-Each test uses an isolated profile and controlled service endpoints.
+For native verification, build the application and run the Electron `reports-layout`
+test. It uses an isolated profile and controlled service endpoints.
 
 Verification on November 15: type checks, lint, production build, 294 unit tests
 (`npm test -- --maxWorkers=2`), all five mock browser tests, and the focused real

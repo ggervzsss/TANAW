@@ -8,7 +8,6 @@ const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "./tests/e2e/browser",
-  testIgnore: "**/dashboard-mock.spec.ts",
   fullyParallel: false,
   timeout: 30_000,
   expect: { timeout: 8_000 },
@@ -29,7 +28,6 @@ export default defineConfig({
       ...process.env,
       TANAW_RENDERER_ONLY: "true",
       VITE_API_BASE_URL: apiUrl,
-      VITE_USE_MOCK_DATA: "false",
     },
   },
 });

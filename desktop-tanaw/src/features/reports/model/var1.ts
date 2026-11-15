@@ -11,12 +11,10 @@ export const VAR1_SEX_COLUMNS = ["Male", "Female", "Total"] as const;
 export const VAR1_COLUMN_WEIGHTS = [34, 51, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 62, 64] as const;
 export const VAR1_NOTE = "Note: *Total number must be recorded, ** Sex & ***Residence entries are optional. Total number of this month must be reported.";
 export type Var1Day = { day: number; weekday: string; date: string; total: number | null };
-export type Var1DailyAllocation = { date: string; demo: DemoBreakdown };
 
-/** Only explicit frontend sample allocations populate daily sex/residence cells. */
-export function var1DailyCells(day: Var1Day, samples?: Var1DailyAllocation[]) {
-  const sample = samples?.find((record) => record.date === day.date);
-  return sample ? var1MonthlyCells(sample.demo, { entries: null, exits: null, peak: null, unique: getDemographicTotals(sample.demo).grandTotal }) : [...Array<null>(14).fill(null), day.total];
+/** Daily rows record only the observed total; sex/residence cells stay blank. */
+export function var1DailyCells(day: Var1Day) {
+  return [...Array<null>(14).fill(null), day.total];
 }
 
 export function var1Days(period: string, metrics: Metrics): Var1Day[] {

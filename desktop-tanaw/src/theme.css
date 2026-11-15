@@ -422,7 +422,7 @@ html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table in
 html.dark
   .enterprise-shell
   .tanaw-reports-workspace
-  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .report-date-badge, .reports-text-button, .report-mock-banner) {
+  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .report-date-badge, .reports-text-button) {
   color: var(--theme-accent) !important;
 }
 html.dark .enterprise-shell .tanaw-reports-workspace .reports-button {

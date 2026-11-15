@@ -105,14 +105,10 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
         }),
       )
       .toBe(true);
-    const source = process.env.TANAW_DASHBOARD_EXPECT_SOURCE ?? "mock";
-    await expect(page.locator(".overview-layout")).toHaveAttribute("data-dashboard-source", source);
-    if (source === "real") {
-      await page.getByRole("combobox", { name: "Dashboard date range" }).click();
-      await page.getByRole("option", { name: "Past 7 days" }).click();
-      await expect.poll(() => sidecar.requestPaths.filter((pathname) => pathname === "/metrics/establishment/summary").length).toBeGreaterThan(0);
-      await expect(page.locator('[data-metric-segment="visitors"] strong')).toHaveText("280");
-    }
+    await page.getByRole("combobox", { name: "Dashboard date range" }).click();
+    await page.getByRole("option", { name: "Past 7 days" }).click();
+    await expect.poll(() => sidecar.requestPaths.filter((pathname) => pathname === "/metrics/establishment/summary").length).toBeGreaterThan(0);
+    await expect(page.locator('[data-metric-segment="visitors"] strong')).toHaveText("280");
     const charts = page.locator(".overview-chart-canvas");
     await expect(charts).toHaveCount(2);
     const assertCleanClick = async () => {
@@ -188,11 +184,11 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
         expect(await chart.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
         await expect(surface).toHaveCSS("outline-style", "none");
         expect(await chart.boundingBox()).toEqual(before);
-        await page.screenshot({ path: testInfo.outputPath(`${source}-${theme}-chart-${index}-keyboard.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-${index}-keyboard.png`) });
         await clickMark(2);
         await assertCleanClick();
         expect(await chart.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
-        await page.screenshot({ path: testInfo.outputPath(`${source}-${theme}-chart-${index}-clicked.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-${index}-clicked.png`) });
       }
     }
     await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
@@ -204,24 +200,10 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
     await input.fill("What insights can you give me?");
     await assistant.getByRole("button", { name: "Send message" }).click();
     await expect(assistant.getByRole("log")).toContainText("What insights can you give me?");
-    await page.screenshot({ path: testInfo.outputPath(`${source}-assistant-expanded.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`dashboard-assistant-expanded.png`) });
     await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
     await expect(page.getByRole("button", { name: "Open TANAW AI Assistant" })).toBeFocused();
-    if (source === "mock") {
-      const reports = page.getByRole("region", { name: "Recent report list" });
-      await reports.scrollIntoViewIfNeeded();
-      const visibleRows = await reports.evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        return [...element.querySelectorAll("button")].filter((row) => {
-          const rect = row.getBoundingClientRect();
-          return rect.top >= box.top && rect.bottom <= box.bottom;
-        }).length;
-      });
-      expect(visibleRows).toBe(5);
-      expect(sidecar.requestPaths.some((pathname) => pathname.startsWith("/metrics/") || pathname === "/reports/local")).toBe(false);
-    } else {
-      expect(sidecar.requestPaths).toContain("/reports/local");
-    }
+    expect(sidecar.requestPaths).toContain("/reports/local");
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
     await expect(assistant).toBeVisible();

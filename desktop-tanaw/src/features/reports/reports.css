@@ -683,29 +683,6 @@
   box-shadow: 0 10px 28px rgb(21 61 42 / 18%);
   animation: reports-panel-enter 180ms ease;
 }
-.report-mock-banner {
-  position: absolute;
-  right: 20px;
-  top: 12px;
-  margin: 0;
-  color: #527158;
-  font-size: 12px;
-  line-height: 16px;
-  max-width: 48%;
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.report-mock-notice {
-  margin: 8px 24px 0;
-  padding: 7px 12px;
-  color: #285b3f;
-  background: #eef8f0;
-  border: 1px solid #d7e9d9;
-  border-radius: 8px;
-  font-size: 12px;
-}
 .tanaw-reports-workspace .report-create-card,
 .tanaw-reports-workspace .report-ledger {
   box-shadow:
@@ -1313,9 +1290,6 @@
   .var1-viewer-footer,
   .var1-validation,
   .var1-supporting-details {
-    display: none !important;
-  }
-  .report-mock-notice {
     display: none !important;
   }
   .var1-official-table thead {

@@ -6,10 +6,8 @@ import type { TrendFilter } from "../types/dashboard";
 import { establishmentTrend } from "../utils/establishment";
 import { DashboardChartTooltip } from "./DashboardChartTooltip";
 
-import type { DashboardMockData } from "../data/dashboardMockData";
-
-type Props = { mockData?: Pick<DashboardMockData, "traffic" | "occupancy">; summary: EstablishmentSummary | null; range: { start: string; end: string }; filter: TrendFilter; unavailable: boolean };
-export function EstablishmentTrendChart({ summary, range, filter, unavailable, mockData }: Props) {
+type Props = { summary: EstablishmentSummary | null; range: { start: string; end: string }; filter: TrendFilter; unavailable: boolean };
+export function EstablishmentTrendChart({ summary, range, filter, unavailable }: Props) {
   const reduceMotion = useReducedMotion();
   const gradientId = useId().replace(/:/g, "");
   const data = establishmentTrend(summary, range).map((point) => {
@@ -17,11 +15,11 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable, m
     const measured = day && (day.covered_ms > 0 || day.qualified_observations > 0) && day.movement_state !== "unavailable";
     return { ...point, entries: measured ? day.entries : null, exits: measured ? day.exits : null };
   });
-  const trafficData: Array<{ label: string; entries: number | null; exits: number | null }> = mockData?.traffic ?? data;
-  const occupancyData: Array<{ label: string; occupancy: number | null }> = mockData?.occupancy ?? data;
+  const trafficData: Array<{ label: string; entries: number | null; exits: number | null }> = data;
+  const occupancyData: Array<{ label: string; occupancy: number | null }> = data;
   const hasOccupancy = occupancyData.some((point) => point.occupancy !== null);
   const hasMovement = trafficData.some((point) => point.entries != null || point.exits != null);
-  const observedZero = !mockData && hasOccupancy && data.every((point) => (point.visitors === null || point.visitors === 0) && (point.occupancy === null || point.occupancy === 0));
+  const observedZero = hasOccupancy && data.every((point) => (point.visitors === null || point.visitors === 0) && (point.occupancy === null || point.occupancy === 0));
   const empty = (
     <div className="chart-empty" role="status">
       {unavailable ? "History unavailable. Check the local camera service." : "No observations available for this period."}
@@ -105,7 +103,7 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable, m
       <section className="design-card overview-chart">
         <header>
           <h3>Occupancy Trend</h3>
-          <p>{mockData && filter === "Today" ? "People inside the site · hourly sample" : "Highest observed occupancy by day"}</p>
+          <p>Highest observed occupancy by day</p>
           {observedZero && <p role="status">Available observations recorded no visitor activity. Gaps remain unavailable.</p>}
         </header>
         {hasOccupancy ? (

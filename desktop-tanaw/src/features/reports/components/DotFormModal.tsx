@@ -6,7 +6,7 @@ import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/ent
 import { useAuthStore } from "../../login/stores/auth-store";
 import { downloadDotReportPdf, type DotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
-import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1DailyAllocation } from "../model/var1";
+import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells } from "../model/var1";
 import { useReportPreviewZoom, REPORT_PAPER_WIDTH } from "../hooks/useReportPreviewZoom";
 import { CountingDetails } from "./CountingDetails";
 
@@ -19,12 +19,10 @@ type Props = {
   period: SystemLogPeriod;
   reportId?: string;
   validationMessage?: string | null;
-  sampleDaily?: Var1DailyAllocation[];
-  attractionType?: string;
 };
 const PAPER_WIDTH = REPORT_PAPER_WIDTH;
 
-export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null, sampleDaily, attractionType }: Props) {
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
   const reduceMotion = useReducedMotion();
   const category = useAuthStore((state) => state.user?.category);
   const dialog = useRef<HTMLDivElement>(null);
@@ -37,7 +35,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
     if (reduceMotion) closeCallback.current();
     else setClosing(true);
   }, [reduceMotion]);
-  const report: DotReportPdf = { demo, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: attractionType ?? category ?? undefined, sampleDaily };
+  const report: DotReportPdf = { demo, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: category ?? undefined };
 
   useEffect(() => {
     if (!closing) return;
@@ -106,11 +104,6 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
               <X aria-hidden="true" />
             </button>
           </header>
-          {sampleDaily && (
-            <p className="report-mock-notice" role="status">
-              Mock data · Frontend visualization only. This report is not saved or submitted.
-            </p>
-          )}
           {validationMessage && (
             <p className="var1-validation" role="status">
               {validationMessage} Complete the allocation before printing or downloading.
@@ -232,7 +225,7 @@ export function Var1ReportDocument({ report }: { report: DotReportPdf }) {
             <tr key={day.date} data-var1-date={day.date}>
               <th scope="row">{day.day}</th>
               <td>{day.weekday}</td>
-              {var1DailyCells(day, report.sampleDaily).map((value, index) => (
+              {var1DailyCells(day).map((value, index) => (
                 <td key={index}>{display(value)}</td>
               ))}
             </tr>

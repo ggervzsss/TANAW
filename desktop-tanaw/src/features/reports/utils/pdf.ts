@@ -1,6 +1,6 @@
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { countingNotes } from "./counting";
-import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1Day, type Var1DailyAllocation } from "../model/var1";
+import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1Day } from "../model/var1";
 
 export type DotReportPdf = {
   enterpriseName: string;
@@ -10,7 +10,6 @@ export type DotReportPdf = {
   demo: DemoBreakdown;
   notes: string;
   attractionType?: string;
-  sampleDaily?: Var1DailyAllocation[];
 };
 type TextOptions = { align?: "center" | "left" | "right"; bold?: boolean; maxWidth?: number; size?: number; horizontalScale?: number };
 type Color = readonly [number, number, number];
@@ -56,10 +55,10 @@ export function createDotReportPdf(report: DotReportPdf) {
   drawText(first, "Type of Tourism Attraction:", 50, 414, { size: 9 });
   drawCell(first, 174, 426, 200, 17, [report.attractionType ?? ""], { align: "left", size: 9 });
   const bodyTop = drawHeader(first, 402);
-  drawDays(first, days.slice(0, 14), bodyTop, report.sampleDaily);
+  drawDays(first, days.slice(0, 14), bodyTop);
   const pages = [first];
   const continuation = whitePage();
-  const totalTop = drawDays(continuation, days.slice(14), 524, report.sampleDaily);
+  const totalTop = drawDays(continuation, days.slice(14), 524);
   drawCell(continuation, TABLE_X, totalTop, span(0, 2), 33.75, ["Total of this", "Month ****"], { bold: true, size: 9.75 }, GREEN);
   var1MonthlyCells(report.demo, report.metrics).forEach((value, index) =>
     drawCell(continuation, positions[index + 2], totalTop, widths[index + 2], 33.75, [cell(value)], { bold: true, size: 9.75 }, GREEN),
@@ -115,9 +114,9 @@ function drawHeader(content: string[], top: number) {
   return last - heights[3];
 }
 
-function drawDays(content: string[], days: Var1Day[], top: number, samples?: Var1DailyAllocation[]) {
+function drawDays(content: string[], days: Var1Day[], top: number) {
   days.forEach((day, row) => {
-    const values = [String(day.day), day.weekday, ...var1DailyCells(day, samples).map(cell)];
+    const values = [String(day.day), day.weekday, ...var1DailyCells(day).map(cell)];
     values.forEach((value, column) => drawCell(content, positions[column], top - row * ROW_HEIGHT, widths[column], ROW_HEIGHT, [value], { size: 10.725 }));
   });
   return top - days.length * ROW_HEIGHT;

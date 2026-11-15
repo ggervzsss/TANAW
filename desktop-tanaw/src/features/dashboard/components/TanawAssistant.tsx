@@ -5,8 +5,6 @@ import type { EstablishmentLive, EstablishmentSummary } from "../../camera/servi
 import type { ReportRecord } from "../../../types/enterprise";
 import type { TrendFilter } from "../types/dashboard";
 
-import { getDashboardMockReply, type DashboardMockData } from "../data/dashboardMockData";
-
 const prompts = ["Analyze visitor trends", "When are our busiest hours?", "Explain my latest visitor report", "What insights can you give me?"];
 type Message = { id: number; question: string; answer: string };
 export function TanawAssistant({
@@ -16,9 +14,7 @@ export function TanawAssistant({
   live,
   report,
   filter,
-  mockConversation,
 }: {
-  mockConversation?: DashboardMockData["assistant"];
   open: boolean;
   onToggle: () => void;
   summary: EstablishmentSummary | null;
@@ -27,7 +23,7 @@ export function TanawAssistant({
   filter: TrendFilter;
 }) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>(() => mockConversation?.messages.map((message, id) => ({ ...message, id })) ?? []);
+  const [messages, setMessages] = useState<Message[]>([]);
   const reduceMotion = useReducedMotion();
   const conversation = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLInputElement>(null);
@@ -79,10 +75,6 @@ export function TanawAssistant({
   const ask = (question: string) => {
     const query = question.trim();
     if (!query) return;
-    if (mockConversation) {
-      appendMessage(query, getDashboardMockReply(query, mockConversation));
-      return;
-    }
     const period = filter === "Today" ? "today" : filter === "Week" ? "the past 7 days" : "the past 30 days";
     const observed = summary?.days.filter((day) => day.covered_ms > 0 || day.qualified_observations > 0) ?? [];
     const peak = observed.filter((day) => day.peak_occupancy != null).sort((a, b) => b.peak_occupancy! - a.peak_occupancy!)[0];
@@ -160,20 +152,9 @@ export function TanawAssistant({
             <div className="assistant-message">
               <Brain />
               <div>
-                {mockConversation ? (
-                  <>
-                    {mockConversation.welcome}
-                    <br />
-                    <br />
-                    {mockConversation.description}
-                  </>
-                ) : (
-                  <>
-                    Hello! I’m TANAW, your assistant for understanding visitor activity and tourism reports.
-                    <br />
-                    <br />I can summarize your available counts and explain how your reports were prepared.
-                  </>
-                )}
+                Hello! I’m TANAW, your assistant for understanding visitor activity and tourism reports.
+                <br />
+                <br />I can summarize your available counts and explain how your reports were prepared.
               </div>
             </div>
             <div className="assistant-message">
@@ -182,7 +163,7 @@ export function TanawAssistant({
                 <strong>How can I help you?</strong>
                 <p>Explore your visitor data and reports.</p>
                 <strong className="assistant-try">Try asking</strong>
-                {(mockConversation?.suggestions.map((suggestion) => suggestion.question) ?? prompts).map((prompt) => (
+                {prompts.map((prompt) => (
                   <button type="button" key={prompt} onClick={() => ask(prompt)}>
                     {prompt}
                     <ArrowUpRight size={13} />
@@ -206,7 +187,7 @@ export function TanawAssistant({
               </motion.div>
             ))}
           </div>
-          <p className="assistant-disclosure">{mockConversation?.disclosure ?? "Data summaries \u00b7 AI service not connected"}</p>
+          <p className="assistant-disclosure">{"Data summaries \u00b7 AI service not connected"}</p>
           <form
             onSubmit={(event) => {
               event.preventDefault();

@@ -1,9 +1,7 @@
 import { Hourglass, UsersRound } from "lucide-react";
 import type { EstablishmentSummary } from "../../camera/services/ml-service";
 
-import type { DashboardMockData } from "../data/dashboardMockData";
-
-export function PeakActivity({ summary, mockPeak }: { summary: EstablishmentSummary | null; mockPeak?: DashboardMockData["peak"] }) {
+export function PeakActivity({ summary }: { summary: EstablishmentSummary | null }) {
   return (
     <section className="design-card overview-peak">
       <header>
@@ -15,15 +13,15 @@ export function PeakActivity({ summary, mockPeak }: { summary: EstablishmentSumm
           <span>
             <Hourglass /> <b>Busiest Hour</b>
           </span>
-          <strong>{mockPeak?.busiestHour ?? "\u2014"}</strong>
-          <small>{mockPeak ? mockPeak.caption : "Hourly data unavailable"}</small>
+          <strong>{"\u2014"}</strong>
+          <small>Hourly data unavailable</small>
         </div>
         <div>
           <span>
             <UsersRound /> <b>Highest Occupancy</b>
           </span>
-          <strong>{(mockPeak?.highestOccupancy ?? summary?.peak_occupancy) == null ? "—" : `${(mockPeak?.highestOccupancy ?? summary?.peak_occupancy)?.toLocaleString()} people`}</strong>
-          <small>{mockPeak?.caption ?? "Selected period"}</small>
+          <strong>{summary?.peak_occupancy == null ? "—" : `${summary.peak_occupancy.toLocaleString()} people`}</strong>
+          <small>Selected period</small>
         </div>
       </div>
     </section>

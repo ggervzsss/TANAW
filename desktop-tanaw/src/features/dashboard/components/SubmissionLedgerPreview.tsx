@@ -4,38 +4,17 @@ import { Link } from "react-router-dom";
 import { Badge } from "../../../components/Badge";
 import type { ReportRecord } from "../../../types/enterprise";
 import { routePaths } from "../../../app/router/routePaths";
-import type { DashboardSampleReport } from "../data/dashboardMockData";
 
-export function SubmissionLedgerPreview({
-  reports,
-  enterpriseName,
-  onPreviewReport,
-  sampleReports,
-  onPreviewSampleReport,
-}: {
-  reports: ReportRecord[];
-  enterpriseName: string;
-  onPreviewReport: (report: ReportRecord) => void;
-  sampleReports?: DashboardSampleReport[];
-  onPreviewSampleReport?: (report: DashboardSampleReport) => void;
-}) {
+export function SubmissionLedgerPreview({ reports, enterpriseName, onPreviewReport }: { reports: ReportRecord[]; enterpriseName: string; onPreviewReport: (report: ReportRecord) => void }) {
   const list = useRef<HTMLDivElement>(null);
   const [maxHeight, setMaxHeight] = useState<number>();
-  const entries = sampleReports
-    ? sampleReports.map((sample) => ({
-        id: sample.id,
-        title: sample.title,
-        description: sample.id + " · Sample report · visualization only",
-        status: sample.status,
-        preview: () => onPreviewSampleReport?.(sample),
-      }))
-    : reports.map((report) => ({
-        id: report.id,
-        title: "Tourism Report · " + (report.period ?? report.date),
-        description: report.id + " · " + (report.syncStatus === "pending" ? "Pending synchronization" : "Submitted to LGU"),
-        status: report.status,
-        preview: () => onPreviewReport(report),
-      }));
+  const entries = reports.map((report) => ({
+    id: report.id,
+    title: "Tourism Report · " + (report.period ?? report.date),
+    description: report.id + " · " + (report.syncStatus === "pending" ? "Pending synchronization" : "Submitted to LGU"),
+    status: report.status,
+    preview: () => onPreviewReport(report),
+  }));
   const count = entries.length;
   const rowKeys = entries.map((entry) => entry.id).join("|");
   useLayoutEffect(() => {

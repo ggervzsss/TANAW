@@ -3,10 +3,8 @@ import type { EstablishmentLive, EstablishmentSummary } from "../../camera/servi
 import type { TrendFilter } from "../types/dashboard";
 import { motion, useReducedMotion } from "motion/react";
 
-import type { DashboardMockData } from "../data/dashboardMockData";
-
-type Props = { mockStats?: DashboardMockData["stats"]; summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean };
-export function EstablishmentMetrics({ summary, live, filter, loading, mockStats }: Props) {
+type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean };
+export function EstablishmentMetrics({ summary, live, filter, loading }: Props) {
   const reduceMotion = useReducedMotion();
   const visitorsAvailable = summary && !["not_collected", "configuration_required"].includes(summary.reconciliation_state) && summary.identification_state !== "unavailable";
   const movementAvailable = summary && summary.movement_state !== "unavailable";
@@ -15,25 +13,25 @@ export function EstablishmentMetrics({ summary, live, filter, loading, mockStats
     {
       id: "occupancy",
       title: "Current Occupancy",
-      value: mockStats ? mockStats.occupancy : live?.occupancy,
+      value: live?.occupancy,
       description: live?.state === "partial" ? "partial · people inside" : live?.state === "configuration_required" ? "counting setup required" : "people inside",
       icon: ScanFace,
     },
     {
       id: "entries",
       title: `${period} Entries`,
-      value: mockStats ? mockStats.entries : movementAvailable ? summary.entries : null,
-      description: mockStats || movementAvailable ? "total entries" : "boundary not measured",
+      value: movementAvailable ? summary.entries : null,
+      description: movementAvailable ? "total entries" : "boundary not measured",
       icon: LogIn,
     },
     {
       id: "exits",
       title: `${period} Exits`,
-      value: mockStats ? mockStats.exits : movementAvailable ? summary.exits : null,
-      description: mockStats || movementAvailable ? "total exits" : "boundary not measured",
+      value: movementAvailable ? summary.exits : null,
+      description: movementAvailable ? "total exits" : "boundary not measured",
       icon: LogOut,
     },
-    { id: "visitors", title: "Unique Visitors", value: mockStats ? mockStats.unique : visitorsAvailable ? summary.unique_count : null, description: "estimated", icon: UsersRound },
+    { id: "visitors", title: "Unique Visitors", value: visitorsAvailable ? summary.unique_count : null, description: "estimated", icon: UsersRound },
   ];
   return (
     <section className="overview-metrics" data-unified-metrics-header aria-label="Enterprise analytics summary" aria-busy={loading}>

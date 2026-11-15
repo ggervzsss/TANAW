@@ -27,10 +27,9 @@ import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useDemographicDraft } from "./useDemographicDraft";
 import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
-import type { Var1DailyAllocation } from "../model/var1";
 
 type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
-type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string; sampleDaily?: Var1DailyAllocation[] };
+type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: Options) {
   const { timeFormat } = useSystemDisplayPreferences();

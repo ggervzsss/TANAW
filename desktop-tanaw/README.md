@@ -20,53 +20,17 @@ place on the enterprise computer.
 - **Support:** create tickets and follow replies.
 - **Account tools:** manage profile and security settings, notifications, display preferences, and help.
 
-## Dashboard visualization data
+## Dashboard and Reports data
 
-Mock Dashboard and Reports mode is enabled by default for the current UI visualization work.
-All fixture values, hourly/daily chart series, demographic percentages, sample
-reports, and assistant conversations live in
-[`src/features/dashboard/data/dashboardMockData.ts`](src/features/dashboard/data/dashboardMockData.ts).
-Reports fixtures live separately in
-[`src/features/reports/data/reportsMockData.ts`](src/features/reports/data/reportsMockData.ts).
-Reports History and Dashboard Recent Reports derive their sample identities and
-statuses from the same records. Both workspaces explicitly label **Mock data**.
-
-To restore real Dashboard and Reports data, set this in `.env.local`:
-
-```dotenv
-VITE_USE_MOCK_DATA=false
-```
-
-Restart the development app after changing the flag. For a packaged app, set the
-flag before `npm run build` or the installer build, then rebuild. Set it to `true`
-to enable sample visualization again. `USE_MOCK_DATA` in the fixture file is the
-single source of the toggle; it is a build-time flag, not a saved user preference.
-
-The mock Dashboard and Reports work without a camera service after normal sign-in.
-They skip camera-service initialization, report polling/draft persistence, and
-background reporting synchronization. Authentication and notifications retain
-their existing behavior. Camera Setup continues using real services.
-Reports uses a separate in-memory hook: no fixture is passed to the real Reports
-service hooks, shared report history state, SQLite, IPC, cloud upload, or browser
-storage. Real submission is disabled, including after editing/reviewing a sample.
-Closing Allocation Tools, search, or the preview preserves the current form.
-The complete daily sample allocations reconcile to their sample monthly totals;
-real records still leave unrecorded daily demographics blank. Local sample PDF
-exports carry `MOCK-` IDs. Sample conversations make no AI requests.
-
-The supplied design values are preserved exactly: residence percentages total
-102.5%, and the reference peak of 156 is below the 462 current-occupancy card.
-These are independent visual examples, not a validated visitor ledger. They are
-never converted into a report submission or stored in SQLite, APIs, or browser
-storage.
-
-Run `npm run test:dashboard-mock` for disconnected-camera visualization and
-request/persistence-isolation checks. The ordinary browser suite explicitly
-builds with `VITE_USE_MOCK_DATA=false` to verify real-data behavior.
+Dashboard and Reports always read real data from the local camera service and
+the central API. To populate them for development or demonstrations, generate
+backend sample data with the repository scripts (`scripts/mockdata-on`,
+`scripts/mockdata-status`, `scripts/mockdata-reset`, `scripts/mockdata-off`, or
+their `.ps1` equivalents).
 
 Dashboard Recent Reports lists up to five complete rows before scrolling. Smaller
 lists stay compact; every row retains its preview action and View All opens the
-Reports workspace in the same data mode. The Dashboard date menu supports arrows, Home/End,
+Reports workspace. The Dashboard date menu supports arrows, Home/End,
 Enter, Escape, and Tab. Green keyboard-focus indicators, chart tooltips, and the
 assistant's rounded composer share the Dashboard theme. Assistant transitions
 respect reduced-motion preferences, preserve conversations across collapse,
@@ -82,9 +46,7 @@ After building, run `npx playwright test --config=playwright.electron.config.ts
 dashboard-interactions` to exercise actual Electron clicks on bars, points, lines,
 and empty plot areas in both themes, plus tooltips, keyboard focus, and assistant
 controls. It uses a temporary desktop profile and a test sidecar, leaving local
-records and camera services untouched. Set `TANAW_DASHBOARD_EXPECT_SOURCE=real`
-when testing a build made with `VITE_USE_MOCK_DATA=false`; the default test expects
-the visualization build.
+records and camera services untouched.
 
 ## How It Works
 
