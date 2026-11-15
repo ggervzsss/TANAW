@@ -66,6 +66,8 @@ class CaptureWorker:
                 return
             reconnect_attempt += 1
             self._mark_reconnecting(session, reconnect_message)
+            if not session.config.auto_reconnect:
+                return
             if session.stop_event.wait(self.reconnect_delay(reconnect_attempt)):
                 return
 

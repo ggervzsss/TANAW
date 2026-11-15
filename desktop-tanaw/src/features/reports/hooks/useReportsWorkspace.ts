@@ -27,9 +27,10 @@ import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useDemographicDraft } from "./useDemographicDraft";
 import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
+import type { Var1DailyAllocation } from "../model/var1";
 
 type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
-type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
+type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string; sampleDaily?: Var1DailyAllocation[] };
 
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: Options) {
   const { timeFormat } = useSystemDisplayPreferences();
@@ -48,7 +49,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
-  const { demo, setDemo } = useDemographicDraft({ activeReportId, demographicDraftKey, isReadOnly, period, reportsHistory });
+  const { demo, setDemo, isHydrating } = useDemographicDraft({ activeReportId, demographicDraftKey, isReadOnly, period, reportsHistory });
   const data = useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat });
   const displayedMetrics = revisionMetrics ?? (activeReport ? metricsFromReport(activeReport) : data.liveMetrics);
   const blockingMetricsError = revisionMetrics?.counting ? reportBaselineError(revisionMetrics.counting) : activeReport?.counting ? null : data.metricsError;
@@ -91,7 +92,15 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       handlePreviewReport(report);
       return;
     }
-    downloadDotReportPdf({ enterpriseName, reportId: report.id, period: formatReportingPeriodLabel(report.period ?? report.date), metrics, demo: reportDemo, notes: report.notes ?? "" });
+    downloadDotReportPdf({
+      enterpriseName,
+      reportId: report.id,
+      period: formatReportingPeriodLabel(report.period ?? report.date),
+      metrics,
+      demo: reportDemo,
+      notes: report.notes ?? "",
+      attractionType: useAuthStore.getState().user?.category ?? undefined,
+    });
   };
   const refreshRevisionCounts = async () => {
     if (isReadOnly || !activeReport) return;
@@ -158,7 +167,16 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         notes,
         period,
         reportId,
-        reportPayload: { auditTrail, demo, notes, period, status: statusLabel },
+        reportPayload: {
+          auditTrail,
+          demo,
+          notes,
+          period,
+          status: statusLabel,
+          // The existing service normalizes demo to its six canonical fields.
+          // Preserve the optional city subset in the already-supported payload.
+          ...(demo.thisCityMale != null || demo.thisCityFemale != null ? { var1: { thisCityMale: demo.thisCityMale ?? "", thisCityFemale: demo.thisCityFemale ?? "" } } : {}),
+        },
       });
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       pendingOperation.current = null;
@@ -205,7 +223,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     handleDownloadReport,
     handlePreviewReport,
     handleSelectLedgerRow,
-    isPeriodChanging: (!activeReport && data.loading) || isRefreshing,
+    isPeriodChanging: (!activeReport && data.loading) || isRefreshing || isHydrating,
     isReadOnly,
     isSubmitting,
     ledgerRows,

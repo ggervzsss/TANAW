@@ -235,3 +235,17 @@ function camera(): Camera {
     zone: "Lobby",
   };
 }
+
+describe("draft connection requests", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("sends draft replacements only for a test and keeps them out of the start payload", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("window", { tanawCameraCredentials: { request } });
+    const draft = { ...camera(), username: "draft", password: "replacement" };
+    await testCameraConnection("http://127.0.0.1:8765", draft, "enterprise:1", { draft: true });
+    await startCameraProcessing("http://127.0.0.1:8765", draft, "enterprise:1");
+    expect(request.mock.calls[0][2]).toMatchObject({ username: "draft", password: "replacement" });
+    expect(request.mock.calls[1][2]).not.toHaveProperty("password");
+    expect(request.mock.calls[1][2]).not.toHaveProperty("username");
+  });
+});

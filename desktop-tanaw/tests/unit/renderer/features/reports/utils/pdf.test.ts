@@ -20,22 +20,22 @@ describe("enterprise DOT PDF generation", () => {
     });
 
     expect(pdf.startsWith("%PDF-1.4")).toBe(true);
-    expect(pdf).toContain("TANAW - DOT Visitor Attraction Report");
-    expect(pdf).toContain("Tourism Attraction Visitor Record - VAR 2");
-    expect(pdf).toContain("Visitor Attraction");
+    expect(pdf).toContain("Tourism Attraction Visitor Record");
+    expect(pdf).toContain("VAR 1");
+    expect(pdf).not.toContain("VAR 2");
     expect(pdf).toContain("REP-260501");
     expect(pdf).toContain("Archie's Event Place");
-    expect(pdf).toContain("UNIQUE VISITORS");
+    expect(pdf).toContain("Unique visitors: 377");
     expect(pdf).toContain("City of San Pedro, Laguna");
     expect(pdf).toContain("Place of Residence");
     expect(pdf).toContain("Grand Total");
     expect(pdf).toContain("(194) Tj");
     expect(pdf).toContain("(183) Tj");
     expect(pdf).toContain("(377) Tj");
-    expect(pdf).toContain("Page 1 of 1");
+    expect(pdf).toContain("Page 1 of 3");
     expect(pdf).not.toContain("SPL-MKT-01");
     expect(pdf).not.toContain("Enterprise Node");
-    expect(pdf).not.toContain("***Place of Residence");
+    expect(pdf).toContain("*** Place of Residence");
     expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");
     expect(pdf).not.toContain("0.043 0.071 0.125 rg");
     expect(pdf).not.toContain("stringwidth");
@@ -61,7 +61,7 @@ describe("enterprise DOT PDF generation", () => {
 
     expect(pdf).toContain("Jos\\351 Ni\\361o's Tourism");
     expect(pdf).toContain("Supporting submission detail 70");
-    expect(pdf).toContain("/Count 2");
-    expect(pdf).toContain("Page 2 of 2");
+    expect(pdf).toContain("/Count 3");
+    expect(pdf).toContain("Page 3 of 3");
   });
 });

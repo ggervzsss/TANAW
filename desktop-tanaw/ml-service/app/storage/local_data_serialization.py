@@ -48,7 +48,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     required_string_fields = (
         "name",
         "status",
-        "zone",
         "rtsp",
         "processingProfile",
     )
@@ -59,6 +58,8 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     for field in required_string_fields:
         if not isinstance(camera.get(field), str) or not str(camera[field]).strip():
             raise ValueError(f"Camera {field} is required.")
+    if not isinstance(camera.get("zone", ""), str) or len(camera.get("zone", "")) > 120:
+        raise ValueError("Camera location must be 120 characters or fewer.")
     raw_status = str(camera["status"])
     status = (
         "running"
@@ -108,6 +109,7 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
         ),
         **({"analysisMode": mode, "openSpace": area} if "analysisMode" in camera else {}),
         "id": int(camera["id"]),
+        "zone": camera.get("zone", "").strip(),
         "status": status,
         "cameraHost": source["camera_host"],
         "cameraBrand": source["camera_brand"],

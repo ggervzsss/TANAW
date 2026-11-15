@@ -8,6 +8,7 @@ import type { CameraPreviewState } from "./CameraVideoPreview";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
+  runtimeReady?: boolean;
   area?: MlAreaState | null;
   counts: MlCounts;
   health: MlHealth | null;
@@ -27,6 +28,7 @@ type CameraMonitoringPanelProps = {
 
 export function CameraMonitoringPanel({
   activeCam,
+  runtimeReady = true,
   area,
   counts,
   health,
@@ -59,7 +61,7 @@ export function CameraMonitoringPanel({
       : counts.running && previewState !== "live"
         ? "Restoring Live Preview"
         : "Stream Needs Check";
-  const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
+  const estimatedUniqueCount = runtimeReady ? (health?.estimated_unique_count ?? health?.confirmed_unique_count ?? "—") : "—";
   const pendingUniqueEntries = health?.pending_unique_entries ?? 0;
   const modelStatus = formatModelStatus(health);
   const hasActiveModel = Boolean(health?.model_ready && (health.selected_model || health.model_name));
@@ -79,7 +81,7 @@ export function CameraMonitoringPanel({
 
   return (
     <div className="space-y-3">
-      <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
+      <section className="camera-live-metrics rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Live Metrics</h4>
           <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[9px] font-bold tracking-wide text-gray-500 uppercase dark:border-white/9 dark:bg-white/4 dark:text-slate-400">
@@ -119,12 +121,12 @@ export function CameraMonitoringPanel({
         ) : (
           <>
             <div className="grid auto-rows-fr grid-cols-2 gap-2">
-              <MetricBox icon={LogIn} label="Entry" value={counts.entry ?? "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
-              <MetricBox icon={LogOut} label="Exit" value={counts.exit ?? "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
+              <MetricBox icon={LogIn} label="Entry" value={runtimeReady ? (counts.entry ?? "—") : "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
+              <MetricBox icon={LogOut} label="Exit" value={runtimeReady ? (counts.exit ?? "—") : "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
               <MetricBox
                 icon={Users}
                 label="Occupancy"
-                value={counts.occupancy ?? "—"}
+                value={runtimeReady ? (counts.occupancy ?? "—") : "—"}
                 tone="occupancy"
                 tooltip="Occupancy calculated from Entrance / Exit activity. Enterprise Analytics adds people observed in separate Open Space zones to its combined live total."
               />
@@ -148,7 +150,7 @@ export function CameraMonitoringPanel({
         )}
       </section>
 
-      <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
+      <section className="camera-system-status rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
         <div className="space-y-2">
           <StatusRow
@@ -226,6 +228,7 @@ export function CameraMonitoringPanel({
           <InfoTooltip content={processButtonTooltip} focusable={false}>
             <button
               type="button"
+              data-camera-process-control
               onClick={isProcessRunning ? onStopProcessing : onStartProcessing}
               disabled={processButtonDisabled}
               aria-pressed={isProcessRunning}
@@ -260,14 +263,15 @@ function MetricBox({ icon: Icon, label, tone, tooltip, value, detail }: MetricBo
   return (
     <InfoTooltip content={tooltip} className="h-full" focusable={false}>
       <div
-        className={`flex h-full min-h-22 flex-col rounded-xl border p-3 transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md group-focus:-translate-y-0.5 ${toneClass}`}
+        data-tone={tone}
+        className={`camera-metric flex h-full min-h-22 flex-col rounded-xl border p-3 transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md group-focus:-translate-y-0.5 ${toneClass}`}
       >
         <div className="flex min-h-7 items-start justify-between gap-2">
-          <span className="text-[9px] leading-tight font-bold tracking-wider uppercase">{label}</span>
+          <span className="camera-metric-title text-[9px] leading-tight font-bold tracking-wider uppercase">{label}</span>
           <Icon size={13} className="shrink-0" />
         </div>
-        <div className="mt-auto pt-1.5 font-['Bai_Jamjuree'] text-2xl leading-none font-bold">{value}</div>
-        {detail && <p className="mt-2 min-h-6 text-[9px] leading-tight">{detail}</p>}
+        <div className="camera-metric-value mt-auto pt-1.5 font-['Bai_Jamjuree'] text-2xl leading-none font-bold">{value}</div>
+        {detail && <p className="camera-metric-detail mt-2 min-h-6 text-[9px] leading-tight">{detail}</p>}
       </div>
     </InfoTooltip>
   );

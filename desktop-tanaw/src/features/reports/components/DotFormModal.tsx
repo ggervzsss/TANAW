@@ -1,13 +1,16 @@
-import { Download, FileText, Info, X } from "lucide-react";
-import { InfoTooltip } from "../../../components/InfoTooltip";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { Download, FileText, Maximize, Printer, Ratio, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
-import { demographicCount, getDemographicTotals } from "../utils/demographics";
-import { downloadDotReportPdf } from "../utils/pdf";
+import { useAuthStore } from "../../login/stores/auth-store";
+import { downloadDotReportPdf, type DotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
+import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1DailyAllocation } from "../model/var1";
+import { useReportPreviewZoom, REPORT_PAPER_WIDTH } from "../hooks/useReportPreviewZoom";
 import { CountingDetails } from "./CountingDetails";
 
-type DotFormModalProps = {
+type Props = {
   demo: DemoBreakdown;
   enterpriseName: string;
   metrics: Metrics;
@@ -16,212 +19,242 @@ type DotFormModalProps = {
   period: SystemLogPeriod;
   reportId?: string;
   validationMessage?: string | null;
+  sampleDaily?: Var1DailyAllocation[];
+  attractionType?: string;
 };
+const PAPER_WIDTH = REPORT_PAPER_WIDTH;
 
-export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
-  const periodLabel = formatReportingPeriodLabel(period);
-  const tpm = demographicCount(demo.thisProvMale);
-  const tpf = demographicCount(demo.thisProvFemale);
-  const totalThisProv = tpm + tpf;
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null, sampleDaily, attractionType }: Props) {
+  const reduceMotion = useReducedMotion();
+  const category = useAuthStore((state) => state.user?.category);
+  const dialog = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const closeCallback = useRef(onClose);
+  closeCallback.current = onClose;
+  const [closing, setClosing] = useState(false);
+  const { paper, ready: portalReady, attachCanvas, zoom, height, changeZoom, fitToPage, actualSize, minZoom, maxZoom } = useReportPreviewZoom(Boolean(reduceMotion));
+  const close = useCallback(() => {
+    if (reduceMotion) closeCallback.current();
+    else setClosing(true);
+  }, [reduceMotion]);
+  const report: DotReportPdf = { demo, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: attractionType ?? category ?? undefined, sampleDaily };
 
-  const opm = demographicCount(demo.otherProvMale);
-  const opf = demographicCount(demo.otherProvFemale);
-  const totalOtherProv = opm + opf;
-
-  const fm = demographicCount(demo.foreignMale);
-  const ff = demographicCount(demo.foreignFemale);
-  const totalForeign = fm + ff;
-  const totals = getDemographicTotals(demo);
-  const canDownload = !validationMessage;
+  useEffect(() => {
+    if (!closing) return;
+    const timer = window.setTimeout(() => closeCallback.current(), 260);
+    return () => window.clearTimeout(timer);
+  }, [closing]);
+  useEffect(() => {
+    if (!portalReady) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() => closeButton.current?.focus({ preventScroll: true }));
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
+      if (event.key !== "Tab") return;
+      const nodes = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), summary, [tabindex="0"]') ?? []).filter((node) => node.getClientRects().length > 0);
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", keyboard, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", keyboard, true);
+      previous?.focus({ preventScroll: true });
+    };
+  }, [close, portalReady]);
 
   return (
     <ModalPortal>
-      <div
-        className="tanaw-dot-viewer fixed inset-0 z-1100 flex items-center justify-center bg-[#17212d]/84 p-3 font-sans backdrop-blur-md sm:p-6 print:block print:bg-white print:p-0"
-        onPointerDown={onClose}
+      <motion.div
+        className="tanaw-var1-viewer"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: closing ? 0 : 1 }}
+        transition={{ duration: reduceMotion ? 0 : 0.26 }}
+        onPointerDown={(event) => {
+          if (event.target === event.currentTarget) close();
+        }}
       >
-        <div
+        <motion.div
+          ref={dialog}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="dot-form-preview-title"
-          className="animate-in fade-in flex h-full max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[26px] border border-white/55 bg-[#f8fafc] shadow-[0_34px_90px_rgba(2,8,23,0.42)] dark:border-slate-600/45 dark:bg-[#0d1725] print:m-0 print:h-auto print:max-h-none print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none"
-          onPointerDown={(event) => event.stopPropagation()}
+          aria-labelledby="var1-review-title"
+          className="tanaw-var1-modal"
+          initial={{ opacity: 0, scale: 0.99, y: 8 }}
+          animate={{ opacity: closing ? 0 : 1, scale: closing ? 0.99 : 1, y: closing ? 8 : 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+          style={{ pointerEvents: closing ? "none" : undefined }}
         >
-          <div className="tanaw-dot-viewer__header flex min-h-18 items-center justify-between gap-4 border-b border-slate-200/90 px-5 py-3.5 sm:px-6 dark:border-slate-700/80 print:hidden">
-            <div className="flex min-w-0 items-center gap-3.5">
-              <span
-                className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm dark:border-emerald-300/18 dark:bg-emerald-300/10 dark:text-emerald-300"
-                aria-hidden="true"
-              >
-                <FileText size={19} />
-              </span>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <h3 id="dot-form-preview-title" className="truncate font-bold text-[#111827] dark:text-slate-100">
-                    DOT Form Preview
-                  </h3>
-                  <InfoTooltip content="Official DOT-style preview generated from the selected report demographics and unique count.">
-                    <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46] dark:text-slate-500 dark:hover:text-emerald-300" />
-                  </InfoTooltip>
-                </div>
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase ${canDownload ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/18 dark:bg-emerald-300/10 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/18 dark:bg-amber-300/10 dark:text-amber-200"}`}
-                >
-                  {canDownload ? "Ready for Export" : "Needs Allocation"}
-                </span>
+          <header className="var1-viewer-header">
+            <FileText className="var1-viewer-icon" fill="currentColor" stroke="white" aria-hidden="true" />
+            <div>
+              <h2 id="var1-review-title">Review Report Form</h2>
+              <p>Check the report before download / submitting the official PDF</p>
+            </div>
+            <button ref={closeButton} type="button" className="var1-close" aria-label="Close preview" onClick={close}>
+              <X aria-hidden="true" />
+            </button>
+          </header>
+          {sampleDaily && (
+            <p className="report-mock-notice" role="status">
+              Mock data · Frontend visualization only. This report is not saved or submitted.
+            </p>
+          )}
+          {validationMessage && (
+            <p className="var1-validation" role="status">
+              {validationMessage} Complete the allocation before printing or downloading.
+            </p>
+          )}
+          <div ref={attachCanvas} className="var1-viewer-canvas" tabIndex={0} aria-label="Scrollable VAR 1 report preview" data-report-zoom={zoom.toFixed(2)}>
+            <div className="var1-scale-frame" style={{ width: PAPER_WIDTH * zoom, height: height * zoom }}>
+              <div ref={paper} className="var1-document" style={{ width: PAPER_WIDTH, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                <Var1ReportDocument report={report} />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white/85 text-gray-500 shadow-sm transition-[border-color,background-color,color] hover:border-slate-300 hover:bg-slate-100 hover:text-[#111827] dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:bg-slate-800 dark:hover:text-white"
-              aria-label="Close preview"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="tanaw-dot-viewer__canvas flex-1 overflow-auto bg-[#dfe5e8] p-5 sm:p-8 dark:bg-[#111a24] print:overflow-visible print:bg-white print:p-8">
-            <div className="enterprise-dot-document mx-auto w-full max-w-5xl min-w-245 rounded-[10px] bg-white p-8 text-[#111827] shadow-[0_18px_52px_rgba(15,23,42,0.22)] sm:p-10 print:max-w-none print:min-w-0 print:rounded-none print:p-0 print:shadow-none">
-              {validationMessage && (
-                <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 print:hidden">
-                  {validationMessage} Official PDF download is disabled until the demographic total matches the unique visitor count of {metrics.unique.toLocaleString()}.
-                </div>
-              )}
-              <div className="mb-6 border-b border-amber-600/70 pb-4 text-center">
-                <h2 className="text-xl font-bold tracking-wide uppercase">TANAW - DOT Visitor Attraction Report</h2>
-                <p className="mt-1 text-xs text-slate-600">Tourism Attraction Visitor Record - VAR 2</p>
-                <p className="mt-1 font-mono text-xs text-slate-500">{reportId}</p>
-              </div>
-              <div className="mb-6 grid gap-4 text-xs sm:grid-cols-3">
-                <div>
-                  <p className="font-bold tracking-wider text-slate-500 uppercase">Reporting Period</p>
-                  <p className="mt-1 font-medium">{periodLabel}</p>
-                </div>
-                <div>
-                  <p className="font-bold tracking-wider text-slate-500 uppercase">Municipality</p>
-                  <p className="mt-1 font-medium">City of San Pedro, Laguna</p>
-                </div>
-                <div>
-                  <p className="font-bold tracking-wider text-slate-500 uppercase">Unique Visitors</p>
-                  <p className="mt-1 font-medium">{metrics.unique.toLocaleString()}</p>
-                </div>
-              </div>
-              <h3 className="mb-4 text-base font-bold tracking-wide uppercase">Visitor Attraction</h3>
-
-              <div className="overflow-x-auto print:overflow-visible">
-                <table className="mb-8 w-full border-collapse border-2 border-black text-center text-xs text-black">
-                  <thead>
-                    <tr>
-                      <th colSpan={2} className="border border-black p-2">
-                        Visitor Attraction
-                      </th>
-                      <th colSpan={9} className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">
-                        Place of Residence
-                      </th>
-                      <th colSpan={3} rowSpan={3} className="border border-black p-2">
-                        Grand Total Number of Visitors
-                      </th>
-                    </tr>
-                    <tr>
-                      <th rowSpan={3} className="w-48 border border-black p-2">
-                        Name / Month
-                      </th>
-                      <th rowSpan={3} className="w-20 border border-black p-2">
-                        Report Code
-                      </th>
-                      <th colSpan={6} className="border border-black bg-gray-50 p-1 print:bg-transparent">
-                        Philippines
-                      </th>
-                      <th colSpan={3} rowSpan={2} className="border border-black bg-gray-50 p-1 print:bg-transparent">
-                        Foreign Country Residence
-                      </th>
-                    </tr>
-                    <tr>
-                      <th colSpan={3} className="border border-black p-1">
-                        This province
-                      </th>
-                      <th colSpan={3} className="border border-black p-1">
-                        Other Province
-                      </th>
-                    </tr>
-                    <tr>
-                      <th className="w-12 border border-black p-1">Male</th>
-                      <th className="w-12 border border-black p-1">Female</th>
-                      <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
-                      <th className="w-12 border border-black p-1">Male</th>
-                      <th className="w-12 border border-black p-1">Female</th>
-                      <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
-                      <th className="w-12 border border-black p-1">Male</th>
-                      <th className="w-12 border border-black p-1">Female</th>
-                      <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
-                      <th className="w-12 border border-black p-1">Male</th>
-                      <th className="w-12 border border-black p-1">Female</th>
-                      <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="border border-black p-2 text-left align-top leading-tight">
-                        <span className="font-bold">{enterpriseName}</span>
-                        <br />
-                        <span className="text-[10px]">{periodLabel}</span>
-                      </td>
-                      <td className="border border-black p-2 text-xs font-semibold uppercase">{reportId}</td>
-                      <td className="border border-black p-2">{tpm || ""}</td>
-                      <td className="border border-black p-2">{tpf || ""}</td>
-                      <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalThisProv || ""}</td>
-                      <td className="border border-black p-2">{opm || ""}</td>
-                      <td className="border border-black p-2">{opf || ""}</td>
-                      <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalOtherProv || ""}</td>
-                      <td className="border border-black p-2">{fm || ""}</td>
-                      <td className="border border-black p-2">{ff || ""}</td>
-                      <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalForeign || ""}</td>
-                      <td className="border border-black bg-gray-100 p-2 font-bold print:bg-transparent">{totals.male || ""}</td>
-                      <td className="border border-black bg-gray-100 p-2 font-bold print:bg-transparent">{totals.female || ""}</td>
-                      <td className="border border-black bg-gray-100 p-2 text-sm font-bold print:bg-transparent">{totals.grandTotal || ""}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <p className="text-[10px] text-slate-500">Visitor totals are camera-based estimates. Demographic allocations are entered by the enterprise.</p>
+            <details className="var1-supporting-details">
+              <summary>Report details and camera evidence</summary>
               <CountingDetails metrics={metrics} />
-
-              {notes && (
-                <div className="mt-4 border border-black bg-gray-50/50 p-4">
-                  <h4 className="mb-2 border-b border-gray-300 pb-1 text-xs font-bold uppercase">Supplementary Notes / Details</h4>
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap">{notes}</p>
-                </div>
-              )}
+              {notes && <p>{notes}</p>}
+            </details>
+          </div>
+          <footer className="var1-viewer-footer">
+            <div className="var1-zoom-controls">
+              <button type="button" className="reports-button" onClick={() => changeZoom(-0.1)} disabled={zoom <= minZoom + 0.001}>
+                <ZoomOut aria-hidden="true" />
+                Zoom Out
+              </button>
+              <button type="button" className="reports-button" onClick={() => changeZoom(0.1)} disabled={zoom >= maxZoom - 0.001}>
+                <ZoomIn aria-hidden="true" />
+                Zoom In
+              </button>
+              <button type="button" className="reports-button" onClick={fitToPage}>
+                <Maximize aria-hidden="true" />
+                Fit to Page
+              </button>
+              <button type="button" className="reports-button" onClick={actualSize}>
+                <Ratio aria-hidden="true" />
+                Actual Size (100%)
+              </button>
             </div>
-          </div>
-
-          <div className="tanaw-dot-viewer__footer flex min-h-18 flex-wrap items-center justify-end gap-3 border-t border-slate-200/90 px-5 py-3.5 sm:px-6 dark:border-slate-700/80 print:hidden">
-            <button
-              type="button"
-              onClick={onClose}
-              className="min-h-11 rounded-xl border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-[#111827] shadow-sm transition-colors hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            >
-              Close Preview
-            </button>
-            <button
-              type="button"
-              disabled={!canDownload}
-              onClick={() => {
-                if (canDownload) downloadDotReportPdf({ enterpriseName, reportId, period: periodLabel, metrics, demo, notes });
-              }}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-6 py-2 text-sm font-semibold shadow-sm transition-[background-color,box-shadow] ${
-                canDownload
-                  ? "bg-[#065f46] text-white hover:bg-[#044a36] hover:shadow-md dark:bg-emerald-700 dark:hover:bg-emerald-600"
-                  : "cursor-not-allowed bg-gray-300 text-gray-500 dark:bg-slate-700 dark:text-slate-400"
-              }`}
-            >
-              <Download size={16} /> Download PDF
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="var1-export-controls">
+              <button type="button" className="reports-button" disabled={Boolean(validationMessage)} onClick={() => window.print()}>
+                <Printer aria-hidden="true" />
+                Print
+              </button>
+              <button type="button" className="reports-button reports-primary" disabled={Boolean(validationMessage)} onClick={() => downloadDotReportPdf(report)}>
+                <Download aria-hidden="true" />
+                Download PDF
+              </button>
+            </div>
+          </footer>
+        </motion.div>
+      </motion.div>
     </ModalPortal>
+  );
+}
+
+export function Var1ReportDocument({ report }: { report: DotReportPdf }) {
+  const days = var1Days(report.period, report.metrics);
+  const monthly = var1MonthlyCells(report.demo, report.metrics);
+  const display = (value: number | null) => (value === null ? "" : value.toLocaleString());
+  return (
+    <>
+      <header className="var1-document-heading">
+        <h2>TOURISM ATTRACTION VISITOR RECORD</h2>
+        <span>(VAR 1)</span>
+        <p>( This recording form can be used instead of just counting the visitors )</p>
+      </header>
+      <dl className="var1-document-information">
+        {[
+          ["Month/Year", report.period],
+          ["Name of City/Municipality", "City of San Pedro, Laguna"],
+          ["Name of attraction/ Spot", report.enterpriseName],
+          ["Type of Tourism Attraction", report.attractionType ?? ""],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <table className="var1-official-table" aria-label="Tourism Attraction Visitor Record VAR 1">
+        <colgroup>
+          {VAR1_COLUMN_WEIGHTS.map((width, index) => (
+            <col key={index} style={{ width: `${(width / 809) * 100}%` }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th colSpan={2}>Date</th>
+            <th colSpan={12}>*** Place of Residence</th>
+            <th colSpan={3} rowSpan={3}>
+              * Grand Total
+              <br />
+              Number of
+              <br />
+              Visitors
+            </th>
+          </tr>
+          <tr>
+            <th rowSpan={3}>Day</th>
+            <th rowSpan={3}>
+              Week Day
+              <br />
+              (Mon-Sun)
+            </th>
+            <th colSpan={9}>Philippines</th>
+            <th colSpan={3} rowSpan={2}>
+              Foreign Country Residence
+            </th>
+          </tr>
+          <tr>
+            {VAR1_RESIDENCES.slice(0, 3).map((label) => (
+              <th key={label} colSpan={3}>
+                {label}
+              </th>
+            ))}
+          </tr>
+          <tr>{Array.from({ length: 5 }, (_, group) => VAR1_SEX_COLUMNS.map((label) => <th key={`${group}-${label}`}>{label}</th>))}</tr>
+        </thead>
+        <tbody>
+          {days.map((day) => (
+            <tr key={day.date} data-var1-date={day.date}>
+              <th scope="row">{day.day}</th>
+              <td>{day.weekday}</td>
+              {var1DailyCells(day, report.sampleDaily).map((value, index) => (
+                <td key={index}>{display(value)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colSpan={2} scope="row">
+              Total of this
+              <br />
+              Month ****
+            </th>
+            {monthly.map((value, index) => (
+              <td key={index}>{display(value)}</td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+      {!days.length && <p className="var1-data-note">The saved reporting month could not be recognized. No daily dates have been invented.</p>}
+      <p className="var1-official-note">{VAR1_NOTE}</p>
+      <p className="var1-data-note">Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank.</p>
+      {hasUnspecifiedCity(report.demo) && <p className="var1-data-note">This Province includes existing allocations with an unspecified city split.</p>}
+    </>
   );
 }

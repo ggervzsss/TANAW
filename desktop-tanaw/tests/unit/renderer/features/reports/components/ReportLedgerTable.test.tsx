@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportLedgerTable, type ReportLedgerRow } from "../../../../../../src/features/reports/components/ReportLedgerTable";
 
 const currentRow: ReportLedgerRow = {
@@ -35,24 +35,25 @@ const pendingRow: ReportLedgerRow = {
 };
 
 describe("ReportLedgerTable layout", () => {
-  it("keeps long status labels and action controls on one line", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-14T02:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+  it("exposes the seven Figma columns while retaining keyboard selection, previews and exports", () => {
     const markup = renderToStaticMarkup(
       <ReportLedgerTable activeLedgerKey="current" ledgerRows={[currentRow]} onDownloadReport={() => undefined} onPreviewReport={() => undefined} onSelectReport={() => undefined} />,
     );
 
-    expect(markup).not.toContain("min-w-270");
-    expect(markup).toContain("overflow-x-hidden");
-    expect(markup).toContain('class="w-[31%]"');
-    expect(markup).toContain('class="w-[15%]"');
-    expect(markup).toContain("tanaw-status-badge inline-flex items-center");
-    expect(markup).toContain("font-semibold whitespace-nowrap tanaw-status-badge--success");
-    expect(markup).toContain("flex shrink-0 items-center");
-    expect(markup).toContain('<span class="xl:hidden">Current</span>');
+    for (const heading of ["Report ID", "Reporting Period", "Visitor Counted", "Status", "Date Submitted", "Time", "Actions"]) expect(markup).toContain(`<th scope="col">${heading}</th>`);
+    expect(markup).toContain('role="button" tabindex="0" aria-selected="true"');
+    expect(markup).toContain("Current Reporting Period");
     expect(markup).toContain('aria-label="View Current Reporting Period"');
     expect(markup).toContain('title="View report"');
     expect(markup).toContain('aria-label="Download Current Reporting Period"');
-    expect(markup).not.toContain('<span class="hidden xl:inline">View</span>');
-    expect(markup).toContain("Current Reporting Period</span>");
+    expect(markup).not.toContain("Apply Filter");
+    expect(markup).toContain('aria-label="Filter reports by reporting period"');
+    expect(markup).toContain('aria-label="Filter reports by status"');
   });
 
   it("renders canonical month and year labels", () => {

@@ -140,6 +140,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   return {
     counting,
     submissions,
@@ -157,15 +158,19 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     const state = await setup(page, mode);
     const row = page.locator("tbody tr").filter({ hasText: "October 2026" });
     await row.click();
+    await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+    await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
     const basis = page.getByRole("region", { name: "Establishment counting basis" });
     await expect(basis).toContainText("One establishment total from both camera modes");
     await expect(basis).toContainText("someone returning on another day can contribute again");
     await expect(basis).toContainText(mode === "open_space" ? "Not measured" : "4");
-    await expect(page.getByText("Unique visitors: 2", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
     // The full demographic allocation uses one establishment baseline.
-    await page.getByPlaceholder("M", { exact: true }).first().fill("1");
-    await page.getByPlaceholder("F", { exact: true }).first().fill("1");
-    await expect(page.getByText("Grand total: 2", { exact: true })).toBeVisible();
+    await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("1");
+    await page.getByRole("textbox", { name: "This City Female", exact: true }).fill("1");
+    await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
     await expect.poll(() => state.submissions.length).toBe(1);
@@ -177,8 +182,10 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     expect(state.uploads[0].exits).toBe(mode === "open_space" ? null : 4);
     await expect(page.getByText("Open Space reporting is not available")).toHaveCount(0);
     const savedRow = page.locator("tbody tr").filter({ hasText: String(state.getSaved()!.report_id) });
+    await page.getByRole("tab", { name: "Reports History", exact: true }).click();
     await savedRow.getByRole("button", { name: /View/ }).click();
-    const preview = page.getByRole("dialog", { name: "DOT Form Preview" });
+    const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
+    await preview.getByText("Report details and camera evidence", { exact: true }).click();
     await expect(preview.getByRole("region", { name: "Establishment counting basis" })).toContainText(mode === "open_space" ? "Not measured" : "4");
     const downloadEvent = page.waitForEvent("download");
     await preview.getByRole("button", { name: /Download/ }).click();
@@ -200,14 +207,17 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
 test("returned reports keep the old snapshot until counts are explicitly refreshed", async ({ page }) => {
   const state = await setup(page, "open_space", true);
   await page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" }).click();
+  await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
   await expect(page.getByRole("button", { name: "Resubmit Report", exact: true })).toBeVisible();
-  await expect(page.getByText("Unique visitors: 2", { exact: true })).toBeVisible();
-  await expect(page.getByText("Grand total: 2", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
+  await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
   await page.getByRole("button", { name: "Refresh reconciled counts for this revision", exact: true }).click();
-  await expect(page.getByText("Unique visitors: 3", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("3");
   await expect(page.getByRole("button", { name: "Resubmit Report", exact: true })).toBeDisabled();
-  await page.getByPlaceholder("M", { exact: true }).first().fill("2");
-  await expect(page.getByText("Grand total: 3", { exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("2");
+  await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("3");
   await page.getByRole("button", { name: "Resubmit Report", exact: true }).click();
   await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
   await expect.poll(() => state.submissions.length).toBe(1);
@@ -217,4 +227,28 @@ test("returned reports keep the old snapshot until counts are explicitly refresh
   expect(state.submissions[0].metrics).toMatchObject({ unique_count: 3 });
   expect(state.submissions[0].expected_snapshot_version).toBe(fixtures["corrected-open-space"].counting.snapshot_version);
   expect(state.getSaved()?.unique_count).toBe(3);
+});
+
+test("report filters, preview and responsive workspace retain the existing layout", async ({ page }, testInfo) => {
+  await setup(page, "mixed", true);
+  if (await page.getByRole("button", { name: "Switch to light mode" }).isVisible()) await page.getByRole("button", { name: "Switch to light mode" }).click();
+  const search = page.getByRole("searchbox", { name: "Search reports" });
+  await page.locator(".report-history-search > button").click();
+  await search.fill("not-a-report");
+  await expect(page.getByText("No matching reports found.", { exact: true })).toBeVisible();
+  await search.fill("REP-FIXTURE");
+  await expect(page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" })).toHaveCount(1);
+  await search.fill("");
+  await page.getByRole("combobox", { name: "Filter reports by status" }).click();
+  await page.getByRole("option", { name: "Returned for Revision", exact: true }).click();
+  await expect(page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" })).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Filter reports by status" }).click();
+  await page.getByRole("option", { name: "All Statuses", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("reports-desktop.png"), fullPage: true });
+  for (const width of [1024, 760, 430]) {
+    await page.setViewportSize({ width, height: 900 });
+    const workspace = page.locator("[data-reports-surface='var1-workspace']");
+    await expect.poll(() => workspace.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("reports-" + width + ".png"), fullPage: true });
+  }
 });

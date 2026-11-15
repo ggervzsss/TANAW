@@ -4,9 +4,14 @@ import type { MlAreaState, MlCounts, MlDetections, MlHealth } from "../services/
 import { canRetryPreview, getPreviewRetryDelayMs, hasRenderablePreviewFrame, isCurrentPreviewRequest, withPreviewRetryVersion } from "../utils/camera-preview-recovery";
 import { OpenSpaceOverlay } from "./OpenSpaceOverlay";
 import { CameraOverlayConfig } from "./CameraOverlayConfig";
-import { CAMERA_PLACEHOLDER_CITY_HALL_IMAGE } from "../../../lib/assets";
+import { Video, Wifi, WifiOff, CircleAlert, RefreshCw } from "lucide-react";
+
+import { DEFAULT_CAMERA_DISPLAY, type CameraDisplayPreferences } from "../model/camera-display";
 
 type CameraVideoPreviewProps = {
+  displayPreferences?: CameraDisplayPreferences;
+  onRetry?: () => void | Promise<boolean | void>;
+  onEditCheckpoint?: () => void;
   activeCam: Camera;
   area?: MlAreaState | null;
   counts: MlCounts;
@@ -29,7 +34,22 @@ type ContentRect = {
   width: number;
 };
 
-export function CameraVideoPreview({ area, activeCam, counts, detections, editForm, health, isProcessing, isEditMode, onEditFormChange, onPreviewStateChange, streamUrl }: CameraVideoPreviewProps) {
+export function CameraVideoPreview({
+  displayPreferences = DEFAULT_CAMERA_DISPLAY,
+  onRetry,
+  onEditCheckpoint,
+  area,
+  activeCam,
+  counts,
+  detections,
+  editForm,
+  health,
+  isProcessing,
+  isEditMode,
+  onEditFormChange,
+  onPreviewStateChange,
+  streamUrl,
+}: CameraVideoPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previewImageRef = useRef<HTMLImageElement | null>(null);
   const previewSourceRef = useRef(streamUrl);
@@ -42,12 +62,38 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
   const streamIsAvailable = Boolean(isProcessing && streamUrl);
   const effectiveStreamUrl = useMemo(() => withPreviewRetryVersion(streamUrl, previewAttempt), [previewAttempt, streamUrl]);
   const isStarting = counts.status === "starting" || counts.status === "connecting" || activeCam.status === "starting";
+  const hasFreshFrame = health?.raw_frame_id !== 0 && (health?.raw_frame_stale_ms == null || health.raw_frame_stale_ms < 5000);
+  const isActuallyLive = streamIsAvailable && previewState === "live" && hasFreshFrame && ["running", "degraded"].includes(counts.status);
+  const presentation = isStarting
+    ? "starting"
+    : counts.status === "reconnecting" || previewState === "retrying"
+      ? "reconnecting"
+      : counts.error || ["failed", "error", "offline"].includes(activeCam.status) || previewState === "failed"
+        ? "error"
+        : isProcessing
+          ? "connecting"
+          : "offline";
+  const loading = presentation === "starting" || presentation === "connecting" || presentation === "reconnecting";
+  const statusHeading = {
+    starting: "Preparing your camera",
+    connecting: "Connecting to camera",
+    reconnecting: "Restoring connection",
+    error: "Camera needs attention",
+    offline: "Camera preview is paused",
+  }[presentation];
+  const statusDescription = {
+    starting: health?.model_loading ? "Loading the counting model. Video will appear when it is ready." : "Starting the secure video connection. This may take a moment.",
+    connecting: "Waiting for a live video frame from this camera.",
+    reconnecting: "The video connection was interrupted. TANAW is working to restore it.",
+    error: "Check the camera connection and local service, then try again.",
+    offline: "Start this camera to view its video and visitor counts.",
+  }[presentation];
+  const StatusIcon = loading ? Wifi : presentation === "error" ? CircleAlert : WifiOff;
   const overlayConfig = isEditMode && editForm ? editForm.config : activeCam.config;
-  const shouldShowConfigOverlay = true;
+  const shouldShowConfigOverlay = isEditMode || displayPreferences.area;
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
   const visibleTracks = detections.tracks.filter((track) => track.confidence >= activeCam.confidence);
-  const activeTrackCount = visibleTracks.filter((track) => track.track_id > 0).length;
   const fpsLabel = health?.analytics_fps ? `${health.analytics_fps.toFixed(1)} AI FPS` : "AI FPS Adaptive";
 
   const clearPreviewTimers = useCallback(() => {
@@ -84,8 +130,8 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
   }, [activeCam.id, clearPreviewTimers, streamUrl]);
 
   useEffect(() => {
-    onPreviewStateChange?.(previewState);
-  }, [onPreviewStateChange, previewState]);
+    onPreviewStateChange?.(previewState === "live" && !isActuallyLive ? (counts.status === "reconnecting" ? "retrying" : "connecting") : previewState);
+  }, [counts.status, isActuallyLive, onPreviewStateChange, previewState]);
 
   useEffect(() => {
     if (!streamIsAvailable) {
@@ -172,47 +218,68 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
             setPreviewState("live");
           }}
         />
-      ) : isStarting ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black text-sm font-bold tracking-wider text-emerald-300 uppercase">Starting camera stream…</div>
-      ) : activeCam.status === "online" || activeCam.status === "untested" || activeCam.status === "stopped" ? (
-        <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url("${CAMERA_PLACEHOLDER_CITY_HALL_IMAGE}")` }} />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-black text-sm font-bold tracking-wider text-red-500 uppercase">Stream Offline</div>
-      )}
-      {!streamIsAvailable && <div className="absolute inset-0 bg-black/30"></div>}
-      {streamIsAvailable && previewState !== "live" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          {previewState === "failed" ? (
+      ) : null}
+      <div className={`camera-preview-state ${isActuallyLive ? "is-hidden" : ""}`} data-state={presentation} aria-hidden={isActuallyLive}>
+        <div className="camera-preview-state-brand">
+          <Video size={18} />
+          <span>
+            TANAW <span>CAMERA MONITORING</span>
+          </span>
+        </div>
+        <div className="camera-preview-state-message" role="status" aria-live="polite">
+          <div className={`camera-preview-state-icon ${loading ? "is-loading" : ""}`}>
+            <StatusIcon size={30} />
+          </div>
+          <h3>{statusHeading}</h3>
+          <p>{statusDescription}</p>
+          {loading && (
+            <div className="camera-preview-progress" aria-label="Connecting">
+              <span />
+            </div>
+          )}
+          {!loading && (
             <button
               type="button"
-              className="pointer-events-auto rounded-full border border-red-300/50 bg-black/80 px-3 py-1 text-[10px] font-bold tracking-wide text-red-200 uppercase shadow-sm backdrop-blur-sm"
+              className="camera-preview-retry"
+              tabIndex={isActuallyLive ? -1 : 0}
               onClick={() => {
-                setPreviewAttempt(0);
+                if (!streamIsAvailable) {
+                  void onRetry?.();
+                  return;
+                }
+                clearPreviewTimers();
+                setPreviewAttempt((attempt) => (attempt === 0 ? 1 : 0));
                 setPreviewState("connecting");
               }}
+              disabled={!onRetry && !streamIsAvailable}
             >
-              Unable to restore preview — Retry
+              <RefreshCw size={16} />
+              {presentation === "offline" ? "Start camera" : "Retry connection"}
             </button>
-          ) : (
-            <span className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold tracking-wide text-amber-200 uppercase shadow-sm backdrop-blur-sm">
-              {previewState === "retrying" ? "Reconnecting preview…" : "Connecting preview…"}
-            </span>
           )}
         </div>
-      )}
+        <div className="camera-preview-state-footer">
+          <span>{activeCam.name}</span>
+          <span>
+            {activeCam.cameraHost || "RTSP camera"} | {activeCam.rtspStream === "stream1" ? "Primary stream" : "Secondary stream"}
+          </span>
+        </div>
+      </div>
 
-      {shouldShowConfigOverlay && (
+      {shouldShowConfigOverlay && isActuallyLive && (
         <div className="absolute" style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
           {(isEditMode && editForm ? editForm : activeCam).analysisMode === "open_space" ? (
             <OpenSpaceOverlay
               value={(isEditMode && editForm ? editForm : activeCam).openSpace}
-              editable={isEditMode && Boolean(contentRect) && previewState === "live"}
+              editable={isEditMode && Boolean(contentRect) && isActuallyLive}
+              onEditCheckpoint={onEditCheckpoint}
               onChange={(openSpace) => onEditFormChange((current) => (current?.analysisMode === "open_space" ? { ...current, openSpace } : current))}
             />
           ) : (
             <CameraOverlayConfig
               config={overlayConfig}
-              isEditMode={isEditMode}
+              onEditCheckpoint={onEditCheckpoint}
+              isEditMode={isEditMode && Boolean(contentRect) && isActuallyLive}
               onConfigChange={
                 isEditMode
                   ? (config) => {
@@ -224,7 +291,7 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
           )}
         </div>
       )}
-      {streamIsAvailable && contentRect && frameWidth > 0 && frameHeight > 0 && (
+      {(displayPreferences.people || displayPreferences.labels) && isActuallyLive && contentRect && frameWidth > 0 && frameHeight > 0 && (
         <div className="pointer-events-none absolute" style={{ height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width }}>
           {visibleTracks.map((track) => {
             const [x1, y1, x2, y2] = track.bbox;
@@ -246,12 +313,18 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
 
             return (
               <div key={track.track_id} className="contents">
-                <div className={`absolute border bg-transparent ${tone.boxClass}`} style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}>
-                  <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
-                    {label} | {(track.confidence * 100).toFixed(0)}%
-                  </span>
+                <div
+                  className={`absolute bg-transparent ${displayPreferences.people ? `border ${tone.boxClass}` : ""}`}
+                  style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}
+                >
+                  {displayPreferences.labels && (
+                    <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
+                      {label} | {(track.confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
                 </div>
                 <span
+                  hidden={!displayPreferences.people}
                   aria-hidden="true"
                   className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_10px_rgba(34,211,238,0.42)] transition-[left,top] duration-75 ease-linear ${tone.triggerClass}`}
                   style={{ left: `${triggerLeft}%`, top: `${triggerTop}%` }}
@@ -262,10 +335,10 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
         </div>
       )}
 
-      <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-3">
+      <div className={`camera-preview-badges absolute top-3 right-3 left-3 flex items-start justify-between gap-3 ${!isActuallyLive ? "invisible" : ""}`}>
         <div className="flex min-w-0 flex-wrap gap-1.5">
-          <PreviewBadge label={counts.running ? "AI Processing" : "Preview"} tone={counts.running ? "ok" : "neutral"} />
-          <PreviewBadge label={`${activeTrackCount} Tracks`} tone={activeTrackCount > 0 ? "ok" : "neutral"} />
+          <PreviewBadge label="● LIVE" tone="ok" />
+          <PreviewBadge label={`People in Area: ${activeCam.analysisMode === "open_space" ? (area?.available ? (area.presence ?? "—") : "—") : (counts.occupancy ?? "—")}`} tone="neutral" />
           <PreviewBadge label={health?.model_ready ? "Model Ready" : health?.model_loading ? "Model Loading" : "Model Standby"} tone={health?.model_ready ? "ok" : "neutral"} />
         </div>
         {streamIsAvailable && (
@@ -275,7 +348,7 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
                 previewState === "live" ? "border-green-500/50 text-green-400" : previewState === "failed" ? "border-red-400/50 text-red-200" : "border-amber-400/50 text-amber-200"
               }`}
             >
-              <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${previewState === "live" ? "bg-green-400" : "bg-amber-300"}`}></span>
+              <span className={`h-1.5 w-1.5 rounded-full ${previewState === "live" ? "bg-green-400" : "bg-amber-300"}`}></span>
               {previewState === "live" ? "LIVE" : previewState === "failed" ? "PREVIEW FAILED" : "RECOVERING"}
             </span>
             <span className="rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">{fpsLabel}</span>

@@ -15,7 +15,7 @@ export function OpenSpaceZoneControls({ value, previewReady, onChange }: { value
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p role={previewReady && error ? "alert" : "status"} className={previewReady && error ? "text-amber-700 dark:text-amber-200" : "font-semibold"}>
-          {previewReady ? (error ?? "Zone ready. Save Config to apply.") : "Waiting for a live preview to place points."}
+          {previewReady ? (error ?? "Zone ready. Use this Area, then Save Changes to apply.") : "Waiting for a live preview to place points."}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] tabular-nums">{points.length} / 12 points</span>

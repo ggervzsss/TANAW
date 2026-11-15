@@ -196,7 +196,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
     unique: metrics.unique,
     counting: countingFromPayload(payload.counting),
     period: periodFromValue(submission.period),
-    demo: demoFromPayload(payload.demo),
+    demo: demoFromPayload(payload.demo, payload.var1),
     notes: payloadNotes ?? submission.notes ?? "",
     auditTrail: auditTrailFromPayload(payload.auditTrail) ?? [
       {
@@ -249,7 +249,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
     unique: report.metrics.unique,
     counting: countingFromPayload(report.payload?.counting),
     period: report.period,
-    demo: demoFromPayload(report.payload?.demo),
+    demo: demoFromPayload(report.payload?.demo, report.payload?.var1),
     notes: report.notes ?? "",
     remarks: report.remarks,
     submittedAt: report.submittedAt,
@@ -332,12 +332,15 @@ function periodFromValue(value: string): SystemLogPeriod {
   return value || getCurrentReportingPeriod();
 }
 
-export function demoFromPayload(value: unknown): DemoBreakdown {
+export function demoFromPayload(value: unknown, var1?: unknown): DemoBreakdown {
   const fallback = emptyDemo();
   if (!value || typeof value !== "object") return fallback;
 
   const payload = value as Partial<Record<keyof DemoBreakdown, unknown>>;
+  const details = var1 && typeof var1 === "object" ? (var1 as Record<string, unknown>) : payload;
   return {
+    ...(details.thisCityMale != null ? { thisCityMale: stringValue(details.thisCityMale) } : {}),
+    ...(details.thisCityFemale != null ? { thisCityFemale: stringValue(details.thisCityFemale) } : {}),
     thisProvMale: stringValue(payload.thisProvMale),
     thisProvFemale: stringValue(payload.thisProvFemale),
     otherProvMale: stringValue(payload.otherProvMale),

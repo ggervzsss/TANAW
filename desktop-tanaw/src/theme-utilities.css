@@ -1,0 +1,531 @@
+/* Adapter for the existing utility classes. Deliberately layered below the
+   unlayered component styles: broad legacy rules must never override a specific
+   input, selected state, table, modal or camera surface. All colors use roles. */
+@layer theme-utilities {
+  html.dark .enterprise-shell aside.bg-\[\#065f46\] {
+    background: var(--theme-surface);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell header.bg-white\/80,
+  html.dark .enterprise-shell header.dark\:bg-\[\#111827\]\/90 {
+    background: color-mix(in srgb, var(--enterprise-card-bg) 94%, transparent);
+    border-color: var(--enterprise-border-soft);
+    box-shadow: var(--tanaw-shadow-soft);
+  }
+
+  html.dark .enterprise-shell .bg-white {
+    background-color: var(--enterprise-card-bg);
+  }
+
+  html.dark .enterprise-shell .bg-white\/50,
+  html.dark .enterprise-shell .bg-white\/80 {
+    background-color: color-mix(in srgb, var(--enterprise-card-bg) 90%, transparent);
+  }
+
+  html.dark .enterprise-shell .bg-gray-50,
+  html.dark .enterprise-shell .bg-gray-50\/80,
+  html.dark .enterprise-shell .bg-\[\#f4f8f5\],
+  html.dark .enterprise-shell .bg-\[\#f8f9fa\] {
+    background-color: var(--enterprise-panel-bg);
+  }
+
+  html.dark .enterprise-shell .bg-gray-100 {
+    background-color: var(--enterprise-card-elevated-bg);
+  }
+
+  html.dark .enterprise-shell .bg-gray-300 {
+    background-color: var(--theme-raised);
+  }
+
+  html.dark .enterprise-shell .bg-green-50,
+  html.dark .enterprise-shell .bg-emerald-50,
+  html.dark .enterprise-shell .bg-emerald-50\/70,
+  html.dark .enterprise-shell .bg-emerald-50\/80,
+  html.dark .enterprise-shell .bg-emerald-50\/90 {
+    background-color: var(--theme-success-bg);
+  }
+
+  html.dark .enterprise-shell .bg-amber-50,
+  html.dark .enterprise-shell .bg-amber-50\/60,
+  html.dark .enterprise-shell .bg-amber-50\/70,
+  html.dark .enterprise-shell .bg-amber-100 {
+    background-color: var(--theme-warning-bg);
+  }
+
+  html.dark .enterprise-shell .bg-red-50 {
+    background-color: var(--theme-danger-bg);
+  }
+
+  html.dark .enterprise-shell .bg-blue-50,
+  html.dark .enterprise-shell .bg-blue-50\/20 {
+    background-color: var(--theme-info-bg);
+  }
+
+  html.dark .enterprise-shell .bg-\[\#065f46\]\/5,
+  html.dark .enterprise-shell .bg-\[\#065f46\]\/10 {
+    background-color: var(--theme-surface);
+  }
+
+  html.dark .enterprise-shell .bg-\[\#ffd200\]\/10,
+  html.dark .enterprise-shell .bg-\[\#ffd200\]\/20 {
+    background-color: var(--theme-surface);
+  }
+
+  html.dark .enterprise-shell .text-\[\#111827\],
+  html.dark .enterprise-shell .text-\[\#2a3063\],
+  html.dark .enterprise-shell .text-tanaw-navy,
+  html.dark .enterprise-shell .text-slate-700,
+  html.dark .enterprise-shell .text-gray-800 {
+    color: var(--enterprise-text);
+  }
+
+  html.dark .enterprise-shell .text-slate-600,
+  html.dark .enterprise-shell .text-gray-700 {
+    color: var(--theme-secondary);
+  }
+
+  html.dark .enterprise-shell .text-slate-500,
+  html.dark .enterprise-shell .text-gray-600 {
+    color: var(--enterprise-muted);
+  }
+
+  html.dark .enterprise-shell .text-gray-500,
+  html.dark .enterprise-shell .text-gray-400 {
+    color: var(--enterprise-muted-soft);
+  }
+
+  html.dark .enterprise-shell .text-gray-300 {
+    color: var(--theme-text);
+  }
+
+  html.dark .enterprise-shell .text-red-900,
+  html.dark .enterprise-shell .text-\[\#a40e0e\] {
+    color: var(--theme-danger-text);
+  }
+
+  html.dark .enterprise-shell .text-blue-800,
+  html.dark .enterprise-shell .text-blue-700,
+  html.dark .enterprise-shell .text-\[\#2d5eff\] {
+    color: var(--theme-info-text);
+  }
+
+  html.dark .enterprise-shell .text-emerald-700,
+  html.dark .enterprise-shell .text-emerald-900,
+  html.dark .enterprise-shell .text-green-600,
+  html.dark .enterprise-shell .text-\[\#065f46\],
+  html.dark .enterprise-shell .text-\[\#055b25\] {
+    color: var(--theme-success-text);
+  }
+
+  html.dark .enterprise-shell .text-red-700,
+  html.dark .enterprise-shell .text-red-800 {
+    color: var(--theme-danger-text);
+  }
+
+  html.dark .enterprise-shell .text-amber-800 {
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell .border-gray-50,
+  html.dark .enterprise-shell .border-gray-100,
+  html.dark .enterprise-shell .border-gray-200,
+  html.dark .enterprise-shell .border-gray-300,
+  html.dark .enterprise-shell .border-gray-200\/70 {
+    border-color: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell .border-emerald-100,
+  html.dark .enterprise-shell .border-emerald-100\/80,
+  html.dark .enterprise-shell .border-emerald-200,
+  html.dark .enterprise-shell .border-green-200,
+  html.dark .enterprise-shell .border-blue-200,
+  html.dark .enterprise-shell .border-amber-200,
+  html.dark .enterprise-shell .border-red-200 {
+    border-color: var(--enterprise-border);
+  }
+
+  html.dark .enterprise-shell input,
+  html.dark .enterprise-shell select,
+  html.dark .enterprise-shell textarea {
+    background-color: var(--enterprise-input-bg);
+    border-color: var(--enterprise-border);
+    color: var(--enterprise-text);
+  }
+
+  html.dark .enterprise-shell input::placeholder,
+  html.dark .enterprise-shell textarea::placeholder {
+    color: var(--enterprise-muted-soft);
+  }
+
+  html.dark .enterprise-shell input:disabled,
+  html.dark .enterprise-shell select:disabled,
+  html.dark .enterprise-shell textarea:disabled {
+    background-color: var(--theme-surface);
+    color: var(--theme-muted);
+  }
+
+  html.dark .enterprise-shell .disabled\:bg-gray-100:disabled,
+  html.dark .enterprise-shell .disabled\:bg-gray-400:disabled {
+    background-color: var(--theme-surface);
+    color: var(--theme-muted);
+  }
+
+  html.dark .enterprise-shell .disabled\:text-gray-400:disabled {
+    color: var(--theme-muted);
+  }
+
+  html.dark .enterprise-shell .tanaw-switch {
+    background-color: var(--theme-surface);
+  }
+
+  html.dark .enterprise-shell .tanaw-switch--on {
+    background-color: var(--theme-surface);
+  }
+
+  html.dark .enterprise-shell .tanaw-switch-thumb {
+    background-color: var(--theme-surface);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu {
+    background: var(--enterprise-card-elevated-bg);
+    border-color: var(--enterprise-border);
+    color: var(--enterprise-text);
+    box-shadow: var(--tanaw-shadow-raised);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu__header {
+    background: var(--theme-raised);
+    border-color: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell .enterprise-ticket-panel-header {
+    background: var(--theme-raised);
+    border-color: var(--enterprise-border);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .tanaw-status-badge {
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .tanaw-status-badge--success {
+    border-color: var(--theme-border-soft);
+    background-color: var(--theme-success-bg);
+    color: var(--theme-success-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-status-badge--warning {
+    border-color: var(--theme-border-soft);
+    background-color: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-status-badge--info {
+    border-color: var(--theme-border-soft);
+    background-color: var(--theme-info-bg);
+    color: var(--theme-info-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-trend-chip--peak {
+    border-color: var(--theme-border-soft);
+    background-color: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-trend-chip--utilization {
+    border-color: var(--theme-border-soft);
+    background-color: var(--theme-success-bg);
+    color: var(--theme-success-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-report-remarks {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .tanaw-report-remarks__title {
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell .tanaw-report-remarks__message {
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu button {
+    color: var(--theme-text);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu button:hover {
+    background-color: var(--theme-raised);
+    color: var(--theme-text);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red {
+    color: var(--theme-danger-text);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red:hover {
+    background-color: var(--theme-danger-bg);
+    color: var(--theme-danger-text);
+  }
+
+  html.dark .enterprise-shell table thead {
+    background-color: var(--enterprise-panel-bg);
+    color: var(--enterprise-muted);
+  }
+
+  html.dark .enterprise-shell table tbody {
+    color: var(--theme-text);
+  }
+
+  html.dark .enterprise-shell table tbody tr:hover {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  html.dark .enterprise-shell .divide-gray-100 > :not(:last-child),
+  html.dark .enterprise-shell .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell table tbody.divide-gray-100 > :not(:last-child),
+  html.dark .enterprise-shell table tbody.divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell .hover\:bg-gray-50:hover,
+  html.dark .enterprise-shell .hover\:bg-gray-100:hover,
+  html.dark .enterprise-shell .hover\:bg-gray-200:hover {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  html.dark .enterprise-shell .hover\:bg-red-50:hover {
+    background-color: var(--theme-danger-bg);
+  }
+
+  html.dark .enterprise-shell .recharts-cartesian-axis-tick-value {
+    fill: var(--enterprise-muted);
+  }
+
+  html.dark .enterprise-shell .recharts-cartesian-grid line {
+    stroke: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background: var(--enterprise-card-elevated-bg);
+    border-color: var(--enterprise-border);
+    color: var(--enterprise-text);
+    box-shadow: var(--tanaw-shadow-raised);
+  }
+
+  html.dark .enterprise-shell .recharts-legend-item-text {
+    color: var(--enterprise-muted);
+  }
+
+  html.dark body {
+    background: var(--enterprise-app-bg);
+  }
+
+  html.dark .enterprise-shell .bg-\[\#0f172a\],
+  html.dark .enterprise-shell .dark\:bg-\[\#0f172a\] {
+    background-color: var(--enterprise-app-bg);
+  }
+
+  html.dark .enterprise-shell .dark\:bg-\[\#121c31\] {
+    background-color: var(--enterprise-card-bg);
+  }
+
+  html.dark .enterprise-shell .dark\:bg-\[\#172033\] {
+    background-color: var(--enterprise-card-elevated-bg);
+  }
+
+  html.dark .enterprise-shell .bg-white,
+  html.dark .enterprise-shell .bg-white\/85 {
+    background-color: var(--enterprise-card-bg);
+  }
+
+  html.dark .enterprise-shell .bg-gray-50,
+  html.dark .enterprise-shell .bg-gray-50\/80 {
+    background-color: var(--enterprise-panel-bg);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-logo-panel,
+  html.dark .enterprise-shell .enterprise-profile-identity-panel {
+    background: var(--theme-surface);
+    border-color: var(--enterprise-border);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .enterprise-profile-logo-panel label,
+  html.dark .enterprise-shell .enterprise-profile-identity-panel .bg-white {
+    background-color: var(--enterprise-input-bg);
+    border-color: var(--enterprise-border);
+    color: var(--enterprise-text);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-change-notice[data-tone="info"] {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-change-notice[data-tone="success"] {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-success-bg);
+    color: var(--theme-success-text);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__icon {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__title {
+    color: var(--theme-text);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__copy {
+    color: var(--theme-secondary);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__address {
+    color: var(--theme-warning-text);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__cancel {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark body .enterprise-shell .enterprise-profile-pending-email__cancel:hover {
+    border-color: var(--theme-border-soft);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-text);
+  }
+
+  html.dark .enterprise-shell input[readonly],
+  html.dark .enterprise-shell textarea[readonly] {
+    background-color: var(--enterprise-input-bg);
+    color: var(--enterprise-text);
+  }
+
+  html.dark .enterprise-shell input[readonly]:focus,
+  html.dark .enterprise-shell textarea[readonly]:focus {
+    border-color: var(--theme-focus);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .enterprise-notification-menu,
+  html.dark .enterprise-shell .enterprise-notifications-view {
+    background: var(--enterprise-card-bg);
+    border-color: var(--enterprise-border);
+    color: var(--enterprise-text);
+    box-shadow: var(--theme-shadow);
+  }
+
+  html.dark .enterprise-shell .enterprise-notification-menu__header {
+    background: var(--theme-raised);
+    border-color: var(--enterprise-border);
+  }
+
+  html.dark .enterprise-shell .enterprise-notification-menu__body,
+  html.dark .enterprise-shell .enterprise-notification-menu__footer {
+    background-color: var(--enterprise-card-bg);
+    border-color: var(--enterprise-border-soft);
+  }
+
+  html.dark .enterprise-shell .enterprise-notification-menu .bg-linear-to-r,
+  html.dark .enterprise-shell .enterprise-notifications-view .bg-blue-50\/20 {
+    background-image: none;
+  }
+
+  html.dark .enterprise-shell .enterprise-notification-menu button:hover,
+  html.dark .enterprise-shell .enterprise-notifications-view button:hover {
+    background-color: var(--theme-raised);
+  }
+
+  html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-white,
+  html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-white\/85,
+  html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-gray-50,
+  html.dark .enterprise-shell .rounded-xl.border.bg-white {
+    background-color: var(--enterprise-card-bg);
+    border-color: var(--enterprise-border);
+  }
+
+  html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-gray-50,
+  html.dark .enterprise-shell .rounded-sm.border.border-gray-300.bg-gray-50,
+  html.dark .enterprise-shell .rounded-sm.bg-gray-50 {
+    background-color: var(--enterprise-input-bg);
+  }
+
+  html.dark .enterprise-shell .bg-emerald-50,
+  html.dark .enterprise-shell .bg-emerald-50\/70,
+  html.dark .enterprise-shell .bg-emerald-50\/80,
+  html.dark .enterprise-shell .bg-green-50 {
+    background-color: var(--theme-success-bg);
+  }
+
+  html.dark .enterprise-shell .bg-red-50 {
+    background-color: var(--theme-danger-bg);
+  }
+
+  html.dark .enterprise-shell .bg-amber-50,
+  html.dark .enterprise-shell .bg-amber-100 {
+    background-color: var(--theme-warning-bg);
+  }
+
+  html.dark .enterprise-shell .bg-blue-50 {
+    background-color: var(--theme-info-bg);
+  }
+
+  html.dark .enterprise-shell .text-gray-400,
+  html.dark .enterprise-shell .text-gray-500,
+  html.dark .enterprise-shell .text-slate-500 {
+    color: var(--enterprise-muted-soft);
+  }
+
+  html.dark .enterprise-shell .text-gray-600,
+  html.dark .enterprise-shell .text-gray-700,
+  html.dark .enterprise-shell .text-gray-800,
+  html.dark .enterprise-shell .text-slate-600,
+  html.dark .enterprise-shell .text-slate-700 {
+    color: var(--enterprise-muted);
+  }
+
+  html.dark .enterprise-shell .disabled\:opacity-60:disabled,
+  html.dark .enterprise-shell .disabled\:opacity-55:disabled,
+  html.dark .enterprise-shell .disabled\:opacity-50:disabled,
+  html.dark .enterprise-shell .disabled\:opacity-40:disabled {
+    opacity: 0.7;
+  }
+
+  html.dark .enterprise-shell button:disabled {
+    color: var(--theme-muted);
+  }
+
+  html.dark .enterprise-shell table,
+  html.dark .enterprise-shell table tbody,
+  html.dark .enterprise-shell table .bg-white {
+    background-color: var(--enterprise-card-bg);
+  }
+
+  html.dark .enterprise-shell table thead,
+  html.dark .enterprise-shell .sticky.top-0.bg-gray-50 {
+    background-color: var(--enterprise-input-bg);
+    color: var(--enterprise-muted);
+  }
+}

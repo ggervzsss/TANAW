@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-CANONICAL_DATABASE_REVISION = "0002"
+CANONICAL_DATABASE_REVISION = "0001"
 CANONICAL_BASELINE_PATH = (
     Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0001_initial_tanaw_schema.py"
 )
@@ -51,4 +51,6 @@ async def validate_database_migration_head(connection: AsyncConnection) -> None:
 
 
 def canonical_schema_fingerprint() -> str:
-    return hashlib.sha256(CANONICAL_BASELINE_PATH.read_bytes()).hexdigest()
+    # Text mode normalizes Windows CRLF and Unix LF before hashing.
+    baseline = CANONICAL_BASELINE_PATH.read_text(encoding="utf-8")
+    return hashlib.sha256(baseline.encode("utf-8")).hexdigest()

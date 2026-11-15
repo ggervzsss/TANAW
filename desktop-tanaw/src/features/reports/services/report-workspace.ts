@@ -9,7 +9,7 @@ export async function persistDemographicDraft(draftKey: string, period: string, 
   try {
     const status = await getMlServiceStatus();
     const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-    if (Object.values(demo).every((value) => value.trim() === "")) {
+    if (Object.values(demo).every((value) => (value ?? "").trim() === "")) {
       await deleteLocalReportDraft(baseUrl, draftKey);
       return;
     }

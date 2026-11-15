@@ -97,7 +97,22 @@ export async function mockCameraSetup(page: Page, enterpriseId: string) {
     pending_camera_ids: [],
     cameras: [],
   };
-  await mockMlRequest(page, "/cameras/runtime", () => mlResponse({ status: 200, body: JSON.stringify(runtime) }));
+  await mockMlRequest(page, "/cameras/runtime", () =>
+    mlResponse({
+      status: 200,
+      body: JSON.stringify({
+        ...runtime,
+        cameras: cameras.map((camera) => ({
+          camera_id: camera.id,
+          counts: { entry: null, exit: null, occupancy: null, running: false, status: "stopped", error: null },
+          detections: { running: false, status: "stopped", frame_width: 640, frame_height: 360, tracks: [] },
+          health,
+          area: { available: false, presence: null, active_visits: [] },
+          session: {},
+        })),
+      }),
+    }),
+  );
   await page.addInitScript(() => {
     const records: Awaited<ReturnType<NonNullable<Window["tanawCameraCredentials"]>["load"]>> = {};
     window.tanawCameraCredentials = {

@@ -3,6 +3,8 @@ import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction }
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { DemoBreakdown } from "../../../types/enterprise";
 import { demographicCount, getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
+import { VisitorOriginTable } from "./VisitorOriginTable";
+import { ReportPopover } from "./ReportPopover";
 import {
   buildAssistedDemo,
   clampPercentage,
@@ -20,6 +22,7 @@ type DemographicsBreakdownProps = {
   previousDemo?: DemoBreakdown | null;
   setDemo: Dispatch<SetStateAction<DemoBreakdown>>;
   uniqueCap: number;
+  period?: string;
 };
 
 const groups = demographicGroups;
@@ -40,7 +43,7 @@ const defaultAssistedSettings: AssistedSettings = {
   },
 };
 
-export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, setDemo, uniqueCap }: DemographicsBreakdownProps) {
+export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, setDemo, uniqueCap, period }: DemographicsBreakdownProps) {
   const [inputNote, setInputNote] = useState("");
   const [mode, setMode] = useState<AllocationMode>("manual");
   const [assistedSettings, setAssistedSettings] = useState<AssistedSettings>(defaultAssistedSettings);
@@ -89,96 +92,99 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
   };
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <label className="block text-xs font-semibold tracking-wider text-[#111827] uppercase">Demographics Breakdown</label>
-        <span className="text-[10px] font-bold text-gray-500">Unique visitors: {allocation.cap.toLocaleString()}</span>
-      </div>
-      {!isReadOnly && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-            <ModeButton active={mode === "manual"} icon={<Keyboard size={13} />} label="Manual" onClick={() => setMode("manual")} />
-            <ModeButton active={mode === "assisted"} icon={<SlidersHorizontal size={13} />} label="Assisted" onClick={() => setMode("assisted")} />
-          </div>
-          <button
-            type="button"
-            onClick={applyRemainingAllocation}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-bold tracking-wider text-[#065f46] uppercase shadow-sm transition-colors hover:border-[#065f46]/40 hover:bg-[#065f46]/5"
-          >
-            <Sparkles size={13} /> Fill Remaining
-          </button>
+    <div className="report-visitor-layout">
+      <VisitorOriginTable demo={demo} isReadOnly={isReadOnly} uniqueCap={uniqueCap} period={period} setDemo={setDemo} />
+      <ReportPopover className="report-allocation-tools" label="Allocation tools" icon={<SlidersHorizontal size={15} aria-hidden="true" />}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label className="block text-xs font-semibold tracking-wider text-[#111827] uppercase">Demographics Breakdown</label>
+          <span className="text-[10px] font-bold text-gray-500">Unique visitors: {allocation.cap.toLocaleString()}</span>
         </div>
-      )}
-
-      {mode === "assisted" && !isReadOnly && (
-        <div className="mb-3 space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-bold tracking-wider text-[#111827] uppercase">Assisted Allocation</p>
-              <p className={`mt-1 text-[10px] font-semibold ${categoryShareTotal === 100 ? "text-gray-500" : "text-amber-700"}`}>Category share total: {categoryShareTotal}%</p>
+        {!isReadOnly && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+              <ModeButton active={mode === "manual"} icon={<Keyboard size={13} />} label="Manual" onClick={() => setMode("manual")} />
+              <ModeButton active={mode === "assisted"} icon={<SlidersHorizontal size={13} />} label="Assisted" onClick={() => setMode("assisted")} />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={resetEvenly}
-                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
-              >
-                <RotateCcw size={12} /> Even Split
-              </button>
-              <button
-                type="button"
-                disabled={!hasPreviousDemo}
-                onClick={usePreviousMix}
-                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-              >
-                Previous Mix
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {groups.map((group) => (
-              <AssistedGroupControls key={group.id} group={group} previewDemo={assistedPreview} settings={assistedSettings} setSettings={setAssistedSettings} />
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
-            <span className="text-[10px] font-semibold text-gray-500">Preview total: {assistedPreviewTotals.grandTotal.toLocaleString()}</span>
             <button
               type="button"
-              onClick={applyAssistedAllocation}
-              className="flex items-center gap-2 rounded-xl bg-[#065f46] px-3.5 py-2.5 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm transition-colors hover:bg-[#044a36]"
+              onClick={applyRemainingAllocation}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-bold tracking-wider text-[#065f46] uppercase shadow-sm transition-colors hover:border-[#065f46]/40 hover:bg-[#065f46]/5"
             >
-              <Sparkles size={13} /> Apply Allocation
+              <Sparkles size={13} /> Fill Remaining
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="tanaw-demographic-grid grid grid-cols-3 gap-2.5 rounded-2xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] max-[850px]:grid-cols-1">
-        {groups.map((group) => (
-          <div key={group.title} className="tanaw-demographic-card min-w-0 rounded-xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) p-2.5">
-            <div className="mb-2 flex min-w-0 items-center gap-1">
-              <p className="min-w-0 truncate text-[9px] font-bold text-(--tanaw-text) uppercase">{group.title}</p>
-              <InfoTooltip content={group.description} align="left">
-                <Info size={12} className="shrink-0 text-(--tanaw-muted-text) transition-colors hover:text-(--tanaw-green)" aria-hidden="true" />
-              </InfoTooltip>
-            </div>
-            <div className="space-y-2">
-              <DemographicInput demo={demo} disabled={isReadOnly} field={group.maleKey} label="Male" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
-              <DemographicInput demo={demo} disabled={isReadOnly} field={group.femaleKey} label="Female" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
-              <div className="tanaw-demographic-total rounded-lg border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) px-2 py-1.5 text-center shadow-sm">
-                <p className="text-[8px] font-bold tracking-wider text-(--tanaw-muted-text) uppercase">Total</p>
-                <p className="font-mono text-xs font-bold text-(--tanaw-text)">{totals[group.totalKey].toLocaleString()}</p>
+        {mode === "assisted" && !isReadOnly && (
+          <div className="mb-3 space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-bold tracking-wider text-[#111827] uppercase">Assisted Allocation</p>
+                <p className={`mt-1 text-[10px] font-semibold ${categoryShareTotal === 100 ? "text-gray-500" : "text-amber-700"}`}>Category share total: {categoryShareTotal}%</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetEvenly}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
+                >
+                  <RotateCcw size={12} /> Even Split
+                </button>
+                <button
+                  type="button"
+                  disabled={!hasPreviousDemo}
+                  onClick={usePreviousMix}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  Previous Mix
+                </button>
               </div>
             </div>
+
+            <div className="space-y-3">
+              {groups.map((group) => (
+                <AssistedGroupControls key={group.id} group={group} previewDemo={assistedPreview} settings={assistedSettings} setSettings={setAssistedSettings} />
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
+              <span className="text-[10px] font-semibold text-gray-500">Preview total: {assistedPreviewTotals.grandTotal.toLocaleString()}</span>
+              <button
+                type="button"
+                onClick={applyAssistedAllocation}
+                className="flex items-center gap-2 rounded-xl bg-[#065f46] px-3.5 py-2.5 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm transition-colors hover:bg-[#044a36]"
+              >
+                <Sparkles size={13} /> Apply Allocation
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-semibold">
-        <span className={helperTone}>{helperMessage}</span>
-        <span className="shrink-0 text-[#065f46]">Grand total: {totals.grandTotal.toLocaleString()}</span>
-      </div>
+        )}
+
+        <div className="tanaw-demographic-grid grid grid-cols-3 gap-2.5 rounded-2xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] max-[850px]:grid-cols-1">
+          {groups.map((group) => (
+            <div key={group.title} className="tanaw-demographic-card min-w-0 rounded-xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) p-2.5">
+              <div className="mb-2 flex min-w-0 items-center gap-1">
+                <p className="min-w-0 truncate text-[9px] font-bold text-(--tanaw-text) uppercase">{group.title}</p>
+                <InfoTooltip content={group.description} align="left">
+                  <Info size={12} className="shrink-0 text-(--tanaw-muted-text) transition-colors hover:text-(--tanaw-green)" aria-hidden="true" />
+                </InfoTooltip>
+              </div>
+              <div className="space-y-2">
+                <DemographicInput demo={demo} disabled={isReadOnly} field={group.maleKey} label="Male" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
+                <DemographicInput demo={demo} disabled={isReadOnly} field={group.femaleKey} label="Female" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
+                <div className="tanaw-demographic-total rounded-lg border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) px-2 py-1.5 text-center shadow-sm">
+                  <p className="text-[8px] font-bold tracking-wider text-(--tanaw-muted-text) uppercase">Total</p>
+                  <p className="font-mono text-xs font-bold text-(--tanaw-text)">{totals[group.totalKey].toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-semibold">
+          <span className={helperTone}>{helperMessage}</span>
+          <span className="shrink-0 text-[#065f46]">Grand total: {totals.grandTotal.toLocaleString()}</span>
+        </div>
+      </ReportPopover>
     </div>
   );
 }

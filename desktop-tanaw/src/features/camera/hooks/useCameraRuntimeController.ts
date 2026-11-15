@@ -268,8 +268,11 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
       await startCameraProcessing(mlBaseUrl, activeCam, storageKey);
       setCameraAction(activeCam.id, "starting");
       void refreshCameraStates().catch(() => undefined);
+      return true;
     } catch (error) {
-      if (handleCameraStartFailure(activeCam.id, error)) void refreshCameraStates().catch(() => undefined);
+      const pending = handleCameraStartFailure(activeCam.id, error);
+      if (pending) void refreshCameraStates().catch(() => undefined);
+      return pending;
     }
   }, [activeCam, beginCameraStart, handleCameraStartFailure, mlBaseUrl, refreshCameraStates, setCameraAction, storageKey]);
 
@@ -283,8 +286,10 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
       updateCameraStatus(activeCam.id, "stopped");
       bumpStreamVersion(activeCam.id);
       await refreshCameraStates();
+      return true;
     } catch (error) {
       setCameraError(activeCam.id, toErrorMessage(error));
+      return false;
     } finally {
       setCameraAction(activeCam.id);
     }

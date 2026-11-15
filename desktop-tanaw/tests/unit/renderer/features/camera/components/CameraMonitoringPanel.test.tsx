@@ -6,6 +6,10 @@ import { CameraMonitoringPanel } from "../../../../../../src/features/camera/com
 import type { CameraPreviewState } from "../../../../../../src/features/camera/components/CameraVideoPreview";
 
 describe("CameraMonitoringPanel", () => {
+  it("does not fabricate a zero visitor estimate when health has not supplied one", () => {
+    const markup = renderPanel({ health: null, counts: { ...EMPTY_ML_COUNTS, entry: null, exit: null, occupancy: null } });
+    expect(markup).not.toContain(">0</div>");
+  });
   it("uses the zone visitor estimate and keeps tracking gaps internal", () => {
     const area: MlAreaState = {
       available: true,

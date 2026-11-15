@@ -10,6 +10,9 @@ export type Metrics = {
 };
 
 export type DemoBreakdown = {
+  /** Optional city subset of thisProv totals; absent on province-only reports. */
+  thisCityMale?: string;
+  thisCityFemale?: string;
   thisProvMale: string;
   thisProvFemale: string;
   otherProvMale: string;
@@ -82,6 +85,7 @@ export type OpenSpaceSettings = {
 };
 
 type CameraConnectionAndProcessing = {
+  autoReconnect?: boolean;
   coverage?: CameraCoverage;
   id: number;
   name: string;
