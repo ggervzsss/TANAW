@@ -74,6 +74,24 @@ class CaptureWorkerTest(unittest.TestCase):
         self.assertEqual(messages, ["Camera stream could not be opened."])
         self.assertTrue(capture.released)
 
+    def test_disabling_reconnect_never_opens_a_second_capture(self) -> None:
+        session = _session(threading.Event())
+        session.config.auto_reconnect = False
+        capture = _Capture([], opened=False)
+        messages: list[str] = []
+        worker = CaptureWorker(
+            CameraFrameRenderer(),
+            is_current_session=lambda candidate: candidate is session,
+            processing_width=lambda _config: 32,
+            publish_frame=lambda _session, _frame: None,
+            mark_reconnecting=lambda _session, message: messages.append(message),
+        )
+        with patch("app.camera.capture_worker.open_capture", return_value=capture) as open_stream:
+            worker.run(session, "rtsp://camera")
+        self.assertEqual(open_stream.call_count, 1)
+        self.assertEqual(len(messages), 1)
+        self.assertTrue(capture.released)
+
     def test_reconnect_backoff_is_bounded(self) -> None:
         self.assertEqual(
             [CaptureWorker.reconnect_delay(value) for value in (1, 2, 3)], [1.0, 2.0, 4.0]

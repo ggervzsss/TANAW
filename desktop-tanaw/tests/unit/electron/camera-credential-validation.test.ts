@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCameraCredential } from "../../../electron/camera-credential-validation";
+import { resolveCameraCredential, resolveCameraRequestCredential } from "../../../electron/camera-credential-validation";
 
 describe("main-process camera credential validation", () => {
   it("rejects missing and whitespace-only credentials without echoing a secret", () => {
@@ -25,5 +25,16 @@ describe("main-process camera credential validation", () => {
         username: "camera-user",
       }),
     ).toThrow("Enter the camera password.");
+  });
+});
+
+describe("draft camera connection testing", () => {
+  it("tests replacements without changing saved credentials and starts with saved credentials", () => {
+    const stored = { username: "saved", password: "saved-secret" };
+    const draft = { username: "draft", password: "draft-secret" };
+    expect(resolveCameraRequestCredential("test", draft, stored)).toEqual(draft);
+    expect(resolveCameraRequestCredential("start", draft, stored)).toEqual(stored);
+    expect(stored).toEqual({ username: "saved", password: "saved-secret" });
+    expect(resolveCameraRequestCredential("test", { username: "draft", password: "" }, stored)).toEqual({ username: "draft", password: "saved-secret" });
   });
 });

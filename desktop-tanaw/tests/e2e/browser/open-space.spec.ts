@@ -246,7 +246,7 @@ async function setup(page: Page, configured = true, mixed = false) {
   await page.getByPlaceholder("Enter your password").fill("Park operator password 2026");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/enterprise\/dashboard/);
-  await expect(page.getByRole("heading", { name: "Enterprise Analytics" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 20_000 });
   return {
     starts,
     liveRequests: () => liveRequests,
@@ -259,16 +259,16 @@ async function setup(page: Page, configured = true, mixed = false) {
 
 test("shows one establishment dashboard for an Open Space-only setup", async ({ page }, testInfo) => {
   await setup(page);
-  await expect(page.getByRole("heading", { name: "Enterprise Analytics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Open Space Activity" })).toHaveCount(0);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
   await expect(header.getByText("3", { exact: true })).toBeVisible();
-  await expect(header.getByText("5", { exact: true })).toBeVisible();
+  await expect(page.locator(".overview-peak").getByText("5 people", { exact: true })).toBeVisible();
   await expect(header.getByText("7", { exact: true })).toBeVisible();
   await expect(header.getByText("Unique Visitors", { exact: true })).toBeVisible();
-  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
+  await expect(header.getByText(/Today.s Entries/, { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
   await expect(page.getByText(/dwell|duration/i)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("shared-occupancy-dashboard.png"), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -285,9 +285,9 @@ test("does not add a contained zone to its parent count or require a mode toggle
   const state = await setup(page, true, true);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
   await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
-  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
+  await expect(header.getByText(/Today.s Entries/, { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
-  await expect(header.getByText("20", { exact: true })).toBeVisible();
+  await expect(header.locator('[data-metric-segment="visitors"]').getByText("20", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("combined-occupancy.png"), fullPage: true });
   state.setPresence(0);
   let previousRequests = state.liveRequests();
@@ -312,7 +312,10 @@ for (const viewport of [
     const metrics = page.locator("section").filter({ has: page.getByRole("heading", { name: "Live Metrics", exact: true }) });
     await expect(metrics.getByText("—", { exact: true })).toHaveCount(2);
     await page.getByRole("button", { name: "Edit configuration" }).click();
-    await expect(page.getByRole("textbox", { name: "Username", exact: true })).toHaveValue("camera");
+    await page.getByRole("tab", { name: "Connection", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Camera Username", exact: true })).toHaveValue("camera");
+    await page.getByRole("tab", { name: "Counting Area", exact: true }).click();
+    await page.getByRole("button", { name: "Edit Counting Area", exact: true }).click();
     const svg = page.getByRole("img", { name: "Monitored area polygon" });
     const tools = page.getByRole("region", { name: "Monitored area editing tools", exact: true });
     await expect(tools.getByRole("button", { name: "Clear zone", exact: true })).toBeDisabled();
@@ -357,8 +360,10 @@ for (const viewport of [
     await lowerPoint.press("ArrowDown");
     await expect.poll(async () => Number(await lowerPoint.getAttribute("cy"))).toBeCloseTo(90, 0);
     await page.screenshot({ path: testInfo.outputPath("zone-tools-outside-preview.png"), fullPage: true });
+    await page.getByRole("button", { name: "Use this Area", exact: true }).click();
+    await page.getByText("Advanced camera configuration", { exact: true }).click();
     await page.getByRole("textbox", { name: "Monitored Area Name" }).fill("Plaza seating");
-    await page.getByRole("button", { name: "Save Config", exact: true }).click();
+    await page.getByRole("button", { name: "Save Changes", exact: true }).click();
     await expect.poll(() => state.profiles()[0].openSpace?.polygon.length).toBe(4);
     expect(state.profiles()[0].openSpace?.polygon[0].x).toBeCloseTo(0.2, 2);
     expect(state.profiles()[0].openSpace?.polygon[0].y).toBeCloseTo(0.3, 2);
@@ -367,3 +372,73 @@ for (const viewport of [
     expect(state.starts[0]).toMatchObject({ analysis_mode: "open_space", preview_only: false, open_space: { zone_name: "Plaza seating" } });
   });
 }
+
+test("camera settings tabs, scoped display saves, cancellation, editor undo and responsive layout", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const state = await setup(page);
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  if (await page.getByRole("button", { name: "Switch to light mode" }).isVisible()) await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.goto("/#/enterprise/cameras");
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  const settings = page.getByRole("region", { name: "Camera Settings", exact: true });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole("tab")).toHaveCount(5);
+  await page.screenshot({ path: testInfo.outputPath("camera-information.png"), fullPage: true });
+  await settings.getByRole("textbox", { name: "Camera Name", exact: true }).fill("");
+  await settings.getByRole("button", { name: "Save Changes", exact: true }).click();
+  await expect(settings.getByRole("alert")).toContainText("Enter a camera name between 2 and 120 characters.");
+  await expect(settings.getByRole("textbox", { name: "Camera Name", exact: true })).toBeFocused();
+  await settings.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Unsaved name");
+  await settings.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("dialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard Changes", exact: true }).click();
+  expect(state.profiles()[0].name).toBe("Plaza camera");
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(settings.getByRole("textbox", { name: "Camera Name", exact: true })).toHaveValue("Plaza camera");
+  for (const tab of ["Connection", "Counting Area", "Display", "Maintenance"]) {
+    await settings.getByRole("tab", { name: tab, exact: true }).click();
+    await expect(settings.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({ path: testInfo.outputPath("camera-" + tab.replaceAll(" ", "-") + ".png"), fullPage: true });
+  }
+  await settings.getByRole("button", { name: "Reconnect Camera", exact: true }).click();
+  await expect.poll(() => state.starts.length).toBe(1);
+  await expect(settings.getByRole("button", { name: "Run Diagnostics", exact: true })).toBeEnabled();
+  await settings.getByRole("button", { name: "Run Diagnostics", exact: true }).click();
+  await expect(settings.getByRole("list", { name: "Camera diagnostics" })).toBeVisible();
+  await settings.getByRole("button", { name: "Restore Camera Defaults", exact: true }).click();
+  const reset = page.getByRole("dialog", { name: "Restore Camera Defaults", exact: true });
+  await expect(reset).toBeVisible();
+  await reset.getByRole("button", { name: "Cancel", exact: true }).click();
+  await settings.getByRole("tab", { name: "Display", exact: true }).click();
+  const people = settings.getByRole("switch", { name: "Show Detected People" });
+  await people.click();
+  await expect(people).toHaveAttribute("aria-checked", "false");
+  await settings.getByRole("button", { name: "Save Changes", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await settings.getByRole("tab", { name: "Display", exact: true }).click();
+  await expect(people).toHaveAttribute("aria-checked", "false");
+  await people.click();
+  await settings.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("dialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard Changes", exact: true }).click();
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await settings.getByRole("tab", { name: "Display", exact: true }).click();
+  await expect(people).toHaveAttribute("aria-checked", "false");
+  await settings.getByRole("tab", { name: "Counting Area", exact: true }).click();
+  await settings.getByRole("button", { name: "Edit Counting Area", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit Counting Area", exact: true });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "Clear zone", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "Use this Area", exact: true })).toBeDisabled();
+  await editor.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "Use this Area", exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath("camera-counting-editor.png"), fullPage: true });
+  await editor.press("Escape");
+  await expect(editor).toHaveCount(0);
+  for (const width of [1024, 760, 430]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(settings.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
+    await expect.poll(() => settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("camera-settings-" + width + ".png"), fullPage: true });
+  }
+});

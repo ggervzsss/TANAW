@@ -41,6 +41,7 @@ export function hasCameraRestartRequiredChange(previous: Camera, next: Camera, p
   if (hasCameraConnectionChange(previous, next, passwordChanged)) return true;
 
   return (
+    (previous.autoReconnect !== false) !== (next.autoReconnect !== false) ||
     (previous.analysisMode ?? "entrance_exit") !== (next.analysisMode ?? "entrance_exit") ||
     JSON.stringify(previous.openSpace ?? null) !== JSON.stringify(next.openSpace ?? null) ||
     JSON.stringify(previous.coverage ?? null) !== JSON.stringify(next.coverage ?? null) ||

@@ -102,7 +102,7 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await expect(identifierShell).toHaveAttribute("data-state", "valid");
   await identifier.focus();
   await expect(identifierShell).toHaveCSS("background-color", "rgb(16, 30, 50)");
-  await expect(identifier).toHaveCSS("caret-color", "rgb(52, 211, 153)");
+  await expect(identifier).toHaveCSS("caret-color", "rgb(164, 201, 184)");
 
   await password.fill("A readable Enterprise passphrase");
   await page.getByRole("button", { name: "Show password" }).click();

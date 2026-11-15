@@ -2,6 +2,7 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ModalPortal } from "./ModalPortal";
 import { getNextDropdownIndex } from "./dropdownKeyboard";
+import { usePopupDismissal } from "./usePopupDismissal";
 
 export type SelectDropdownOption = string | readonly [string, string] | { value: string; label: string; meta?: string; searchText?: string };
 
@@ -11,6 +12,8 @@ type SelectDropdownProps = {
   options: readonly SelectDropdownOption[];
   ariaLabel: string;
   className?: string;
+  menuClassName?: string;
+  restoreFocusOnTab?: boolean;
   disabled?: boolean;
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -18,6 +21,7 @@ type SelectDropdownProps = {
   ariaInvalid?: boolean;
   ariaDescribedBy?: string;
   focusOnFormError?: boolean;
+  reportsDismissal?: boolean;
 };
 
 type NormalizedOption = { value: string; label: string; meta?: string; searchText?: string };
@@ -29,6 +33,8 @@ export function SelectDropdown({
   options,
   ariaLabel,
   className = "",
+  menuClassName = "",
+  restoreFocusOnTab = false,
   disabled = false,
   searchable = false,
   searchPlaceholder = "Search options...",
@@ -36,6 +42,7 @@ export function SelectDropdown({
   ariaInvalid = false,
   ariaDescribedBy,
   focusOnFormError = false,
+  reportsDismissal = false,
 }: SelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -76,10 +83,16 @@ export function SelectDropdown({
     setMenuPosition(null);
     if (restoreFocus) window.setTimeout(() => buttonRef.current?.focus(), 0);
   }, []);
+  usePopupDismissal(reportsDismissal && isOpen, closeMenu, buttonRef, menuRef);
 
   const openMenu = useCallback(() => {
     if (disabled) return;
-    setActiveIndex(Math.max(normalizedOptions.findIndex((option) => option.value === value), 0));
+    setActiveIndex(
+      Math.max(
+        normalizedOptions.findIndex((option) => option.value === value),
+        0,
+      ),
+    );
     updateMenuPosition();
     setIsOpen(true);
   }, [disabled, normalizedOptions, updateMenuPosition, value]);
@@ -125,6 +138,7 @@ export function SelectDropdown({
       return;
     }
     if (event.key === "Tab") {
+      if (restoreFocusOnTab) buttonRef.current?.focus({ preventScroll: true });
       closeMenu();
       return;
     }
@@ -154,6 +168,7 @@ export function SelectDropdown({
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
         data-form-error-focus={focusOnFormError ? "" : undefined}
+        data-reports-popup-trigger={reportsDismissal ? "" : undefined}
         onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
         className={`flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-left font-semibold text-gray-800 shadow-sm transition outline-none hover:border-emerald-700/50 focus:border-[#065f46] focus:ring-2 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:opacity-60 dark:border-slate-600 dark:bg-[#111b2f] dark:text-slate-100 ${size === "compact" ? "min-h-8 rounded-md px-2 py-1.5 text-xs" : "min-h-10 rounded-xl px-3 py-2.5 text-sm"}`}
@@ -167,14 +182,14 @@ export function SelectDropdown({
 
       {isOpen && menuPosition && (
         <ModalPortal>
-          <div className="fixed inset-0 z-1300" onPointerDown={() => closeMenu()} />
+          {!reportsDismissal && <div className="fixed inset-0 z-1300" onPointerDown={() => closeMenu()} />}
           <div
             ref={menuRef}
             tabIndex={-1}
             style={menuPosition}
             onKeyDown={handleKeyDown}
             onPointerDown={(event) => event.stopPropagation()}
-            className="fixed z-1301 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_22px_54px_rgba(0,0,0,0.32)] outline-none dark:border-slate-700 dark:bg-[#121c31]"
+            className={`tanaw-dropdown-menu fixed z-1301 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_22px_54px_rgba(0,0,0,0.32)] outline-none dark:border-slate-700 dark:bg-[#121c31] ${menuClassName}`}
           >
             {searchable && (
               <div className="shrink-0 border-b border-gray-100 p-2 dark:border-slate-700">
@@ -210,6 +225,7 @@ export function SelectDropdown({
                     type="button"
                     role="option"
                     aria-selected={selected}
+                    data-active={active}
                     onClick={() => selectOption(option)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${active ? "bg-emerald-50 font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200" : selected ? "font-semibold text-emerald-800 dark:text-emerald-200" : "text-gray-700 hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-800"}`}

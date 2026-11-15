@@ -79,6 +79,7 @@ class CameraCountingConfigUpdate(BaseModel):
 
 
 class CameraStartRequest(BaseModel):
+    auto_reconnect: bool = True
     coverage: CameraCoverage = Field(default_factory=CameraCoverage)
     analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
     preview_only: bool = False

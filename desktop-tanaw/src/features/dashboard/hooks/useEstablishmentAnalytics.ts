@@ -8,7 +8,7 @@ import { establishmentRange } from "../utils/establishment";
 
 type Snapshot = { key: string; summary: EstablishmentSummary; live: EstablishmentLive };
 
-export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter) {
+export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter, enabled = true) {
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
   const range = establishmentRange(filter);
   const key = JSON.stringify([enterpriseId, range, cameras.map((camera) => [camera.id, camera.analysisMode, camera.coverage])]);
@@ -17,6 +17,7 @@ export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter
   usePersistentIssue({ id: "dashboard-visitor-counts", message: error, title: "Establishment counts unavailable", tone: "error" });
 
   useEffect(() => {
+    if (!enabled) return;
     let disposed = false;
     let busy = false;
     const [expectedEnterprise, selectedRange] = JSON.parse(key) as [string | undefined, { start: string; end: string }];
@@ -49,8 +50,8 @@ export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [key]);
+  }, [key, enabled]);
 
   const current = snapshot?.key === key ? snapshot : null;
-  return { summary: current?.summary ?? null, live: current?.live ?? null, range, error, loading: !current && !error };
+  return { summary: current?.summary ?? null, live: current?.live ?? null, range, error, loading: enabled && !current && !error };
 }

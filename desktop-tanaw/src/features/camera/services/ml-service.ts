@@ -259,9 +259,10 @@ export async function prepareLocalSampleCounts(baseUrl: string, payload: SampleP
   );
 }
 
-export async function testCameraConnection(baseUrl: string, camera: Camera, credentialScope?: string): Promise<CameraTestResult> {
+export async function testCameraConnection(baseUrl: string, camera: Camera, credentialScope?: string, options: { draft?: boolean } = {}): Promise<CameraTestResult> {
   const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
+    ...(options.draft ? { username: camera.username, password: camera.password } : {}),
     camera_id: camera.id,
     camera_name: camera.name,
     camera_host: camera.cameraHost || null,
@@ -279,8 +280,8 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
       method: "POST",
       body: JSON.stringify({
         ...payload,
-        password: credential?.password ?? camera.password ?? null,
-        username: credential?.username ?? camera.username ?? null,
+        password: (options.draft ? camera.password || credential?.password : credential?.password ?? camera.password) ?? null,
+        username: (options.draft ? camera.username : credential?.username ?? camera.username) ?? null,
       }),
     },
     8000,
@@ -290,6 +291,7 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
 export async function startCameraProcessing(baseUrl: string, camera: Camera, credentialScope?: string): Promise<{ message: string }> {
   const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
+    auto_reconnect: camera.autoReconnect !== false,
     analysis_mode: camera.analysisMode ?? "entrance_exit",
     coverage: camera.coverage,
     open_space: camera.analysisMode === "open_space" ? (camera.openSpace ?? null) : null,

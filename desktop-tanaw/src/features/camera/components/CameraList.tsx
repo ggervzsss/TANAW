@@ -13,10 +13,10 @@ type CameraListProps = {
 export function CameraList({ cameras, activeCamId, cameraLimit, onAdd, onSelect }: CameraListProps) {
   const cameraLimitReached = cameras.length >= cameraLimit;
   return (
-    <Card className="flex h-full min-h-0 flex-col rounded-[18px] border border-slate-200/80 bg-white/95 p-3.5 shadow-[0_18px_42px_rgba(15,23,42,0.08)] dark:border-white/8 dark:bg-[#121d2b]/96 dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)]">
+    <Card className="camera-list flex h-full min-h-0 flex-col rounded-[18px] border border-slate-200/80 bg-white/95 p-3.5 shadow-[0_18px_42px_rgba(15,23,42,0.08)] dark:border-white/8 dark:bg-[#121d2b]/96 dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)]">
       <div className="mb-3 flex shrink-0 items-center gap-2">
         <h3 className="flex min-w-0 items-center gap-2 text-[11px] font-bold tracking-[0.12em] text-[#111827] uppercase dark:text-slate-100">
-          <Video size={16} className="shrink-0 text-[#065f46]" /> <span className="truncate">Configured Cameras</span>
+          <Video size={16} className="shrink-0 text-[#065f46]" /> <span className="truncate">My Cameras</span>
         </h3>
       </div>
       <button
@@ -24,7 +24,7 @@ export function CameraList({ cameras, activeCamId, cameraLimit, onAdd, onSelect 
         onClick={onAdd}
         disabled={cameraLimitReached}
         aria-describedby={cameraLimitReached ? "camera-configuration-limit" : undefined}
-        className="mb-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-700/25 bg-emerald-50/70 px-3 py-2.5 text-xs font-bold text-[#065f46] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition-all hover:-translate-y-px hover:border-emerald-700/40 hover:bg-emerald-100/70 focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-300 dark:hover:border-emerald-300/35 dark:hover:bg-emerald-400/14 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-400"
+        className="camera-add-button mb-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-700/25 bg-emerald-50/70 px-3 py-2.5 text-xs font-bold text-[#065f46] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition-all hover:-translate-y-px hover:border-emerald-700/40 hover:bg-emerald-100/70 focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-300 dark:hover:border-emerald-300/35 dark:hover:bg-emerald-400/14 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-400"
       >
         <Plus size={15} /> Add Camera
       </button>

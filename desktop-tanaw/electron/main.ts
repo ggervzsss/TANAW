@@ -1,5 +1,5 @@
+import "./main-logging-bootstrap";
 import { app, net, protocol } from "electron";
-import { mkdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import { createApplicationTray } from "./application-tray";
@@ -27,13 +27,6 @@ process.env.APP_ROOT = path.join(__dirname, "..");
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-
-if (app.isPackaged && !app.commandLine.hasSwitch("user-data-dir")) {
-  const profile = path.join(app.getPath("appData"), "TANAW Enterprise Desktop");
-  mkdirSync(profile, { recursive: true });
-  app.setPath("userData", profile);
-  app.setPath("sessionData", profile);
-}
 
 let isQuitting = false;
 let mlServiceShutdownComplete = false;

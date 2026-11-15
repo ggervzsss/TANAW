@@ -55,7 +55,6 @@ export function PasswordVisibilityInput({
       />
       <button
         type="button"
-        tabIndex={-1}
         onClick={() => setIsVisible((current) => !current)}
         className={buttonClass}
         aria-label={isVisible ? "Hide password" : "Show password"}

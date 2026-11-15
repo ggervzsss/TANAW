@@ -1,10 +1,11 @@
-import { Check, RefreshCw, Video, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { ModalPortal } from "../../../components/ModalPortal";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { CameraDialog } from "./CameraDialog";
+import { SelectDropdown } from "../../../components/SelectDropdown";
+import { CAMERA_BRANDS, updateCameraConnection } from "../utils/camera-connection";
 import type { CameraFormValues } from "../types/camera";
 import { validateCameraForm } from "../utils/camera-form-validation";
-import { CameraConnectionFields } from "./CameraConnectionFields";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
+import { CameraConnectionFields } from "./CameraConnectionFields";
 
 type CameraAddModalProps = {
   newCam: CameraFormValues;
@@ -15,176 +16,156 @@ type CameraAddModalProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onChange: (values: CameraFormValues) => void;
 };
-
 export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError, onClose, onSubmit, onChange }: CameraAddModalProps) {
-  const [touchedCredentials, setTouchedCredentials] = useState({ password: false, username: false });
-  const currentErrors = validateCameraForm(newCam);
-  const hostError = errors.cameraHost ?? duplicateIpError;
-  const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
-  const passwordError = errors.password ?? (touchedCredentials.password ? currentErrors.password : undefined);
-  const canSave = Object.keys(currentErrors).length === 0 && !duplicateIpError;
-
+  const [step, setStep] = useState<"information" | "connection">("information");
+  const initial = useRef(JSON.stringify(newCam));
+  const [discard, setDiscard] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const formErrors = validateCameraForm(newCam);
+  const shownErrors = { ...(submitted ? formErrors : {}), ...errors };
+  const requestClose = () => {
+    if (isValidating) return;
+    if (JSON.stringify(newCam) !== initial.current) setDiscard(true);
+    else onClose();
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitted(true);
+    if (step === "information") {
+      if (formErrors.name || formErrors.zone) return;
+      setStep("connection");
+      setSubmitted(false);
+    } else {
+      onSubmit(event);
+    }
+  };
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={onClose}>
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="register-camera-node-title"
-          className="animate-in fade-in max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/80 bg-white shadow-2xl dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_28px_80px_rgba(0,0,0,0.58)]"
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div className="h-1.5 rounded-t-2xl bg-linear-to-r from-[#065f46] via-emerald-500 to-[#45a549]" />
-          <div className="max-h-[calc(92vh-0.375rem)] overflow-auto p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 id="register-camera-node-title" className="flex items-center gap-2 text-lg font-bold text-[#111827] dark:text-white">
-                <Video size={20} className="text-[#065f46] dark:text-emerald-300" /> Add Camera
-              </h3>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-gray-200 bg-white p-2 text-gray-400 shadow-sm transition-colors hover:bg-emerald-50 hover:text-[#065f46] dark:border-slate-600 dark:bg-[#172033] dark:text-slate-300 dark:hover:bg-[#1d2940] dark:hover:text-emerald-200"
-                aria-label="Close dialog"
-              >
-                <X size={20} />
+    <>
+      <CameraDialog
+        title={step === "information" ? "Camera Information" : "Camera Connection"}
+        description={step === "information" ? "Name your camera and specify where it is installed." : `Connect ${newCam.name || "your camera"} to verify its video stream.`}
+        className="camera-add-dialog"
+        onClose={requestClose}
+        busy={isValidating}
+        footer={
+          <>
+            {step === "connection" && (
+              <button className="design-button camera-add-back" type="button" disabled={isValidating} onClick={() => setStep("information")}>
+                Back
               </button>
-            </div>
-
-            <form onSubmit={onSubmit} noValidate className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <ModalField id="camera-name" label="Camera Name" error={errors.name} required>
-                  <input
-                    id="camera-name"
-                    required
-                    aria-required="true"
-                    type="text"
-                    value={newCam.name}
-                    onChange={(event) => onChange({ ...newCam, name: event.target.value })}
-                    className={inputClass(Boolean(errors.name))}
-                  />
-                </ModalField>
-                <ModalField id="camera-zone" label="Assigned Zone" error={errors.zone} required>
-                  <input
-                    id="camera-zone"
-                    required
-                    aria-required="true"
-                    type="text"
-                    value={newCam.zone}
-                    onChange={(event) => onChange({ ...newCam, zone: event.target.value })}
-                    className={inputClass(Boolean(errors.zone))}
-                  />
-                </ModalField>
-              </div>
-
-              <ModalField label="Camera Mode" id="camera-mode">
-                <select
-                  id="camera-mode"
-                  value={newCam.analysisMode ?? "entrance_exit"}
-                  onChange={(event) => onChange({ ...newCam, analysisMode: event.target.value as CameraFormValues["analysisMode"] })}
-                  className={inputClass(false)}
-                >
-                  <option value="entrance_exit">Entrance / Exit — establishment access</option>
-                  <option value="open_space">Open Space — people counts and activity</option>
-                </select>
-                {newCam.analysisMode === "open_space" && (
-                  <p className="mt-1 text-xs">After adding, start the preview, draw the monitored zone, and configure its counting role. Both camera modes contribute to one establishment report.</p>
-                )}
-              </ModalField>
-
-              <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
-                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Connection</h4>
-                <CameraConnectionFields
-                  value={newCam}
-                  hostError={hostError}
-                  streamError={errors.rtsp}
-                  onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "", rtspStream: connection.rtspStream ?? "stream2" })}
-                />
-              </section>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <ModalField id="camera-username" label="Username" error={usernameError} required>
-                  <input
-                    id="camera-username"
-                    required
-                    aria-required="true"
-                    aria-invalid={Boolean(usernameError)}
-                    aria-describedby={usernameError ? "camera-username-error" : undefined}
-                    type="text"
-                    autoComplete="username"
-                    value={newCam.username}
-                    onBlur={() => setTouchedCredentials((current) => ({ ...current, username: true }))}
-                    onChange={(event) => onChange({ ...newCam, username: event.target.value })}
-                    className={inputClass(Boolean(usernameError))}
-                  />
-                </ModalField>
-                <ModalField id="camera-password" label="Password" error={passwordError} required>
-                  <PasswordVisibilityInput
-                    id="camera-password"
-                    value={newCam.password}
-                    onBlur={() => setTouchedCredentials((current) => ({ ...current, password: true }))}
-                    onChange={(password) => onChange({ ...newCam, password })}
-                    variant="modal"
-                    autoComplete="new-password"
-                    ariaRequired
-                    ariaDescribedBy={passwordError ? "camera-password-error" : undefined}
-                    hasError={Boolean(passwordError)}
-                  />
-                </ModalField>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isValidating || !canSave}
-                  className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
-                >
-                  {isValidating ? (
-                    <>
-                      <RefreshCw size={16} className="animate-spin" /> Testing Camera...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} /> Test &amp; Add Camera
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            )}
+            <button className="design-button" type="button" disabled={isValidating} onClick={requestClose}>
+              Cancel
+            </button>
+            <button className="design-button primary" type="submit" form="camera-add-form" disabled={isValidating || (step === "connection" && Boolean(duplicateIpError))}>
+              {isValidating ? "Testing Camera…" : step === "information" ? "Add Camera" : "Test & Add Camera"}
+            </button>
+          </>
+        }
+      >
+        <form id="camera-add-form" onSubmit={submit} noValidate>
+          <div hidden={step !== "information"}>
+            <Field id="camera-name" label="Camera Name" required error={shownErrors.name}>
+              <input
+                id="camera-name"
+                required
+                aria-required="true"
+                aria-invalid={Boolean(shownErrors.name)}
+                maxLength={120}
+                value={newCam.name}
+                onChange={(event) => onChange({ ...newCam, name: event.target.value })}
+              />
+            </Field>
+            <Field label="Camera Brand" required>
+              <SelectDropdown
+                reportsDismissal
+                value={newCam.cameraBrand ?? "tapo"}
+                ariaLabel="Camera brand / type"
+                options={CAMERA_BRANDS}
+                onChange={(brand) =>
+                  onChange({ ...newCam, ...updateCameraConnection(newCam, { cameraBrand: brand as CameraFormValues["cameraBrand"] }), cameraHost: newCam.cameraHost, rtspStream: newCam.rtspStream })
+                }
+              />
+            </Field>
+            <Field id="camera-zone" label="Camera Location (optional)" error={shownErrors.zone}>
+              <input id="camera-zone" maxLength={120} value={newCam.zone} placeholder="Enter the location of your camera" onChange={(event) => onChange({ ...newCam, zone: event.target.value })} />
+              <small>Example: Main Gate, Lobby, or Park</small>
+            </Field>
+            <Field label="Area Type" required>
+              <SelectDropdown
+                reportsDismissal
+                ariaLabel="Area Type"
+                value={newCam.analysisMode ?? "entrance_exit"}
+                options={[
+                  ["open_space", "Open Space"],
+                  ["entrance_exit", "Entry / Exit"],
+                ]}
+                onChange={(mode) => onChange({ ...newCam, analysisMode: mode as CameraFormValues["analysisMode"] })}
+              />
+            </Field>
           </div>
-        </div>
-      </div>
-    </ModalPortal>
+          <div hidden={step !== "connection"} className="camera-add-connection">
+            <CameraConnectionFields
+              value={newCam}
+              hostError={shownErrors.cameraHost ?? duplicateIpError}
+              streamError={shownErrors.rtsp}
+              onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "", rtspStream: connection.rtspStream ?? "stream2" })}
+            />
+            <Field id="camera-username" label="Camera Username" required error={shownErrors.username}>
+              <input
+                id="camera-username"
+                autoComplete="username"
+                required
+                aria-required="true"
+                aria-invalid={Boolean(shownErrors.username)}
+                value={newCam.username}
+                onChange={(event) => onChange({ ...newCam, username: event.target.value })}
+              />
+            </Field>
+            <Field id="camera-password" label="Camera Password" required error={shownErrors.password}>
+              <PasswordVisibilityInput id="camera-password" variant="modal" autoComplete="new-password" ariaRequired
+                hasError={Boolean(shownErrors.password)} value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} />
+            </Field>
+            <p className="design-note">The camera is added only after its connection is verified. Credentials are kept in the desktop's secure credential store.</p>
+          </div>
+        </form>
+      </CameraDialog>
+      {discard && (
+        <CameraDialog
+          title="Discard new camera?"
+          description="This camera has not been added."
+          className="camera-confirm-dialog"
+          onClose={() => setDiscard(false)}
+          footer={
+            <>
+              <button type="button" className="design-button" onClick={() => setDiscard(false)}>
+                Keep Editing
+              </button>
+              <button type="button" className="design-button danger-button" onClick={onClose}>
+                Discard Changes
+              </button>
+            </>
+          }
+        >
+          <p>Your unsaved camera details will be discarded.</p>
+        </CameraDialog>
+      )}
+    </>
   );
 }
-
-function ModalField({ children, error, id, label, required = false }: { children: React.ReactNode; error?: string; id?: string; label: string; required?: boolean }) {
+function Field({ id, label, required, error, children }: { id?: string; label: string; required?: boolean; error?: string; children: ReactNode }) {
   return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">
+    <div className="settings-field">
+      <label htmlFor={id}>
         {label}
-        {required ? (
-          <span className="ml-1 text-red-600 dark:text-red-300" aria-hidden="true">
-            *
-          </span>
-        ) : null}
+        {required && <em aria-hidden="true"> *</em>}
       </label>
       {children}
       {error && (
-        <p id={id ? `${id}-error` : undefined} className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">
+        <p className="camera-field-error" role="alert">
           {error}
         </p>
       )}
     </div>
   );
-}
-
-function inputClass(hasError: boolean) {
-  return `w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white ${hasError ? "border-red-500" : "border-gray-300 dark:border-slate-600"}`;
 }

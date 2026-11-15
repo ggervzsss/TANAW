@@ -50,7 +50,8 @@ test("applies the complete Enterprise night topbar and preserves the daytime var
 
   const darkTopbar = page.locator('[data-topbar-theme="dark"]');
   await expect(darkTopbar).toBeVisible();
-  expect(await darkTopbar.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain("rgb(2, 9, 13)");
+  await expect(darkTopbar).toHaveCSS("background-color", "rgb(28, 44, 40)");
+  await expect(darkTopbar).toHaveCSS("background-image", "none");
   const dayImage = page.locator('[data-topbar-image="day"]');
   const nightImage = page.locator('[data-topbar-image="night"]');
   await expect(dayImage).toHaveCSS("opacity", "0");

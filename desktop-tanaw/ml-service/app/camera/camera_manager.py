@@ -875,7 +875,11 @@ class CameraProcessingManager:
             if not self._is_current_session_locked(session):
                 return
             safe_message = redact_stream_credentials(message)
-            self._state = RuntimeState(running=True, status="reconnecting", error=safe_message)
+            if not session.config.auto_reconnect:
+                self._state = RuntimeState(running=False, status="failed", error=safe_message)
+                session.stop_event.set()
+            else:
+                self._state = RuntimeState(running=True, status="reconnecting", error=safe_message)
             self._area_interrupt_requested = True
             self._latest_jpeg = self._frame_renderer.build_status_frame(
                 "Reconnecting camera stream..."

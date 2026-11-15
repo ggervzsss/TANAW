@@ -1,0 +1,931 @@
+/* Camera Setup only. Reference: supplied TANAW Camera Settings and Add Camera frames. */
+.camera-management,
+.camera-dialog {
+  font-family: Arial, sans-serif !important;
+  color: var(--enterprise-text, #101510);
+}
+.camera-management :where(h1, h2, h3, h4, p, span, label, input, button, select, small, summary, dt, dd),
+.camera-dialog :where(h1, h2, h3, p, span, label, input, button, select, small, summary) {
+  font-family: inherit !important;
+}
+.enterprise-shell .enterprise-content:has(.camera-management) {
+  padding: 30px 36px 28px;
+  background: var(--enterprise-card-bg, white);
+}
+.camera-management {
+  --camera-green: #335d43;
+  --camera-tint: #f7fff8;
+  --camera-border: #a2dabb;
+  --camera-muted: #595b60;
+}
+.camera-page-heading h2 {
+  font-size: 36px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.camera-page-heading p {
+  font-size: 20px;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.camera-management > [data-camera-sidebar="expanded"] {
+  grid-template-columns: minmax(230px, 22%) minmax(0, 1fr);
+  gap: 16px;
+}
+.camera-management #configured-cameras-panel > div > div {
+  width: 100%;
+}
+.camera-list {
+  border-radius: 12px;
+  padding: 26px 20px;
+  box-shadow: 0 1px 5px #17351f30;
+}
+.camera-list > div:first-child {
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 24px;
+}
+.camera-list h3 {
+  font-size: 25px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.camera-list h3 svg {
+  width: 30px;
+  height: 30px;
+}
+.camera-list > .camera-add-button {
+  order: 3;
+  margin: 18px 0 6px;
+  min-height: 50px;
+  font-size: 18px;
+}
+.camera-list > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.camera-list > div:last-child > button {
+  flex: 0 0 auto;
+  min-height: 126px;
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 1px 5px #17351f25;
+}
+.camera-list > div:last-child > button > div:first-child > span {
+  font-size: 22px;
+}
+.camera-list > div:last-child > button > div:last-child {
+  font-size: 15px;
+}
+.camera-preview-card {
+  border-radius: 12px;
+  box-shadow: 0 1px 5px #17351f30;
+}
+.camera-preview-card > div:first-child {
+  padding: 22px 28px;
+}
+.camera-preview-card > div:first-child h3 {
+  font-size: 25px;
+}
+.camera-preview-card > div:first-child p {
+  font-size: 15px;
+  margin-top: 3px;
+}
+.camera-settings-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.camera-preview-layout {
+  background: var(--enterprise-card-bg, #fff);
+  padding: 24px 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 26%);
+  gap: 20px;
+}
+.camera-preview-layout > aside section {
+  border-radius: 12px;
+  box-shadow: 0 1px 5px #17351f18;
+}
+.camera-preview-layout h4 {
+  font-size: 15px;
+}
+.camera-preview-layout > aside > div > section:first-child > div:nth-child(2) > div:first-child {
+  grid-template-columns: 1fr;
+}
+.camera-preview-layout > aside > div > section:first-child > div:nth-child(2) > div:first-child > div {
+  min-height: 100px;
+}
+.camera-settings {
+  font-family: Arial, sans-serif !important;
+  border-color: #d5d9d5;
+  box-shadow: 0 1px 5px #17351f45;
+}
+.camera-settings-heading {
+  padding: 26px 5.2% 12px;
+  flex: 0 0 auto;
+}
+.camera-settings-heading span {
+  font-size: 20px;
+  line-height: 1.5;
+}
+.camera-settings-heading h1 {
+  font-size: 32px;
+  line-height: 1.3;
+}
+.camera-settings-heading p {
+  font-size: 20px;
+}
+.camera-settings-identity {
+  padding-block: 10px;
+  min-height: 70px;
+  flex: 0 0 auto;
+}
+.camera-settings-identity h2 {
+  font-size: 25px;
+}
+.camera-settings-identity p {
+  font-size: 20px;
+}
+.camera-settings-body {
+  grid-template-columns: 25% minmax(0, 1fr);
+}
+.camera-settings-body > nav {
+  padding: 38px 9.5%;
+  gap: 18px;
+}
+.camera-settings-body [role="tab"] {
+  font-size: 24px;
+  gap: 28px;
+  padding: 12px 18px;
+  transition:
+    background 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+.camera-settings-body [role="tab"] svg {
+  width: 40px;
+  height: 40px;
+}
+.camera-settings-content {
+  min-width: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 12px 3% 48px;
+  animation: camera-tab-in 220ms ease;
+}
+.camera-settings-content.settings-counting,
+.camera-settings-content.settings-maintenance {
+  padding-top: 42px;
+}
+.camera-settings-content.settings-display {
+  padding: 48px 4.8% 36px;
+}
+.camera-settings .settings-section-heading {
+  margin-bottom: 30px;
+}
+.camera-settings .settings-section-heading h2 {
+  font-size: 25px;
+  line-height: 1.3;
+}
+.camera-settings .settings-section-heading p {
+  font-size: 20px;
+  margin-top: 8px;
+}
+.camera-settings .settings-field {
+  margin-bottom: 20px;
+}
+.camera-settings .settings-field > label,
+.camera-dialog .settings-field > label {
+  font-size: 20px;
+  margin-bottom: 24px;
+}
+.camera-settings .settings-field input,
+.camera-settings .settings-field button[aria-haspopup],
+.camera-add-dialog .settings-field input,
+.camera-add-dialog .settings-field button[aria-haspopup] {
+  min-height: 68px;
+  font-size: 20px;
+  border-radius: 20px;
+  padding: 16px 30px;
+  border: 1px solid var(--camera-border, #a2dabb);
+  box-shadow: none;
+  background: var(--enterprise-card-bg, white);
+}
+.camera-settings .settings-field button[aria-haspopup] svg,
+.camera-add-dialog .settings-field button[aria-haspopup] svg {
+  width: 30px;
+  height: 30px;
+  color: #355523;
+}
+.camera-settings .settings-field input:focus-visible,
+.camera-add-dialog input:focus-visible {
+  outline: 2px solid #335d4360;
+  outline-offset: 3px;
+}
+.camera-settings .settings-field small {
+  font-size: 12px;
+}
+.camera-settings .settings-field > label + * {
+  width: 100%;
+}
+.camera-settings-footer {
+  flex: 0 0 auto;
+  min-height: 100px;
+  padding: 20px 4%;
+}
+.camera-settings .design-button,
+.camera-dialog .design-button {
+  min-height: 58px;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+.camera-settings .design-button.primary,
+.camera-dialog .design-button.primary {
+  background: #335d43;
+  color: white;
+  border-color: #839b88;
+  min-width: 168px;
+}
+.camera-settings .design-button.primary:hover,
+.camera-dialog .design-button.primary:hover {
+  background: #254c35;
+}
+.camera-settings-content > .full-width {
+  min-height: 68px;
+  border-radius: 20px;
+}
+.camera-settings .design-switch-row {
+  margin: 8px 0 24px;
+  padding: 18px 0;
+}
+.camera-settings .design-switch-row label,
+.camera-settings .design-switch-row p {
+  font-size: 20px;
+}
+.camera-settings .design-switch-row label {
+  line-height: 1.35;
+}
+.camera-settings .settings-display .design-switch-row {
+  margin: 0;
+  padding: 22px 0;
+}
+.camera-settings .settings-display .design-switch-row:last-of-type {
+  border-bottom: 0;
+}
+.camera-settings .settings-counting .design-switch {
+  width: 84px;
+  height: 44px;
+}
+.camera-settings .settings-counting .design-switch span {
+  height: 36px;
+  width: 36px;
+}
+.camera-settings .settings-counting .design-switch[aria-checked="true"] span {
+  transform: translateX(39px);
+}
+.camera-settings .counting-method {
+  min-height: 116px;
+}
+.camera-settings .counting-method strong,
+.camera-settings .counting-method p {
+  font-size: 20px;
+}
+.camera-settings .settings-subheading {
+  font-size: 25px;
+}
+.camera-settings .design-note,
+.camera-dialog .design-note {
+  font-size: 16px;
+  margin-top: 18px;
+  line-height: 1.5;
+  color: var(--enterprise-muted, #595b60);
+}
+.camera-settings .settings-display-note {
+  margin-top: 56px;
+  font-size: 20px;
+}
+.camera-settings .maintenance-status > div {
+  font-size: 24px;
+  padding: 20px 0;
+}
+.camera-settings .maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+}
+.camera-settings .maintenance-actions .design-button {
+  min-width: 246px;
+  min-height: 66px;
+  border-radius: 20px;
+}
+.camera-settings .camera-danger-zone p {
+  font-size: 20px;
+}
+.camera-settings .camera-danger-zone .design-button {
+  border-radius: 20px;
+}
+.camera-settings-success {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: #235334;
+  background: #eaf8ed;
+  border: 1px solid #a2dabb;
+  border-radius: 12px;
+  font-size: 15px;
+}
+.camera-field-error {
+  color: #b32929;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.camera-diagnostics {
+  padding: 18px 22px;
+  margin-top: 20px;
+  border: 1px solid #a2dabb;
+  border-radius: 14px;
+  line-height: 1.8;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.camera-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: rgb(38 91 54 / 23%);
+  animation: camera-fade 200ms ease;
+}
+.camera-dialog {
+  width: min(1020px, 100%);
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+  padding: 36px 48px 32px;
+  background: var(--enterprise-card-bg, white);
+  border: 1px solid #acb8ae;
+  border-radius: 22px;
+  box-shadow:
+    0 2px 5px #17351f40,
+    0 16px 60px #17351f18;
+  outline: none;
+  animation: camera-dialog-in 280ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.camera-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex: 0 0 auto;
+}
+.camera-dialog h2 {
+  font-size: 32px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.camera-dialog header p {
+  font-size: 20px;
+  color: var(--enterprise-muted, #595b60);
+  line-height: 1.4;
+}
+.camera-dialog-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.camera-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  padding-top: 28px;
+  flex: 0 0 auto;
+}
+.camera-dialog button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.camera-dialog button,
+.camera-management button {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+.camera-dialog button:focus-visible,
+.camera-management button:focus-visible {
+  outline: 2px solid #6b967b;
+  outline-offset: 3px;
+}
+.camera-dialog .danger-button {
+  border-color: #e95656;
+  color: #b02929;
+}
+.camera-dialog .danger-button:hover {
+  background: #fff1f1;
+}
+.camera-confirm-dialog {
+  max-width: 560px;
+  padding: 30px;
+}
+.camera-confirm-dialog h2 {
+  font-size: 26px;
+}
+.camera-confirm-dialog p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.camera-confirm-dialog .design-button {
+  font-size: 16px;
+  min-height: 48px;
+  padding: 10px 16px;
+}
+.camera-add-dialog {
+  width: min(998px, 100%);
+  padding: 40px 62px 32px;
+  border-radius: 12px;
+}
+.camera-add-dialog h2 {
+  font-size: 25px;
+}
+.camera-add-dialog .settings-field {
+  margin-bottom: 18px;
+}
+.camera-add-dialog .settings-field > label {
+  margin-bottom: 18px;
+}
+.camera-add-dialog .settings-field input,
+.camera-add-dialog .settings-field button[aria-haspopup] {
+  min-height: 60px;
+}
+.camera-add-dialog .camera-add-back {
+  margin-right: auto;
+}
+.camera-add-connection > div:first-child {
+  margin-bottom: 24px;
+}
+.camera-add-dialog .settings-field small {
+  font-size: 12px;
+}
+.camera-add-dialog form [hidden] {
+  display: none;
+}
+.camera-area-dialog .counting-editor-preview {
+  aspect-ratio: 1.66;
+  min-height: 220px;
+  max-height: 56dvh;
+  margin-bottom: 12px;
+}
+.camera-area-dialog .counting-editor-preview > div {
+  min-height: 100%;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.camera-area-dialog .counting-editor-preview > div:focus-within {
+  outline: none;
+}
+.camera-area-dialog .counting-editor-preview svg circle {
+  cursor: grab;
+}
+.camera-area-dialog .counting-editor-preview svg circle:active {
+  cursor: grabbing;
+}
+.camera-preview-state {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  color: #e8f2ec;
+  background: radial-gradient(ellipse at 50% 45%, #183c2e 0%, #0c211a 58%, #081610 100%);
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+.camera-preview-state.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity 300ms ease,
+    visibility 0s 300ms;
+}
+.camera-preview-state-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #a1c7ae;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.camera-preview-state-brand span span {
+  margin-left: 8px;
+  color: #82a18e;
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  font-weight: 400;
+}
+.camera-preview-state-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  flex: 1;
+  text-align: center;
+  max-width: 420px;
+  margin: 16px auto;
+}
+.camera-preview-state-icon {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  border: 1px solid #759d8240;
+  border-radius: 22px;
+  color: #b7d8c0;
+  background: #254b3850;
+  margin-bottom: 18px;
+}
+.camera-preview-state-icon.is-loading {
+  animation: camera-breathe 2.5s ease-in-out infinite;
+}
+.camera-preview-state h3 {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.camera-preview-state p {
+  font-size: 13px;
+  color: #a0b9aa;
+  line-height: 1.65;
+  margin-top: 10px;
+}
+.camera-preview-state-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: #91ac9c;
+  border-top: 1px solid #a0d6b018;
+  padding-top: 14px;
+}
+.camera-preview-progress {
+  width: 110px;
+  height: 3px;
+  margin-top: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #a8e4b418;
+}
+.camera-preview-progress span {
+  display: block;
+  height: 100%;
+  width: 45%;
+  border-radius: 6px;
+  background: #a1d2b3;
+  animation: camera-progress 2.2s ease-in-out infinite;
+}
+.camera-preview-state[data-state="reconnecting"] .camera-preview-state-icon {
+  color: #e1c88d;
+  border-color: #e1c88d50;
+}
+.camera-preview-state[data-state="error"] .camera-preview-state-icon {
+  color: #efb2ab;
+  border-color: #efb2ab50;
+}
+.camera-preview-retry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #8cba9d70;
+  border-radius: 10px;
+  color: #e8f2ec;
+  background: #335d4360;
+  font-size: 13px;
+}
+.camera-preview-retry:hover {
+  background: #335d43;
+}
+@keyframes camera-progress {
+  0%,
+  100% {
+    transform: translateX(-80%);
+  }
+  50% {
+    transform: translateX(200%);
+  }
+}
+@keyframes camera-breathe {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes camera-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes camera-tab-in {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes camera-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 1200px) {
+  .camera-management > [data-camera-sidebar="expanded"] {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .camera-preview-layout {
+    display: block;
+    overflow-y: auto;
+  }
+  .camera-preview-layout > div:first-child {
+    overflow: visible;
+  }
+  .camera-preview-layout > aside {
+    overflow: visible;
+    margin-top: 16px;
+  }
+  .camera-list h3 {
+    font-size: 20px;
+  }
+  .camera-settings-body {
+    grid-template-columns: 25% minmax(0, 1fr);
+  }
+  .camera-settings-body > nav {
+    padding: 28px 16px;
+  }
+  .camera-settings-body [role="tab"] {
+    font-size: 20px;
+    gap: 18px;
+    padding: 12px;
+  }
+  .camera-settings-body [role="tab"] svg {
+    width: 32px;
+    height: 32px;
+  }
+}
+@media (max-width: 1000px), (max-height: 800px) {
+  .enterprise-shell .enterprise-content:has(.camera-management) {
+    padding: 18px 24px;
+  }
+  .camera-page-heading h2 {
+    font-size: 28px;
+  }
+  .camera-page-heading p {
+    font-size: 16px;
+  }
+  .camera-settings-heading {
+    padding: 18px 5.2% 12px;
+  }
+  .camera-settings-heading h1 {
+    font-size: 28px;
+  }
+  .camera-settings-heading span {
+    font-size: 16px;
+  }
+  .camera-settings-heading p,
+  .camera-settings-identity p {
+    font-size: 16px;
+  }
+  .camera-settings-footer {
+    min-height: 80px;
+    padding-block: 14px;
+  }
+  .camera-settings .design-button {
+    min-height: 48px;
+    font-size: 17px;
+    padding: 12px 18px;
+  }
+  .camera-settings .settings-field input,
+  .camera-settings .settings-field button[aria-haspopup] {
+    min-height: 54px;
+    font-size: 17px;
+    padding: 12px 22px;
+    border-radius: 16px;
+  }
+  .camera-settings .settings-field > label {
+    margin-bottom: 14px;
+    font-size: 18px;
+  }
+  .camera-settings-body [role="tab"] {
+    min-height: 52px;
+    font-size: 18px;
+    gap: 16px;
+  }
+  .camera-settings-body > nav {
+    padding: 22px 14px;
+    gap: 10px;
+  }
+  .camera-settings-body [role="tab"] svg {
+    width: 30px;
+    height: 30px;
+  }
+  .camera-settings .settings-section-heading p {
+    font-size: 17px;
+  }
+  .camera-settings .settings-section-heading {
+    margin-bottom: 22px;
+  }
+  .camera-dialog {
+    padding: 26px 32px;
+  }
+  .camera-add-dialog .settings-field {
+    margin-bottom: 14px;
+  }
+  .camera-add-dialog .settings-field > label {
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+  .camera-add-dialog .settings-field input,
+  .camera-add-dialog .settings-field button[aria-haspopup] {
+    min-height: 54px;
+    font-size: 17px;
+    padding: 12px 24px;
+  }
+}
+@media (max-width: 760px) {
+  .enterprise-shell .enterprise-content:has(.camera-management) {
+    padding: 12px;
+  }
+  .camera-management > [data-camera-sidebar="expanded"] {
+    grid-template-columns: 176px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .camera-list {
+    padding: 16px 10px;
+  }
+  .camera-list > div:last-child > button {
+    padding: 14px;
+  }
+  .camera-list h3 {
+    font-size: 17px;
+  }
+  .camera-list > .camera-add-button {
+    font-size: 15px;
+  }
+  .camera-settings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .camera-settings-body > nav {
+    padding: 8px;
+    gap: 4px;
+  }
+  .camera-settings-body [role="tab"] {
+    min-height: 42px;
+    font-size: 12px;
+    gap: 6px;
+    padding: 8px;
+  }
+  .camera-settings-body [role="tab"] svg {
+    width: 18px;
+    height: 18px;
+  }
+  .camera-settings-content.settings-counting,
+  .camera-settings-content.settings-maintenance,
+  .camera-settings-content.settings-display {
+    padding: 20px 16px;
+  }
+  .camera-settings .settings-display-note {
+    font-size: 16px;
+    margin: 30px 0;
+  }
+  .camera-settings .design-switch-row label,
+  .camera-settings .design-switch-row p {
+    font-size: 16px;
+  }
+  .camera-settings .maintenance-status > div {
+    font-size: 18px;
+  }
+  .camera-settings .counting-method {
+    min-height: 100px;
+    padding: 20px;
+    gap: 20px;
+  }
+  .camera-settings .counting-method strong,
+  .camera-settings .counting-method p {
+    font-size: 16px;
+  }
+  .camera-settings .maintenance-actions {
+    gap: 12px;
+  }
+  .camera-settings .maintenance-actions .design-button {
+    min-width: 0;
+  }
+  .camera-settings-footer > p {
+    font-size: 12px;
+  }
+  .camera-settings-footer > div {
+    gap: 10px;
+  }
+  .camera-dialog-backdrop {
+    padding: 12px;
+  }
+  .camera-dialog {
+    padding: 24px 20px;
+    max-height: calc(100dvh - 24px);
+  }
+  .camera-dialog h2 {
+    font-size: 25px;
+  }
+  .camera-dialog header p {
+    font-size: 16px;
+  }
+  .camera-dialog > footer {
+    gap: 10px;
+  }
+  .camera-dialog .design-button {
+    font-size: 16px;
+    min-height: 48px;
+    padding: 10px 14px;
+  }
+  .camera-dialog .design-button.primary {
+    min-width: 130px;
+  }
+  .camera-preview-state {
+    padding: 16px;
+  }
+  .camera-preview-state-brand span span {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camera-management *,
+  .camera-dialog *,
+  .camera-dialog-backdrop,
+  .camera-dialog {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .camera-preview-progress span {
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
+.camera-area-dialog .counting-editor-preview {
+  width: 100%;
+}
+
+@media (min-width: 1201px) and (min-height: 801px) {
+  .camera-settings-body > nav {
+    padding-top: 48px;
+  }
+  .camera-settings-content.settings-information {
+    padding-top: 2px;
+  }
+  .camera-settings .settings-information .settings-section-heading {
+    margin-bottom: 25px;
+  }
+}
+
+.camera-area-dialog .camera-preview-badges > div:last-child,
+.camera-area-dialog .camera-preview-badges > div:first-child > span:nth-child(3) { display: none; }
+.camera-area-dialog .camera-preview-badges > div:first-child > span { font-size: 16px; padding: 10px 16px; border-radius: 15px; }
+@media (max-width: 760px) { .camera-area-dialog .camera-preview-badges > div:first-child > span { font-size: 12px; padding: 7px 10px; } }
+
+.camera-preview-layout .camera-live-metrics h4,
+.camera-preview-layout .camera-system-status h4 { font-size: 18px; letter-spacing: 0; }
+.camera-preview-layout .camera-metric-title { font-size: 16px; text-transform: none; letter-spacing: 0; }
+.camera-preview-layout .camera-metric-value { font-size: 36px; }
+.camera-preview-layout .camera-metric-detail { font-size: 12px; }
+.camera-preview-layout .camera-system-status button { min-height: 40px; font-size: 12px; }

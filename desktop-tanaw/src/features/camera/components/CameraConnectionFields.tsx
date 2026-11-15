@@ -35,7 +35,7 @@ export function CameraConnectionFields({ value, onChange, hostError, streamError
         <p id={`${id}-brand`} className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-300">
           Camera brand / type
         </p>
-        <SelectDropdown value={brand} options={CAMERA_BRANDS} ariaLabel="Camera brand / type" onChange={(cameraBrand) => update({ cameraBrand: cameraBrand as CameraConnection["cameraBrand"] })} />
+        <SelectDropdown reportsDismissal value={brand} options={CAMERA_BRANDS} ariaLabel="Camera brand / type" onChange={(cameraBrand) => update({ cameraBrand: cameraBrand as CameraConnection["cameraBrand"] })} />
       </div>
       {brand !== "custom" ? (
         <CameraIpAddressField
@@ -78,6 +78,7 @@ export function CameraConnectionFields({ value, onChange, hostError, streamError
         <div>
           <p className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-300">Tenda connection profile</p>
           <SelectDropdown
+            reportsDismissal
             value={profile}
             options={TENDA_PROFILES}
             ariaLabel="Tenda connection profile"
@@ -94,6 +95,7 @@ export function CameraConnectionFields({ value, onChange, hostError, streamError
               <div>
                 <p className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-300">Video Quality</p>
                 <SelectDropdown
+            reportsDismissal
                   value={value.rtspStream ?? "stream2"}
                   options={CAMERA_QUALITY_OPTIONS.map((option) => [option.value, option.label] as const)}
                   ariaLabel="Video quality"

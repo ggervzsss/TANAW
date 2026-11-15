@@ -178,3 +178,51 @@ function emptyDemo(): DemoBreakdown {
     thisProvMale: "",
   };
 }
+
+type Origin = "city" | "otherCity" | "otherProvince" | "foreign";
+/** City values are an optional subset, never an extra contribution to provincial totals. */
+export function originValue(demo: DemoBreakdown, origin: Origin, sex: "Male" | "Female"): string {
+  if (origin === "city") return demo[`thisCity${sex}`] ?? "";
+  if (origin === "otherCity") {
+    const city = demo[`thisCity${sex}`];
+    if (city == null || city === "") return "";
+    const other = Math.max(0, demographicCount(demo[`thisProv${sex}`]) - demographicCount(city));
+    return other === 0 ? "" : String(other);
+  }
+  return demo[`${origin === "otherProvince" ? "otherProv" : "foreign"}${sex}`];
+}
+
+export function updateOriginValue(demo: DemoBreakdown, origin: Origin, sex: "Male" | "Female", raw: string, cap: number): DemoBreakdown {
+  const digits = raw.match(/^\d*/)?.[0] ?? "";
+  const requested = digits === "" ? 0 : Number.parseInt(digits, 10);
+  const next = { ...demo };
+  const totals = getDemographicTotals(demo);
+  if (origin === "city" || origin === "otherCity") {
+    const provinceKey = `thisProv${sex}` as const;
+    const cityKey = `thisCity${sex}` as const;
+    const province = demographicCount(demo[provinceKey]);
+    const available = Math.max(0, cap - totals.grandTotal + province);
+    if (origin === "city") {
+      if (digits === "") {
+        delete next[cityKey];
+        return next;
+      }
+      const oldCity = demo[cityKey];
+      const other = oldCity == null || oldCity === "" ? 0 : Math.max(0, province - demographicCount(oldCity));
+      const city = Math.min(requested, Math.max(0, available - other));
+      next[cityKey] = String(city);
+      // Identifying part of a province-only allocation preserves its saved total.
+      next[provinceKey] = String(oldCity == null || oldCity === "" ? Math.max(province, city) : city + other);
+    } else {
+      const city = demographicCount(demo[cityKey]);
+      const other = Math.min(requested, Math.max(0, available - city));
+      next[cityKey] = String(city);
+      next[provinceKey] = digits === "" && !city ? "" : String(city + other);
+    }
+  } else {
+    const key = `${origin === "otherProvince" ? "otherProv" : "foreign"}${sex}` as keyof DemoBreakdown;
+    const available = Math.max(0, cap - totals.grandTotal + demographicCount(demo[key]));
+    next[key] = digits === "" ? "" : String(Math.min(requested, available));
+  }
+  return next;
+}

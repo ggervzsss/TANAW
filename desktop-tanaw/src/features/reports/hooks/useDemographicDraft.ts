@@ -21,7 +21,7 @@ export function useDemographicDraft({
   isReadOnly,
   period,
   reportsHistory,
-}: DemographicDraftOptions): { demo: DemoBreakdown; setDemo: Dispatch<SetStateAction<DemoBreakdown>> } {
+}: DemographicDraftOptions): { demo: DemoBreakdown; setDemo: Dispatch<SetStateAction<DemoBreakdown>>; isHydrating: boolean } {
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   const reportsHistoryRef = useRef(reportsHistory);
@@ -71,5 +71,5 @@ export function useDemographicDraft({
     return () => window.clearTimeout(timeoutId);
   }, [activeReportId, demo, demographicDraftKey, hydratedKey, isReadOnly, period]);
 
-  return { demo, setDemo };
+  return { demo, setDemo, isHydrating: !isReadOnly && hydratedKey !== demographicDraftKey };
 }

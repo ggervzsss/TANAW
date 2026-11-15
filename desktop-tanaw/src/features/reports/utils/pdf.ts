@@ -1,6 +1,6 @@
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { countingNotes } from "./counting";
-import { demographicCount, getDemographicTotals } from "./demographics";
+import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1Day, type Var1DailyAllocation } from "../model/var1";
 
 export type DotReportPdf = {
   enterpriseName: string;
@@ -9,263 +9,160 @@ export type DotReportPdf = {
   metrics: Metrics;
   demo: DemoBreakdown;
   notes: string;
+  attractionType?: string;
+  sampleDaily?: Var1DailyAllocation[];
 };
-
-type TextOptions = {
-  align?: "center" | "left";
-  bold?: boolean;
-  maxWidth?: number;
-  size?: number;
-};
-
-type PdfPalette = {
-  background: [number, number, number];
-  text: [number, number, number];
-  muted: [number, number, number];
-  border: [number, number, number];
-  header: [number, number, number];
-  total: [number, number, number];
-  accent: [number, number, number];
-};
-
-const lightExportPalette: PdfPalette = {
-  background: [1, 1, 1],
-  text: [0.05, 0.08, 0.13],
-  muted: [0.31, 0.37, 0.46],
-  border: [0.4, 0.45, 0.52],
-  header: [0.94, 0.96, 0.98],
-  total: [0.86, 0.89, 0.93],
-  accent: [0.72, 0.54, 0.1],
-};
-
-const contentPalettes = new WeakMap<string[], PdfPalette>();
+type TextOptions = { align?: "center" | "left" | "right"; bold?: boolean; maxWidth?: number; size?: number; horizontalScale?: number };
+type Color = readonly [number, number, number];
+const BLACK: Color = [0, 0, 0];
+const YELLOW: Color = [1, 1, 0];
+const GREEN: Color = [146 / 255, 208 / 255, 80 / 255];
+const TABLE_X = 25;
+const TABLE_WIDTH = 806;
+const ROW_HEIGHT = 17.25;
+const weight = VAR1_COLUMN_WEIGHTS.reduce((total, value) => total + value, 0);
+const widths = VAR1_COLUMN_WEIGHTS.map((value) => (TABLE_WIDTH * value) / weight);
+const positions = widths.map((_, index) => TABLE_X + widths.slice(0, index).reduce((total, value) => total + value, 0));
+const span = (start: number, length: number) => widths.slice(start, start + length).reduce((total, value) => total + value, 0);
 
 export function downloadDotReportPdf(report: DotReportPdf) {
-  const pdf = createDotReportPdf(report);
-  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+  const url = URL.createObjectURL(new Blob([createDotReportPdf(report)], { type: "application/pdf" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${safeFileName(report.reportId)}-DOT-Visitor-Attraction.pdf`;
+  anchor.download = `${report.reportId.replace(/[^a-zA-Z0-9._-]/g, "_")}-DOT-Visitor-Attraction.pdf`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Vector reconstruction of the supplied VAR 1 B1:R46 form, without its blank overflow pages. */
 export function createDotReportPdf(report: DotReportPdf) {
-  const tpm = demographicCount(report.demo.thisProvMale);
-  const tpf = demographicCount(report.demo.thisProvFemale);
-  const opm = demographicCount(report.demo.otherProvMale);
-  const opf = demographicCount(report.demo.otherProvFemale);
-  const fm = demographicCount(report.demo.foreignMale);
-  const ff = demographicCount(report.demo.foreignFemale);
-  const totals = getDemographicTotals(report.demo);
-  const content: string[] = [];
-  contentPalettes.set(content, lightExportPalette);
-  content.push(`${rgbFill(lightExportPalette.background)} 0 0 842 595 re f`);
-
-  drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 564, { align: "center", bold: true, maxWidth: 742, size: 15 });
-  drawText(content, "Tourism Attraction Visitor Record - VAR 2", 50, 550, { align: "center", maxWidth: 742, size: 8 });
-  drawText(content, report.reportId, 50, 536, { align: "center", maxWidth: 742, size: 9 });
-  content.push(`${rgbStroke(lightExportPalette.accent)} 1 w 50 524 m 792 524 l S`);
-  drawText(content, "REPORTING PERIOD", 50, 506, { bold: true, size: 7 });
-  drawText(content, report.period, 50, 492, { size: 9 });
-  drawText(content, "MUNICIPALITY", 315, 506, { bold: true, size: 7 });
-  drawText(content, "City of San Pedro, Laguna", 315, 492, { size: 9 });
-  drawText(content, "UNIQUE VISITORS", 630, 506, { bold: true, size: 7 });
-  drawText(content, report.metrics.unique.toLocaleString(), 630, 492, { size: 9 });
-
-  const table = {
-    x: 74,
-    top: 448,
-    name: 154,
-    code: 72,
-    demo: 42,
-    grand: 30,
-  };
-  const demoX = table.x + table.name + table.code;
-  const grandX = demoX + table.demo * 9;
-  let top = table.top;
-
-  drawCell(content, table.x, top, table.name + table.code, 36, ["Visitor Attraction"], { bold: true });
-  drawCell(content, demoX, top, table.demo * 9, 36, ["Place of Residence"], { bold: true });
-  drawCell(content, grandX, top, table.grand * 3, 84, ["Grand Total", "Number of Visitors"], { bold: true });
-
-  top -= 36;
-  drawCell(content, table.x, top, table.name, 76, ["Name / Month"], { bold: true });
-  drawCell(content, table.x + table.name, top, table.code, 76, ["Report", "Code"], { bold: true });
-  drawCell(content, demoX, top, table.demo * 6, 24, ["Philippines"], { bold: true });
-  drawCell(content, demoX + table.demo * 6, top, table.demo * 3, 48, ["Foreign Country", "Residence"], { bold: true, size: 7 });
-
-  top -= 24;
-  drawCell(content, demoX, top, table.demo * 3, 24, ["This Province"], { bold: true, size: 7 });
-  drawCell(content, demoX + table.demo * 3, top, table.demo * 3, 24, ["Other Province"], { bold: true, size: 7 });
-
-  top -= 24;
-  ["Male", "Female", "Total", "Male", "Female", "Total", "Male", "Female", "Total"].forEach((label, index) => {
-    drawCell(content, demoX + table.demo * index, top, table.demo, 28, [label], { bold: true, size: 7 });
+  const days = var1Days(report.period, report.metrics);
+  const first = whitePage();
+  drawText(first, "Tourism Attraction Visitor Record", 28, 513, { bold: true, size: 10.725 });
+  drawText(first, "(VAR 1)", 769, 513, { size: 10 });
+  drawText(first, "( This recording form can be used instead of just counting the visitors )", 28, 498, { size: 9 });
+  [
+    ["Month/Year:", report.period],
+    ["Name of City/Municipality:", "City of San Pedro, Laguna"],
+    ["Name of attraction/ Spot:", report.enterpriseName],
+  ].forEach(([label, value], index) => {
+    const y = 476 - index * 15.75;
+    drawText(first, label, 28, y, { align: "right", maxWidth: 172, size: 9 });
+    drawText(first, value, 248, y, { maxWidth: 520, size: 9 });
+    first.push(`0 0 0 RG 0.8 w 247 ${number(y - 3)} m 768 ${number(y - 3)} l S`);
   });
-  ["Male", "Female", "Total"].forEach((label, index) => {
-    drawCell(content, grandX + table.grand * index, top, table.grand, 28, [label], { bold: true, size: 7 });
-  });
+  drawText(first, "Type of Tourism Attraction:", 50, 414, { size: 9 });
+  drawCell(first, 174, 426, 200, 17, [report.attractionType ?? ""], { align: "left", size: 9 });
+  const bodyTop = drawHeader(first, 402);
+  drawDays(first, days.slice(0, 14), bodyTop, report.sampleDaily);
+  const pages = [first];
+  const continuation = whitePage();
+  const totalTop = drawDays(continuation, days.slice(14), 524, report.sampleDaily);
+  drawCell(continuation, TABLE_X, totalTop, span(0, 2), 33.75, ["Total of this", "Month ****"], { bold: true, size: 9.75 }, GREEN);
+  var1MonthlyCells(report.demo, report.metrics).forEach((value, index) =>
+    drawCell(continuation, positions[index + 2], totalTop, widths[index + 2], 33.75, [cell(value)], { bold: true, size: 9.75 }, GREEN),
+  );
+  drawText(continuation, VAR1_NOTE, 28, totalTop - 47, { size: 7, maxWidth: 800 });
+  drawText(continuation, "Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank.", 28, totalTop - 59, { size: 7, maxWidth: 800 });
+  if (hasUnspecifiedCity(report.demo)) drawText(continuation, "This Province includes existing allocations with an unspecified city split.", 28, totalTop - 71, { size: 7 });
+  pages.push(continuation);
 
-  top -= 28;
-  const enterpriseLines = [...wrapText(report.enterpriseName, 34), report.period];
-  const rowHeight = Math.max(40, enterpriseLines.length * 11 + 12);
-  drawCell(content, table.x, top, table.name, rowHeight, enterpriseLines, { align: "left", bold: true, size: 8 });
-  drawCell(content, table.x + table.name, top, table.code, rowHeight, wrapText(report.reportId, 14), { bold: true, size: 8 });
-  [tpm, tpf, tpm + tpf, opm, opf, opm + opf, fm, ff, fm + ff].forEach((value, index) => {
-    drawCell(content, demoX + table.demo * index, top, table.demo, rowHeight, [value ? value.toLocaleString("en-US") : ""], { bold: value > 0, size: 8 });
-  });
-  [totals.male, totals.female, totals.grandTotal].forEach((value, index) => {
-    drawCell(content, grandX + table.grand * index, top, table.grand, rowHeight, [value ? value.toLocaleString("en-US") : ""], { bold: true, size: 8 });
-  });
-
-  top -= rowHeight;
-  const noteLines = [countingNotes(report.metrics), `Operator notes: ${report.notes.trim() || "None recorded."}`]
+  // Supporting information is kept outside the official VAR 1 grid.
+  const noteLines = [
+    `Report ID: ${report.reportId}`,
+    `Attraction: ${report.enterpriseName}`,
+    `Reporting period: ${report.period}`,
+    `Unique visitors: ${report.metrics.unique.toLocaleString("en-US")}`,
+    countingNotes(report.metrics),
+    report.notes.trim() ? `Operator notes: ${report.notes}` : "",
+  ]
     .filter(Boolean)
-    .flatMap((paragraph) => paragraph.split("\n").flatMap((line) => wrapText(sanitizePdfText(line), 112)));
-  const notePages: string[][] = [];
-  const firstPageNoteCapacity = Math.max(0, Math.floor((top - 88) / 12) + 1);
-  const firstPageNotes = noteLines.slice(0, firstPageNoteCapacity);
-  drawText(content, "Supplementary Notes", 50, top - 22, { bold: true, size: 10 });
-  firstPageNotes.forEach((line, index) => {
-    drawText(content, line, 50, top - 38 - index * 12, { size: 8 });
-  });
-  drawText(content, "Visitor totals are camera estimates. Demographic allocations are entered by the establishment.", 50, 28, { size: 7 });
-
-  for (let offset = firstPageNotes.length; offset < noteLines.length; offset += 40) {
-    const continuation: string[] = [];
-    contentPalettes.set(continuation, lightExportPalette);
-    continuation.push(`${rgbFill(lightExportPalette.background)} 0 0 842 595 re f`);
-    drawText(continuation, "TANAW - DOT Visitor Attraction Report", 50, 564, { align: "center", bold: true, maxWidth: 742, size: 15 });
-    drawText(continuation, `${report.reportId} - Supplementary Notes`, 50, 542, { align: "center", maxWidth: 742, size: 9 });
-    continuation.push(`${rgbStroke(lightExportPalette.accent)} 1 w 50 530 m 792 530 l S`);
-    noteLines.slice(offset, offset + 40).forEach((line, index) => {
-      drawText(continuation, line, 50, 506 - index * 12, { size: 8 });
-    });
-    notePages.push(continuation);
+    .flatMap((paragraph) => paragraph.split("\n").flatMap((line) => wrapText(line, 145)));
+  if (report.notes.trim() || countingNotes(report.metrics)) {
+    for (let offset = 0; offset < noteLines.length; offset += 38) {
+      const page = whitePage();
+      drawText(page, "VAR 1 - Supporting report details", 50, 550, { bold: true, size: 13 });
+      noteLines.slice(offset, offset + 38).forEach((line, index) => drawText(page, line, 50, 522 - index * 12, { size: 8, maxWidth: 742 }));
+      pages.push(page);
+    }
   }
-
-  const pages = [content, ...notePages];
   pages.forEach((page, index) => {
-    drawText(page, `Page ${index + 1} of ${pages.length}`, 722, 16, { align: "center", maxWidth: 70, size: 7 });
+    drawText(page, report.reportId, 25, 18, { size: 7 });
+    drawText(page, `Page ${index + 1} of ${pages.length}`, 722, 18, { align: "right", maxWidth: 100, size: 7 });
   });
   return buildPdf(pages.map((page) => page.join("\n")));
 }
 
-function drawCell(content: string[], x: number, top: number, width: number, height: number, lines: string[], options: TextOptions = {}) {
+function drawHeader(content: string[], top: number) {
+  const heights = [16.5, 15, 28.5, 17.25];
+  // Match the reference's 9.75pt condensed headings with standard PDF fonts.
+  const options = { bold: true, size: 9.75, horizontalScale: 0.85 } as const;
+  drawCell(content, positions[0], top, span(0, 2), heights[0], ["Date"], options, YELLOW);
+  drawCell(content, positions[2], top, span(2, 12), heights[0], ["*** Place of Residence"], options, YELLOW);
+  drawCell(content, positions[14], top, span(14, 3), heights[0] + heights[1] + heights[2], ["* Grand Total", "Number of", "Visitors"], options, YELLOW);
+  const second = top - heights[0];
+  drawCell(content, positions[0], second, widths[0], heights[1] + heights[2] + heights[3], ["Day"], options, YELLOW);
+  drawCell(content, positions[1], second, widths[1], heights[1] + heights[2] + heights[3], ["Week Day", "(Mon-Sun)"], { bold: true, size: 6.5 }, YELLOW);
+  drawCell(content, positions[2], second, span(2, 9), heights[1], ["Philippines"], options, YELLOW);
+  drawCell(content, positions[11], second, span(11, 3), heights[1] + heights[2], ["Foreign Country Residence"], options, YELLOW);
+  ["This City/Municipality", "This Province", "Other Province"].forEach((label, index) =>
+    drawCell(content, positions[2 + index * 3], second - heights[1], span(2 + index * 3, 3), heights[2], [label], options, YELLOW),
+  );
+  const last = second - heights[1] - heights[2];
+  for (let index = 2; index < 17; index += 1) drawCell(content, positions[index], last, widths[index], heights[3], [VAR1_SEX_COLUMNS[(index - 2) % 3]], options, YELLOW);
+  return last - heights[3];
+}
+
+function drawDays(content: string[], days: Var1Day[], top: number, samples?: Var1DailyAllocation[]) {
+  days.forEach((day, row) => {
+    const values = [String(day.day), day.weekday, ...var1DailyCells(day, samples).map(cell)];
+    values.forEach((value, column) => drawCell(content, positions[column], top - row * ROW_HEIGHT, widths[column], ROW_HEIGHT, [value], { size: 10.725 }));
+  });
+  return top - days.length * ROW_HEIGHT;
+}
+function cell(value: number | null) {
+  return value === null ? "" : value.toLocaleString("en-US");
+}
+function whitePage() {
+  return ["1 1 1 rg 0 0 842 595 re f"];
+}
+function number(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3);
+}
+
+function drawCell(content: string[], x: number, top: number, width: number, height: number, lines: string[], options: TextOptions = {}, fill?: Color) {
   const y = top - height;
-  const palette = paletteFor(content);
-  content.push(`${rgbStroke(palette.border)} ${formatNumber(x)} ${formatNumber(y)} ${formatNumber(width)} ${formatNumber(height)} re S`);
+  if (fill) content.push(`${fill.join(" ")} rg ${number(x)} ${number(y)} ${number(width)} ${number(height)} re f`);
+  content.push(`${BLACK.join(" ")} RG 0.6 w ${number(x)} ${number(y)} ${number(width)} ${number(height)} re S`);
   const size = options.size ?? 8;
   const lineHeight = size + 3;
-  const totalTextHeight = lines.length * lineHeight;
-  const startY = y + height / 2 + totalTextHeight / 2 - size;
-
-  lines.forEach((line, index) => {
-    const textY = startY - index * lineHeight;
-    const textX = options.align === "left" ? x + 8 : x;
-    drawText(content, line, textX, textY, {
-      align: options.align ?? "center",
-      bold: options.bold,
-      maxWidth: options.align === "left" ? width - 16 : width,
+  const startY = y + height / 2 + (lines.length * lineHeight) / 2 - size;
+  lines.forEach((line, index) =>
+    drawText(content, line, x + (options.align === "left" ? 5 : 0), startY - index * lineHeight, {
+      ...options,
       size,
-    });
-  });
+      align: options.align ?? "center",
+      maxWidth: width - (options.align === "left" ? 10 : 0),
+    }),
+  );
 }
-
 function drawText(content: string[], value: string, x: number, y: number, options: TextOptions = {}) {
-  const size = options.size ?? 10;
-  const sanitized = sanitizePdfText(value);
-  const escaped = escapePdf(sanitized);
-  const font = options.bold ? "F2" : "F1";
+  const text = sanitize(value);
+  let size = options.size ?? 10;
+  const scale = options.horizontalScale ?? 1;
   const maxWidth = options.maxWidth ?? 0;
-  const estimatedWidth = Math.min(maxWidth || Number.POSITIVE_INFINITY, sanitized.length * size * 0.52);
-  const textX = options.align === "center" ? x + (maxWidth - estimatedWidth) / 2 : x;
-  content.push(`BT /${font} ${size} Tf ${rgbFill(paletteFor(content).text)} ${formatNumber(textX)} ${formatNumber(y)} Td (${escaped}) Tj ET`);
-}
-
-function paletteFor(content: string[]) {
-  return contentPalettes.get(content) ?? lightExportPalette;
-}
-
-function rgbFill([red, green, blue]: [number, number, number]) {
-  return `${red} ${green} ${blue} rg`;
-}
-
-function rgbStroke([red, green, blue]: [number, number, number]) {
-  return `${red} ${green} ${blue} RG`;
-}
-
-function buildPdf(pages: string[]) {
-  const objects: string[] = [];
-  const pageObjectIds: number[] = [];
-  objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
-  objects[2] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
-  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-
-  pages.forEach((content, index) => {
-    const pageObjectId = 5 + index * 2;
-    const contentObjectId = pageObjectId + 1;
-    pageObjectIds.push(pageObjectId);
-    objects[pageObjectId - 1] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
-    objects[contentObjectId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
-  });
-  objects[1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageObjectIds.length} >>`;
-
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  pdf += offsets
-    .slice(1)
-    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
-    .join("");
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return pdf;
-}
-
-function wrapText(value: string, maxLength: number) {
-  const words = value
-    .split(/\s+/)
-    .filter(Boolean)
-    .flatMap((word) => (word.length <= maxLength ? [word] : Array.from({ length: Math.ceil(word.length / maxLength) }, (_, index) => word.slice(index * maxLength, (index + 1) * maxLength))));
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxLength && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function formatNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
-}
-
-function escapePdf(value: string) {
-  return Array.from(sanitizePdfText(value), (character) => {
-    if (character === "\\") return "\\\\";
-    if (character === "(") return "\\(";
-    if (character === ")") return "\\)";
-    const code = character.charCodeAt(0);
-    return code > 0x7e ? `\\${code.toString(8).padStart(3, "0")}` : character;
+  if (maxWidth > 0 && text.length * size * 0.52 * scale > maxWidth) size = Math.max(4, maxWidth / (text.length * 0.52 * scale));
+  const width = text.length * size * 0.52 * scale;
+  const textX = options.align === "center" ? x + (maxWidth - width) / 2 : options.align === "right" ? x + maxWidth - width : x;
+  const escaped = Array.from(text, (character) => {
+    if (character === "\\" || character === "(" || character === ")") return `\\${character}`;
+    return character.charCodeAt(0) > 0x7e ? `\\${character.charCodeAt(0).toString(8).padStart(3, "0")}` : character;
   }).join("");
+  content.push(`BT /${options.bold ? "F2" : "F1"} ${number(size)} Tf ${number(scale * 100)} Tz 0 0 0 rg ${number(textX)} ${number(y)} Td (${escaped}) Tj ET`);
 }
-
-function sanitizePdfText(value: string) {
+function sanitize(value: string) {
   return value
     .replace(/[‘’‚‛]/g, "'")
     .replace(/[“”„‟]/g, '"')
@@ -274,7 +171,47 @@ function sanitizePdfText(value: string) {
     .normalize("NFC")
     .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, "?");
 }
-
-function safeFileName(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+function wrapText(value: string, maxLength: number) {
+  const words = value
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((word) => (word.length <= maxLength ? [word] : Array.from({ length: Math.ceil(word.length / maxLength) }, (_, index) => word.slice(index * maxLength, (index + 1) * maxLength))));
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current && current.length + word.length + 1 > maxLength) {
+      lines.push(current);
+      current = word;
+    } else current = current ? `${current} ${word}` : word;
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+function buildPdf(pages: string[]) {
+  const objects: string[] = [];
+  const pageIds: number[] = [];
+  objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+  pages.forEach((content, index) => {
+    const pageId = 5 + index * 2;
+    const contentId = pageId + 1;
+    pageIds.push(pageId);
+    objects[pageId - 1] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
+  objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
+    .join("");
+  return pdf + `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
 }

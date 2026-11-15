@@ -1,5 +1,6 @@
 import { Check, Send, X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type SubmitReportDialogProps = {
   isSubmitting: boolean;
@@ -8,10 +9,53 @@ type SubmitReportDialogProps = {
 };
 
 export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: SubmitReportDialogProps) {
+  const dialog = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(false);
+  const attachDialog = useCallback((element: HTMLDivElement | null) => {
+    dialog.current = element;
+    setReady(Boolean(element));
+  }, []);
+  const submitting = useRef(isSubmitting);
+  submitting.current = isSubmitting;
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
+  useEffect(() => {
+    if (!ready) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting.current) {
+        event.preventDefault();
+        cancel.current();
+      }
+      if (event.key !== "Tab") return;
+      const buttons = dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+      if (!buttons?.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = buttons[0],
+        last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      }
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", keyboard, true);
+    return () => {
+      document.removeEventListener("keydown", keyboard, true);
+      previous?.focus({ preventScroll: true });
+    };
+  }, [ready]);
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={isSubmitting ? undefined : onCancel}>
         <div
+          ref={attachDialog}
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-report-submission-title"

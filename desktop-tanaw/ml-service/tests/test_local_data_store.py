@@ -45,6 +45,15 @@ class LocalDataStoreTest(unittest.TestCase):
             reopened = LocalDataStore(directory, "enterprise@example.test")
             self.assertEqual(reopened.list_camera_profiles(), profiles)
 
+    def test_optional_camera_location_and_reconnect_preference_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(directory, "enterprise@example.test")
+            camera = {**_camera_profile(), "zone": "", "autoReconnect": False}
+            store.replace_camera_profiles([camera])
+            reopened = LocalDataStore(directory, "enterprise@example.test")
+            self.assertEqual(reopened.list_camera_profiles()[0]["zone"], "")
+            self.assertIs(reopened.list_camera_profiles()[0]["autoReconnect"], False)
+
     def test_canonical_schema_has_current_migration_and_expected_tables(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")

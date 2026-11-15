@@ -34,47 +34,35 @@ describe("CameraAddModal", () => {
     expect(markup).toContain("rtsp://192.168.1.9:8554/live?channel=2");
     expect(markup).not.toContain("Tenda connection profile");
   });
-  it("renders a simple camera setup without exposing stream internals", () => {
+  it("opens with the reference information fields and keeps connection setup in a second step", () => {
     const markup = render(values(), {});
-    const labels = ["Camera Name", "Assigned Zone", "Camera IP Address", "Username", "Password"];
+    const labels = ["Camera Name", "Camera Brand", "Camera Location (optional)", "Area Type"];
     const positions = labels.map((label) => markup.indexOf(label));
-
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    expect(markup).toContain("Camera Connection");
-    expect(markup).toContain("Test &amp; Add Camera");
-    expect(markup).not.toContain("RTSP Stream");
-    expect(markup).not.toContain("Stream URL");
-    expect(markup).not.toContain("rtsp://");
-    expect(markup).not.toContain("stream1");
-    expect(markup).not.toContain("stream2");
+    expect(markup).toContain("Camera Information");
+    expect(markup).toContain('hidden="" class="camera-add-connection"');
+    expect(markup).toContain('form="camera-add-form"');
   });
 
-  it("disables saving and shows an inline error for an invalid IPv4 address", () => {
+  it("keeps IPv4 validation attached to the connection field", () => {
     const markup = render(values({ cameraHost: "999.168.1.9", rtsp: "" }), {});
     expect(markup).toContain("Enter a valid IPv4 address, such as 192.168.1.9.");
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(markup).toContain('aria-invalid="true"');
   });
 
-  it("requires camera credentials and keeps save disabled until both are present", () => {
-    const missingMarkup = render(values(), {
-      password: "Enter the camera password.",
-      username: "Enter the camera username.",
-    });
-    expect(missingMarkup).toContain("Enter the camera username.");
-    expect(missingMarkup).toContain("Enter the camera password.");
-    expect(missingMarkup).toContain('aria-required="true"');
-    expect(missingMarkup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
-
-    const validMarkup = render(values({ username: "camera-user", password: "device pass" }), {});
-    expect(validMarkup).not.toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+  it("requires camera credentials in the connection step and masks the password", () => {
+    const markup = render(values(), { password: "Enter the camera password.", username: "Enter the camera username." });
+    expect(markup).toContain("Enter the camera username.");
+    expect(markup).toContain("Enter the camera password.");
+    expect(markup).toContain('type="password"');
+    expect(markup).toContain('aria-required="true"');
   });
 
-  it("keeps the form open and disables saving when the tenant already uses the IP", () => {
-    const markup = render(values({ username: "camera-user", password: "device pass" }), {}, "A camera with this IP address is already configured for this Enterprise.");
-
+  it("shows an existing camera IP conflict alongside the connection field", () => {
+    const markup = render(values(), {}, "A camera with this IP address is already configured for this Enterprise.");
     expect(markup).toContain("A camera with this IP address is already configured");
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(markup).toContain('aria-describedby="camera-ip-host-error"');
   });
 
   it("shows camera connection failures without exposing the generated URL", () => {

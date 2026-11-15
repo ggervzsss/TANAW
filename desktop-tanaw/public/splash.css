@@ -22,6 +22,12 @@ body {
   background: #f7f7f3;
 }
 
+html.dark body,
+html.dark .tanaw-boot-splash {
+  background: #151b21;
+  color: #e2e9e8;
+}
+
 .tanaw-boot-splash {
   position: relative;
   display: grid;

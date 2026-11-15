@@ -8,7 +8,7 @@ export type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
 export function validateCameraForm(values: CameraFormValues): CameraFormErrors {
   const errors: CameraFormErrors = {};
   const nameError = validateRequiredText(values.name, "Camera name", 2);
-  const zoneError = validateRequiredText(values.zone, "Assigned zone", 2);
+  const zoneError = values.zone.length > 120 ? "Camera location must be 120 characters or fewer." : undefined;
   if (nameError) errors.name = nameError;
   if (zoneError) errors.zone = zoneError;
   if (!isValidIpv4(values.cameraHost)) errors.cameraHost = "Enter a valid IPv4 address, such as 192.168.1.9.";

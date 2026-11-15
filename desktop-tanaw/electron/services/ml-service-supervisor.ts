@@ -13,6 +13,7 @@ import { classifyMlServiceStderr } from "../ml-service-log";
 import { createMlDiagnosticLog, createMlDiagnosticOutput } from "../ml-service-diagnostics";
 import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "../ml-service-process";
 import { getCameraCredential, normalizeCameraCredentialId } from "../stores/camera-credential-store";
+import { resolveCameraRequestCredential } from "../camera-credential-validation";
 import { SerializedOperationQueue } from "./serialized-operation-queue";
 import { MlReportLiveEventStream } from "./ml-report-live-events";
 
@@ -355,7 +356,9 @@ export async function requestCameraWithCredentials(scopeInput: unknown, cameraId
   if (!operation || !isObjectRecord(payloadInput)) {
     throw new Error("Unsupported secure camera request.");
   }
-  const credentials = getCameraCredential(scopeInput, cameraIdInput);
+  const stored = getCameraCredential(scopeInput, cameraIdInput);
+  // Test replacements in memory; starting a camera always uses saved credentials.
+  const credentials = resolveCameraRequestCredential(operation, payloadInput, stored ?? undefined);
   if (!credentials?.username) {
     throw new Error("Enter the camera username.");
   }
