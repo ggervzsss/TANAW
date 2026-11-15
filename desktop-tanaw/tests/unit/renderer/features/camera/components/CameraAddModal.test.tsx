@@ -8,24 +8,23 @@ vi.mock("../../../../../../src/components/ModalPortal", () => ({
 }));
 
 describe("CameraAddModal", () => {
-  it("offers Dahua with IP, device credentials, quality and port controls", () => {
-    const markup = render(values({ cameraBrand: "dahua", rtsp: "rtsp://192.168.1.9:554/cam/realmonitor?channel=1&subtype=1", username: "admin", password: "device-password" }), {});
-    expect(markup).toContain("Dahua");
+  it.each([
+    ["dahua", "rtsp://192.168.1.9:554/cam/realmonitor?channel=1&subtype=1"],
+    ["tenda", "rtsp://192.168.1.9:554/ch=1?subtype=1"],
+    ["tapo", "rtsp://192.168.1.9/stream2"],
+  ] as const)("asks only for the IP address and credentials for %s cameras", (cameraBrand, rtsp) => {
+    const markup = render(values({ cameraBrand, rtsp, username: "admin", password: "device-password" }), {});
     expect(markup).toContain("Camera IP Address");
-    expect(markup).toContain("device username and password");
-    expect(markup).toContain("Standard quality (Recommended)");
-    expect(markup).toContain("RTSP port");
-    expect(markup).not.toContain("Stream path and query");
-    expect(markup).not.toContain("RTSP stream address");
-    expect(markup).not.toContain("Tenda connection profile");
+    for (const hidden of ["Video Quality", "Standard quality", "RTSP port", "Stream path and query", "RTSP stream address", "Tenda connection profile", "Advanced connection settings"]) {
+      expect(markup).not.toContain(hidden);
+    }
   });
 
-  it("shows Tenda profiles and advanced port/path controls", () => {
-    const markup = render(values({ cameraBrand: "tenda", rtsp: "rtsp://192.168.1.9:8554/profile1", connectionProfile: "profile" }), {});
-    expect(markup).toContain("Tenda connection profile");
-    expect(markup).toContain("CH3 profile stream (port 8554)");
-    expect(markup).toContain("RTSP port");
-    expect(markup).toContain("Stream path and query");
+  it("names the camera mode and describes it", () => {
+    const markup = render(values({}), {});
+    expect(markup).toContain("Camera Mode");
+    expect(markup).toContain("Counts people crossing the line into or out of the establishment.");
+    expect(markup).not.toContain("Area Type");
   });
 
   it("shows the full stream address for Custom RTSP", () => {
@@ -36,7 +35,7 @@ describe("CameraAddModal", () => {
   });
   it("opens with the reference information fields and keeps connection setup in a second step", () => {
     const markup = render(values(), {});
-    const labels = ["Camera Name", "Camera Brand", "Camera Location (optional)", "Area Type"];
+    const labels = ["Camera Name", "Camera Brand", "Camera Location (optional)", "Camera Mode"];
     const positions = labels.map((label) => markup.indexOf(label));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
@@ -87,7 +86,6 @@ function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {
     name: "Tapo C310",
     password: "",
     rtsp: "rtsp://192.168.1.9/stream2",
-    rtspStream: "stream2",
     username: "",
     zone: "Main Lobby",
     ...overrides,

@@ -324,6 +324,10 @@ export type SamplePreparationResult = {
 export type CameraTestResult = {
   ok: boolean;
   message: string;
+  /** The working, credential-free stream address TANAW chose for this camera. */
+  stream_url?: string | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 export type MlServiceErrorCode =

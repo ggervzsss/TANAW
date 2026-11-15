@@ -32,24 +32,32 @@ their `.ps1` equivalents).
 
 ### Camera monitoring
 
-The computer connects to an RTSP camera using the camera's own credentials.
-Presets support Tapo, Tenda, Dahua, and custom RTSP connections. Camera access
-requires a working local network connection and valid device credentials.
+To add a camera, operators enter its name, an optional location, the brand
+(Tapo, Tenda, Dahua, or Custom RTSP), its IP address, its own username and
+password, and the camera mode. TANAW finds a working video stream for the brand
+when the connection is tested, preferring a stream that is light enough for
+steady counting and large enough for reliable detection. Only Custom RTSP asks
+for a stream address. The computer must be able to reach the camera on the
+local network.
 
-In Entrance / Exit mode, operators position counting lines across the intended
-passage. The app tracks people crossing those lines and uses the events for
-entry, exit, and occupancy figures.
+Each camera uses one of two modes:
 
-In Open Space mode, operators draw a monitored area on the preview.
-The dashboard can show that area's current occupancy, peak occupancy,
-estimated daily unique visitors when available, and activity history.
-Unavailable measurements are shown as unavailable rather than as zero.
+- **Entry / Exit:** operators place the counting lines across a doorway. The
+  red side is outside and the green side is inside. Crossing from red to green
+  is an entry; crossing from green to red is an exit.
+- **Open Space:** operators draw the monitored area on the preview. Everyone
+  inside the area counts as present.
 
-Counts depend on camera placement, lighting, visibility, and configuration.
-Unique visitors are estimates based on appearance matching, not facial recognition.
-Camera accuracy and sustained workloads need validation with representative footage.
-Combined occupancy assumes separate, non-overlapping monitored areas and does
-not deduplicate people between camera views.
+All Entry / Exit cameras share one balance for the establishment, so a visitor
+may enter through one door and leave through another. The balance starts from
+zero each day. Live occupancy is that balance plus the people inside every Open
+Space area. A camera that is offline is left out, and the other cameras still
+count.
+
+Counts depend on camera placement, lighting, and visibility. Unique visitors are
+estimates based on appearance matching, not facial recognition, and a visitor
+seen by several cameras on the same day counts once. Camera accuracy and
+sustained workloads need validation with representative footage.
 
 ### Reports and synchronization
 
@@ -63,8 +71,8 @@ require access to the central service.
 
 Both camera modes contribute to the same establishment occupancy and estimated
 visitor totals. These totals appear on the desktop and in LGU monitoring,
-visitor history, and submitted reports. Open Space cameras measure presence.
-Only Entrance / Exit cameras at a configured boundary measure arrivals and departures.
+visitor history, and submitted reports. Open Space cameras measure presence;
+Entry / Exit cameras measure arrivals and departures.
 
 ### Privacy and local storage
 

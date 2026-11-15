@@ -40,7 +40,6 @@ class OccupancyCorrectionRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     actor_id: str | None = Field(default=None, max_length=160)
     actor_name: str | None = Field(default=None, max_length=160)
-    camera_id: int | None = None
 
 
 class OccupancyCorrectionResponse(BaseModel):

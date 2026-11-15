@@ -36,7 +36,7 @@ def counting_metrics(
         raise ValueError("An establishment counting snapshot is required.")
     if (
         snapshot.get("counting_basis") != COUNTING_BASIS
-        or snapshot.get("policy_version") != 1
+        or snapshot.get("policy_version") != 2
         or snapshot.get("timezone") != "Asia/Manila"
         or not isinstance(snapshot.get("enterprise_id"), str)
         or not snapshot["enterprise_id"]

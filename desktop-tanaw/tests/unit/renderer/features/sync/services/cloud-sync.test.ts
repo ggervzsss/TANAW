@@ -146,7 +146,7 @@ describe("establishment telemetry", () => {
     });
     vi.mocked(getEstablishmentLive).mockResolvedValue({
       enterprise_id: "test", occupancy: 8, partial_occupancy: 8, state: "estimated", contributions: [],
-      missing_camera_ids: [], excluded_camera_ids: [], movement_available: false, identification_available: true,
+      missing_camera_ids: [], movement_available: false, identification_available: true,
     });
     vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
   });

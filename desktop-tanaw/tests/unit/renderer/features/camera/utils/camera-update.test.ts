@@ -12,14 +12,14 @@ import {
 } from "../../../../../../src/features/camera/utils/camera-update";
 
 describe("camera update classification", () => {
-  it("restarts counting when coverage changes without invalidating camera credentials", () => {
-    const next: Camera = { ...camera, coverage: { role: "internal_observation", area_name: "Lobby", relationship: "independent", related_camera_id: null, travel_seconds: {} } };
+  it("restarts counting when the camera mode changes without invalidating camera credentials", () => {
+    const next: Camera = { ...camera, analysisMode: "open_space", openSpace: null };
     expect(hasCameraConnectionChange(camera, next)).toBe(false);
     expect(getCameraSaveRuntimeAction(camera, next, { isRunning: true })).toBe("restart");
   });
-  it("restarts a running camera when its connection brand or Tenda profile changes", () => {
+  it("restarts a running camera when its brand or chosen stream changes", () => {
     expect(getCameraSaveRuntimeAction(camera, { ...camera, cameraBrand: "tenda" }, { isRunning: true })).toBe("restart");
-    expect(getCameraSaveRuntimeAction(camera, { ...camera, connectionProfile: "profile" }, { isRunning: true })).toBe("restart");
+    expect(getCameraSaveRuntimeAction(camera, { ...camera, rtsp: "rtsp://192.168.1.20/stream1" }, { isRunning: true })).toBe("restart");
     expect(hasCameraConnectionChange(camera, { ...camera, cameraBrand: "tapo" })).toBe(false);
   });
   it("keeps camera name and zone edits on the active runtime", () => {
@@ -79,8 +79,8 @@ describe("camera update classification", () => {
 
   it("restarts only a running camera with a runtime-affecting edit", () => {
     expect(shouldRestartCameraAfterSave(camera, { ...camera, name: "Display-only rename" }, { isRunning: true })).toBe(false);
-    expect(shouldRestartCameraAfterSave(camera, { ...camera, rtspStream: "stream1" }, { isRunning: true })).toBe(true);
-    expect(shouldRestartCameraAfterSave(camera, { ...camera, rtspStream: "stream1" }, { isRunning: false })).toBe(false);
+    expect(shouldRestartCameraAfterSave(camera, { ...camera, rtsp: "rtsp://192.168.1.20/stream1" }, { isRunning: true })).toBe(true);
+    expect(shouldRestartCameraAfterSave(camera, { ...camera, rtsp: "rtsp://192.168.1.20/stream1" }, { isRunning: false })).toBe(false);
     expect(
       shouldRestartCameraAfterSave(
         camera,
@@ -112,7 +112,7 @@ describe("camera update classification", () => {
         { isRunning: true },
       ),
     ).toBe("hot-update-counting");
-    expect(getCameraSaveRuntimeAction(camera, { ...camera, rtspStream: "stream1" }, { isRunning: true })).toBe("restart");
+    expect(getCameraSaveRuntimeAction(camera, { ...camera, rtsp: "rtsp://192.168.1.20/stream1" }, { isRunning: true })).toBe("restart");
     expect(
       getCameraSaveRuntimeAction(
         camera,
@@ -192,7 +192,6 @@ const camera: Camera = {
   zone: "Lobby",
   rtsp: "rtsp://192.168.1.10/stream2",
   cameraHost: "192.168.1.10",
-  rtspStream: "stream2",
   processingProfile: "auto",
   confidence: 0.35,
   trackingConfidence: 0.15,

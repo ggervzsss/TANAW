@@ -10,7 +10,6 @@ const camera: Camera = {
   cameraBrand: "tapo",
   cameraHost: "192.168.1.11",
   rtsp: "rtsp://192.168.1.11/stream2",
-  rtspStream: "stream2",
   analysisMode: "open_space",
   openSpace: {
     zone_id: "main",

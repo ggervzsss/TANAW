@@ -125,10 +125,10 @@ export function CameraMonitoringPanel({
               <MetricBox icon={LogOut} label="Exit" value={runtimeReady ? (counts.exit ?? "—") : "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
               <MetricBox
                 icon={Users}
-                label="Occupancy"
+                label="Establishment Occupancy"
                 value={runtimeReady ? (counts.occupancy ?? "—") : "—"}
                 tone="occupancy"
-                tooltip="Occupancy calculated from Entrance / Exit activity. Enterprise Analytics adds people observed in separate Open Space zones to its combined live total."
+                tooltip="People inside, counted across all Entry / Exit cameras. The Dashboard also adds people in Open Space areas."
               />
               <MetricBox
                 icon={Users}

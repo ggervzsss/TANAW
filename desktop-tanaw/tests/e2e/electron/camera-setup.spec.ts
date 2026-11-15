@@ -17,7 +17,6 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
       cameraBrand: "tapo",
       cameraHost: "192.168.1.11",
       rtsp: "rtsp://192.168.1.11/stream2",
-      rtspStream: "stream2",
       analysisMode: "open_space",
       openSpace: {
         zone_id: "main",

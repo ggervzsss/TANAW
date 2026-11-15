@@ -266,9 +266,7 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
     camera_id: camera.id,
     camera_name: camera.name,
     camera_host: camera.cameraHost || null,
-    rtsp_stream: camera.rtspStream || null,
     camera_brand: camera.cameraBrand ?? "tapo",
-    connection_profile: camera.connectionProfile ?? null,
     stream_url: camera.rtsp,
   };
   if (credentialScope && window.tanawCameraCredentials) {
@@ -284,16 +282,16 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
         username: (options.draft ? camera.username : credential?.username ?? camera.username) ?? null,
       }),
     },
-    8000,
+    // TANAW may try several stream addresses for the brand before one answers.
+    45_000,
   );
 }
 
 export async function startCameraProcessing(baseUrl: string, camera: Camera, credentialScope?: string): Promise<{ message: string }> {
   const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
-    auto_reconnect: camera.autoReconnect !== false,
+    auto_reconnect: true,
     analysis_mode: camera.analysisMode ?? "entrance_exit",
-    coverage: camera.coverage,
     open_space: camera.analysisMode === "open_space" ? (camera.openSpace ?? null) : null,
     preview_only: camera.analysisMode === "open_space" && !camera.openSpace,
     camera_name: camera.name,
@@ -314,9 +312,7 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     roi: toMlRoi(camera.config.roi),
     stream_fps: 24,
     stream_url: camera.rtsp,
-    rtsp_stream: camera.rtspStream || null,
     camera_brand: camera.cameraBrand ?? "tapo",
-    connection_profile: camera.connectionProfile ?? null,
     tracking_confidence: camera.trackingConfidence ?? 0.15,
     track_ttl_seconds: 9,
     tripwire_position: camera.config.tripwire / 100,

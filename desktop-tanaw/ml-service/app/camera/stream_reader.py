@@ -11,6 +11,8 @@ os.environ.setdefault(
 
 import cv2
 
+from app.camera.stream_candidates import StreamProbe
+
 OPEN_TIMEOUT_MS = 5000
 READ_TIMEOUT_MS = 5000
 
@@ -37,23 +39,34 @@ def open_capture(stream_url: str) -> Any:
 
 
 def validate_stream(stream_url: str, attempts: int = 8) -> tuple[bool, str]:
+    result = probe_stream(stream_url, attempts)
+    return result.ok, result.message
+
+
+def probe_stream(stream_url: str, attempts: int = 8) -> StreamProbe:
+    """Open a stream, read one frame, and report its size."""
     try:
         capture = open_capture(stream_url)
     except Exception:
-        return False, "Unable to open the camera stream. Check the camera connection and try again."
+        return StreamProbe(
+            False, "Unable to open the camera stream. Check the camera connection and try again."
+        )
     try:
         if not capture.isOpened():
-            return (
+            return StreamProbe(
                 False,
-                "RTSP camera stream could not be opened. Check the camera IP, RTSP path, username/password, and that RTSP is enabled on the camera.",
+                "The camera could not be reached. Check its IP address, username, and password.",
             )
 
         for _ in range(attempts):
             ok, frame = capture.read()
             if ok and frame is not None:
-                return True, "Camera stream is reachable."
+                height, width = frame.shape[:2]
+                return StreamProbe(True, "Camera stream is reachable.", int(width), int(height))
             time.sleep(0.15)
 
-        return False, "Camera stream opened, but no frames were readable within the timeout."
+        return StreamProbe(
+            False, "Camera stream opened, but no frames were readable within the timeout."
+        )
     finally:
         capture.release()

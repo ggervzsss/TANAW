@@ -3,10 +3,10 @@ import type { EstablishmentLive, EstablishmentSummary } from "../../camera/servi
 import type { TrendFilter } from "../types/dashboard";
 import { motion, useReducedMotion } from "motion/react";
 
-type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean; needsSetup?: boolean };
-export function EstablishmentMetrics({ summary, live, filter, loading, needsSetup = false }: Props) {
+type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean };
+export function EstablishmentMetrics({ summary, live, filter, loading }: Props) {
   const reduceMotion = useReducedMotion();
-  const visitorsAvailable = summary && !["not_collected", "configuration_required"].includes(summary.reconciliation_state) && summary.identification_state !== "unavailable";
+  const visitorsAvailable = summary && summary.reconciliation_state !== "not_collected" && summary.identification_state !== "unavailable";
   const movementAvailable = summary && summary.movement_state !== "unavailable";
   const period = filter === "Today" ? "Today’s" : filter === "Week" ? "7-day" : "30-day";
   const metrics = [
@@ -14,7 +14,7 @@ export function EstablishmentMetrics({ summary, live, filter, loading, needsSetu
       id: "occupancy",
       title: "Current Occupancy",
       value: live?.occupancy,
-      description: live?.state === "partial" ? "partial · people inside" : live?.state === "configuration_required" ? "counting setup required" : "people inside",
+      description: live?.state === "partial" ? "people inside · some cameras offline" : "people inside",
       icon: ScanFace,
     },
     {
@@ -45,7 +45,7 @@ export function EstablishmentMetrics({ summary, live, filter, loading, needsSetu
             <motion.strong key={`${loading}-${value}`} initial={{ opacity: reduceMotion ? 1 : 0.6 }} animate={{ opacity: 1 }} transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}>
               {loading ? <span className="design-skeleton" aria-label="Loading count" /> : value == null ? "—" : value.toLocaleString()}
             </motion.strong>
-            <p>{value == null && !loading ? (needsSetup ? "Counting setup required" : "Unavailable") : description}</p>
+            <p>{value == null && !loading ? "Unavailable" : description}</p>
           </div>
         </article>
       ))}

@@ -45,7 +45,6 @@ function camera(id: number): Camera {
     zone: `Zone ${id}`,
     rtsp: `rtsp://192.168.1.${id}/stream2`,
     cameraHost: `192.168.1.${id}`,
-    rtspStream: "stream2",
     processingProfile: "auto",
     confidence: 0.35,
     config: {

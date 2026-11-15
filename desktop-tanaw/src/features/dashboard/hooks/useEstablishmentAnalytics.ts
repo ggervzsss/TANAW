@@ -11,7 +11,7 @@ type Snapshot = { key: string; summary: EstablishmentSummary; live: Establishmen
 export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter) {
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
   const range = establishmentRange(filter);
-  const key = JSON.stringify([enterpriseId, range, cameras.map((camera) => [camera.id, camera.analysisMode, camera.coverage])]);
+  const key = JSON.stringify([enterpriseId, range, cameras.map((camera) => [camera.id, camera.analysisMode])]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   usePersistentIssue({ id: "dashboard-visitor-counts", message: error, title: "Establishment counts unavailable", tone: "error" });

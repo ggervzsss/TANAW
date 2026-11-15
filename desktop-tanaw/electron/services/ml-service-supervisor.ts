@@ -377,7 +377,8 @@ export async function requestCameraWithCredentials(scopeInput: unknown, cameraId
     body: JSON.stringify(payload),
     headers: mlServiceHeaders({ "Content-Type": "application/json" }),
     method: "POST",
-    signal: AbortSignal.timeout(operation === "start" ? 30_000 : 8000),
+    // A connection test may try several stream addresses for the camera brand.
+    signal: AbortSignal.timeout(operation === "start" ? 30_000 : 45_000),
   });
   if (!response.ok) {
     throw new Error(`Camera ${operation} request failed (${response.status}).`);

@@ -557,28 +557,12 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            registry.replace_camera_profiles(
-                [
-                    {
-                        **_profile(1),
-                        "coverage": {"role": "external_boundary", "relationship": "independent"},
-                    },
-                    {
-                        **_profile(2),
-                        "coverage": {
-                            "role": "external_boundary",
-                            "relationship": "alternative",
-                            "related_camera_id": 1,
-                        },
-                    },
-                ]
-            )
+            registry.replace_camera_profiles([_profile(1), _profile(2)])
             registry.start(_config(1))
             registry.start(_config(2))
             registry.record_occupancy_correction(
                 new_occupancy=7,
                 reason="Manual recount",
-                camera_id=1,
             )
 
             states = registry.camera_states()

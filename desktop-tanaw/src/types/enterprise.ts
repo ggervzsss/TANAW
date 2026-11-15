@@ -63,16 +63,8 @@ export type TripwireLine = {
 };
 
 export type CameraBrand = "tapo" | "tenda" | "dahua" | "custom";
-export type CameraConnectionProfile = "channel" | "channel_ampersand" | "profile" | "h264" | "manual";
 
 export type AnalysisMode = "entrance_exit" | "open_space";
-export type CameraCoverage = {
-  role: "unconfigured" | "external_boundary" | "internal_observation";
-  area_name: string;
-  relationship: "unknown" | "independent" | "contained" | "overlapping" | "alternative";
-  related_camera_id: number | null;
-  travel_seconds: Record<string, number>;
-};
 export type OpenSpaceSettings = {
   zone_id: string;
   zone_name: string;
@@ -85,8 +77,6 @@ export type OpenSpaceSettings = {
 };
 
 type CameraConnectionAndProcessing = {
-  autoReconnect?: boolean;
-  coverage?: CameraCoverage;
   id: number;
   name: string;
   status: CameraStatus;
@@ -94,8 +84,6 @@ type CameraConnectionAndProcessing = {
   rtsp: string;
   cameraHost?: string;
   cameraBrand?: CameraBrand;
-  connectionProfile?: CameraConnectionProfile;
-  rtspStream?: "stream1" | "stream2";
   processingProfile: ProcessingProfile;
   confidence: number;
   trackingConfidence?: number;

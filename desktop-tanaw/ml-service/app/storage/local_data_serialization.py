@@ -88,7 +88,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     }
     normalize_rtsp_source(source)
 
-    from app.config.camera_coverage import CameraCoverage
     from app.config.open_space_config import OpenSpaceConfig
 
     mode = camera.get("analysisMode", "entrance_exit")
@@ -100,13 +99,9 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     elif mode == "entrance_exit":
         area = None
 
+    camera = {key: value for key, value in camera.items() if key != "coverage"}
     return {
         **camera,
-        **(
-            {"coverage": CameraCoverage.model_validate(camera["coverage"]).model_dump(mode="json")}
-            if "coverage" in camera
-            else {}
-        ),
         **({"analysisMode": mode, "openSpace": area} if "analysisMode" in camera else {}),
         "id": int(camera["id"]),
         "zone": camera.get("zone", "").strip(),

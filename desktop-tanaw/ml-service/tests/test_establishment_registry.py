@@ -6,16 +6,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.analytics.establishment_populations import population_contexts
-from app.config.camera_coverage import CameraCoverage, validate_camera_coverages
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.storage.repositories.establishment_repository import day_bounds
 
 NOW = datetime(2026, 11, 10, 2, tzinfo=UTC)
-BOUNDARY = CameraCoverage(role="external_boundary", relationship="independent")
-INSIDE = CameraCoverage(role="internal_observation", relationship="contained", related_camera_id=1)
 VECTOR = np.array([1, 0, 0], dtype=np.float32)
-BOUNDARY_KEY = population_contexts({1: BOUNDARY})[1]["population_key"]
+LATER = NOW + timedelta(minutes=5)
 
 
 def observe(service: EstablishmentRegistry, key: str, camera: int = 1, **changes):
@@ -26,7 +22,6 @@ def observe(service: EstablishmentRegistry, key: str, camera: int = 1, **changes
         track_key=key,
         analysis_mode="entrance_exit" if camera == 1 else "open_space",
         kind="entry" if camera == 1 else "area_visit",
-        coverage=BOUNDARY if camera == 1 else INSIDE,
         qualified=True,
         first_at=at,
         observed_at=at,
@@ -51,9 +46,11 @@ def test_one_hundred_door_visitors_and_forty_zone_observations(
     for index in range(100):
         observe(service, f"door:{index}", embedding=vectors[index])
     for index in range(40 - additional):
-        observe(service, f"area:{index}", 2, embedding=vectors[index])
+        observe(service, f"area:{index}", 2, embedding=vectors[index], observed_at=LATER)
     for index in range(additional):
-        observe(service, f"additional:{index}", 2, embedding=vectors[100 + index])
+        observe(
+            service, f"additional:{index}", 2, embedding=vectors[100 + index], observed_at=LATER
+        )
     result = summary(service)
     assert result["unique_count"] == expected
     assert result["entries"] == 100
@@ -64,7 +61,7 @@ def test_shared_identity_survives_restart_and_zone_revision(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     visitor = observe(service, "door")
     restored = EstablishmentRegistry(str(tmp_path), "park")
-    inside = observe(restored, "area", 2, revision_id="revision-2")
+    inside = observe(restored, "area", 2, revision_id="revision-2", observed_at=LATER)
     assert visitor.visitor_id == inside.visitor_id
     assert summary(restored)["unique_count"] == 1
     with restored.database.connection() as db:
@@ -94,15 +91,6 @@ def test_same_person_returns_after_an_observed_departure(tmp_path: Path):
     assert result["repeat_entry_count"] == 1
 
 
-def test_overlapping_door_views_do_not_duplicate_a_crossing(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(service, "entry")
-    overlap = INSIDE.model_copy(update={"role": "external_boundary", "relationship": "overlapping"})
-    observe(service, "second-view", 2, kind="entry", coverage=overlap)
-    result = summary(service)
-    assert result["unique_count"] == result["entries"] == 1
-
-
 def test_similar_people_in_one_view_cannot_share_an_identity(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     first = observe(service, "person-1")
@@ -120,36 +108,6 @@ def test_replaced_physical_track_can_match_when_previous_track_is_no_longer_pres
     replacement = observe(service, "replacement", observed_at=later)
     assert replacement.visitor_id == first.visitor_id
     assert summary(service)["unique_count"] == 1
-
-
-def test_disjoint_cameras_enforce_travel_time(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    first = observe(
-        service, "first", coverage=BOUNDARY.model_copy(update={"travel_seconds": {2: 10}})
-    )
-    second = observe(
-        service, "impossible", 2, coverage=BOUNDARY, observed_at=NOW + timedelta(seconds=5)
-    )
-    assert first.visitor_id != second.visitor_id
-
-
-def test_plausible_travel_can_match_between_separate_areas(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    first = observe(
-        service, "first", coverage=BOUNDARY.model_copy(update={"travel_seconds": {2: 10}})
-    )
-    second = observe(
-        service, "later", 2, coverage=BOUNDARY, observed_at=NOW + timedelta(seconds=20)
-    )
-    assert first.visitor_id == second.visitor_id
-    assert summary(service)["unique_count"] == 1
-
-
-def test_unknown_relationship_is_not_claimed_as_deduplicated(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(service, "door")
-    observe(service, "zone", 2, coverage=CameraCoverage())
-    assert summary(service)["reconciliation_state"] == "configuration_required"
 
 
 def test_short_zone_observation_does_not_create_unique_visitor(tmp_path: Path):
@@ -257,35 +215,6 @@ def test_departures_can_exceed_period_arrivals(tmp_path: Path):
     assert result["exits"] == 1 and result["entries"] == 0
 
 
-def test_daily_balance_carries_opening_occupancy_and_survives_detail_and_summary_retention(
-    tmp_path: Path,
-):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(service, "arrival-1")
-    observe(service, "arrival-2", embedding=np.array([0, 1, 0]))
-    observe(service, "next-day-exit", kind="exit", observed_at=NOW + timedelta(days=1))
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 1}
-    service.cleanup(NOW + timedelta(days=200))
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 1}
-    service.cleanup(NOW + timedelta(days=201))
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 1}
-
-
-def test_duplicate_boundary_views_contribute_once_to_population_balance(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(service, "primary")
-    observe(
-        service,
-        "overlap",
-        2,
-        kind="entry",
-        coverage=CameraCoverage(
-            role="external_boundary", relationship="overlapping", related_camera_id=1
-        ),
-    )
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 1}
-
-
 def test_coverage_records_zero_and_does_not_fill_an_outage(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     snapshot = {
@@ -362,157 +291,91 @@ def test_monthly_summary_accepts_thirty_one_day_month(tmp_path: Path):
     assert result["days_requested"] == 31
 
 
-def test_coverage_graph_rejects_cycles_and_unknown_cameras():
-    with pytest.raises(ValueError, match="cycle"):
-        validate_camera_coverages(
-            [
-                {"id": 1, "coverage": {"relationship": "contained", "related_camera_id": 2}},
-                {"id": 2, "coverage": {"relationship": "alternative", "related_camera_id": 1}},
-            ]
-        )
-    with pytest.raises(ValueError, match="another configured"):
-        validate_camera_coverages(
-            [{"id": 1, "coverage": {"relationship": "overlapping", "related_camera_id": 2}}]
-        )
-
-
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"relationship": "contained"},
-        {"relationship": "independent", "related_camera_id": 2},
-        {"travel_seconds": {2: float("nan")}},
-        {"travel_seconds": {2: -1}},
-    ],
-)
-def test_invalid_coverage_is_rejected(changes):
-    with pytest.raises(ValueError):
-        CameraCoverage(**changes)
-
-
-def save_boundary_profile(service: EstablishmentRegistry):
-    from app.storage.repositories.camera_repository import CameraRepository
-
-    return CameraRepository(service.database).replace_profiles(
-        [
-            {
-                "id": 1,
-                "name": "Entrance",
-                "zone": "Gate",
-                "status": "running",
-                "rtsp": "rtsp://192.168.1.10/stream2",
-                "cameraHost": "192.168.1.10",
-                "rtspStream": "stream2",
-                "coverage": BOUNDARY.model_dump(),
-                "analysisMode": "entrance_exit",
-                "confidence": 0.35,
-                "processingProfile": "auto",
-                "config": {
-                    "tripwire": 50,
-                    "roi": {"left": 0, "top": 0, "width": 100, "height": 100},
-                    "reverse": False,
-                },
-            }
-        ]
-    )
-
-
-def test_subsecond_boundary_peak_is_retained_between_periodic_samples(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    save_boundary_profile(service)
-    observe(service, "brief-entry", track_key="brief")
-    observe(
+def door(service: EstablishmentRegistry, key: str, camera: int, kind: str, at: datetime):
+    """An unidentified doorway crossing, which keeps large scenarios fast."""
+    return observe(
         service,
-        "brief-exit",
-        track_key="brief",
-        kind="exit",
-        observed_at=NOW + timedelta(milliseconds=100),
+        key,
+        camera,
+        analysis_mode="entrance_exit",
+        kind=kind,
+        embedding=None,
+        observed_at=at,
     )
-    result = summary(service)
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 0}
-    assert result["peak_occupancy"] == 1
-    assert result["entries"] == result["exits"] == result["unique_count"] == 1
 
 
-def test_manual_population_reset_persists_without_fabricating_visitors_or_arrivals(tmp_path: Path):
+def test_doors_share_one_establishment_balance(tmp_path: Path):
+    """Visitors may enter by one door and leave by another."""
     service = EstablishmentRegistry(str(tmp_path), "park")
-    save_boundary_profile(service)
-    observe(service, "first")
-    correction = service.repository.record_population_correction(
-        population_key=BOUNDARY_KEY,
-        camera_id=1,
+    for index in range(50):
+        door(service, f"in:{index}", 1, "entry", NOW + timedelta(seconds=index))
+    for index in range(45):
+        door(service, f"out:{index}", 2, "exit", LATER + timedelta(seconds=index))
+    result = summary(service)
+    assert result["entries"] == 50
+    assert result["exits"] == 45
+    assert service.repository.today_balance(LATER + timedelta(minutes=1)) == 5
+    breakdown = {item["camera_id"]: item for item in result["source_breakdown"]}
+    assert (breakdown[1]["entries"], breakdown[1]["exits"]) == (50, 0)
+    assert (breakdown[2]["entries"], breakdown[2]["exits"]) == (0, 45)
+
+
+def test_counting_needs_no_camera_setup_beyond_the_mode(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observe(service, "door")
+    observe(service, "zone", 2, embedding=np.array([0, 1, 0]), observed_at=LATER)
+    result = summary(service)
+    assert result["reconciliation_state"] == "estimated"
+    assert result["unique_count"] == 2
+
+
+def test_exit_with_nobody_inside_keeps_the_balance_at_zero(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    door(service, "early-exit", 2, "exit", NOW)
+    door(service, "entry", 1, "entry", NOW + timedelta(seconds=10))
+    assert service.repository.today_balance(NOW + timedelta(seconds=20)) == 1
+
+
+def test_balance_starts_from_zero_each_business_day(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    for index in range(3):
+        door(service, f"in:{index}", 1, "entry", NOW + timedelta(seconds=index))
+    assert service.repository.today_balance(NOW + timedelta(minutes=1)) == 3
+    assert service.repository.today_balance(NOW + timedelta(days=1)) == 0
+
+
+def test_visitor_entering_at_one_door_and_leaving_by_another_is_one_visitor(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    entered = observe(service, "front-entry", 1)
+    left = observe(
+        service, "back-exit", 2, analysis_mode="entrance_exit", kind="exit", observed_at=LATER
+    )
+    assert entered.visitor_id == left.visitor_id
+    result = summary(service)
+    assert result["unique_count"] == 1
+    assert result["entries"] == result["exits"] == 1
+
+
+def test_person_in_view_on_another_camera_is_someone_else(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    service.update_present_tracks(1, {"front"}, NOW)
+    first = observe(service, "front", 1)
+    second = observe(service, "back", 2, analysis_mode="entrance_exit", kind="entry")
+    assert first.visitor_id != second.visitor_id
+
+
+def test_correction_sets_the_shared_balance(tmp_path: Path):
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    door(service, "first", 1, "entry", NOW)
+    correction = service.repository.record_occupancy_correction(
         new_occupancy=10,
         reason="Ten people physically verified",
         now=NOW + timedelta(seconds=1),
     )
-    observe(
-        service, "departure", track_key="first", kind="exit", observed_at=NOW + timedelta(seconds=2)
-    )
+    door(service, "departure", 2, "exit", NOW + timedelta(seconds=2))
     assert correction["old_occupancy"] == 1
-    assert service.repository.population_balances() == {BOUNDARY_KEY: 9}
+    assert service.repository.today_balance(NOW + timedelta(seconds=3)) == 9
     result = summary(service)
-    assert result["peak_occupancy"] == 10
-    assert result["unique_count"] == result["entries"] == result["exits"] == 1
+    assert result["entries"] == result["exits"] == 1
+    assert result["unique_count"] == 0
     assert result["occupancy_corrections"][0]["reason"] == "Ten people physically verified"
-    # Compact daily transformations carry the reset beyond detailed evidence retention.
-    service.repository.cleanup(NOW + timedelta(days=31))
-    restored = EstablishmentRegistry(str(tmp_path), "park")
-    assert restored.repository.population_balances() == {BOUNDARY_KEY: 9}
-    restored.repository.cleanup(NOW + timedelta(days=181))
-    assert restored.repository.population_balances() == {BOUNDARY_KEY: 9}
-
-
-def test_camera_setup_rejects_shared_views_with_separate_area_travel_requirements():
-    with pytest.raises(ValueError, match="Shared camera views"):
-        validate_camera_coverages(
-            [
-                {"id": 1, "coverage": {**BOUNDARY.model_dump(), "travel_seconds": {2: 10}}},
-                {"id": 2, "coverage": INSIDE.model_dump()},
-            ]
-        )
-
-
-def test_unidentified_shared_boundary_crossings_disclose_partial_movement(tmp_path: Path):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(service, "unidentified-a", embedding=None)
-    observe(
-        service,
-        "unidentified-b",
-        2,
-        analysis_mode="entrance_exit",
-        kind="entry",
-        coverage=CameraCoverage(
-            role="external_boundary", relationship="overlapping", related_camera_id=1
-        ),
-        embedding=None,
-    )
-    service.repository.checkpoint_occupancy(
-        {
-            "occupancy": 1,
-            "state": "estimated",
-            "movement_available": True,
-            "identification_available": False,
-        },
-        NOW,
-    )
-    result = summary(service)
-    assert result["movement_state"] == "partial"
-    assert result["reconciliation_state"] == "partial"
-    assert result["unresolved_observations"] == 2
-
-
-def test_later_counting_role_change_does_not_reclassify_internal_movement_as_arrival(
-    tmp_path: Path,
-):
-    service = EstablishmentRegistry(str(tmp_path), "park")
-    observe(
-        service,
-        "internal",
-        coverage=CameraCoverage(role="internal_observation", relationship="independent"),
-    )
-    observe(service, "boundary", observed_at=NOW + timedelta(seconds=10))
-    result = summary(service)
-    assert result["entries"] == 1
-    assert result["unique_count"] == 1
-    assert result["reconciliation_state"] == "partial"
-    assert len(result["source_breakdown"][0]["coverage_configurations"]) == 2

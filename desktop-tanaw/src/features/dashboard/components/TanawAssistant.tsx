@@ -89,7 +89,7 @@ export function TanawAssistant({
         : "No observed occupancy data is available for this period. Start your configured cameras to collect activity.";
     else if (/trend|insight|visitor|occupancy|entr|exit|count/i.test(query))
       answer =
-        summary && !["not_collected", "configuration_required"].includes(summary.reconciliation_state)
+        summary && summary.reconciliation_state !== "not_collected"
           ? `For ${period}, ${summary.identification_state === "unavailable" ? "unique visitor estimates are unavailable" : `TANAW recorded ${summary.unique_count.toLocaleString()} estimated unique visitors`}. ${summary.movement_state === "unavailable" ? "Boundary entries and exits are not measured." : `Observed entries: ${summary.entries.toLocaleString()}; exits: ${summary.exits.toLocaleString()}.`} Current occupancy: ${live?.occupancy == null ? "unavailable" : `${live.occupancy.toLocaleString()} people`}. Observation coverage: ${Math.round(summary.coverage_ratio * 100)}%. ${summary.reconciliation_state === "partial" ? "These figures are partial estimates." : "Unique counts are daily estimates; multiple days add those estimates together."}`
           : "Visitor data is unavailable or counting setup is incomplete. Check Camera Setup and start monitoring to collect observations.";
     else

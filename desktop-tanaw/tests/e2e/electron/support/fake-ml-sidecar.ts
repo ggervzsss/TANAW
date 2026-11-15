@@ -149,7 +149,6 @@ function responseForPath(path: string, query: URLSearchParams): { body: unknown;
         state: "estimated",
         contributions: [],
         missing_camera_ids: [],
-        excluded_camera_ids: [],
         movement_available: false,
         identification_available: false,
       } satisfies EstablishmentLive,

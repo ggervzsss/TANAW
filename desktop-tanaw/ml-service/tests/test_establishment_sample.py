@@ -6,7 +6,6 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from app.camera.pipeline_manager import CameraPipelineRegistry
-from app.config.camera_coverage import CameraCoverage
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.main import create_app
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
@@ -130,7 +129,6 @@ def test_camera_activity_today_replaces_sample_visits(tmp_path: Path):
         track_key="person",
         analysis_mode="entrance_exit",
         kind="entry",
-        coverage=CameraCoverage(role="external_boundary", relationship="independent"),
         qualified=True,
         first_at=NOW,
         observed_at=NOW,
@@ -153,7 +151,6 @@ def test_days_with_camera_data_and_submitted_periods_are_left_alone(tmp_path: Pa
         track_key="person",
         analysis_mode="entrance_exit",
         kind="entry",
-        coverage=CameraCoverage(role="external_boundary", relationship="independent"),
         qualified=True,
         first_at=observed,
         observed_at=observed,

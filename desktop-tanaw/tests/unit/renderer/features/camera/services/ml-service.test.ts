@@ -19,14 +19,14 @@ describe("secure camera service requests", () => {
     const device: Camera = {
       ...camera(),
       cameraBrand,
-      connectionProfile: cameraBrand === "dahua" ? undefined : "manual",
       rtsp: cameraBrand === "dahua" ? "rtsp://192.168.1.9:554/cam/realmonitor?channel=1&subtype=0" : "rtsp://192.168.1.9:8554/live?channel=2&subtype=0",
     };
     await testCameraConnection("http://127.0.0.1:8765", device, "enterprise:1");
     await startCameraProcessing("http://127.0.0.1:8765", device, "enterprise:1");
     expect(request.mock.calls.map((call) => call[1])).toEqual(["test", "start"]);
     for (const call of request.mock.calls) {
-      expect(call[2]).toMatchObject({ camera_brand: cameraBrand, connection_profile: device.connectionProfile ?? null, stream_url: device.rtsp });
+      expect(call[2]).toMatchObject({ camera_brand: cameraBrand, stream_url: device.rtsp });
+      expect(call[2]).not.toHaveProperty("connection_profile");
       expect(call[2]).not.toHaveProperty("password");
       expect(call[2]).not.toHaveProperty("username");
     }
@@ -227,7 +227,6 @@ function camera(): Camera {
     processingProfile: "auto",
     reidMode: "auto",
     rtsp: "rtsp://192.168.1.9/stream2",
-    rtspStream: "stream2",
     status: "untested",
     trackingConfidence: 0.15,
     uniqueCountingMode: "estimated_reid",

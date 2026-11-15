@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.config.camera_coverage import CameraCoverage
 from app.config.open_space_config import OpenSpaceConfig
 from app.config.rtsp_source import normalize_rtsp_source as _normalize_rtsp_source
 
@@ -80,7 +79,6 @@ class CameraCountingConfigUpdate(BaseModel):
 
 class CameraStartRequest(BaseModel):
     auto_reconnect: bool = True
-    coverage: CameraCoverage = Field(default_factory=CameraCoverage)
     analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
     preview_only: bool = False
     open_space: OpenSpaceConfig | None = None
@@ -214,6 +212,10 @@ class CameraTestRequest(BaseModel):
 class CameraTestResponse(BaseModel):
     ok: bool
     message: str
+    # The working, credential-free address TANAW chose; save it with the camera.
+    stream_url: str | None = None
+    width: int | None = None
+    height: int | None = None
 
 
 class HealthResponse(BaseModel):

@@ -260,9 +260,7 @@ export function CameraVideoPreview({
         </div>
         <div className="camera-preview-state-footer">
           <span>{activeCam.name}</span>
-          <span>
-            {activeCam.cameraHost || "RTSP camera"} | {activeCam.rtspStream === "stream1" ? "Primary stream" : "Secondary stream"}
-          </span>
+          <span>{activeCam.cameraHost || "RTSP camera"}</span>
         </div>
       </div>
 

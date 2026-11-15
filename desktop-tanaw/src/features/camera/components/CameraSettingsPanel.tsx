@@ -3,12 +3,11 @@ import { CircleDot, Wifi, ScanLine, List, Wrench, Video, X, Pencil, Info } from 
 import { DesignSwitch } from "../../../components/DesignSwitch";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CAMERA_BRANDS, updateCameraConnection, validateCameraConnection } from "../utils/camera-connection";
-import { DEFAULT_COUNTING_CONFIDENCE, DEFAULT_TRACKING_CONFIDENCE, DEFAULT_ROI, getDefaultTripwires } from "../model/camera-management";
+import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, cameraModeDescription, cameraModeName } from "../utils/camera-mode";
+import { DEFAULT_ROI, FIXED_DETECTION_SETTINGS, getDefaultTripwires } from "../model/camera-management";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
 import { validateOpenSpace } from "../utils/open-space";
-import { CameraEditControls } from "./CameraEditControls";
 import { CameraConnectionFields } from "./CameraConnectionFields";
-import { CameraCoverageControls } from "./CameraCoverageControls";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { OpenSpaceZoneControls } from "./OpenSpaceZoneControls";
@@ -29,7 +28,7 @@ type Tab = (typeof tabs)[number]["id"];
 type Props = CameraPreviewPanelProps & { activeCam: Camera; editForm: Camera; initialPreviewState?: CameraPreviewState };
 
 export function CameraSettingsPanel(props: Props) {
-  const { activeCam, editForm, onEditFormChange, onCancelEdit, onSave, counts, area, health, detections, streamUrl, cameras, hasStoredPassword, storageKey = "tanaw-camera" } = props;
+  const { activeCam, editForm, onEditFormChange, onCancelEdit, onSave, counts, area, health, detections, streamUrl, hasStoredPassword, storageKey = "tanaw-camera" } = props;
   const [tab, setTab] = useState<Tab>("information");
   const [editorForm, setEditorForm] = useState<Camera | null>(null);
   const [previewState, setPreviewState] = useState<CameraPreviewState>(props.initialPreviewState ?? "connecting");
@@ -168,6 +167,8 @@ export function CameraSettingsPanel(props: Props) {
     try {
       const status = await getMlServiceStatus();
       const result = await testCameraConnection(status.baseUrl, editForm, storageKey, { draft: true });
+      // Keep the stream address that answered; it is saved with the other changes.
+      if (result.ok && result.stream_url && result.stream_url !== editForm.rtsp) onEditFormChange({ ...editForm, rtsp: result.stream_url });
       setFeedback({ error: !result.ok, message: result.ok ? "Camera connection verified with these settings. Changes have not been saved." : result.message });
     } catch (issue) {
       setFeedback({ error: true, message: messageOf(issue) });
@@ -343,23 +344,21 @@ export function CameraSettingsPanel(props: Props) {
                 />
                 <small>Example: Main Gate, Lobby, or Park</small>
               </Field>
-              <Field label="Area Type" required>
+              <Field label={CAMERA_MODE_LABEL} required>
                 <SelectDropdown
                   reportsDismissal
-                  ariaLabel="Area Type"
+                  ariaLabel={CAMERA_MODE_LABEL}
                   value={editForm.analysisMode ?? "entrance_exit"}
-                  options={[
-                    ["open_space", "Open Space"],
-                    ["entrance_exit", "Entry / Exit"],
-                  ]}
+                  options={CAMERA_MODE_OPTIONS}
                   onChange={(mode) => changeMode(mode as "open_space" | "entrance_exit")}
                 />
+                <small>{cameraModeDescription(editForm.analysisMode)}</small>
               </Field>
             </>
           )}
           {tab === "connection" && (
             <>
-              <SectionHeading title="Camera Connection" description="Manage this camera's video address and connection preferences." />
+              <SectionHeading title="Camera Connection" description="Enter the camera's IP address and its own username and password." />
               <p className="connection-status">
                 <b>Current Connection</b>
                 <span>
@@ -367,15 +366,7 @@ export function CameraSettingsPanel(props: Props) {
                   {videoStatus}
                 </span>
               </p>
-              <Field label="RTSP Stream Address" htmlFor="settings-rtsp">
-                <input
-                  id="settings-rtsp"
-                  spellCheck={false}
-                  value={editForm.rtsp}
-                  onChange={(event) => onEditFormChange({ ...editForm, ...updateCameraConnection(editForm, { rtsp: event.target.value }) })}
-                />
-                <small>Enter credentials separately below.</small>
-              </Field>
+              <CameraConnectionFields value={editForm} hostError={props.cameraIpError} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
               <Field label="Camera Username" htmlFor="settings-username">
                 <input
                   id="settings-username"
@@ -390,32 +381,10 @@ export function CameraSettingsPanel(props: Props) {
                   value={editForm.password ?? ""} placeholder="Enter new password (optional)" onChange={(password) => onEditFormChange({ ...editForm, password })} />
                 {hasStoredPassword && <small>Password configured. Leave blank to keep it unchanged.</small>}
               </Field>
-              <Field label="Video Stream">
-                <SelectDropdown
-                  reportsDismissal
-                  ariaLabel="Video Stream"
-                  value={editForm.rtspStream ?? "stream2"}
-                  options={[
-                    ["stream2", "Secondary (lower resource use)"],
-                    ["stream1", "Primary (higher quality)"],
-                  ]}
-                  onChange={(stream) => onEditFormChange({ ...editForm, ...updateCameraConnection(editForm, { rtspStream: stream as Camera["rtspStream"] }) })}
-                />
-              </Field>
-              <DesignSwitch
-                label="Automatically Reconnect"
-                description="Try again if this camera disconnects."
-                checked={editForm.autoReconnect !== false}
-                onChange={(autoReconnect) => onEditFormChange({ ...editForm, autoReconnect })}
-              />
               <button className="design-button full-width" type="button" disabled={busy || props.isTesting} onClick={() => void testConnection()}>
                 {testing ? "Testing connection…" : "Test Camera Connection"}
               </button>
-              <p className="design-note">Tests these connection settings without saving them or interrupting counting.</p>
-              <details>
-                <summary>Brand-specific connection settings</summary>
-                <CameraConnectionFields value={editForm} hostError={props.cameraIpError} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
-              </details>
+              <p className="design-note">TANAW finds the best video stream for counting. Testing does not save changes or interrupt counting.</p>
             </>
           )}
           {tab === "counting" && (
@@ -428,14 +397,14 @@ export function CameraSettingsPanel(props: Props) {
                 disabled={props.runtimeReady === false}
                 onChange={setCountingEnabled}
               />
-              <h3 className="settings-subheading">Counting Method</h3>
-              <div className="counting-methods" role="radiogroup" aria-label="Counting Method">
-                {(["open_space", "entrance_exit"] as const).map((mode) => (
+              <h3 className="settings-subheading">{CAMERA_MODE_LABEL}</h3>
+              <div className="counting-methods" role="radiogroup" aria-label={CAMERA_MODE_LABEL}>
+                {CAMERA_MODE_OPTIONS.map(([mode]) => (
                   <label key={mode} className={`counting-method ${(editForm.analysisMode ?? "entrance_exit") === mode ? "selected" : ""}`}>
                     <input type="radio" name="counting-method" value={mode} checked={(editForm.analysisMode ?? "entrance_exit") === mode} onChange={() => changeMode(mode)} />
                     <span>
-                      <strong>{mode === "open_space" ? "Open Space" : "Entry / Exit"}</strong>
-                      <p>{mode === "open_space" ? "Count people currently inside the selected area." : "Count people who cross the selected lines."}</p>
+                      <strong>{cameraModeName(mode)}</strong>
+                      <p>{cameraModeDescription(mode)}</p>
                     </span>
                   </label>
                 ))}
@@ -445,20 +414,6 @@ export function CameraSettingsPanel(props: Props) {
                 <Pencil size={20} /> Edit Counting Area
               </button>
               <p className="design-note">Test your area after changing it. Changes apply to this camera when you save.</p>
-              <details>
-                <summary>Counting role and camera relationships</summary>
-                <CameraCoverageControls
-                  cameraId={editForm.id}
-                  analysisMode={editForm.analysisMode}
-                  cameras={cameras ?? []}
-                  value={editForm.coverage}
-                  onChange={(coverage) => onEditFormChange({ ...editForm, coverage })}
-                />
-              </details>
-              <details>
-                <summary>Advanced camera configuration</summary>
-                <CameraEditControls cameras={cameras} cameraIpError={props.cameraIpError} editForm={editForm} hasExistingPassword={hasStoredPassword} onEditFormChange={onEditFormChange} />
-              </details>
             </>
           )}
           {tab === "display" && (
@@ -629,9 +584,7 @@ export function CameraSettingsPanel(props: Props) {
                 onClick={() => {
                   onEditFormChange({
                     ...editForm,
-                    confidence: DEFAULT_COUNTING_CONFIDENCE,
-                    trackingConfidence: DEFAULT_TRACKING_CONFIDENCE,
-                    processingProfile: "auto",
+                    ...FIXED_DETECTION_SETTINGS,
                     config: { tripwire: 50, reverse: false, roi: { ...DEFAULT_ROI }, tripwires: getDefaultTripwires(50) },
                     openSpace: null,
                   });

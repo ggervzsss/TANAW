@@ -4,7 +4,6 @@ import { Card } from "../../../components/Card";
 import type { Camera } from "../../../types/enterprise";
 import { CameraSettingsPanel } from "./CameraSettingsPanel";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
-import { CameraEditControls } from "./CameraEditControls";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import { CameraReadOnlyDetails } from "./CameraReadOnlyDetails";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
@@ -49,7 +48,6 @@ export type CameraPreviewPanelProps = {
 
 export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
   const {
-    cameras,
     activeCam,
     area,
     cameraIpError,
@@ -57,7 +55,6 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
     detections,
     editForm,
     error,
-    hasStoredPassword,
     health,
     isRestartingService,
     isEditMode,
@@ -203,11 +200,7 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
             onTestConnection={onTestConnection}
           />
           <CameraValidationWarnings warnings={warnings} />
-          {isEditMode && editForm ? (
-            <CameraEditControls cameras={cameras} cameraIpError={cameraIpError} editForm={editForm} hasExistingPassword={hasStoredPassword} onEditFormChange={onEditFormChange} />
-          ) : (
-            <CameraReadOnlyDetails activeCam={activeCam} />
-          )}
+          <CameraReadOnlyDetails activeCam={activeCam} />
         </aside>
       </div>
     </Card>

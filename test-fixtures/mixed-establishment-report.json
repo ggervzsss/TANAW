@@ -48,7 +48,7 @@
           "movement_state": "available",
           "occupancy_corrections": [],
           "peak_occupancy": 2,
-          "policy_version": 1,
+          "policy_version": 2,
           "qualified_observations": 9,
           "reconciliation_state": "estimated",
           "repeat_entry_count": 2,
@@ -82,7 +82,6 @@
             1,
             2
           ],
-          "unconfigured_camera_pairs": [],
           "unique_count": 2,
           "unresolved_observations": 0,
           "finalized": false
@@ -90,7 +89,7 @@
       ],
       "peak_occupancy": 2,
       "counting_basis": "sum_of_daily_establishment_unique_visitors",
-      "policy_version": 1,
+      "policy_version": 2,
       "days_available": 1,
       "days_requested": 31,
       "coverage_ratio": 1.1200716845878136e-06,
@@ -124,7 +123,7 @@
         }
       ],
       "occupancy_corrections": [],
-      "snapshot_version": "27bcd38e3b774a38358c7162c4510361826df931c22dac97fce6ff0346e062f7"
+      "snapshot_version": "8c4000bf667d2f496342f42acb65b6ad3468c3190e0d502d75d7ed15ece11566"
     },
     "metrics": {
       "entries": 3,
@@ -165,7 +164,7 @@
         "movement_state": "available",
         "occupancy_corrections": [],
         "peak_occupancy": 2,
-        "policy_version": 1,
+        "policy_version": 2,
         "qualified_observations": 9,
         "reconciliation_state": "estimated",
         "repeat_entry_count": 2,
@@ -199,7 +198,6 @@
           1,
           2
         ],
-        "unconfigured_camera_pairs": [],
         "unique_count": 2,
         "unresolved_observations": 0,
         "finalized": false
@@ -207,7 +205,7 @@
     ],
     "peak_occupancy": 2,
     "counting_basis": "sum_of_daily_establishment_unique_visitors",
-    "policy_version": 1,
+    "policy_version": 2,
     "days_available": 1,
     "days_requested": 31,
     "coverage_ratio": 1.1200716845878136e-06,
@@ -241,7 +239,7 @@
       }
     ],
     "occupancy_corrections": [],
-    "snapshot_version": "27bcd38e3b774a38358c7162c4510361826df931c22dac97fce6ff0346e062f7"
+    "snapshot_version": "8c4000bf667d2f496342f42acb65b6ad3468c3190e0d502d75d7ed15ece11566"
   },
   "camera_breakdown": []
 }

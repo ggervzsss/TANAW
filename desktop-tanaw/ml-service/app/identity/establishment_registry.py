@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 import numpy as np
 
-from app.config.camera_coverage import CameraCoverage, camera_relation_in_graph
 from app.identity.models import VisitorDecision, normalize_embedding
 from app.identity.unique_visitor_registry import UniqueVisitorRegistry
 from app.storage.local_database import LocalDatabase
@@ -68,7 +67,6 @@ class EstablishmentRegistry:
                 track_key=track_key,
                 analysis_mode="entrance_exit",
                 kind="entry",
-                coverage=CameraCoverage.model_validate_json(source["coverage_json"]),
                 qualified=True,
                 first_at=datetime.fromisoformat(source["first_at"]),
                 observed_at=observed_at,
@@ -98,7 +96,6 @@ class EstablishmentRegistry:
         track_key: str,
         analysis_mode: Literal["entrance_exit", "open_space"],
         kind: Literal["entry", "exit", "area_visit"],
-        coverage: CameraCoverage,
         qualified: bool,
         first_at: datetime,
         observed_at: datetime,
@@ -127,7 +124,7 @@ class EstablishmentRegistry:
         normalized = normalize_embedding(embedding) if embedding is not None else None
         with self._lock, self.database.transaction() as db:
             source = db.execute(
-                "select first_at,camera_id,track_key,kind,population_key,population_context_json,visitor_id,identity_confidence,qualified from establishment_observations "
+                "select first_at,camera_id,track_key,kind from establishment_observations "
                 "where observation_id=? order by business_date limit 1",
                 (observation_id,),
             ).fetchone()
@@ -139,11 +136,6 @@ class EstablishmentRegistry:
                 ):
                     raise ValueError("An observation ID cannot be reassigned to another source.")
                 first = source["first_at"]
-            population = (
-                json.loads(source["population_context_json"])
-                if source is not None
-                else self.repository.population_context(camera_id, coverage)
-            )
             previous = db.execute(
                 "select * from establishment_observations where track_key=? and business_date=? "
                 "order by last_at desc limit 1",
@@ -163,9 +155,7 @@ class EstablishmentRegistry:
                 signature = self._gallery_signature(registry, business_date)
                 if self._gallery_versions.get(registry) != signature:
                     registry.refresh_gallery(None, observed_at)
-                excluded = self._excluded_visitors(
-                    camera_id, track_key, coverage, at, business_date
-                )
+                excluded = self._excluded_visitors(track_key, at, business_date)
                 decision = registry.resolve_entry(
                     track_id=_track_id(track_key),
                     camera_id=None,
@@ -206,20 +196,9 @@ class EstablishmentRegistry:
                 "ended_at": timestamp(ended_at) if ended_at is not None else None,
                 "arrival_observed": int(arrival_observed),
                 "departure_observed": int(departure_observed),
-                "coverage_json": coverage.model_dump_json(),
-                "population_key": population["population_key"],
-                "population_context_json": json.dumps(population, sort_keys=True),
                 "payload_json": json.dumps(payload or {}, sort_keys=True),
             }
             changed = self.repository.save_observation(record)
-            reclassified = bool(
-                source is not None
-                and (
-                    source["visitor_id"] != decision.visitor_id
-                    or source["identity_confidence"] != decision.identity_confidence
-                    or bool(source["qualified"]) != qualified
-                )
-            )
             if decision.visitor_id is not None and decision.identity_confidence == "high":
                 bound = db.execute(
                     "update establishment_observations set visitor_id=?,identity_confidence='high',"
@@ -228,18 +207,9 @@ class EstablishmentRegistry:
                     (decision.visitor_id, track_key, business_date),
                 )
                 changed |= bound.rowcount > 0
-                reclassified |= bound.rowcount > 0
             if changed:
-                reclassified |= self.repository.reconcile_identities(business_date)
-                if reclassified:
-                    self.repository.reconcile_occupancy_day(business_date, observed_at)
+                self.repository.reconcile_identities(business_date)
                 self.repository.rebuild_day(business_date, observed_at)
-                if (
-                    analysis_mode == "entrance_exit"
-                    and coverage.role != "unconfigured"
-                    and (kind in {"entry", "exit"} or arrival_observed or departure_observed)
-                ):
-                    self.repository.checkpoint_boundary_change(camera_id, observed_at)
             return decision
 
     def _gallery_signature(
@@ -277,55 +247,31 @@ class EstablishmentRegistry:
             )
         return self._registries[key]
 
-    def _excluded_visitors(
-        self,
-        camera_id: int,
-        track_key: str,
-        coverage: CameraCoverage,
-        at: str,
-        business_date: str,
-    ) -> set[str]:
+    def _excluded_visitors(self, track_key: str, at: str, business_date: str) -> set[str]:
+        """Visitors physically present on any camera right now are other people.
+
+        Cameras watch different places, so a person still in view elsewhere at this
+        instant cannot be the one being observed here. Anyone seen earlier today, on
+        any camera, may be matched.
+        """
         excluded: set[str] = set()
         instant = datetime.fromisoformat(at)
         with self.database.connection() as db:
             rows = db.execute(
-                "select camera_id,track_key,visitor_id,last_at,ended_at,coverage_json "
+                "select camera_id,track_key,visitor_id,last_at,ended_at "
                 "from establishment_observations where business_date=? and visitor_id is not null "
                 "and track_key!=?",
                 (business_date, track_key),
             ).fetchall()
-        graph = self.repository.coverage_graph(camera_id, coverage)
         for row in rows:
-            elapsed = (instant - datetime.fromisoformat(row["last_at"])).total_seconds()
-            if elapsed < 0:
-                elapsed = 0
-            if row["camera_id"] == camera_id:
-                # A short-lived unseen track may be the same returning person;
-                # concurrent active tracks represent different physical people.
-                current = self._present_tracks.get(camera_id)
-                peer_present = (
-                    row["track_key"] in current[1]
-                    if current is not None and abs((instant - current[0]).total_seconds()) <= 1
-                    else row["ended_at"] is None and elapsed <= 1
-                )
-                if peer_present:
-                    excluded.add(row["visitor_id"])
-                continue
-            relation, minimum = camera_relation_in_graph(
-                row["camera_id"],
-                camera_id,
-                {
-                    **graph,
-                    row["camera_id"]: CameraCoverage.model_validate_json(row["coverage_json"]),
-                },
+            elapsed = max(0.0, (instant - datetime.fromisoformat(row["last_at"])).total_seconds())
+            current = self._present_tracks.get(row["camera_id"])
+            present = (
+                row["track_key"] in current[1]
+                if current is not None and abs((instant - current[0]).total_seconds()) <= 1
+                else row["ended_at"] is None and elapsed <= 1
             )
-            if relation == "unknown" or (
-                relation == "separate"
-                and (
-                    (row["ended_at"] is None and elapsed <= 1)
-                    or (minimum is not None and elapsed < minimum)
-                )
-            ):
+            if present:
                 excluded.add(row["visitor_id"])
         return excluded
 

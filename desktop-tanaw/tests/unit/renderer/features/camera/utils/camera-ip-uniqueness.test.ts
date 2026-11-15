@@ -45,7 +45,6 @@ function camera(id: number, host: string, stream: "stream1" | "stream2" = "strea
     processingProfile: "auto",
     reidMode: "auto",
     rtsp: `rtsp://${host}/${stream}`,
-    rtspStream: stream,
     status: "untested",
     trackingConfidence: 0.15,
     uniqueCountingMode: "estimated_reid",

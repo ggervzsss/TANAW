@@ -6,7 +6,7 @@ export function countingNotes(metrics: Metrics): string {
   const value = (number: number | null) => (number === null ? "not measured" : number.toLocaleString("en-US"));
   const coverage = data.coverage_ratio > 0 && data.coverage_ratio < 0.01 ? "<1" : String(Math.round(data.coverage_ratio * 100));
   return [
-    "Counting basis: one establishment total from Entrance / Exit and Open Space observations.",
+    "Counting basis: one establishment total from Entry / Exit and Open Space observations.",
     "Visitor total adds daily estimates, with recognized people counted once across cameras each day. A person visiting on different days can contribute again; this is not month-wide person identification.",
     `Observed arrivals: ${value(metrics.entries)}. Observed departures: ${value(metrics.exits)}. Peak simultaneous occupancy: ${value(metrics.peak)}.`,
     `Observation coverage: ${coverage}% of the selected period. Unresolved observations: ${data.unresolved_observations}. Counting state: ${data.reconciliation_state}.`,

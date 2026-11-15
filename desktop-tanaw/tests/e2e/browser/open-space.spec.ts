@@ -26,12 +26,10 @@ const camera: Camera = {
   name: "Plaza camera",
   zone: "Plaza",
   analysisMode: "open_space",
-  coverage: { role: "internal_observation", area_name: "Plaza", relationship: "independent", related_camera_id: null, travel_seconds: {} },
   openSpace: zone,
   status: "stopped",
   rtsp: "rtsp://192.168.1.9/stream2",
   cameraHost: "192.168.1.9",
-  rtspStream: "stream2",
   processingProfile: "auto",
   confidence: 0.35,
   config,
@@ -41,8 +39,7 @@ async function setup(page: Page, configured = true, mixed = false) {
   let signedIn = false;
   let profiles: Camera[] = [{ ...camera, analysisMode: "open_space", openSpace: configured ? zone : null }];
   if (mixed) {
-    profiles[0] = { ...profiles[0], coverage: { ...camera.coverage!, relationship: "contained", related_camera_id: 2 } };
-    profiles.push({ ...camera, id: 2, name: "Entrance camera", analysisMode: "entrance_exit", openSpace: null, coverage: { ...camera.coverage!, role: "external_boundary" } });
+    profiles.push({ ...camera, id: 2, name: "Entrance camera", analysisMode: "entrance_exit", openSpace: null });
   }
   let running = true;
   let presence: number | null = 3;
@@ -91,9 +88,16 @@ async function setup(page: Page, configured = true, mixed = false) {
         enterprise_id: user.enterpriseId,
         occupancy,
         partial_occupancy: occupancy ?? 0,
-        state: !configured ? "configuration_required" : occupancy === null ? "unavailable" : "estimated",
-        contributions: occupancy === null ? [] : [{ camera_ids: [mixed ? 2 : 1], occupancy, state: "estimated", basis: mixed ? "boundary_balance" : "observed_presence" }],
-        excluded_camera_ids: mixed ? [1] : [],
+        state: occupancy === null ? "unavailable" : "estimated",
+        contributions:
+          occupancy === null
+            ? []
+            : mixed
+              ? [
+                  { camera_ids: [2], occupancy: 9, state: "estimated", basis: "entry_exit_balance" },
+                  { camera_ids: [1], occupancy: 3, state: "estimated", basis: "observed_presence" },
+                ]
+              : [{ camera_ids: [1], occupancy, state: "estimated", basis: "observed_presence" }],
         missing_camera_ids: occupancy === null ? [1] : [],
         movement_available: mixed,
         identification_available: configured,
@@ -113,7 +117,7 @@ async function setup(page: Page, configured = true, mixed = false) {
         unresolved_observations: 0,
         qualified_observations: mixed ? 27 : 7,
         identification_state: "available",
-        reconciliation_state: configured ? "estimated" : "configuration_required",
+        reconciliation_state: configured ? "estimated" : "not_collected",
         movement_state: mixed ? "available" : "unavailable",
         peak_occupancy: mixed ? 12 : 5,
         covered_ms: 10000,
@@ -281,7 +285,7 @@ test("shows one establishment dashboard for an Open Space-only setup", async ({ 
   await metrics.screenshot({ path: testInfo.outputPath("open-space-live-metrics.png") });
 });
 
-test("does not add a contained zone to its parent count or require a mode toggle", async ({ page }, testInfo) => {
+test("adds Entry / Exit and Open Space cameras into one live occupancy without a mode toggle", async ({ page }, testInfo) => {
   const state = await setup(page, true, true);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
   await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
@@ -361,15 +365,13 @@ for (const viewport of [
     await expect.poll(async () => Number(await lowerPoint.getAttribute("cy"))).toBeCloseTo(90, 0);
     await page.screenshot({ path: testInfo.outputPath("zone-tools-outside-preview.png"), fullPage: true });
     await page.getByRole("button", { name: "Use this Area", exact: true }).click();
-    await page.getByText("Advanced camera configuration", { exact: true }).click();
-    await page.getByRole("textbox", { name: "Monitored Area Name" }).fill("Plaza seating");
     await page.getByRole("button", { name: "Save Changes", exact: true }).click();
     await expect.poll(() => state.profiles()[0].openSpace?.polygon.length).toBe(4);
     expect(state.profiles()[0].openSpace?.polygon[0].x).toBeCloseTo(0.2, 2);
     expect(state.profiles()[0].openSpace?.polygon[0].y).toBeCloseTo(0.3, 2);
     expect(state.profiles()[0].openSpace?.polygon[3].y).toBeCloseTo(0.9, 2);
     await expect.poll(() => state.starts.length).toBe(1);
-    expect(state.starts[0]).toMatchObject({ analysis_mode: "open_space", preview_only: false, open_space: { zone_name: "Plaza seating" } });
+    expect(state.starts[0]).toMatchObject({ analysis_mode: "open_space", preview_only: false, open_space: { zone_id: "main" } });
   });
 }
 

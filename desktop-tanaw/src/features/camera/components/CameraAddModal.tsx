@@ -6,6 +6,7 @@ import type { CameraFormValues } from "../types/camera";
 import { validateCameraForm } from "../utils/camera-form-validation";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { CameraConnectionFields } from "./CameraConnectionFields";
+import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, cameraModeDescription } from "../utils/camera-mode";
 
 type CameraAddModalProps = {
   newCam: CameraFormValues;
@@ -83,7 +84,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 ariaLabel="Camera brand / type"
                 options={CAMERA_BRANDS}
                 onChange={(brand) =>
-                  onChange({ ...newCam, ...updateCameraConnection(newCam, { cameraBrand: brand as CameraFormValues["cameraBrand"] }), cameraHost: newCam.cameraHost, rtspStream: newCam.rtspStream })
+                  onChange({ ...newCam, ...updateCameraConnection(newCam, { cameraBrand: brand as CameraFormValues["cameraBrand"] }), cameraHost: newCam.cameraHost })
                 }
               />
             </Field>
@@ -91,17 +92,15 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               <input id="camera-zone" maxLength={120} value={newCam.zone} placeholder="Enter the location of your camera" onChange={(event) => onChange({ ...newCam, zone: event.target.value })} />
               <small>Example: Main Gate, Lobby, or Park</small>
             </Field>
-            <Field label="Area Type" required>
+            <Field label={CAMERA_MODE_LABEL} required>
               <SelectDropdown
                 reportsDismissal
-                ariaLabel="Area Type"
+                ariaLabel={CAMERA_MODE_LABEL}
                 value={newCam.analysisMode ?? "entrance_exit"}
-                options={[
-                  ["open_space", "Open Space"],
-                  ["entrance_exit", "Entry / Exit"],
-                ]}
+                options={CAMERA_MODE_OPTIONS}
                 onChange={(mode) => onChange({ ...newCam, analysisMode: mode as CameraFormValues["analysisMode"] })}
               />
+              <small>{cameraModeDescription(newCam.analysisMode)}</small>
             </Field>
           </div>
           <div hidden={step !== "connection"} className="camera-add-connection">
@@ -109,7 +108,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               value={newCam}
               hostError={shownErrors.cameraHost ?? duplicateIpError}
               streamError={shownErrors.rtsp}
-              onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "", rtspStream: connection.rtspStream ?? "stream2" })}
+              onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "" })}
             />
             <Field id="camera-username" label="Camera Username" required error={shownErrors.username}>
               <input

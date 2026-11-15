@@ -137,8 +137,14 @@ def set_enterprise_context(
 
 @router.post("/camera/test", response_model=CameraTestResponse)
 def test_camera(payload: CameraTestRequest, request: Request) -> CameraTestResponse:
-    ok, message = _registry(request).test_connection(payload)
-    return CameraTestResponse(ok=ok, message=message)
+    result = _registry(request).test_connection(payload)
+    return CameraTestResponse(
+        ok=result.ok,
+        message=result.message,
+        stream_url=result.stream_url,
+        width=result.width,
+        height=result.height,
+    )
 
 
 @router.post("/camera/start", status_code=202)

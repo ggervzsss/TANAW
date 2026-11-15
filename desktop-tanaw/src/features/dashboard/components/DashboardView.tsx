@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { CAMERA_MODE_LABEL, cameraModeName } from "../../camera/utils/camera-mode";
 import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import { DotFormModal } from "../../reports/components/DotFormModal";
@@ -70,8 +71,8 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
   }, [refreshReports, enterpriseId]);
 
   const demographicsReport = reports.find(hasDemographics) ?? reports[0] ?? null;
-  const needsSetup = live?.state === "configuration_required" || summary?.reconciliation_state === "configuration_required";
-  const partial = live?.state === "partial" || summary?.reconciliation_state === "partial";
+  const offline = live?.state === "partial";
+  const partial = summary?.reconciliation_state === "partial";
   return (
     <div className={`overview-layout ${assistantOpen ? "assistant-is-open" : ""}`}>
       <div className="overview-main">
@@ -88,16 +89,12 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           />
         )}
         <DashboardHeader filter={filter} onFilterChange={setFilter} />
-        {needsSetup && (
+        {offline && (
           <p role="status" className="mx-4.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100">
-            Camera counts are being withheld because a camera has no counting role or coverage relationship yet. Choose them under Settings in{" "}
-            <a className="font-semibold underline underline-offset-2" href="#/enterprise/cameras">
-              Camera Setup
-            </a>
-            . Counts recorded before the role was set stay withheld for that day.
+            Some cameras are offline. Totals include the cameras that are running.
           </p>
         )}
-        <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} needsSetup={needsSetup} />
+        <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
         <EstablishmentTrendChart summary={summary} range={range} filter={filter} unavailable={Boolean(error)} />
         <div className="overview-secondary">
           <DemographicsBreakdownChart report={demographicsReport} />
@@ -113,18 +110,8 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
         <details className="overview-coverage">
           <summary>Counting coverage and estimate details</summary>
           <section aria-label="Counting coverage" className="space-y-2 border-l-2 border-emerald-700 pl-4 text-sm text-slate-600 dark:border-emerald-400 dark:text-slate-300">
-            {needsSetup ? (
-              <p>
-                Complete the camera counting roles and coverage relationships so TANAW can reconcile shared visitors.{" "}
-                <a className="font-semibold text-emerald-800 underline underline-offset-2 dark:text-emerald-300" href="#/enterprise/cameras">
-                  Open Camera Setup
-                </a>
-                .
-              </p>
-            ) : (
-              <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
-            )}
-            {partial && <p>Some observations or visitor matches are incomplete. These figures are partial estimates.</p>}
+            <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
+            {partial && <p>Some visitors could not be recognized or some days have no observations. These figures are partial estimates.</p>}
             {summary && (
               <p className="text-xs">
                 Observation coverage: {summary.coverage_ratio > 0 && summary.coverage_ratio < 0.01 ? "<1" : Math.round(summary.coverage_ratio * 100)}% of the selected period. Unresolved observations:{" "}
@@ -135,36 +122,25 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
         </details>
         {cameras.length > 0 && (
           <details className="rounded-xl border border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
-            <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera coverage and contributions</summary>
-            <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">These details explain the establishment tally. Camera figures are not separate report totals.</p>
+            <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera status</summary>
+            <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Live occupancy adds the Entry / Exit balance of all doors and the people inside every Open Space area.</p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-700">
                     <th className="py-2 pr-4 font-semibold">Camera</th>
-                    <th className="py-2 pr-4 font-semibold">Mode</th>
-                    <th className="py-2 pr-4 font-semibold">Counting role</th>
-                    <th className="py-2 font-semibold">Occupancy contribution</th>
+                    <th className="py-2 pr-4 font-semibold">{CAMERA_MODE_LABEL}</th>
+                    <th className="py-2 font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cameras.map((camera) => {
-                    const contribution = live?.contributions.find((item) => item.camera_ids.includes(camera.id));
-                    const excluded = live?.excluded_camera_ids.includes(camera.id);
+                    const counting = live?.contributions.some((item) => item.camera_ids.includes(camera.id));
                     return (
                       <tr key={camera.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                         <td className="py-3 pr-4">{camera.name}</td>
-                        <td className="py-3 pr-4">{camera.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"}</td>
-                        <td className="py-3 pr-4">
-                          {camera.coverage?.role === "external_boundary" ? "Establishment boundary" : camera.coverage?.role === "internal_observation" ? "Internal observation" : "Setup required"}
-                        </td>
-                        <td className="py-3">
-                          {contribution
-                            ? `${contribution.occupancy.toLocaleString()}${contribution.camera_ids.length > 1 ? " in a shared population" : ""}${contribution.state === "partial" ? " · partial" : ""}`
-                            : excluded
-                              ? "Not added separately"
-                              : "Unavailable"}
-                        </td>
+                        <td className="py-3 pr-4">{cameraModeName(camera.analysisMode)}</td>
+                        <td className="py-3">{counting ? "Counting" : "Offline"}</td>
                       </tr>
                     );
                   })}

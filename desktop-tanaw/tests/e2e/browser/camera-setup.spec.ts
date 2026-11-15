@@ -17,7 +17,6 @@ const camera = (id: number): Camera => ({
   cameraBrand: "tapo",
   cameraHost: `192.168.1.${id + 10}`,
   rtsp: `rtsp://192.168.1.${id + 10}/stream2`,
-  rtspStream: "stream2",
   analysisMode: "open_space",
   openSpace: { zone_id: "main", zone_name: "Park area", polygon },
   username: "operator",
@@ -200,7 +199,6 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   await expect(page.getByText("Camera connection verified with these settings.", { exact: false })).toBeVisible();
   expect(state.requests.find((value) => value.path === "/camera/test")!.body).toMatchObject({ camera_id: 1, username: "draft-user", password: "draft-secret" });
   expect(state.profiles()[0].name).toBe("Tapo Camera");
-  await page.getByRole("switch", { name: "Automatically Reconnect", exact: true }).click();
   await page.getByRole("tab", { name: "Display", exact: true }).click();
   await page.getByRole("switch", { name: "Show Detected People", exact: true }).click();
   await page.getByRole("switch", { name: "Show Visitor Labels", exact: true }).click();
@@ -208,7 +206,8 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   await expect(page.getByLabel("Camera Name", { exact: true })).toHaveValue("Updated Tapo");
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(settings(page)).toHaveCount(0);
-  expect(state.profiles()[0]).toMatchObject({ name: "Updated Tapo", autoReconnect: false });
+  expect(state.profiles()[0]).toMatchObject({ name: "Updated Tapo" });
+  expect(state.profiles()[0]).not.toHaveProperty("autoReconnect");
   expect(state.profiles()[1].name).toBe("Dahua Camera");
   expect(state.profiles()[0]).not.toHaveProperty("password");
   await openSettings(page);
@@ -267,9 +266,9 @@ test("dropdowns and unsaved dialogs dismiss predictably, and maintenance uses re
   await page.setViewportSize({ width: 1440, height: 1000 });
   await openSettings(page);
   await page.getByRole("combobox", { name: "Camera brand / type" }).click();
-  await page.getByRole("combobox", { name: "Area Type" }).click();
+  await page.getByRole("combobox", { name: "Camera Mode" }).click();
   await expect(page.getByRole("listbox")).toHaveCount(1);
-  await expect(page.getByRole("listbox", { name: "Area Type" })).toBeVisible();
+  await expect(page.getByRole("listbox", { name: "Camera Mode" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await expect(settings(page)).toBeVisible();
@@ -303,7 +302,7 @@ test("Add Camera keeps the reference form and verifies connection before persist
   await modal.getByRole("button", { name: "Add Camera", exact: true }).click();
   await expect(modal.getByRole("alert")).toContainText("Camera name");
   await modal.getByLabel("Camera Name", { exact: false }).fill("Gate Camera");
-  await modal.getByRole("combobox", { name: "Area Type" }).click();
+  await modal.getByRole("combobox", { name: "Camera Mode" }).click();
   await page.getByRole("option", { name: "Open Space", exact: true }).click();
   await page.screenshot({ path: info.outputPath("add-camera-information.png"), fullPage: true });
   await modal.getByRole("button", { name: "Add Camera", exact: true }).click();

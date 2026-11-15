@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Plus, Video } from "lucide-react";
+import { cameraModeName } from "../utils/camera-mode";
 import { Card } from "../../../components/Card";
 import type { Camera } from "../../../types/enterprise";
 
@@ -50,7 +51,7 @@ export function CameraList({ cameras, activeCamId, cameraLimit, onAdd, onSelect 
               </div>
               <div className="grid gap-1 text-[11px] font-medium text-gray-500 dark:text-slate-400">
                 <span className="truncate">Zone: {camera.zone}</span>
-                <span>{camera.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"}</span>
+                <span>{cameraModeName(camera.analysisMode)}</span>
                 <span className="capitalize">Status: {camera.status}</span>
               </div>
             </button>

@@ -124,9 +124,13 @@ export async function mockCameraSetup(page: Page, enterpriseId: string) {
       remove: async (id) => {
         delete records[id];
       },
-      request: async (id, operation) => {
+      request: async (id, operation, payload) => {
         if (!records[id]?.passwordConfigured) throw new Error("Camera fixture credentials have not been saved");
-        if (operation === "test") return { ok: true, message: "Fixture camera connection verified" };
+        if (operation === "test") {
+          // Like the ML service, a Tenda camera answers on one of several stream formats.
+          const tenda = payload.camera_brand === "tenda" ? `rtsp://${String(payload.camera_host)}:8554/profile1` : null;
+          return { ok: true, message: "Fixture camera connection verified", stream_url: tenda ?? payload.stream_url, width: 1280, height: 720 };
+        }
         throw new Error(`Unconfigured camera credential operation: ${operation}`);
       },
     };

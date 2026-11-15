@@ -190,9 +190,11 @@ Sign in with the activated enterprise's registered email and chosen password.
 Electron starts the local ML service at 127.0.0.1:8765; the development renderer
 uses port 5174. You do not need to start the ML service separately.
 
-For live counting, open **Camera Setup**, add a compatible RTSP camera, and
-test its connection. Use **Edit Configuration** to position entry/exit lines
-or draw an open-space area. The computer must be able to reach the camera.
+For live counting, open **Camera Setup** and add a camera with its brand, IP
+address, username, password, and camera mode. TANAW tests the connection and
+chooses the video stream itself. Use **Edit Configuration** to place the Entry /
+Exit lines (red outside, green inside) or draw an Open Space area. The computer
+must be able to reach the camera.
 
 ## 6. Try the report workflow without a camera
 

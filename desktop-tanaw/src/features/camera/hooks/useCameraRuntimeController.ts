@@ -253,13 +253,18 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
       const result = await testCameraConnection(mlBaseUrl, activeCam, storageKey);
       updateCameraStatus(activeCam.id, result.ok ? "online" : "offline");
       setCameraError(activeCam.id, result.ok ? null : result.message);
+      const chosen = result.ok ? result.stream_url : null;
+      // Keep the stream address that answered, so the next start uses it directly.
+      if (chosen && chosen !== activeCam.rtsp) {
+        setCameras((current) => updateCamerasWhenChanged(current, (camera) => (camera.id === activeCam.id ? { ...camera, rtsp: chosen } : camera)));
+      }
     } catch (error) {
       updateCameraStatus(activeCam.id, "error");
       setCameraError(activeCam.id, toErrorMessage(error));
     } finally {
       setCameraAction(activeCam.id);
     }
-  }, [activeCam, mlBaseUrl, setCameraAction, setCameraError, storageKey, updateCameraStatus]);
+  }, [activeCam, mlBaseUrl, setCameraAction, setCameraError, setCameras, storageKey, updateCameraStatus]);
 
   const handleStartProcessing = useCallback(async () => {
     if (!activeCam) return;

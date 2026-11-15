@@ -1,4 +1,4 @@
-export type ReconciliationState = "configuration_required" | "not_collected" | "partial" | "estimated";
+export type ReconciliationState = "not_collected" | "partial" | "estimated";
 export type MeasurementState = "available" | "partial" | "unavailable";
 
 export type DailyEstablishmentMetrics = {
@@ -24,7 +24,6 @@ export type DailyEstablishmentMetrics = {
   last_event_at: string | null;
   sources: number[];
   incompatible_identity_models: boolean;
-  unconfigured_camera_pairs: Array<[number, number]>;
 };
 
 export type EstablishmentSummary = Pick<
@@ -76,16 +75,16 @@ export type EstablishmentLive = {
   enterprise_id: string;
   occupancy: number | null;
   partial_occupancy: number;
-  state: "estimated" | "partial" | "unavailable" | "configuration_required";
+  /** estimated: every camera counting · partial: some cameras offline · unavailable: none counting. */
+  state: "estimated" | "partial" | "unavailable";
   contributions: Array<{
     camera_ids: number[];
     occupancy: number;
-    state: "estimated" | "partial";
-    basis: "boundary_balance" | "observed_presence" | "observed_presence_and_later_movements";
-    population_keys?: string[];
+    state: "estimated";
+    /** All Entry / Exit doors share one balance; each Open Space area adds its people. */
+    basis: "entry_exit_balance" | "observed_presence";
   }>;
   missing_camera_ids: number[];
-  excluded_camera_ids: number[];
   movement_available: boolean;
   identification_available: boolean;
 };

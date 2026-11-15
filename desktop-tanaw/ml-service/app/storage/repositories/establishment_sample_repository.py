@@ -7,8 +7,8 @@ that Dashboard and Reports read.
 
 Completed days are finalized immediately. Today holds only the visits up to the
 current time and is rewritten on each call, so it keeps pace with the clock. A
-day where a real camera records keeps only the camera's data: two unrelated
-doorway sources would otherwise make the day require counting setup.
+day where a real camera records keeps only the camera's data, so sample visits
+never inflate real counts.
 """
 
 import json
@@ -18,8 +18,6 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid5
 
-from app.analytics.establishment_populations import population_contexts
-from app.config.camera_coverage import CameraCoverage
 from app.storage.repositories.establishment_report_repository import period_bounds
 from app.storage.repositories.establishment_repository import (
     TIMEZONE,
@@ -35,7 +33,6 @@ SAMPLE_MODEL_NAME = "sample_data"
 SAMPLE_NAMESPACE = UUID("4d0f4b8e-6a51-4c1e-9b8e-3f2f63a0c5d1")
 OPEN_HOUR = 7
 CLOSE_HOUR = 20
-COVERAGE = CameraCoverage(role="external_boundary", relationship="independent")
 
 
 def prepare_sample_period(
@@ -54,7 +51,6 @@ def prepare_sample_period(
     period = begin.strftime("%B %Y")
     today = now.astimezone(TIMEZONE).date()
     plan = allocate_month(report_id, begin.date(), entries, exits, unique_count)
-    context = population_contexts({SAMPLE_CAMERA_ID: COVERAGE})[SAMPLE_CAMERA_ID]
     with repository.database.connection() as db:
         # A submitted report freezes its counts; adding history afterwards would contradict it.
         if db.execute("select 1 from report_submissions where period=?", (period,)).fetchone():
@@ -96,7 +92,7 @@ def prepare_sample_period(
                 continue
             if not visits:
                 continue
-            _record_day(repository, report_id, business_date, visits, context, until)
+            _record_day(repository, report_id, business_date, visits, until)
             metrics = repository.rebuild_day(business_date, now)
             for source in metrics["source_breakdown"]:
                 if source["camera_id"] == SAMPLE_CAMERA_ID:
@@ -238,11 +234,8 @@ def _record_day(
     report_id: str,
     business_date: str,
     visits: list[dict[str, Any]],
-    context: dict[str, Any],
     until: datetime | None = None,
 ) -> None:
-    coverage_json = COVERAGE.model_dump_json()
-    context_json = json.dumps(context, sort_keys=True)
     payload_json = json.dumps({"report_id": report_id, "sample_data": True}, sort_keys=True)
     events: list[tuple[datetime, int]] = []
     for index, visit in enumerate(visits):
@@ -272,9 +265,6 @@ def _record_day(
                     "ended_at": None,
                     "arrival_observed": 0,
                     "departure_observed": 0,
-                    "coverage_json": coverage_json,
-                    "population_key": context["population_key"],
-                    "population_context_json": context_json,
                     "payload_json": payload_json,
                 }
             )

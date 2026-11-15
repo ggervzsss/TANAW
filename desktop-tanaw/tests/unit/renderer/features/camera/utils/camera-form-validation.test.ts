@@ -30,7 +30,6 @@ function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {
     name: "Lobby Camera",
     password: "device pass",
     rtsp: "rtsp://192.168.1.9/stream2",
-    rtspStream: "stream2",
     username: "camera-user",
     zone: "Lobby",
     ...overrides,

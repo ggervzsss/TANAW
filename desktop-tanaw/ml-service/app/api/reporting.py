@@ -29,7 +29,6 @@ def record_occupancy_correction(
                 reason=payload.reason,
                 actor_id=payload.actor_id,
                 actor_name=payload.actor_name,
-                camera_id=payload.camera_id,
             )
         )
     except ValueError as exc:

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, ty
 import type { Camera } from "../../../types/enterprise";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
-import { defaultCameraCoverage } from "../utils/camera-coverage";
 import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
 import { isCameraPreviewReady } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
@@ -35,9 +34,8 @@ type CameraManagementOptions = {
 
 import {
   applyStoredCameraMetadata,
-  DEFAULT_COUNTING_CONFIDENCE,
   DEFAULT_ROI,
-  DEFAULT_TRACKING_CONFIDENCE,
+  FIXED_DETECTION_SETTINGS,
   getCameraStorageFingerprint,
   getDefaultTripwires,
   getTripwireSaveErrorMessage,
@@ -56,7 +54,6 @@ const emptyCameraForm: CameraFormValues = {
   name: "",
   password: "",
   rtsp: "",
-  rtspStream: "stream2",
   username: "",
   zone: "",
 };
@@ -331,22 +328,15 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     setIsValidating(true);
     const newCameraNode: Camera = canonicalizeCameraIp({
       analysisMode: newCam.analysisMode ?? "entrance_exit",
-      coverage: defaultCameraCoverage(newCam.analysisMode ?? "entrance_exit", cameras.length > 0),
       openSpace: null,
       cameraHost: newCam.cameraHost || undefined,
-      confidence: DEFAULT_COUNTING_CONFIDENCE,
-      processingProfile: "auto",
-      reidMode: "auto",
-      trackingConfidence: DEFAULT_TRACKING_CONFIDENCE,
-      uniqueCountingMode: "estimated_reid",
+      ...FIXED_DETECTION_SETTINGS,
       config: { reverse: false, roi: DEFAULT_ROI, tripwire: 50, tripwires: getDefaultTripwires(50) },
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
       cameraBrand: newCam.cameraBrand ?? "tapo",
-      connectionProfile: newCam.connectionProfile,
       rtsp: newCam.rtsp.trim(),
-      rtspStream: newCam.rtspStream,
       status: "untested",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),
@@ -365,9 +355,11 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       return;
     }
 
+    let chosenStream = newCameraNode.rtsp;
     try {
       const result = await testCameraConnection(mlBaseUrl, newCameraNode, storageKey);
       if (!result.ok) throw new Error(result.message);
+      chosenStream = result.stream_url || chosenStream;
     } catch (error) {
       try {
         await deleteCameraCredential(storageKey, newCameraNode.id);
@@ -379,7 +371,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       return;
     }
 
-    const verifiedCameraNode: Camera = { ...newCameraNode, status: "online" };
+    const verifiedCameraNode: Camera = { ...newCameraNode, rtsp: chosenStream, status: "online" };
     try {
       const savedCameras = [...cameras, verifiedCameraNode];
       await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
