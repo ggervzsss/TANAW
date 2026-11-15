@@ -28,26 +28,6 @@ backend sample data with the repository scripts (`scripts/mockdata-on`,
 `scripts/mockdata-status`, `scripts/mockdata-reset`, `scripts/mockdata-off`, or
 their `.ps1` equivalents).
 
-Dashboard Recent Reports lists up to five complete rows before scrolling. Smaller
-lists stay compact; every row retains its preview action and View All opens the
-Reports workspace. The Dashboard date menu supports arrows, Home/End,
-Enter, Escape, and Tab. Green keyboard-focus indicators, chart tooltips, and the
-assistant's rounded composer share the Dashboard theme. Assistant transitions
-respect reduced-motion preferences, preserve conversations across collapse,
-and scroll new messages inside the conversation panel.
-
-Dashboard charts retain Recharts' keyboard-accessible SVG surface. Their internal
-`tabindex="-1"` SVG portal groups have a scoped focus reset, preventing Electron's
-native orange rectangles on pointer clicks. Keyboard focus uses the rounded green
-chart-container indicator instead. Surface fades, chart transitions, and value
-updates respect reduced motion without changing card geometry or typography.
-
-After building, run `npx playwright test --config=playwright.electron.config.ts
-dashboard-interactions` to exercise actual Electron clicks on bars, points, lines,
-and empty plot areas in both themes, plus tooltips, keyboard focus, and assistant
-controls. It uses a temporary desktop profile and a test sidecar, leaving local
-records and camera services untouched.
-
 ## How It Works
 
 ### Camera monitoring
@@ -124,6 +104,11 @@ Central records and local device records have separate lifecycles.
 On Windows the installed app stores its database, camera credentials, and sign-in
 state under `%APPDATA%\TANAW Enterprise Desktop` and starts its camera service on
 `127.0.0.1:8766`. Development uses `%APPDATA%\desktop-tanaw` and port `8765`.
+
+Diagnostic logs are written to the `logs` folder inside that profile:
+`main.log` for the desktop app (the previous file is kept as `main.previous.log`)
+and `ml-service.log` for the camera service. Camera passwords and tokens are
+redacted from both.
 
 A Windows uninstall removes the installed app's profile and cached installer
 payload for the current Windows account. Unsynced reports are lost. Installing
