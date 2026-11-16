@@ -2,8 +2,19 @@ import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode }
 import { createPortal } from "react-dom";
 import { usePopupDismissal } from "../../../components/usePopupDismissal";
 
+type Props = {
+  label: string;
+  icon: ReactNode;
+  className: string;
+  /** Replaces the default icon + label trigger content. */
+  trigger?: ReactNode;
+  panelClassName?: string;
+  width?: number;
+  children: ReactNode | ((close: () => void) => ReactNode);
+};
+
 /** Fixed portal avoids clipping by report cards; contents stay mounted to retain edits. */
-export function ReportPopover({ label, icon, className, children }: { label: string; icon: ReactNode; className: string; children: ReactNode }) {
+export function ReportPopover({ label, icon, className, trigger: triggerContent, panelClassName = "report-search-popover", width: preferredWidth = 280, children }: Props) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 12, top: 12, width: 640, maxHeight: 300, upward: false });
   const trigger = useRef<HTMLButtonElement>(null);
@@ -25,7 +36,7 @@ export function ReportPopover({ label, icon, className, children }: { label: str
       }
       const padding = 12,
         gap = 8;
-      const width = Math.min(className === "report-allocation-tools" ? 640 : 280, window.innerWidth - padding * 2);
+      const width = Math.min(preferredWidth, window.innerWidth - padding * 2);
       const below = window.innerHeight - rect.bottom - gap - padding;
       const above = rect.top - gap - padding;
       const preferredHeight = Math.min(content.current?.scrollHeight ?? 400, 640);
@@ -51,12 +62,16 @@ export function ReportPopover({ label, icon, className, children }: { label: str
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [open, className, close]);
+  }, [open, preferredWidth, close]);
   return (
     <div className={className}>
       <button ref={trigger} type="button" aria-expanded={open} aria-controls={id} data-reports-popup-trigger onClick={() => setOpen((value) => !value)}>
-        {icon}
-        {label}
+        {triggerContent ?? (
+          <>
+            {icon}
+            {label}
+          </>
+        )}
       </button>
       {typeof document !== "undefined" &&
         createPortal(
@@ -66,11 +81,11 @@ export function ReportPopover({ label, icon, className, children }: { label: str
               id={id}
               role="region"
               aria-label={label}
-              className={className === "report-allocation-tools" ? "report-allocation-popover" : "report-search-popover"}
+              className={panelClassName}
               data-placement={position.upward ? "top" : "bottom"}
               style={{ position: "fixed", left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}
             >
-              {children}
+              {typeof children === "function" ? children(() => close(true)) : children}
             </div>
           </div>,
           document.body,

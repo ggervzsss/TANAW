@@ -349,30 +349,13 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(page.getByRole("heading", { name: "Report Workspace" })).toHaveCount(0);
   await expect.poll(() => page.getByText("REP-202607", { exact: true }).count()).toBeGreaterThan(0);
   await expect(page.locator(".report-create-card")).toHaveCSS("border-radius", "10px");
-  await page.locator(".report-allocation-tools > button").click();
-  const demographicCards = page.locator(".tanaw-demographic-card");
-  await expect(demographicCards).toHaveCount(3);
-  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(25, 33, 39)");
-  const darkDemographicSurfaces = await page.evaluate(() => {
-    const card = document.querySelector<HTMLElement>(".tanaw-demographic-card");
-    const input = document.querySelector<HTMLElement>(".tanaw-demographic-input");
-    const total = document.querySelector<HTMLElement>(".tanaw-demographic-total");
-    return {
-      card: card ? getComputedStyle(card).backgroundColor : null,
-      input: input ? getComputedStyle(input).backgroundColor : null,
-      total: total ? getComputedStyle(total).backgroundColor : null,
-    };
-  });
-  expect(darkDemographicSurfaces.input).not.toBe("rgb(255, 255, 255)");
-  expect(darkDemographicSurfaces.total).not.toBe("rgb(255, 255, 255)");
-  expect(darkDemographicSurfaces.input).not.toBe(darkDemographicSurfaces.card);
-  expect(darkDemographicSurfaces.total).not.toBe(darkDemographicSurfaces.card);
-
-  await page.getByRole("button", { name: "Assisted" }).click();
-  await expect(page.getByText("Assisted Allocation", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Manual" }).click();
-  await page.getByRole("button", { name: "Fill Remaining" }).click();
+  // The date picker lists the reporting month; dark surfaces stay distinct from the card.
+  await page.locator(".report-day-picker > button").click();
+  const calendar = page.getByRole("group", { name: /^Days of / });
+  await expect(calendar).toBeVisible();
+  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", "rgb(38, 49, 58)");
   await page.keyboard.press("Escape");
+  await expect(calendar).toBeHidden();
   await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
   const notes = page.getByPlaceholder("Add notes regarding events, closures, or demographic estimates...");
   await notes.fill("Updated report workspace notes");
@@ -403,9 +386,9 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
-  await page.locator(".report-allocation-tools > button").click();
-  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(240, 245, 241)");
-  await page.keyboard.press("Escape");
+  // A report submitted before daily entry shows its monthly origins, without a date picker.
+  await expect(page.getByRole("table", { name: "Monthly visitor origins" })).toBeVisible();
+  await expect(page.locator(".report-day-picker")).toHaveCount(0);
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await page.setViewportSize({ width: 1100, height: 760 });
   await expect(workspace).toBeVisible();

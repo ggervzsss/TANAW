@@ -61,8 +61,14 @@ sustained workloads need validation with representative footage.
 
 ### Reports and synchronization
 
-Operators sign in with an activated enterprise account, review visitor figures,
-and complete the required report fields before submitting.
+Operators sign in with an activated enterprise account and prepare one report
+per month. TANAW fills each day's unique visitors under **This City**. The
+cameras cannot tell where visitors live, so for each day the operator enters the
+visitors from another city, another province, or abroad; those are deducted
+from This City. A day with only local visitors is confirmed with **All from This
+City**. The date picker marks days that still need this with a red badge, and
+the report can be submitted once none remain. TANAW does not detect male and
+female yet, so This City has a total only.
 
 Reports and detailed records are saved locally. Pending submissions retry while
 the app is open, signed in, and connected to the central API. Temporary internet

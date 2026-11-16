@@ -7,6 +7,8 @@ export type DemographicTotals = {
   male: number;
   otherProvince: number;
   thisProvince: number;
+  /** This Province visitors whose sex was not recorded; excluded from male and female. */
+  unspecified: number;
 };
 
 export type DemographicAllocationStatus = {
@@ -27,6 +29,7 @@ export function demographicCount(value: string | undefined) {
 export function getDemographicTotals(demo: DemoBreakdown): DemographicTotals {
   const thisProvMale = demographicCount(demo.thisProvMale);
   const thisProvFemale = demographicCount(demo.thisProvFemale);
+  const unspecified = demographicCount(demo.thisProvUnspecified);
   const otherProvMale = demographicCount(demo.otherProvMale);
   const otherProvFemale = demographicCount(demo.otherProvFemale);
   const foreignMale = demographicCount(demo.foreignMale);
@@ -37,10 +40,11 @@ export function getDemographicTotals(demo: DemoBreakdown): DemographicTotals {
   return {
     female,
     foreign: foreignMale + foreignFemale,
-    grandTotal: male + female,
+    grandTotal: male + female + unspecified,
     male,
     otherProvince: otherProvMale + otherProvFemale,
-    thisProvince: thisProvMale + thisProvFemale,
+    thisProvince: thisProvMale + thisProvFemale + unspecified,
+    unspecified,
   };
 }
 
@@ -58,7 +62,11 @@ export function getDemographicAllocationStatus(demo: DemoBreakdown, uniqueCap: n
 
   if (hasInvalidValue) {
     validationMessage = "Demographics values must be non-negative whole numbers.";
-  } else if (demographicCount(demo.thisCityMale) > demographicCount(demo.thisProvMale) || demographicCount(demo.thisCityFemale) > demographicCount(demo.thisProvFemale)) {
+  } else if (
+    demographicCount(demo.thisCityMale) > demographicCount(demo.thisProvMale) ||
+    demographicCount(demo.thisCityFemale) > demographicCount(demo.thisProvFemale) ||
+    demographicCount(demo.thisCityUnspecified) > demographicCount(demo.thisProvUnspecified)
+  ) {
     validationMessage = "The optional city allocation cannot exceed its saved province total.";
   } else if (excess > 0) {
     validationMessage = "Demographic totals cannot exceed the unique visitor count.";

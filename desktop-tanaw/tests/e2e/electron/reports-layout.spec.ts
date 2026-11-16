@@ -74,7 +74,9 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
       const body = await readBody();
       submissions.push(body);
       const frozen = makeCounting(body.period);
-      const demo = Object.fromEntries(["thisProvMale", "thisProvFemale", "otherProvMale", "otherProvFemale", "foreignMale", "foreignFemale"].map((key) => [key, body.payload.demo[key] || "0"]));
+      const demo = Object.fromEntries(
+        ["thisProvMale", "thisProvFemale", "thisProvUnspecified", "otherProvMale", "otherProvFemale", "foreignMale", "foreignFemale"].map((key) => [key, body.payload.demo[key] || "0"]),
+      );
       const record = {
         ...fixture,
         report_id: body.report_id,
@@ -151,9 +153,12 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.getByText("Report Workspace", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("tab", { name: "Create Reports" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
-    await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("257");
-    await page.getByRole("textbox", { name: "This City Female", exact: true }).fill("360");
+    // TANAW fills This City for the day; it is not editable.
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("617");
+    await expect(page.getByRole("textbox", { name: "This City Male", exact: true })).toHaveCount(0);
     await expect(page.locator(".report-origin-table tfoot")).toContainText("617");
+    await page.getByRole("button", { name: "All from This City", exact: true }).click();
+    await expect(page.getByText("Visitor origins confirmed for this day.", { exact: true })).toBeVisible();
     await expect(page.locator(".report-information")).toHaveCSS("display", "grid");
     const visitor = (await page.locator(".report-visitor-card").boundingBox())!;
     const steps = (await page.locator(".report-next-steps").boundingBox())!;
@@ -225,9 +230,9 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await page.keyboard.press("Escape");
     await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
+    await expect(page.getByRole("button", { name: /Selected day: October 1, 2026/ })).toBeVisible();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("5");
-    await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("252");
-    await page.getByRole("textbox", { name: "This City Female", exact: true }).fill("360");
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("612");
     await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("617");
     await page.getByRole("button", { name: "Review Report Form", exact: true }).click();
     await expect(page.locator(".var1-official-table tbody tr")).toHaveCount(31);
@@ -237,9 +242,13 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
     await expect.poll(() => uploads.some((item) => item.reportId === submissions[0].report_id)).toBe(true);
-    expect(submissions[0].payload).toMatchObject({ var1: { thisCityMale: "252", thisCityFemale: "360" } });
-    await expect(page.getByRole("textbox", { name: "This City Male", exact: true })).toHaveValue("252");
-    await expect(page.getByRole("textbox", { name: "This City Male", exact: true })).toBeDisabled();
+    expect(submissions[0].payload).toMatchObject({
+      demo: { thisProvMale: "5", thisProvUnspecified: "612" },
+      var1: { thisCityUnspecified: "612" },
+      origins: { "2026-10-01": { otherCity: { male: 5, female: 0 } } },
+    });
+    await expect(page.getByRole("textbox", { name: "Other City Male", exact: true })).toHaveValue("5");
+    await expect(page.getByRole("textbox", { name: "Other City Male", exact: true })).toBeDisabled();
     const submittedInformation = page.locator(".report-workflow-status");
     await expect(submittedInformation).toContainText(String(submissions[0].report_id));
     const reviewAfterSubmission = (await page.getByRole("button", { name: "Review Report Form", exact: true }).boundingBox())!;

@@ -149,6 +149,7 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
     assert {
         "this_prov_male",
         "this_prov_female",
+        "this_prov_unspecified",
         "other_prov_male",
         "other_prov_female",
         "foreign_male",

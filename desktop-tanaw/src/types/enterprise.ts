@@ -13,13 +13,23 @@ export type DemoBreakdown = {
   /** Optional city subset of thisProv totals; absent on province-only reports. */
   thisCityMale?: string;
   thisCityFemale?: string;
+  /** City subset of thisProvUnspecified. */
+  thisCityUnspecified?: string;
   thisProvMale: string;
   thisProvFemale: string;
+  /** This Province visitors whose sex was not recorded (TANAW does not detect sex yet). */
+  thisProvUnspecified?: string;
   otherProvMale: string;
   otherProvFemale: string;
   foreignMale: string;
   foreignFemale: string;
 };
+
+/** Visitors from origins TANAW cannot detect, entered for one day. */
+export type OriginSexCounts = { male: number; female: number };
+export type DayOrigins = { otherCity: OriginSexCounts; otherProvince: OriginSexCounts; foreign: OriginSexCounts };
+/** Keyed by business date (YYYY-MM-DD). A day present here has been confirmed by the user. */
+export type DailyOrigins = Record<string, DayOrigins>;
 
 export type AuditEntry = {
   time: string;
@@ -43,6 +53,8 @@ export type ReportRecord = {
   submittedAt?: string;
   syncStatus?: string;
   demo?: DemoBreakdown;
+  /** Visitor origins entered for each day; absent on reports made before daily entry. */
+  origins?: DailyOrigins;
   notes?: string;
   auditTrail?: AuditEntry[];
   remarks?: string | null;

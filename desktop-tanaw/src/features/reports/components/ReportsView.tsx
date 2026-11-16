@@ -7,6 +7,7 @@ import { SubmitReportDialog } from "./SubmitReportDialog";
 import type { Camera, ReportRecord } from "../../../types/enterprise";
 import { useReportsWorkspace } from "../hooks/useReportsWorkspace";
 import { validateDemographicAllocation } from "../model/report-workspace";
+import { dailyOriginsError } from "../model/daily-origins";
 
 type ReportsViewProps = {
   cameras?: Camera[];
@@ -29,29 +30,33 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     activeReport,
     activeReportId,
     blockingMetricsError,
+    days,
     demo,
     displayedMetrics,
     executeSubmit,
     handleDownloadReport,
     handlePreviewReport,
     handleSelectLedgerRow,
+    hasDailyOrigins,
     isPeriodChanging,
     isReadOnly,
     isSubmitting,
     ledgerRows,
     notes,
+    origins,
     period,
     previewReport,
-    previousDemo,
     refreshRevisionCounts,
-    setDemo,
     setNotes,
+    setOrigins,
     setPreviewReport,
     setShowConfirm,
     showConfirm,
     validationError,
   } = workspace;
-  const reviewKey = JSON.stringify([period, activeReportId, demo, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
+  const reviewKey = JSON.stringify([period, activeReportId, origins, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
+  const previewIsDraft = previewReport?.reportId === (activeReportId ?? "TANAW-DRAFT") && !isReadOnly;
+  const previewValidation = previewReport ? ((previewIsDraft ? dailyOriginsError(days) : null) ?? validateDemographicAllocation(previewReport.metrics, previewReport.demo)) : null;
   const selectTab = (next: "create" | "history") => {
     if (next === "create" && previewedLedgerKey) {
       const row = ledgerRows.find((item) => item.key === previewedLedgerKey);
@@ -66,19 +71,15 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          origins={previewReport.origins}
           enterpriseName={enterpriseName}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
           reportId={previewReport.reportId}
-          validationMessage={validateDemographicAllocation(previewReport.metrics, previewReport.demo)}
+          validationMessage={previewValidation}
           onClose={() => {
-            if (
-              previewReport.reportId === (activeReportId ?? "TANAW-DRAFT") &&
-              !validateDemographicAllocation(previewReport.metrics, previewReport.demo) &&
-              JSON.stringify(previewReport.demo) === JSON.stringify(demo)
-            )
-              setReviewedKey(reviewKey);
+            if (previewReport.reportId === (activeReportId ?? "TANAW-DRAFT") && !previewValidation && JSON.stringify(previewReport.origins) === JSON.stringify(origins)) setReviewedKey(reviewKey);
             setPreviewReport(null);
           }}
         />
@@ -129,19 +130,21 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           reviewed={reviewedKey === reviewKey}
           activeReport={activeReport}
           activeReportId={activeReportId}
+          days={days}
           demo={demo}
+          hasDailyOrigins={hasDailyOrigins}
           isReadOnly={isReadOnly}
           isPeriodChanging={isPeriodChanging}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
-          previousDemo={previousDemo}
           validationError={validationError}
           onSubmitPrompt={() => setShowConfirm(true)}
           onReview={() =>
             setPreviewReport({
               demo,
+              origins: hasDailyOrigins ? origins : undefined,
               metrics: displayedMetrics,
               notes,
               period,
@@ -149,7 +152,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
             })
           }
           onRefreshCounts={refreshRevisionCounts}
-          setDemo={setDemo}
+          setOrigins={setOrigins}
           setNotes={setNotes}
         />
       </div>

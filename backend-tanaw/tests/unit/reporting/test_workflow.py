@@ -193,7 +193,29 @@ def test_report_demographics_preserve_submitted_breakdown() -> None:
         "otherProvMale": 81,
         "thisProvFemale": 161,
         "thisProvMale": 161,
+        "thisProvUnspecified": 0,
     }
+
+
+def test_report_demographics_count_visitors_without_a_recorded_sex() -> None:
+    demographics = report_demographics_from_payload(
+        {
+            "demo": {
+                "foreignFemale": "0",
+                "foreignMale": "1",
+                "otherProvFemale": "2",
+                "otherProvMale": "0",
+                "thisProvFemale": "1",
+                "thisProvMale": "1",
+                "thisProvUnspecified": "45",
+            }
+        },
+        50,
+    )
+
+    assert demographics is not None
+    assert demographics.thisProvUnspecified == 45
+    assert report_demographics_from_payload({"demo": {"thisProvUnspecified": "x"}}, 0) is None
 
 
 def test_report_demographics_reject_mismatched_totals() -> None:

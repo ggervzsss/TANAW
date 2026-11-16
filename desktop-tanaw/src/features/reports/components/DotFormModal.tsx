@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Download, FileText, Maximize, Printer, Ratio, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
-import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
+import type { DailyOrigins, DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { downloadDotReportPdf, type DotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
-import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells } from "../model/var1";
+import { VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1DataNotes, var1Days, var1MonthlyCells } from "../model/var1";
 import { useReportPreviewZoom, REPORT_PAPER_WIDTH } from "../hooks/useReportPreviewZoom";
 import { CountingDetails } from "./CountingDetails";
 
@@ -16,13 +16,14 @@ type Props = {
   metrics: Metrics;
   notes: string;
   onClose: () => void;
+  origins?: DailyOrigins;
   period: SystemLogPeriod;
   reportId?: string;
   validationMessage?: string | null;
 };
 const PAPER_WIDTH = REPORT_PAPER_WIDTH;
 
-export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, origins, notes, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
   const reduceMotion = useReducedMotion();
   const category = useAuthStore((state) => state.user?.category);
   const dialog = useRef<HTMLDivElement>(null);
@@ -35,7 +36,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
     if (reduceMotion) closeCallback.current();
     else setClosing(true);
   }, [reduceMotion]);
-  const report: DotReportPdf = { demo, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: category ?? undefined };
+  const report: DotReportPdf = { demo, origins, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: category ?? undefined };
 
   useEffect(() => {
     if (!closing) return;
@@ -106,7 +107,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
           </header>
           {validationMessage && (
             <p className="var1-validation" role="status">
-              {validationMessage} Complete the allocation before printing or downloading.
+              {validationMessage} Complete the visitor details before printing or downloading.
             </p>
           )}
           <div ref={attachCanvas} className="var1-viewer-canvas" tabIndex={0} aria-label="Scrollable VAR 1 report preview" data-report-zoom={zoom.toFixed(2)}>
@@ -158,7 +159,8 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
 }
 
 export function Var1ReportDocument({ report }: { report: DotReportPdf }) {
-  const days = var1Days(report.period, report.metrics);
+  const days = var1Days(report.period, report.metrics, report.origins);
+  const detailed = report.origins !== undefined;
   const monthly = var1MonthlyCells(report.demo, report.metrics);
   const display = (value: number | null) => (value === null ? "" : value.toLocaleString());
   return (
@@ -225,7 +227,7 @@ export function Var1ReportDocument({ report }: { report: DotReportPdf }) {
             <tr key={day.date} data-var1-date={day.date}>
               <th scope="row">{day.day}</th>
               <td>{day.weekday}</td>
-              {var1DailyCells(day).map((value, index) => (
+              {var1DailyCells(day, detailed).map((value, index) => (
                 <td key={index}>{display(value)}</td>
               ))}
             </tr>
@@ -246,8 +248,11 @@ export function Var1ReportDocument({ report }: { report: DotReportPdf }) {
       </table>
       {!days.length && <p className="var1-data-note">The saved reporting month could not be recognized. No daily dates have been invented.</p>}
       <p className="var1-official-note">{VAR1_NOTE}</p>
-      <p className="var1-data-note">Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank.</p>
-      {hasUnspecifiedCity(report.demo) && <p className="var1-data-note">This Province includes existing allocations with an unspecified city split.</p>}
+      {var1DataNotes(report.demo, report.origins).map((note) => (
+        <p key={note} className="var1-data-note">
+          {note}
+        </p>
+      ))}
     </>
   );
 }

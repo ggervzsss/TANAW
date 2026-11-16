@@ -211,6 +211,23 @@ def test_blank_zero_demographic_cells_use_the_same_visitor_baseline(tmp_path: Pa
     assert repo.submit(**body)["payload"]["demo"]["foreignMale"] == "0"
 
 
+def test_visitors_without_a_recorded_sex_count_toward_the_baseline(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service, internal=True)
+    repo = EstablishmentReportRepository(service.database)
+    over = request(repo, 1)
+    over["payload"]["demo"]["thisProvUnspecified"] = "1"
+    with pytest.raises(ValueError, match="must match"):
+        repo.submit(**over)
+
+    body = request(repo, 0)
+    body["payload"]["demo"]["thisProvUnspecified"] = "1"
+    body["payload"]["origins"] = {"2026-10-01": {"otherCity": {"male": 0, "female": 0}}}
+    saved = repo.submit(**body)["payload"]
+    assert saved["demo"]["thisProvUnspecified"] == "1"
+    assert saved["origins"] == body["payload"]["origins"]
+
+
 def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.observe(

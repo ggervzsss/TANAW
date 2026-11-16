@@ -6,6 +6,8 @@
   --reports-border: #dfdfdf;
   --reports-green: #1d533f;
   --reports-focus: #236b48;
+  --reports-missing: #c62828;
+  --reports-missing-bg: #fdecec;
   color: var(--reports-text);
   font-family: Arial, "Inter", sans-serif;
 }
@@ -241,23 +243,245 @@
   min-height: 36px;
 }
 .report-visitor-heading p {
-  font-size: 20px;
-  line-height: 24px;
+  font-size: 16px;
+  line-height: 20px;
   color: var(--reports-muted);
   margin: 0;
   padding-top: 5px;
 }
-.report-date-badge {
-  padding: 7px 14px;
+.report-day-picker > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px 7px 14px;
   border: 1px solid #5f9b76;
   border-radius: 12px;
-  color: #1d533f;
-  min-width: 190px;
+  color: var(--reports-green);
+  background: var(--enterprise-card-bg, white);
   font-size: 16px;
   font-weight: 700;
   line-height: 20px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.report-day-picker > button:hover,
+.report-day-picker > button[aria-expanded="true"] {
+  border-color: var(--reports-green);
+  box-shadow: 0 0 0 3px rgb(29 83 63 / 12%);
+}
+.report-day-picker > button:focus-visible {
+  outline: 2px solid var(--reports-focus);
+  outline-offset: 2px;
+}
+.report-day-picker-icon {
+  position: relative;
+  display: inline-flex;
+}
+.report-day-picker-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.report-day-picker-chevron {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+}
+.report-day-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--reports-missing);
+  box-shadow: 0 0 0 2px var(--enterprise-card-bg, white);
+}
+.report-day-popover {
+  padding: 16px;
+  overflow: auto;
+  background: var(--enterprise-card-bg, white);
+  border: 1px solid var(--reports-border);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgb(21 61 42 / 18%);
+  animation: reports-panel-enter 180ms ease;
+}
+.report-day-calendar header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.report-day-calendar header strong {
+  font-size: 17px;
+}
+.report-day-calendar header span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--reports-green);
+}
+.report-day-calendar header span[data-tone="missing"] {
+  color: var(--reports-missing);
+}
+.report-day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.report-day-weekday {
+  padding-bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--reports-muted);
+}
+.report-day-grid button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--reports-text);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.report-day-grid button:hover:not(:disabled) {
+  background: var(--design-tint, #edf6ed);
+}
+.report-day-grid button[data-status="missing"] {
+  background: var(--reports-missing-bg);
+  color: var(--reports-missing);
+}
+.report-day-grid button[data-status="no-visitors"],
+.report-day-grid button:disabled {
+  color: var(--reports-muted);
+  font-weight: 400;
+}
+.report-day-grid button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.report-day-grid button[aria-pressed="true"] {
+  background: var(--reports-green);
+  color: white;
+}
+.report-day-grid button .report-day-badge {
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+}
+.report-day-check {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 11px;
+  height: 11px;
+  color: var(--reports-green);
+}
+.report-day-grid button[aria-pressed="true"] .report-day-check {
+  color: currentcolor;
+}
+.report-day-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 14px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--reports-border);
+  list-style: none;
+  font-size: 12px;
+  color: var(--reports-muted);
+}
+.report-day-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.report-day-legend li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--reports-muted);
+}
+.report-day-legend li[data-status="missing"]::before {
+  background: var(--reports-missing);
+}
+.report-day-legend li[data-status="complete"]::before {
+  background: var(--reports-green);
+}
+.report-origin-lock {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin-left: 8px;
+  vertical-align: -1px;
+  color: var(--reports-muted);
+}
+.report-origin-locked {
+  display: block;
+  width: min(128px, 100%);
+  margin: auto;
+  padding: 4px 8px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #f6f7f6;
+  color: var(--reports-muted);
+  line-height: 27px;
+  cursor: help;
+}
+.report-day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-top: 14px;
+}
+.report-day-actions p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--reports-muted);
+}
+.report-day-actions p svg {
   flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+.report-day-actions p[data-tone="missing"] {
+  color: var(--reports-missing);
+}
+.report-day-actions p[data-tone="complete"] {
+  color: var(--reports-green);
+}
+.report-day-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.report-day-actions .reports-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+.report-day-actions .reports-text-button svg {
+  width: 15px;
+  height: 15px;
 }
 .report-origin-table-scroll {
   border: 1px solid #cecece;
@@ -525,46 +749,6 @@
   color: var(--reports-green);
   margin-bottom: 10px;
 }
-.report-unspecified {
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--reports-muted);
-  margin: 10px 0 0;
-}
-.report-allocation-tools {
-  position: absolute;
-  top: -10px;
-  right: 0;
-  z-index: 25;
-  font-size: 12px;
-}
-.report-allocation-tools > button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 7px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--reports-green);
-  list-style: none;
-}
-.report-allocation-tools > button:hover {
-  background: var(--design-tint);
-}
-.report-allocation-popover {
-  position: absolute;
-  top: 30px;
-  right: 0;
-  width: min(640px, calc(100vw - 120px));
-  max-height: 65vh;
-  overflow: auto;
-  padding: 18px;
-  border: 1px solid var(--reports-border);
-  background: var(--enterprise-card-bg, white);
-  border-radius: 14px;
-  box-shadow: 0 10px 28px rgb(21 61 42 / 18%);
-  animation: reports-panel-enter 180ms ease;
-}
 .tanaw-reports-workspace .report-ledger {
   position: relative;
   margin: 0 13px 0 21px;
@@ -671,9 +855,6 @@
   scrollbar-color: #83a28f transparent;
   outline: none;
 }
-.report-floating-layer .report-allocation-popover {
-  right: auto;
-}
 .report-search-popover {
   padding: 12px;
   overflow: auto;
@@ -702,10 +883,6 @@
 .report-floating-layer :is(button, input):focus-visible {
   outline: 2px solid #236b48;
   outline-offset: 2px;
-}
-.report-allocation-tools > button[aria-expanded="true"] {
-  background: #edf6ed;
-  box-shadow: inset 0 0 0 1px #d6e8d8;
 }
 .tanaw-reports-workspace .report-history-table-scroll {
   border: 1px solid var(--reports-border);
@@ -1336,9 +1513,6 @@
     flex-wrap: wrap;
     margin-top: 2px;
   }
-  .report-date-badge {
-    min-width: 0;
-  }
   .report-next-steps li {
     gap: 16px;
   }
@@ -1444,12 +1618,6 @@
   .report-workflow-actions {
     display: flex;
   }
-  .report-allocation-tools {
-    top: -14px;
-  }
-  .report-allocation-popover {
-    width: calc(100vw - 80px);
-  }
   .tanaw-reports-workspace .report-ledger {
     padding: 28px 16px;
   }
@@ -1479,7 +1647,29 @@
 }
 
 /* Returned reports retain their existing Light Mode badge colors. */
-.report-status[data-tone="returned"] { background: #ffc8a9; color: #ed6500; }
-.report-history-results { animation: report-results-enter 160ms ease-out; }
-@keyframes report-results-enter { from { opacity: .6; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .report-history-results { animation: none; } }
+.report-status[data-tone="returned"] {
+  background: #ffc8a9;
+  color: #ed6500;
+}
+.report-history-results {
+  animation: report-results-enter 160ms ease-out;
+}
+@keyframes report-results-enter {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-history-results {
+    animation: none;
+  }
+}
+.report-day-actions .reports-button {
+  min-height: 40px;
+  padding: 6px 16px;
+  font-size: 15px;
+  line-height: 20px;
+}

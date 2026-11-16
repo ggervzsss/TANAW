@@ -97,8 +97,8 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await expect(page.getByLabel("System unique visitor count", { exact: true })).not.toHaveText("\u2026");
   await auditDarkContrast(page, info, "create-reports", ".tanaw-reports-workspace");
   await page.screenshot({ path: info.outputPath("dark-create-reports.png"), fullPage: true });
-  await page.getByRole("button", { name: "Allocation tools", exact: true }).click();
-  await expect(page.locator(".report-allocation-popover")).toHaveCSS("background-color", "rgb(38, 49, 58)");
+  await page.locator(".report-day-picker > button").click();
+  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", "rgb(38, 49, 58)");
   await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await expect(page.getByRole("button", { name: "Apply Filter", exact: true })).toHaveCount(0);

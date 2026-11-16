@@ -151,8 +151,12 @@ class ReportSubmissionRequest(BaseModel):
         )
         if not isinstance(demo, dict) or any(field not in demo for field in fields):
             raise ValueError("All demographics fields are required.")
-        demo = {field: "0" if demo[field] == "" else demo[field] for field in fields}
-        if any(not str(demo[field]).strip().isdigit() for field in fields):
+        # This Province visitors whose sex was not recorded; optional.
+        all_fields = (*fields, "thisProvUnspecified")
+        demo = {
+            field: "0" if demo.get(field) in (None, "") else demo[field] for field in all_fields
+        }
+        if any(not str(demo[field]).strip().isdigit() for field in all_fields):
             raise ValueError("Demographics values must be non-negative whole numbers.")
         assert self.payload is not None
         self.payload["demo"] = demo

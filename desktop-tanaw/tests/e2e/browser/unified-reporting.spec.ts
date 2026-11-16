@@ -159,9 +159,12 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect(basis).toContainText("someone returning on another day can contribute again");
     await expect(basis).toContainText(mode === "open_space" ? "Not measured" : "4");
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
-    // The full demographic allocation uses one establishment baseline.
-    await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("1");
-    await page.getByRole("textbox", { name: "This City Female", exact: true }).fill("1");
+    // TANAW fills This City; visitors entered for other origins are deducted from it.
+    await expect(page.getByRole("button", { name: /Selected day: October 10, 2026/ })).toBeVisible();
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("2");
+    await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("1");
     await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
@@ -169,7 +172,12 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect.poll(() => state.getSaved()?.sync_status).toBe("pending_cloud_sync");
     await expect(page.getByRole("button", { name: "Yes, Submit", exact: true })).toHaveCount(0);
     expect(state.uploads.length).toBeGreaterThan(0);
-    expect(state.uploads[0].payload).toMatchObject({ counting: { snapshot_version: state.counting.snapshot_version }, metrics: { unique: 2 } });
+    expect(state.uploads[0].payload).toMatchObject({
+      counting: { snapshot_version: state.counting.snapshot_version },
+      metrics: { unique: 2 },
+      demo: { thisProvMale: "1", thisProvUnspecified: "1" },
+      origins: { "2026-10-10": { otherCity: { male: 1, female: 0 } } },
+    });
     expect(state.uploads[0].entries).toBe(mode === "open_space" ? null : 3);
     expect(state.uploads[0].exits).toBe(mode === "open_space" ? null : 4);
     await expect(page.getByText("Open Space reporting is not available")).toHaveCount(0);
@@ -208,7 +216,8 @@ test("returned reports keep the old snapshot until counts are explicitly refresh
   await page.getByRole("button", { name: "Refresh reconciled counts for this revision", exact: true }).click();
   await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("3");
   await expect(page.getByRole("button", { name: "Resubmit Report", exact: true })).toBeDisabled();
-  await page.getByRole("textbox", { name: "This City Male", exact: true }).fill("2");
+  await page.getByRole("button", { name: "All from This City", exact: true }).click();
+  await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("3");
   await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("3");
   await page.getByRole("button", { name: "Resubmit Report", exact: true }).click();
   await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();

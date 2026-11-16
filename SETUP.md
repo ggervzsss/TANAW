@@ -234,7 +234,8 @@ Dashboard stays empty before opening time; the 7-day and 30-day ranges show the
 earlier days. Today keeps updating every minute while the desktop is open.
 Dashboard shows the counts as the **Sample data** source, and
 **Reports & Submissions** lists each completed month as an overdue period.
-Complete the demographic fields for a month and submit; repeat for the others.
+Open a month, confirm each day's visitor origins in the date picker (red badges
+mark days still to do), and submit; repeat for the others.
 A day where a camera records keeps only the camera's counts.
 
 In the portal, sign in as the sample LGU Staff account. Review the submissions

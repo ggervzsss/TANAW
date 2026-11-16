@@ -1,6 +1,6 @@
-import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
+import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { countingNotes } from "./counting";
-import { hasUnspecifiedCity, VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_SEX_COLUMNS, var1DailyCells, var1Days, var1MonthlyCells, type Var1Day } from "../model/var1";
+import { VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_SEX_COLUMNS, var1DailyCells, var1DataNotes, var1Days, var1MonthlyCells, type Var1Day } from "../model/var1";
 
 export type DotReportPdf = {
   enterpriseName: string;
@@ -8,6 +8,8 @@ export type DotReportPdf = {
   period: string;
   metrics: Metrics;
   demo: DemoBreakdown;
+  /** Daily visitor origins; absent on reports made before daily entry. */
+  origins?: DailyOrigins;
   notes: string;
   attractionType?: string;
 };
@@ -37,7 +39,8 @@ export function downloadDotReportPdf(report: DotReportPdf) {
 
 /** Vector reconstruction of the supplied VAR 1 B1:R46 form, without its blank overflow pages. */
 export function createDotReportPdf(report: DotReportPdf) {
-  const days = var1Days(report.period, report.metrics);
+  const days = var1Days(report.period, report.metrics, report.origins);
+  const detailed = report.origins !== undefined;
   const first = whitePage();
   drawText(first, "Tourism Attraction Visitor Record", 28, 513, { bold: true, size: 10.725 });
   drawText(first, "(VAR 1)", 769, 513, { size: 10 });
@@ -55,17 +58,16 @@ export function createDotReportPdf(report: DotReportPdf) {
   drawText(first, "Type of Tourism Attraction:", 50, 414, { size: 9 });
   drawCell(first, 174, 426, 200, 17, [report.attractionType ?? ""], { align: "left", size: 9 });
   const bodyTop = drawHeader(first, 402);
-  drawDays(first, days.slice(0, 14), bodyTop);
+  drawDays(first, days.slice(0, 14), bodyTop, detailed);
   const pages = [first];
   const continuation = whitePage();
-  const totalTop = drawDays(continuation, days.slice(14), 524);
+  const totalTop = drawDays(continuation, days.slice(14), 524, detailed);
   drawCell(continuation, TABLE_X, totalTop, span(0, 2), 33.75, ["Total of this", "Month ****"], { bold: true, size: 9.75 }, GREEN);
   var1MonthlyCells(report.demo, report.metrics).forEach((value, index) =>
     drawCell(continuation, positions[index + 2], totalTop, widths[index + 2], 33.75, [cell(value)], { bold: true, size: 9.75 }, GREEN),
   );
   drawText(continuation, VAR1_NOTE, 28, totalTop - 47, { size: 7, maxWidth: 800 });
-  drawText(continuation, "Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank.", 28, totalTop - 59, { size: 7, maxWidth: 800 });
-  if (hasUnspecifiedCity(report.demo)) drawText(continuation, "This Province includes existing allocations with an unspecified city split.", 28, totalTop - 71, { size: 7 });
+  var1DataNotes(report.demo, report.origins).forEach((note, index) => drawText(continuation, note, 28, totalTop - 59 - index * 12, { size: 7, maxWidth: 800 }));
   pages.push(continuation);
 
   // Supporting information is kept outside the official VAR 1 grid.
@@ -114,9 +116,9 @@ function drawHeader(content: string[], top: number) {
   return last - heights[3];
 }
 
-function drawDays(content: string[], days: Var1Day[], top: number) {
+function drawDays(content: string[], days: Var1Day[], top: number, detailed: boolean) {
   days.forEach((day, row) => {
-    const values = [String(day.day), day.weekday, ...var1DailyCells(day).map(cell)];
+    const values = [String(day.day), day.weekday, ...var1DailyCells(day, detailed).map(cell)];
     values.forEach((value, column) => drawCell(content, positions[column], top - row * ROW_HEIGHT, widths[column], ROW_HEIGHT, [value], { size: 10.725 }));
   });
   return top - days.length * ROW_HEIGHT;

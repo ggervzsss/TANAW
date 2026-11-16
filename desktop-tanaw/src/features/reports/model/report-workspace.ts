@@ -1,8 +1,9 @@
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
 import type { EnterpriseIntakeReport } from "../services/report-history";
-import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
+import { getDemographicAllocationStatus } from "../utils/demographics";
+import { dailyOriginsError, originsFromPayload, type ReportDay } from "./daily-origins";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 import { sortReportLedgerRows } from "../utils/report-ledger";
 import type { ReportLedgerRow } from "./report-ledger";
@@ -30,6 +31,7 @@ export function countingFromPayload(value: unknown): EstablishmentSummary | unde
 export function validateReportDraft(
   metrics: Metrics,
   demo: DemoBreakdown,
+  days: ReportDay[],
   period: string,
   reports: ReportRecord[],
   activeReportId: string | null,
@@ -39,7 +41,7 @@ export function validateReportDraft(
     const periodSubmissionError = getReportingPeriodSubmissionError(period);
     if (periodSubmissionError) return periodSubmissionError;
   }
-  const allocationError = validateDemographicAllocation(metrics, demo);
+  const allocationError = dailyOriginsError(days) ?? validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
   if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
     return `A report for ${period} has already been submitted.`;
@@ -86,6 +88,7 @@ export function getDemographicDraftKey(activeReportId: string | null, period: st
 
 export function buildLedgerRows({
   currentDemo,
+  currentOrigins,
   currentMetrics,
   currentNotes,
   currentPeriod,
@@ -93,6 +96,7 @@ export function buildLedgerRows({
   reportsHistory,
 }: {
   currentDemo: DemoBreakdown;
+  currentOrigins: DailyOrigins;
   currentMetrics: Metrics;
   currentNotes: string;
   currentPeriod: SystemLogPeriod;
@@ -116,6 +120,7 @@ export function buildLedgerRows({
         counting: currentMetrics.counting,
         period: currentPeriod,
         demo: currentDemo,
+        origins: currentOrigins,
         notes: currentNotes,
       },
       reportLabel: "Current Reporting Period",
@@ -193,6 +198,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
     counting: countingFromPayload(payload.counting),
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo, payload.var1),
+    origins: originsFromPayload(payload.origins),
     notes: payloadNotes ?? submission.notes ?? "",
     auditTrail: auditTrailFromPayload(payload.auditTrail) ?? [
       {
@@ -246,6 +252,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
     counting: countingFromPayload(report.payload?.counting),
     period: report.period,
     demo: demoFromPayload(report.payload?.demo, report.payload?.var1),
+    origins: originsFromPayload(report.payload?.origins),
     notes: report.notes ?? "",
     remarks: report.remarks,
     submittedAt: report.submittedAt,
@@ -287,6 +294,7 @@ export function mergeReportHistory(localReports: ReportRecord[], cloudReports: R
       ...localReport,
       ...report,
       demo: localReport.demo ?? report.demo,
+      origins: localReport.origins ?? report.origins,
       notes: report.notes || localReport.notes,
     });
   }
@@ -313,11 +321,6 @@ function sortReports(reports: ReportRecord[]) {
   return [...reports].sort((first, second) => reportTimestamp(second) - reportTimestamp(first));
 }
 
-export function findPreviousDemo(reports: ReportRecord[], activeReportId: string | null): DemoBreakdown | null {
-  const previousReport = reports.find((report) => report.id !== activeReportId && getDemographicTotals(report.demo ?? emptyDemo()).grandTotal > 0);
-  return previousReport?.demo ?? null;
-}
-
 function reportTimestamp(report: ReportRecord) {
   const value = report.submittedAt ?? report.auditTrail?.[report.auditTrail.length - 1]?.time ?? report.date;
   const timestamp = Date.parse(value);
@@ -337,8 +340,10 @@ export function demoFromPayload(value: unknown, var1?: unknown): DemoBreakdown {
   return {
     ...(details.thisCityMale != null ? { thisCityMale: stringValue(details.thisCityMale) } : {}),
     ...(details.thisCityFemale != null ? { thisCityFemale: stringValue(details.thisCityFemale) } : {}),
+    ...(details.thisCityUnspecified != null ? { thisCityUnspecified: stringValue(details.thisCityUnspecified) } : {}),
     thisProvMale: stringValue(payload.thisProvMale),
     thisProvFemale: stringValue(payload.thisProvFemale),
+    ...(payload.thisProvUnspecified != null ? { thisProvUnspecified: stringValue(payload.thisProvUnspecified) } : {}),
     otherProvMale: stringValue(payload.otherProvMale),
     otherProvFemale: stringValue(payload.otherProvFemale),
     foreignMale: stringValue(payload.foreignMale),

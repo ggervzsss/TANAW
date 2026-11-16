@@ -86,6 +86,7 @@ function demoFromPayload(value: unknown): DemoBreakdown {
   return {
     thisProvMale: stringValue(payload.thisProvMale),
     thisProvFemale: stringValue(payload.thisProvFemale),
+    thisProvUnspecified: stringValue(payload.thisProvUnspecified),
     otherProvMale: stringValue(payload.otherProvMale),
     otherProvFemale: stringValue(payload.otherProvFemale),
     foreignMale: stringValue(payload.foreignMale),

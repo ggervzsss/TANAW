@@ -15,6 +15,8 @@ export function DemographicsBreakdownChart({ report }: { report: ReportRecord | 
   const gender = [
     { label: "Female", value: totals.female, color: colors[0] },
     { label: "Male", value: totals.male, color: colors[1] },
+    // TANAW does not detect sex yet, so This City visitors have no male/female split.
+    ...(totals.unspecified > 0 ? [{ label: "Not recorded", value: totals.unspecified, color: "var(--dashboard-demographic-unspecified, #cbd5e1)" }] : []),
   ];
   const residence = [
     { label: "This Province", value: totals.thisProvince, icon: MapPin },

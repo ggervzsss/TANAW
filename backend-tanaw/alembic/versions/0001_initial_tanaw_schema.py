@@ -930,6 +930,7 @@ def upgrade() -> None:
         sa.Column("counting_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("this_prov_male", sa.Integer(), nullable=True),
         sa.Column("this_prov_female", sa.Integer(), nullable=True),
+        sa.Column("this_prov_unspecified", sa.Integer(), nullable=True),
         sa.Column("other_prov_male", sa.Integer(), nullable=True),
         sa.Column("other_prov_female", sa.Integer(), nullable=True),
         sa.Column("foreign_male", sa.Integer(), nullable=True),

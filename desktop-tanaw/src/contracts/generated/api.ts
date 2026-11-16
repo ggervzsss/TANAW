@@ -2157,6 +2157,12 @@ export interface components {
             thisProvFemale: number;
             /** Thisprovmale */
             thisProvMale: number;
+            /**
+             * Thisprovunspecified
+             * @description This Province visitors whose sex was not recorded.
+             * @default 0
+             */
+            thisProvUnspecified: number;
         };
         /** ReportStatusUpdate */
         ReportStatusUpdate: {

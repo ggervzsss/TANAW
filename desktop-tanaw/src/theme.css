@@ -422,7 +422,7 @@ html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table in
 html.dark
   .enterprise-shell
   .tanaw-reports-workspace
-  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .report-date-badge, .reports-text-button) {
+  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .reports-text-button) {
   color: var(--theme-accent) !important;
 }
 html.dark .enterprise-shell .tanaw-reports-workspace .reports-button {
@@ -504,7 +504,7 @@ html.dark .enterprise-shell .tanaw-status-badge--info {
 }
 
 /* Portals inherit the document's semantic roles; no separate popup palette. */
-html.dark :is(.tanaw-dropdown-menu, .report-floating-layer .report-allocation-popover, .report-floating-layer .report-search-popover) {
+html.dark :is(.tanaw-dropdown-menu, .report-floating-layer .report-day-popover, .report-floating-layer .report-search-popover) {
   background: var(--theme-raised) !important;
   border-color: var(--theme-border) !important;
   color: var(--theme-text);
@@ -532,15 +532,27 @@ html.dark .report-floating-layer button {
   color: var(--theme-text);
   border-color: var(--theme-border-soft);
 }
-html.dark .report-floating-layer .tanaw-demographic-input {
-  background: var(--theme-surface);
+html.dark .report-floating-layer .report-day-grid button {
+  background: transparent;
+  border-color: transparent;
 }
-html.dark .report-floating-layer .tanaw-demographic-total {
-  background: var(--theme-raised);
+html.dark .report-floating-layer .report-day-grid button[aria-pressed="true"] {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
 }
-html.dark .enterprise-shell .report-allocation-tools > button[aria-expanded="true"] {
-  background: var(--theme-accent-tint);
+html.dark .tanaw-reports-workspace {
+  --reports-missing: var(--theme-danger-text);
+  --reports-missing-bg: var(--theme-danger-bg);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-day-picker > button {
+  background: var(--theme-inset);
+  border-color: var(--theme-border-soft);
+  color: var(--theme-accent);
   box-shadow: none;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-origin-locked {
+  background: var(--theme-raised);
+  border-color: transparent;
 }
 html.dark :is(.camera-dialog, .design-modal, .tanaw-var1-modal) {
   background: var(--theme-raised);

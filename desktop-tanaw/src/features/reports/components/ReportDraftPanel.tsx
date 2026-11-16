@@ -1,11 +1,12 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { CalendarDays, Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { getDemographicAllocationStatus } from "../utils/demographics";
-import { DemographicsBreakdown } from "./DemographicsBreakdown";
+import { VisitorDetails } from "./VisitorDetails";
+import { missingDays, type ReportDay } from "../model/daily-origins";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
 import { ReportDraftAlerts } from "./ReportDraftAlerts";
@@ -17,19 +18,20 @@ type Props = {
   reviewed?: boolean;
   activeReport: ReportRecord | null;
   activeReportId: string | null;
+  days: ReportDay[];
   demo: DemoBreakdown;
+  hasDailyOrigins: boolean;
   isReadOnly: boolean;
   isPeriodChanging: boolean;
   metricsError: string | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
-  previousDemo?: DemoBreakdown | null;
   validationError: string | null;
   onSubmitPrompt: () => void;
   onReview: () => void;
   onRefreshCounts?: () => void;
-  setDemo: Dispatch<SetStateAction<DemoBreakdown>>;
+  setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
   setNotes: Dispatch<SetStateAction<string>>;
 };
 
@@ -38,23 +40,24 @@ export function ReportDraftPanel({
   reviewed = false,
   activeReport,
   activeReportId,
+  days,
   demo,
+  hasDailyOrigins,
   isReadOnly,
   isPeriodChanging,
   metricsError,
   metrics,
   notes,
   period,
-  previousDemo = null,
   validationError,
   onSubmitPrompt,
   onReview,
   onRefreshCounts,
-  setDemo,
+  setOrigins,
   setNotes,
 }: Props) {
   const category = useAuthStore((state) => state.user?.category);
-  const complete = getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
+  const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
   const steps = [
     { label: "Complete Visitor Details", done: complete },
@@ -114,7 +117,7 @@ export function ReportDraftPanel({
       </div>
       <div className="report-create-body">
         <section className="report-visitor-card" aria-label="Visitor Details">
-          <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly || isPeriodChanging} previousDemo={previousDemo} setDemo={setDemo} uniqueCap={metrics.unique} period={period} />
+          <VisitorDetails days={days} hasDailyOrigins={hasDailyOrigins} demo={demo} metrics={metrics} isReadOnly={isReadOnly || isPeriodChanging} period={period} setOrigins={setOrigins} />
         </section>
         <aside className="report-next-steps" aria-label="Next Steps">
           <h3>
