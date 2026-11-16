@@ -46,6 +46,23 @@ describe("official VAR 1 data mapping", () => {
     expect(var1DailyCells(second, false)).toEqual([...Array(14).fill(null), 10]);
   });
 
+  it("fills This City male and female from TANAW's estimate in daily and monthly rows", () => {
+    const data = {
+      ...metrics,
+      unique: 10,
+      counting: { days: [{ ...day("2026-05-02", 10), male_count: 4, female_count: 6 }] },
+    } as unknown as Metrics;
+    const origins: DailyOrigins = {
+      "2026-05-02": { otherCity: { male: 1, female: 1 }, otherProvince: { male: 0, female: 0 }, foreign: { male: 0, female: 1 } },
+    };
+    const days = var1Days("May 2026", data, origins);
+    expect(var1DailyCells(days[1], true)).toEqual([3, 4, 7, 1, 1, 2, 0, 0, 0, 0, 1, 1, 4, 6, 10]);
+    const demo = monthlyDemoFromDays(days);
+    expect(var1MonthlyCells(demo, data)).toEqual([3, 4, 7, 1, 1, 2, 0, 0, 0, 0, 1, 1, 4, 6, 10]);
+    expect(getDemographicTotals(demo)).toMatchObject({ male: 4, female: 6, unspecified: 0, grandTotal: 10 });
+    expect(var1DataNotes(demo, origins)[0]).toContain("male and female are TANAW estimates");
+  });
+
   it("derives monthly totals that match the unique count, with This City sex unspecified", () => {
     const data = { ...metrics, unique: 30, counting: { days: [day("2026-05-01", 10), day("2026-05-02", 20)] } } as unknown as Metrics;
     const origins: DailyOrigins = {

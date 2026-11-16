@@ -36,7 +36,7 @@ def counting_metrics(
         raise ValueError("An establishment counting snapshot is required.")
     if (
         snapshot.get("counting_basis") != COUNTING_BASIS
-        or snapshot.get("policy_version") != 2
+        or snapshot.get("policy_version") != 3
         or snapshot.get("timezone") != "Asia/Manila"
         or not isinstance(snapshot.get("enterprise_id"), str)
         or not snapshot["enterprise_id"]
@@ -76,6 +76,11 @@ def counting_metrics(
         value = snapshot.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError("Snapshot counts must be non-negative whole numbers.")
+    _validate_sex_counts(snapshot)
+    for day in snapshot.get("days") or []:
+        if not isinstance(day, dict):
+            raise ValueError("Snapshot days must be objects.")
+        _validate_sex_counts(day)
     peak = snapshot.get("peak_occupancy")
     if peak is not None and (isinstance(peak, bool) or not isinstance(peak, int) or peak < 0):
         raise ValueError("Peak occupancy must be measured or explicitly unavailable.")
@@ -96,3 +101,18 @@ def complete_sum(values: Iterable[int | None]) -> int | None:
         if any(item is None for item in items)
         else sum(item for item in items if item is not None)
     )
+
+
+def _validate_sex_counts(values: dict[str, Any]) -> None:
+    """Male and female split the unique visitors; both are absent when estimation was unavailable."""
+    male, female = values.get("male_count"), values.get("female_count")
+    if male is None and female is None:
+        return
+    if not isinstance(male, int) or not isinstance(female, int) or not _whole(male, female):
+        raise ValueError("Male and female counts must be non-negative whole numbers.")
+    if male + female != values.get("unique_count"):
+        raise ValueError("Male and female counts must add up to the unique visitors.")
+
+
+def _whole(*values: int) -> bool:
+    return all(not isinstance(value, bool) and value >= 0 for value in values)

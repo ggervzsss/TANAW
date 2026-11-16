@@ -67,8 +67,10 @@ cameras cannot tell where visitors live, so for each day the operator enters the
 visitors from another city, another province, or abroad; those are deducted
 from This City. A day with only local visitors is confirmed with **All from This
 City**. The date picker marks days that still need this with a red badge, and
-the report can be submitted once none remain. TANAW does not detect male and
-female yet, so This City has a total only.
+the report can be submitted once none remain. TANAW also estimates how many of
+the day's unique visitors are male and female and splits This City accordingly;
+visitors entered for other origins are deducted from it sex by sex. Days without
+an estimate show This City as a total only.
 
 Reports and detailed records are saved locally. Pending submissions retry while
 the app is open, signed in, and connected to the central API. Temporary internet
@@ -80,11 +82,64 @@ visitor totals. These totals appear on the desktop and in LGU monitoring,
 visitor history, and submitted reports. Open Space cameras measure presence;
 Entry / Exit cameras measure arrivals and departures.
 
+### Male and female estimates
+
+TANAW estimates whether each **unique visitor** is male or female from their
+whole appearance (build, hair, clothing), so faces are not needed. Every unique
+visitor counts once, as male or female, and the two always add up to the unique
+visitors. Entries, exits, occupancy and Open Space presence are not split, and no
+screen shows a live male/female count; the split appears in Reports and the DOT
+form.
+
+- A small classifier (a "sex head") reads the appearance embedding TANAW
+  already computes for re-identification. Every good view of a visitor, on any
+  camera, adds evidence.
+- The day's female count is the sum of the visitors' probabilities, adjusted to
+  the day's own male/female mix. Visitors never seen clearly enough receive the
+  day's share, so there is no "unknown" group.
+- Estimates need people's bodies in view: mount cameras angled toward people,
+  not pointing straight down.
+- The heads live in `ml-service/models/sex_head_fast.npz` and
+  `sex_head_quality.npz`, each with a JSON model card of its measured accuracy.
+  Without them, reports fall back to a This City total. `npm run models:verify --
+--reid quality --require-sex-heads` checks that they match the installed ReID
+  models.
+
+The heads are trained on PA-100K, a public dataset of 100,000 labelled
+surveillance images released under CC BY 4.0 (see Credits). It is downloaded
+outside the repository and never bundled. RAP v2 and PETA readers also exist,
+but those datasets are licensed for research only. To retrain, from
+`ml-service`, with PA-100K unpacked under `~/Datasets/PA-100K`:
+
+```bash
+uv run --with scipy python -m scripts.build_sex_dataset_cache --dataset pa100k --root ~/Datasets/PA-100K/images/release_data/release_data --annotation ~/Datasets/PA-100K/annotation/annotation.mat --reid quality --output-dir ~/Datasets/PA-100K/cache --workers 4 --train-limit 30000
+```
+
+```bash
+uv run python -m scripts.train_sex_head --reid quality --train ~/Datasets/PA-100K/cache/pa100k_quality_train.npz --calibration ~/Datasets/PA-100K/cache/pa100k_quality_val.npz --test ~/Datasets/PA-100K/cache/pa100k_quality_test.npz
+```
+
+Repeat both with `--reid fast` (without `--train-limit`) for the fast head.
+The trained heads and their model cards are kept in git, so a fresh clone has
+them; the rest of `models/` comes from `models:setup` and `models:setup:reid`.
+A head works only with the exact ReID model file it was trained on.
+`models:verify` flags a mismatch, which retraining fixes. On
+PA-100K's test split the quality head reaches 86% balanced accuracy and the
+fast head 82%, so prefer the quality model where male and female figures
+matter.
+
+`scripts.evaluate_sex_estimator` re-measures a head on any cache, or compares a
+replayed recording (`scripts.replay_tracking --summary-output`) with the known
+number of men and women in it, so estimates can be tested without mounted
+cameras.
+
 ### Privacy and local storage
 
 Raw camera video is processed on the device and is not uploaded to the central
 database. Account tokens and camera passwords use operating-system-protected
-storage and are excluded from the local SQLite database.
+storage and are excluded from the local SQLite database. Male/female estimation
+keeps two numbers of evidence per sighting and daily totals, never images or a
+per-person label.
 
 Clearing local app data can remove saved cameras and unsynchronized records.
 Central records and local device records have separate lifecycles.
@@ -156,4 +211,5 @@ storage; Python, Node.js, and model downloads are not required on the target PC.
 
 - `public/images/san-pedro-seal.png` is the City of San Pedro seal published by the City Government of San Pedro and listed by Wikimedia Commons as a Philippine government public-domain work: <https://commons.wikimedia.org/wiki/File:Seal_of_San_Pedro,_Laguna.png>.
 - `public/images/camera-placeholder-city-hall.jpg` is the San Pedro City Hall photograph by Wikimedia Commons user Judgefloro, dedicated to the public domain under CC0 1.0: <https://commons.wikimedia.org/wiki/File:6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg>.
+- The male/female estimation heads in `ml-service/models/sex_head_*.npz` are trained on the PA-100K dataset by Xihui Liu, Haiyu Zhao, Maoqing Tian, Lu Sheng, Jing Shao, Junjie Yan and Xiaogang Wang ("HydraPlus-Net: Attentive Deep Features for Pedestrian Analysis", ICCV 2017), used under CC BY 4.0: <https://github.com/xh-liu/HydraPlus-Net>.
 - `public/fonts/` contains the Latin webfont files used by the desktop renderer: Inter, Montserrat, and Bai Jamjuree from Google Fonts. They are bundled so typography remains unchanged when the desktop app is offline. Each family retains its SIL Open Font License file in the same directory: <https://fonts.google.com/>.

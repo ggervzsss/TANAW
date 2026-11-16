@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import numpy as np
 
+from app.attributes import SexEvidence
 from app.identity.models import VisitorDecision, normalize_embedding
 from app.identity.unique_visitor_registry import UniqueVisitorRegistry
 from app.storage.local_database import LocalDatabase
@@ -40,6 +41,7 @@ class EstablishmentRegistry:
         model_name: str,
         quality_embedding: np.ndarray | None = None,
         quality_model_name: str | None = None,
+        sex_evidence: SexEvidence | None = None,
     ) -> None:
         """Enrich an existing doorway observation when usable appearance arrives late."""
         with self._lock:
@@ -74,6 +76,7 @@ class EstablishmentRegistry:
                 model_name=model_name,
                 quality_embedding=quality_embedding,
                 quality_model_name=quality_model_name,
+                sex_evidence=sex_evidence,
                 payload=json.loads(source["payload_json"]),
             )
 
@@ -110,6 +113,7 @@ class EstablishmentRegistry:
         detection_confidence: float | None = None,
         bbox: tuple[int, int, int, int] | None = None,
         payload: dict[str, Any] | None = None,
+        sex_evidence: SexEvidence | None = None,
     ) -> VisitorDecision:
         at = timestamp(observed_at)
         first = timestamp(first_at)
@@ -197,6 +201,10 @@ class EstablishmentRegistry:
                 "arrival_observed": int(arrival_observed),
                 "departure_observed": int(departure_observed),
                 "payload_json": json.dumps(payload or {}, sort_keys=True),
+                # The track's latest male/female evidence replaces earlier, weaker evidence.
+                "sex_logit_sum": sex_evidence.logit_sum if sex_evidence else None,
+                "sex_weight": sex_evidence.weight if sex_evidence else 0.0,
+                "sex_model": sex_evidence.model if sex_evidence else None,
             }
             changed = self.repository.save_observation(record)
             if decision.visitor_id is not None and decision.identity_confidence == "high":

@@ -4,9 +4,10 @@ import { reportingMonthKey } from "../utils/reporting-period";
 /**
  * Daily visitor origins.
  *
- * TANAW counts every unique visitor of a day as This City. Users enter the visitors who came
- * from origins the cameras cannot tell (another city, another province, abroad); those are
- * deducted from This City. TANAW does not detect sex yet, so This City has a total only.
+ * TANAW counts every unique visitor of a day as This City and estimates how many are male and
+ * female. Users enter the visitors who came from origins the cameras cannot tell (another city,
+ * another province, abroad); those are deducted from This City, sex by sex. When TANAW had no
+ * male/female estimate for a day, This City has a total only.
  */
 export type OtherOrigin = keyof DayOrigins;
 export type Sex = keyof OriginSexCounts;
@@ -30,6 +31,12 @@ export type ReportDay = {
   origins: DayOrigins | null;
   /** Visitors left in This City after the other origins are deducted. */
   thisCity: number | null;
+  /** TANAW's male/female estimate of the day's unique visitors; null when unavailable. */
+  systemMale: number | null;
+  systemFemale: number | null;
+  /** This City's share of that estimate; null when unavailable. */
+  thisCityMale: number | null;
+  thisCityFemale: number | null;
   status: ReportDayStatus;
 };
 
@@ -74,6 +81,20 @@ export function reportDays(period: string, metrics: Metrics, origins: DailyOrigi
     const others = otherOriginsTotal(dayOrigins);
     const weekdayDate = new Date(Date.UTC(year, month - 1, day));
     const status: ReportDayStatus = date > today && !unique ? "upcoming" : !unique ? "no-visitors" : dayOrigins && others <= unique ? "complete" : "missing";
+    const thisCity = unique === null ? null : Math.max(0, unique - others);
+    // Only an estimate that splits exactly the counted visitors is used.
+    const sexed =
+      unique !== null &&
+      record &&
+      Number.isSafeInteger(record.male_count) &&
+      Number.isSafeInteger(record.female_count) &&
+      (record.male_count ?? 0) >= 0 &&
+      (record.female_count ?? 0) >= 0 &&
+      (record.male_count ?? 0) + (record.female_count ?? 0) === unique;
+    const systemMale = sexed ? (record.male_count ?? 0) : null;
+    const othersMale = OTHER_ORIGINS.reduce((total, { id }) => total + (dayOrigins?.[id].male ?? 0), 0);
+    // The operator's entries are authoritative; any difference shifts within This City.
+    const thisCityMale = systemMale === null || thisCity === null ? null : Math.min(thisCity, Math.max(0, systemMale - othersMale));
     return {
       date,
       day,
@@ -81,7 +102,11 @@ export function reportDays(period: string, metrics: Metrics, origins: DailyOrigi
       weekday: new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "UTC" }).format(weekdayDate),
       unique,
       origins: dayOrigins,
-      thisCity: unique === null ? null : Math.max(0, unique - others),
+      thisCity,
+      systemMale,
+      systemFemale: sexed ? (record.female_count ?? 0) : null,
+      thisCityMale,
+      thisCityFemale: thisCityMale === null || thisCity === null ? null : thisCity - thisCityMale,
       status,
     };
   });
@@ -111,24 +136,34 @@ export function dailyOriginsError(days: ReportDay[]) {
   return `Enter or confirm visitor origins for ${missing.toLocaleString()} ${missing === 1 ? "day" : "days"} before submitting.`;
 }
 
-/** Monthly totals sent with the report. This City has no sex split, so it is recorded as unspecified. */
+/**
+ * Monthly totals sent with the report. This City is split into male and female with TANAW's
+ * estimate; days without an estimate are recorded as unspecified.
+ */
 export function monthlyDemoFromDays(days: ReportDay[]): DemoBreakdown {
-  const sums = { thisCity: 0, ...emptyDayOrigins() };
+  const sums = { cityMale: 0, cityFemale: 0, cityUnspecified: 0, ...emptyDayOrigins() };
   for (const day of days) {
     if (!day.unique) continue;
-    sums.thisCity += day.thisCity ?? 0;
+    if (day.thisCityMale !== null && day.thisCityFemale !== null) {
+      sums.cityMale += day.thisCityMale;
+      sums.cityFemale += day.thisCityFemale;
+    } else {
+      sums.cityUnspecified += day.thisCity ?? 0;
+    }
     for (const { id } of OTHER_ORIGINS) {
       sums[id].male += day.origins?.[id].male ?? 0;
       sums[id].female += day.origins?.[id].female ?? 0;
     }
   }
+  // Without any estimate, This City's male and female stay blank rather than zero.
+  const anySexed = days.some((day) => day.unique && day.thisCityMale !== null);
   return {
-    thisCityMale: "",
-    thisCityFemale: "",
-    thisCityUnspecified: String(sums.thisCity),
-    thisProvMale: String(sums.otherCity.male),
-    thisProvFemale: String(sums.otherCity.female),
-    thisProvUnspecified: String(sums.thisCity),
+    thisCityMale: anySexed ? String(sums.cityMale) : "",
+    thisCityFemale: anySexed ? String(sums.cityFemale) : "",
+    thisCityUnspecified: String(sums.cityUnspecified),
+    thisProvMale: String(sums.cityMale + sums.otherCity.male),
+    thisProvFemale: String(sums.cityFemale + sums.otherCity.female),
+    thisProvUnspecified: String(sums.cityUnspecified),
     otherProvMale: String(sums.otherProvince.male),
     otherProvFemale: String(sums.otherProvince.female),
     foreignMale: String(sums.foreign.male),

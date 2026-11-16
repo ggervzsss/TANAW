@@ -23,19 +23,22 @@ function group(male: Cell, female: Cell, unspecified: Cell = null): Cell[] {
 }
 
 /**
- * One day's row. Reports with daily origins fill every residence group; This City has a total
- * only because TANAW does not record sex. Older reports carry daily totals only.
+ * One day's row. Reports with daily origins fill every residence group. This City uses TANAW's
+ * male/female estimate, or a total only on days without one. Older reports carry daily totals only.
  */
 export function var1DailyCells(day: Var1Day, detailed: boolean): Cell[] {
   if (!detailed || !day.unique || !day.origins) return [...Array<null>(14).fill(null), day.unique];
   const { otherCity, otherProvince, foreign } = day.origins;
+  const sexed = day.thisCityMale !== null && day.thisCityFemale !== null;
+  const cityMale = sexed ? (day.thisCityMale ?? 0) : 0;
+  const cityFemale = sexed ? (day.thisCityFemale ?? 0) : 0;
   return [
-    ...group(null, null, day.thisCity),
+    ...(sexed ? group(cityMale, cityFemale) : group(null, null, day.thisCity)),
     ...group(otherCity.male, otherCity.female),
     ...group(otherProvince.male, otherProvince.female),
     ...group(foreign.male, foreign.female),
-    otherCity.male + otherProvince.male + foreign.male,
-    otherCity.female + otherProvince.female + foreign.female,
+    cityMale + otherCity.male + otherProvince.male + foreign.male,
+    cityFemale + otherCity.female + otherProvince.female + foreign.female,
     day.unique,
   ];
 }
@@ -69,12 +72,18 @@ export function hasUnspecifiedCity(demo: DemoBreakdown) {
   return !citySplit && getDemographicTotals(demo).thisProvince > 0;
 }
 
-/** Explains blank cells under the official grid. */
+/** Explains estimated and blank cells under the official grid. */
 export function var1DataNotes(demo: DemoBreakdown, origins: DailyOrigins | undefined) {
+  const sexed = (recorded(demo.thisCityMale) ?? 0) + (recorded(demo.thisCityFemale) ?? 0) > 0;
+  const unspecified = (recorded(demo.thisCityUnspecified) ?? 0) > 0;
   const notes = [
-    origins
-      ? "This City is counted by TANAW and has no male/female split yet. Other origins are entered by the establishment."
-      : "Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank.",
+    !origins
+      ? "Sex and residence allocations are monthly. Unrecorded daily breakdowns are left blank."
+      : sexed && unspecified
+        ? "This City is counted by TANAW; male and female are TANAW estimates, and days without an estimate show a total only. Other origins are entered by the establishment."
+        : sexed
+          ? "This City is counted by TANAW; male and female are TANAW estimates. Other origins are entered by the establishment."
+          : "This City is counted by TANAW and has no male/female estimate. Other origins are entered by the establishment.",
   ];
   if (hasUnspecifiedCity(demo)) notes.push("This Province includes existing allocations with an unspecified city split.");
   return notes;

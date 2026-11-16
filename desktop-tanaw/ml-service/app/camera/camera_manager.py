@@ -13,6 +13,7 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 import numpy as np
 
 from app.analytics.open_space import AreaVisitTracker
+from app.attributes import SexEstimator, SexEvidence
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
 from app.camera.capture_worker import CaptureWorker
 from app.camera.contracts import CameraCounts, CameraSessionState
@@ -49,6 +50,7 @@ from app.reid import (
     TrackAppearanceBuffer,
     get_reid_model_availability,
     get_reid_model_profile,
+    sex_head_path,
 )
 from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
@@ -96,6 +98,9 @@ class CameraProcessingManager:
             get_reid_model_profile("quality")
         )
         self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
+        self._sex_estimator = SexEstimator.from_files(
+            [sex_head_path("fast"), sex_head_path("quality")]
+        )
         self._appearance_buffer = TrackAppearanceBuffer()
         self._quality_appearance_buffer = TrackAppearanceBuffer(
             max_samples_per_track=2,
@@ -693,6 +698,9 @@ class CameraProcessingManager:
             **self._tracker.status(),
             **self._reidentifier.status(),
             **self._reid_worker.status(),
+            **self._sex_estimator.status(
+                [self._reidentifier.embedding_space, self._quality_reidentifier.embedding_space]
+            ),
             "quality_reid_model_loaded": quality_status["reid_model_loaded"],
             "quality_reid_model_ready": quality_status["reid_model_ready"],
             "quality_reid_model_loading": quality_status["reid_model_loading"],
@@ -1179,6 +1187,7 @@ class CameraProcessingManager:
                             track.track_id
                         ),
                         quality_model_name=self._quality_reidentifier.embedding_space,
+                        sex_evidence=self._sex_evidence(track.track_id),
                     )
             directions = (
                 self._counter.update_many(
@@ -1910,6 +1919,21 @@ class CameraProcessingManager:
             quality_model_name=self._quality_reidentifier.embedding_space,
             detection_confidence=track.confidence,
             bbox=track.bbox,
+            sex_evidence=self._sex_evidence(track.track_id) if identified else None,
+        )
+
+    def _sex_evidence(self, track_id: int) -> SexEvidence | None:
+        """Male/female evidence for a track, preferring the higher-accuracy embedding space."""
+        candidates = [
+            self._sex_estimator.evidence(buffer.samples_for_track(track_id), space)
+            for buffer, space in (
+                (self._quality_appearance_buffer, self._quality_reidentifier.embedding_space),
+                (self._appearance_buffer, self._reidentifier.embedding_space),
+            )
+        ]
+        available = [evidence for evidence in candidates if evidence is not None]
+        return next((item for item in available if item.weight > 0), None) or next(
+            iter(available), None
         )
 
     def _save_establishment_visits(self, records: list[dict[str, Any]]) -> None:
@@ -1941,6 +1965,7 @@ class CameraProcessingManager:
                 else None,
                 quality_model_name=self._quality_reidentifier.embedding_space,
                 revision_id=self._area_revision_id,
+                sex_evidence=self._sex_evidence(track_id) if identified else None,
                 ended_at=parse_area_timestamp(record["ended_at"]) if record["ended_at"] else None,
                 arrival_observed=record["arrival_observed"],
                 departure_observed=record["departure_observed"],

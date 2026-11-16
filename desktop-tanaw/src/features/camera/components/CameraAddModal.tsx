@@ -6,7 +6,7 @@ import type { CameraFormValues } from "../types/camera";
 import { validateCameraForm } from "../utils/camera-form-validation";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { CameraConnectionFields } from "./CameraConnectionFields";
-import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, cameraModeDescription } from "../utils/camera-mode";
+import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraModeDescription } from "../utils/camera-mode";
 
 type CameraAddModalProps = {
   newCam: CameraFormValues;
@@ -100,7 +100,9 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 options={CAMERA_MODE_OPTIONS}
                 onChange={(mode) => onChange({ ...newCam, analysisMode: mode as CameraFormValues["analysisMode"] })}
               />
-              <small>{cameraModeDescription(newCam.analysisMode)}</small>
+              <small>
+                {cameraModeDescription(newCam.analysisMode)} {CAMERA_PLACEMENT_NOTE}
+              </small>
             </Field>
           </div>
           <div hidden={step !== "connection"} className="camera-add-connection">

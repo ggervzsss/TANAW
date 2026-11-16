@@ -3,7 +3,7 @@ import { CircleDot, Wifi, ScanLine, List, Wrench, Video, X, Pencil, Info } from 
 import { DesignSwitch } from "../../../components/DesignSwitch";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CAMERA_BRANDS, updateCameraConnection, validateCameraConnection } from "../utils/camera-connection";
-import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, cameraModeDescription, cameraModeName } from "../utils/camera-mode";
+import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraModeDescription, cameraModeName } from "../utils/camera-mode";
 import { DEFAULT_ROI, FIXED_DETECTION_SETTINGS, getDefaultTripwires } from "../model/camera-management";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
 import { validateOpenSpace } from "../utils/open-space";
@@ -409,6 +409,7 @@ export function CameraSettingsPanel(props: Props) {
                   </label>
                 ))}
               </div>
+              <p className="design-note">{CAMERA_PLACEMENT_NOTE}</p>
               <SectionHeading title="Monitored Area" description="Choose where this camera should count people." />
               <button className="design-button full-width" type="button" onClick={openEditor}>
                 <Pencil size={20} /> Edit Counting Area

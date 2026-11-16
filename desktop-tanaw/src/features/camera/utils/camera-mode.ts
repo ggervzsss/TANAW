@@ -15,3 +15,6 @@ export function cameraModeName(mode: AnalysisMode | undefined) {
 export function cameraModeDescription(mode: AnalysisMode | undefined) {
   return mode === "open_space" ? "Counts people currently inside the marked area." : "Counts people crossing the line into or out of the establishment.";
 }
+
+/** Male/female estimates need to see people's bodies, not only the tops of their heads. */
+export const CAMERA_PLACEMENT_NOTE = "For male and female estimates, angle the camera toward people rather than straight down.";

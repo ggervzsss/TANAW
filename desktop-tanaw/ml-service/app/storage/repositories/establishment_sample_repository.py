@@ -30,6 +30,9 @@ from app.storage.repositories.establishment_repository import (
 SAMPLE_CAMERA_ID = 900_001
 SAMPLE_SOURCE_NAME = "Sample data"
 SAMPLE_MODEL_NAME = "sample_data"
+SAMPLE_SEX_MODEL = "sample_data"
+# Sample visitors carry clear male/female evidence; the day's female share varies 45-55%.
+SAMPLE_SEX_LOGIT = 6.0
 SAMPLE_NAMESPACE = UUID("4d0f4b8e-6a51-4c1e-9b8e-3f2f63a0c5d1")
 OPEN_HOUR = 7
 CLOSE_HOUR = 20
@@ -238,8 +241,16 @@ def _record_day(
 ) -> None:
     payload_json = json.dumps({"report_id": report_id, "sample_data": True}, sort_keys=True)
     events: list[tuple[datetime, int]] = []
+    sex_rng = random.Random(f"{report_id}:{business_date}:sex")
+    female_share = 0.45 + sex_rng.random() * 0.10
+    female_visitors = {
+        visitor
+        for visitor in sorted({visit["visitor"] for visit in visits})
+        if sex_rng.random() < female_share
+    }
     for index, visit in enumerate(visits):
         visitor_id = str(uuid5(SAMPLE_NAMESPACE, f"{report_id}:{business_date}:{visit['visitor']}"))
+        sex_logit = SAMPLE_SEX_LOGIT if visit["visitor"] in female_visitors else -SAMPLE_SEX_LOGIT
         moves = [("entry", visit["arrival"])]
         if visit["departure"] is not None:
             moves.append(("exit", visit["departure"]))
@@ -266,6 +277,9 @@ def _record_day(
                     "arrival_observed": 0,
                     "departure_observed": 0,
                     "payload_json": payload_json,
+                    "sex_logit_sum": sex_logit,
+                    "sex_weight": 1.0,
+                    "sex_model": SAMPLE_SEX_MODEL,
                 }
             )
             events.append((at, 1 if kind == "entry" else -1))

@@ -19,7 +19,8 @@ type Props = {
 type Cell = number | null;
 type Row = { label: string; male: Cell; female: Cell; total: Cell };
 
-const NOT_RECORDED = "TANAW does not detect male and female yet.";
+const ESTIMATED = "Estimated by TANAW from the cameras. Visitors entered for other origins are deducted from it.";
+const NOT_RECORDED = "TANAW had no male/female estimate for this day.";
 
 export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnly, period, setOrigins }: Props) {
   const selected = useSelectedDay(days, period);
@@ -29,7 +30,9 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnl
   const missing = missingDays(days);
   const nextMissing = missing.find((item) => item.date > day.date) ?? missing.find((item) => item.date !== day.date);
   const origins = day.origins;
-  const sum = (sex: "male" | "female") => OTHER_ORIGINS.reduce((total, { id }) => total + (origins?.[id][sex] ?? 0), 0);
+  const sexed = day.thisCityMale !== null && day.thisCityFemale !== null;
+  const city = { male: day.thisCityMale ?? 0, female: day.thisCityFemale ?? 0 };
+  const sum = (sex: "male" | "female") => (sexed ? city[sex] : 0) + OTHER_ORIGINS.reduce((total, { id }) => total + (origins?.[id][sex] ?? 0), 0);
 
   return (
     <>
@@ -49,16 +52,16 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnl
                 This City
                 <LockKeyhole className="report-origin-lock" aria-label="Counted by TANAW" />
               </th>
-              <td>
-                <span className="report-origin-locked" title={NOT_RECORDED} aria-label="This City Male not recorded">
-                  —
-                </span>
-              </td>
-              <td>
-                <span className="report-origin-locked" title={NOT_RECORDED} aria-label="This City Female not recorded">
-                  —
-                </span>
-              </td>
+              {(["male", "female"] as const).map((sex) => {
+                const label = `This City ${sex === "male" ? "Male" : "Female"}`;
+                return (
+                  <td key={sex}>
+                    <span className="report-origin-locked" title={sexed ? ESTIMATED : NOT_RECORDED} aria-label={sexed ? label : `${label} not recorded`}>
+                      {sexed ? city[sex].toLocaleString() : "—"}
+                    </span>
+                  </td>
+                );
+              })}
               <td className="report-origin-total" aria-label="This City Total">
                 {display(day.thisCity)}
               </td>

@@ -25,6 +25,9 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
         ...day,
         business_date: `${key}-${String(index + 1).padStart(2, "0")}`,
         unique_count: index === 0 ? unique : 0,
+        // TANAW's male/female estimate splits the day's unique visitors.
+        male_count: index === 0 ? Math.floor(unique / 2) - 8 : 0,
+        female_count: index === 0 ? unique - Math.floor(unique / 2) + 8 : 0,
         confirmed_unique_count: index === 0 ? unique : 0,
         qualified_observations: index === 0 ? unique : 0,
       })),
@@ -155,6 +158,8 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
     // TANAW fills This City for the day; it is not editable.
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("617");
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("300");
+    await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("317");
     await expect(page.getByRole("textbox", { name: "This City Male", exact: true })).toHaveCount(0);
     await expect(page.locator(".report-origin-table tfoot")).toContainText("617");
     await page.getByRole("button", { name: "All from This City", exact: true }).click();
@@ -233,6 +238,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.getByRole("button", { name: /Selected day: October 1, 2026/ })).toBeVisible();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("5");
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("612");
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("295");
     await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("617");
     await page.getByRole("button", { name: "Review Report Form", exact: true }).click();
     await expect(page.locator(".var1-official-table tbody tr")).toHaveCount(31);
@@ -243,8 +249,8 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect.poll(() => submissions.length).toBe(1);
     await expect.poll(() => uploads.some((item) => item.reportId === submissions[0].report_id)).toBe(true);
     expect(submissions[0].payload).toMatchObject({
-      demo: { thisProvMale: "5", thisProvUnspecified: "612" },
-      var1: { thisCityUnspecified: "612" },
+      demo: { thisProvMale: "300", thisProvFemale: "317", thisProvUnspecified: "0" },
+      var1: { thisCityMale: "295", thisCityFemale: "317", thisCityUnspecified: "0" },
       origins: { "2026-10-01": { otherCity: { male: 5, female: 0 } } },
     });
     await expect(page.getByRole("textbox", { name: "Other City Male", exact: true })).toHaveValue("5");

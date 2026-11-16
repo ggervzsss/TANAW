@@ -8,16 +8,17 @@ a recognized visitor counts once per business day across all cameras.
 import hashlib
 import json
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.analytics.establishment_movements import daily_movements
+from app.analytics.visitor_sex import daily_sex_counts, recent_female_share
 from app.storage.local_database import LocalDatabase
 
 TIMEZONE = ZoneInfo("Asia/Manila")
-POLICY_VERSION = 2
+POLICY_VERSION = 3
 COUNTING_BASIS = "sum_of_daily_establishment_unique_visitors"
 
 
@@ -70,7 +71,7 @@ class EstablishmentRepository:
                     :observation_id,:business_date,:camera_id,:analysis_mode,:kind,:track_key,
                     :revision_id,:model_name,:visitor_id,:identity_confidence,:reid_decision,
                     :reid_score,:qualified,:first_at,:last_at,:ended_at,:arrival_observed,
-                    :departure_observed,:payload_json)
+                    :departure_observed,:payload_json,:sex_logit_sum,:sex_weight,:sex_model)
                 on conflict(observation_id,business_date) do update set
                     visitor_id=coalesce(excluded.visitor_id,establishment_observations.visitor_id),
                     identity_confidence=case when excluded.visitor_id is null
@@ -83,20 +84,37 @@ class EstablishmentRepository:
                     last_at=max(establishment_observations.last_at,excluded.last_at),
                     ended_at=coalesce(excluded.ended_at,establishment_observations.ended_at),
                     departure_observed=max(establishment_observations.departure_observed,
-                        excluded.departure_observed),payload_json=excluded.payload_json""",
-                record,
+                        excluded.departure_observed),payload_json=excluded.payload_json,
+                    sex_logit_sum=case when excluded.sex_model is null
+                        then establishment_observations.sex_logit_sum
+                        else excluded.sex_logit_sum end,
+                    sex_weight=case when excluded.sex_model is null
+                        then establishment_observations.sex_weight
+                        else excluded.sex_weight end,
+                    sex_model=coalesce(excluded.sex_model,establishment_observations.sex_model)""",
+                {"sex_logit_sum": None, "sex_weight": 0.0, "sex_model": None, **record},
             )
-            return existing is None or any(
-                existing[key] != record[key]
-                for key in (
-                    "visitor_id",
-                    "identity_confidence",
-                    "qualified",
-                    "ended_at",
-                    "arrival_observed",
-                    "departure_observed",
+            return (
+                existing is None
+                or any(
+                    existing[key] != record[key]
+                    for key in (
+                        "visitor_id",
+                        "identity_confidence",
+                        "qualified",
+                        "ended_at",
+                        "arrival_observed",
+                        "departure_observed",
+                    )
+                    if record[key] is not None
                 )
-                if record[key] is not None
+                or (
+                    record.get("sex_model") is not None
+                    and any(
+                        existing[key] != record[key]
+                        for key in ("sex_logit_sum", "sex_weight", "sex_model")
+                    )
+                )
             )
 
     def reconcile_identities(self, business_date: str) -> bool:
@@ -279,7 +297,20 @@ class EstablishmentRepository:
                         "additive": False,
                     }
                 )
+            earlier = [
+                json.loads(row["metrics_json"])
+                for row in db.execute(
+                    "select metrics_json from establishment_daily_summaries "
+                    "where business_date<? and business_date>=? order by business_date",
+                    (
+                        business_date,
+                        (date.fromisoformat(business_date) - timedelta(days=30)).isoformat(),
+                    ),
+                )
+            ]
+            sex = daily_sex_counts(rows, identities, recent_female_share(earlier))
             metrics = {
+                **sex.as_metrics(),
                 "business_date": business_date,
                 "unique_count": len(identities),
                 "confirmed_unique_count": len(identities),
@@ -359,6 +390,18 @@ class EstablishmentRepository:
             )
         }
         peaks = [day["peak_occupancy"] for day in days if day["peak_occupancy"] is not None]
+        # Male and female split the unique visitors; a period total exists only when every
+        # day with visitors has one.
+        visited = [day for day in days if day["unique_count"] > 0]
+        sexed = [day for day in visited if day.get("sex_estimation_state") == "estimated"]
+        complete_sex = len(sexed) == len(visited)
+        result.update(
+            male_count=sum(day["male_count"] for day in sexed) if complete_sex else None,
+            female_count=sum(day["female_count"] for day in sexed) if complete_sex else None,
+            sex_estimation_state=(
+                "estimated" if complete_sex else "partial" if sexed else "unavailable"
+            ),
+        )
         expected_days = (end.astimezone(TIMEZONE).date() - start.astimezone(TIMEZONE).date()).days
         result.update(
             enterprise_id=self.database.enterprise_id,

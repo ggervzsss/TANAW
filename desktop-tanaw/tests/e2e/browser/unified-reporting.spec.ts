@@ -162,9 +162,14 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     // TANAW fills This City; visitors entered for other origins are deducted from it.
     await expect(page.getByRole("button", { name: /Selected day: October 10, 2026/ })).toBeVisible();
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("2");
+    // TANAW's male/female estimate of the day's unique visitors fills This City.
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("1");
+    await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
     await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeDisabled();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("1");
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("0");
+    await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
     await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
@@ -175,7 +180,8 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     expect(state.uploads[0].payload).toMatchObject({
       counting: { snapshot_version: state.counting.snapshot_version },
       metrics: { unique: 2 },
-      demo: { thisProvMale: "1", thisProvUnspecified: "1" },
+      demo: { thisProvMale: "1", thisProvFemale: "1", thisProvUnspecified: "0" },
+      var1: { thisCityMale: "0", thisCityFemale: "1", thisCityUnspecified: "0" },
       origins: { "2026-10-10": { otherCity: { male: 1, female: 0 } } },
     });
     expect(state.uploads[0].entries).toBe(mode === "open_space" ? null : 3);

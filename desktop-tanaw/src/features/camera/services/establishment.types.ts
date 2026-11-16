@@ -5,6 +5,11 @@ export type DailyEstablishmentMetrics = {
   business_date: string;
   unique_count: number;
   confirmed_unique_count: number;
+  /** TANAW's male/female split of the unique visitors; null when estimation was unavailable. */
+  male_count?: number | null;
+  female_count?: number | null;
+  sex_estimation_state?: "estimated" | "partial" | "unavailable";
+  sex_evidence_share?: number | null;
   entries: number;
   exits: number;
   repeat_entry_count: number;
@@ -30,6 +35,9 @@ export type EstablishmentSummary = Pick<
   DailyEstablishmentMetrics,
   | "unique_count"
   | "confirmed_unique_count"
+  | "male_count"
+  | "female_count"
+  | "sex_estimation_state"
   | "entries"
   | "exits"
   | "repeat_entry_count"

@@ -111,3 +111,41 @@ def test_actual_doorway_and_mixed_snapshots_keep_one_baseline_and_more_departure
             == 4
         )
         assert report.uniqueCount != 4
+
+
+def test_snapshot_male_and_female_split_the_unique_visitors():
+    snapshot = submission()["payload"]["counting"]
+    assert snapshot["policy_version"] == 3
+    assert snapshot["male_count"] + snapshot["female_count"] == snapshot["unique_count"]
+    DesktopReportSubmissionIngest.model_validate(submission())
+
+
+@pytest.mark.parametrize(
+    "where,change",
+    [
+        ("period", {"female_count": 2}),
+        ("period", {"male_count": -1, "female_count": 3}),
+        ("period", {"male_count": True}),
+        ("day", {"female_count": 9}),
+        ("snapshot", {"policy_version": 2}),
+    ],
+)
+def test_inconsistent_male_and_female_counts_are_rejected(where, change):
+    body = submission()
+    snapshot = body["payload"]["counting"]
+    target = (
+        next(day for day in snapshot["days"] if day["unique_count"]) if where == "day" else snapshot
+    )
+    target.update(change)
+    snapshot["snapshot_version"] = snapshot_digest(snapshot)
+    with pytest.raises(ValidationError):
+        DesktopReportSubmissionIngest.model_validate(body)
+
+
+def test_unavailable_estimation_has_no_male_or_female_counts():
+    body = submission()
+    snapshot = body["payload"]["counting"]
+    for values in (snapshot, *snapshot["days"]):
+        values.update(male_count=None, female_count=None, sex_estimation_state="unavailable")
+    snapshot["snapshot_version"] = snapshot_digest(snapshot)
+    DesktopReportSubmissionIngest.model_validate(body)

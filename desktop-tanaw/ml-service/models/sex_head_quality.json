@@ -1,0 +1,58 @@
+{
+  "calibration": {
+    "caches": [
+      "pa100k_quality_val.npz"
+    ],
+    "ece_before": 0.025643405090918094,
+    "images": 10000
+  },
+  "created_at": "2026-11-16T10:35:51.525809+00:00",
+  "embedding_space": "torchreid_osnet_ain_x1_0_msmt17_onnx@104f0e3819f07a298a86ba377d48dc97599fdc935fea41edc73f5953c8b9a006:128x256:head_mask=0",
+  "evaluation": {
+    "accuracy": 0.8631,
+    "accuracy_by_view": {
+      "back": 0.8776718184807629,
+      "front": 0.8554095045500506,
+      "side": 0.8577154308617234
+    },
+    "back_view_accuracy": 0.8776718184807629,
+    "balanced_accuracy": 0.8608885074855819,
+    "caches": [
+      "pa100k_quality_test.npz"
+    ],
+    "expected_calibration_error": 0.04128455864954988,
+    "female_share": 0.3896,
+    "identities": 10000,
+    "identity_accuracy": 0.8631,
+    "images": 10000,
+    "negative_log_likelihood": 0.33674971068217857,
+    "simulated_share_mae": 0.02778705478485444,
+    "simulated_share_p95": 0.07509615384615376
+  },
+  "gate_thresholds": {
+    "back_view_accuracy": 0.8,
+    "balanced_accuracy": 0.85,
+    "expected_calibration_error": 0.05,
+    "simulated_share_mae": 0.03
+  },
+  "gates": {
+    "back_view_accuracy": true,
+    "balanced_accuracy": true,
+    "expected_calibration_error": true,
+    "simulated_share_mae": true
+  },
+  "head_path": "sex_head_quality.npz",
+  "iterations": 1500,
+  "l2": 0.0001,
+  "learning_rate": 1.0,
+  "reid": "quality",
+  "temperature": 0.9546709578151654,
+  "training": {
+    "caches": [
+      "pa100k_quality_train.npz"
+    ],
+    "female_share": 0.45726666666666665,
+    "images": 30000
+  },
+  "version": "sex-head@6f3b24e4732fdcf7"
+}

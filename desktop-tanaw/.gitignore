@@ -36,6 +36,11 @@ __pycache__/
 # Personal files
 -docs
 
-# Local ML model downloads and exports
-ml-service/models/
+# Local ML model downloads and exports. The male/female heads are small and
+# trained by TANAW, so they are kept in git for other developers.
+ml-service/models/*
+!ml-service/models/sex_head_fast.npz
+!ml-service/models/sex_head_fast.json
+!ml-service/models/sex_head_quality.npz
+!ml-service/models/sex_head_quality.json
 ml-service/build/

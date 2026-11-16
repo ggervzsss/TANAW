@@ -48,7 +48,7 @@
           "movement_state": "unavailable",
           "occupancy_corrections": [],
           "peak_occupancy": 3,
-          "policy_version": 2,
+          "policy_version": 3,
           "qualified_observations": 3,
           "reconciliation_state": "estimated",
           "repeat_entry_count": 0,
@@ -71,12 +71,19 @@
           ],
           "unique_count": 3,
           "unresolved_observations": 0,
-          "finalized": false
+          "finalized": false,
+          "male_count": 2,
+          "female_count": 1,
+          "sex_estimation_state": "estimated",
+          "sex_evidence_share": 1.0,
+          "sex_models": [
+            "sex-head@fixture"
+          ]
         }
       ],
       "peak_occupancy": 3,
       "counting_basis": "sum_of_daily_establishment_unique_visitors",
-      "policy_version": 2,
+      "policy_version": 3,
       "days_available": 1,
       "days_requested": 31,
       "coverage_ratio": 1.1200716845878136e-06,
@@ -98,7 +105,10 @@
         }
       ],
       "occupancy_corrections": [],
-      "snapshot_version": "6474e2e647cc228e61a9ab8defd3886dc54f58c523fe8a38d5ddb80936757e19"
+      "snapshot_version": "c8c05437cabe6cf6c8dec3b036b2c269127fd379d39e775c4aac6a04442d27be",
+      "male_count": 2,
+      "female_count": 1,
+      "sex_estimation_state": "estimated"
     },
     "metrics": {
       "entries": null,
@@ -139,7 +149,7 @@
         "movement_state": "unavailable",
         "occupancy_corrections": [],
         "peak_occupancy": 3,
-        "policy_version": 2,
+        "policy_version": 3,
         "qualified_observations": 3,
         "reconciliation_state": "estimated",
         "repeat_entry_count": 0,
@@ -162,12 +172,19 @@
         ],
         "unique_count": 3,
         "unresolved_observations": 0,
-        "finalized": false
+        "finalized": false,
+        "male_count": 2,
+        "female_count": 1,
+        "sex_estimation_state": "estimated",
+        "sex_evidence_share": 1.0,
+        "sex_models": [
+          "sex-head@fixture"
+        ]
       }
     ],
     "peak_occupancy": 3,
     "counting_basis": "sum_of_daily_establishment_unique_visitors",
-    "policy_version": 2,
+    "policy_version": 3,
     "days_available": 1,
     "days_requested": 31,
     "coverage_ratio": 1.1200716845878136e-06,
@@ -189,7 +206,10 @@
       }
     ],
     "occupancy_corrections": [],
-    "snapshot_version": "6474e2e647cc228e61a9ab8defd3886dc54f58c523fe8a38d5ddb80936757e19"
+    "snapshot_version": "c8c05437cabe6cf6c8dec3b036b2c269127fd379d39e775c4aac6a04442d27be",
+    "male_count": 2,
+    "female_count": 1,
+    "sex_estimation_state": "estimated"
   },
   "camera_breakdown": []
 }

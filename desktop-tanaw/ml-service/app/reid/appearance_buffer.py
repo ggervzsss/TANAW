@@ -147,6 +147,13 @@ class TrackAppearanceBuffer:
             return None
         return (weighted / norm).astype(np.float32)
 
+    def samples_for_track(self, track_id: int) -> list[tuple[np.ndarray, float]]:
+        """The kept embeddings with their quality scores, best first."""
+        state = self._tracks.get(track_id)
+        if state is None:
+            return []
+        return [(sample.embedding, sample.quality) for sample in state.samples]
+
     def sample_count_for_track(self, track_id: int) -> int:
         state = self._tracks.get(track_id)
         return len(state.samples) if state is not None else 0
