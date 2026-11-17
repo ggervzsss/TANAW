@@ -186,7 +186,7 @@ html.dark .tanaw-request-queue {
   }
 
   html.dark :where(.text-amber-950, .text-amber-900, .text-amber-800, .text-amber-700, .text-yellow-700, .text-yellow-600) {
-    color: var(--tanaw-gold-ink);
+    color: #fcd34d;
   }
 
   html.dark :where(.text-red-800, .text-red-700, .text-red-600, .text-tanaw-red) {
@@ -1407,7 +1407,7 @@ html.dark .tanaw-compliance-summary[data-tone="complete"] strong {
 
 html.dark .tanaw-compliance-summary[data-tone="pending"] svg,
 html.dark .tanaw-compliance-summary[data-tone="pending"] strong {
-  color: var(--tanaw-gold-ink);
+  color: #fcd34d;
 }
 
 html.dark .tanaw-compliance-item {
