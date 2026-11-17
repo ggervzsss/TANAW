@@ -79,7 +79,7 @@ html.dark .tanaw-request-queue {
     background-color: var(--tanaw-surface-strong);
   }
 
-  html.dark :where(.bg-emerald-50, .bg-tgreen-dark\/5, .bg-tgreen-dark\/6, .bg-tgreen-dark\/10) {
+  html.dark :where(.bg-emerald-50, .bg-tanaw-ledger\/5, .bg-tanaw-ledger\/6, .bg-tanaw-ledger\/10) {
     background-color: rgb(16 185 129 / 0.14);
   }
 
@@ -157,7 +157,7 @@ html.dark .tanaw-request-queue {
     --tw-ring-color: rgb(255 255 255 / 0.08);
   }
 
-  html.dark :where(.text-tanaw-navy, .text-charcoal-800, .text-gray-950, .text-gray-900, .text-slate-950, .text-slate-900) {
+  html.dark :where(.text-tanaw-navy, .text-gray-950, .text-gray-900, .text-slate-950, .text-slate-900) {
     color: var(--tanaw-text);
   }
 
@@ -169,8 +169,8 @@ html.dark .tanaw-request-queue {
     color: var(--tanaw-secondary-text);
   }
 
-  html.dark :where(.text-tgreen-dark, .text-tanaw-green, .text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
-    color: #6ee7b7;
+  html.dark :where(.text-tanaw-ledger, .text-tanaw-green, .text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
+    color: var(--tanaw-accent-ink);
   }
 
   html.dark :where(.text-blue-700, .text-sky-700) {
@@ -186,7 +186,7 @@ html.dark .tanaw-request-queue {
   }
 
   html.dark :where(.text-amber-950, .text-amber-900, .text-amber-800, .text-amber-700, .text-yellow-700, .text-yellow-600) {
-    color: #fcd34d;
+    color: var(--tanaw-gold-ink);
   }
 
   html.dark :where(.text-red-800, .text-red-700, .text-red-600, .text-tanaw-red) {
@@ -205,7 +205,7 @@ html.dark .tanaw-request-queue {
     background-color: var(--tanaw-control-hover);
   }
 
-  html.dark :where(.hover\:bg-emerald-50:hover, .hover\:bg-emerald-50\/70:hover, .hover\:bg-tgreen-dark\/5:hover, .hover\:bg-tgreen-dark\/6:hover, .focus\:bg-tgreen-dark\/6:focus) {
+  html.dark :where(.hover\:bg-emerald-50:hover, .hover\:bg-emerald-50\/70:hover, .hover\:bg-tanaw-ledger\/5:hover, .hover\:bg-tanaw-ledger\/6:hover, .focus\:bg-tanaw-ledger\/6:focus) {
     background-color: rgb(16 185 129 / 0.14);
   }
 
@@ -213,8 +213,8 @@ html.dark .tanaw-request-queue {
     background-color: rgb(239 68 68 / 0.14);
   }
 
-  html.dark :where(.hover\:text-tanaw-green:hover, .hover\:text-tgreen-dark:hover, .hover\:text-emerald-700:hover) {
-    color: #6ee7b7;
+  html.dark :where(.hover\:text-tanaw-green:hover, .hover\:text-tanaw-ledger:hover, .hover\:text-emerald-700:hover) {
+    color: var(--tanaw-accent-ink);
   }
 
   html.dark :where(.hover\:text-red-700:hover) {
@@ -250,25 +250,25 @@ html.dark .tanaw-request-queue {
   }
 
   html.dark :where(.tanaw-document-preview) {
-    background-color: #0b1220 !important;
-    color: #e8eef7 !important;
+    background-color: var(--tanaw-surface-inset) !important;
+    color: var(--tanaw-text) !important;
     color-scheme: dark;
   }
 
   html.dark :where(.tanaw-document-preview .bg-white) {
-    background-color: #111b2f;
+    background-color: var(--tanaw-surface);
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-50, .tanaw-document-preview .bg-slate-50) {
-    background-color: #172238;
+    background-color: var(--tanaw-surface-raised);
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-100, .tanaw-document-preview .bg-slate-100) {
-    background-color: #1d2a42;
+    background-color: var(--tanaw-surface-raised);
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-200, .tanaw-document-preview .bg-slate-200) {
-    background-color: #263650;
+    background-color: var(--tanaw-control-hover);
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-300) {
@@ -276,35 +276,35 @@ html.dark .tanaw-request-queue {
   }
 
   html.dark :where(.tanaw-document-preview .border-gray-200, .tanaw-document-preview .border-slate-200) {
-    border-color: #52647c;
+    border-color: var(--tanaw-border);
   }
 
   html.dark :where(.tanaw-document-preview .divide-gray-100, .tanaw-document-preview .divide-slate-100) > :not([hidden]) ~ :not([hidden]) {
-    border-color: #42536a;
+    border-color: var(--tanaw-border);
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-900, .tanaw-document-preview .text-slate-900) {
-    color: #f8fafc;
+    color: var(--tanaw-text);
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-800, .tanaw-document-preview .text-slate-800) {
-    color: #edf2f7;
+    color: var(--tanaw-text);
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-700, .tanaw-document-preview .text-slate-700) {
-    color: #d7e0ec;
+    color: var(--tanaw-text);
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-600, .tanaw-document-preview .text-slate-600) {
-    color: #b9c7d8;
+    color: var(--tanaw-text-secondary);
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
-    color: #91a4ba;
+    color: var(--tanaw-text-muted);
   }
 
   html.dark :where(.tanaw-document-preview .text-black) {
-    color: #f8fafc;
+    color: var(--tanaw-text);
   }
 
   html.dark :where(.tanaw-document-preview .border-black) {
@@ -331,7 +331,7 @@ html.dark .it-portal-main {
 }
 
 .tanaw-unified-metrics__accent {
-  background: linear-gradient(90deg, #1b4332 0%, #c5a047 50%, #5a8c46 100%);
+  background: linear-gradient(90deg, var(--color-tanaw-forest) 0%, #c5a047 50%, #5a8c46 100%);
 }
 
 html.dark .tanaw-unified-metrics__accent {
@@ -339,11 +339,11 @@ html.dark .tanaw-unified-metrics__accent {
 }
 
 html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-detail {
-  color: #8fdcba !important;
+  color: var(--tanaw-accent-ink) !important;
 }
 
 html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-value {
-  color: #78d7ad !important;
+  color: var(--tanaw-accent-ink) !important;
 }
 
 html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-dot {
@@ -391,7 +391,7 @@ html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-dot {
 .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
 .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
 .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
-  color: color-mix(in srgb, currentColor 76%, #1b4332);
+  color: color-mix(in srgb, currentColor 76%, var(--color-tanaw-forest));
 }
 
 .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon,
@@ -437,7 +437,7 @@ html.dark .tanaw-unified-metrics__segment:focus-within {
 html.dark .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
 html.dark .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
 html.dark .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
-  color: color-mix(in srgb, currentColor 80%, #a7f3d0);
+  color: color-mix(in srgb, currentColor 80%, var(--tanaw-label));
 }
 
 html.dark .tanaw-unified-metrics__scroller {
@@ -509,7 +509,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 
 .tanaw-audit-command__identity h2,
 .tanaw-operations-command__identity h2 {
-  color: #17251f;
+  color: var(--tanaw-text);
   font-size: 0.86rem;
   font-weight: 800;
 }
@@ -517,7 +517,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-audit-command__identity p,
 .tanaw-operations-command__identity p {
   margin-top: 0.18rem;
-  color: #64748b;
+  color: var(--tanaw-text-muted);
   font-size: 0.7rem;
   font-weight: 600;
 }
@@ -532,7 +532,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   border: 1px solid rgb(5 150 105 / 0.2);
   border-radius: 14px;
   background: rgb(5 150 105 / 0.09);
-  color: #087455;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-audit-controls {
@@ -560,7 +560,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   gap: 1rem;
   padding: 0 1rem;
   border-bottom: 1px solid rgb(71 85 105 / 0.12);
-  color: #526174;
+  color: var(--tanaw-text-secondary);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -594,7 +594,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   border: 1px solid rgb(5 150 105 / 0.16);
   border-radius: 10px;
   background: rgb(5 150 105 / 0.08);
-  color: #087455;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-audit-cell--details {
@@ -618,7 +618,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-data-page .tanaw-data-filter > button:hover,
 .tanaw-data-page button.tanaw-data-filter:hover {
   border-color: rgb(5 150 105 / 0.34);
-  background: #ffffff;
+  background: var(--tanaw-surface);
 }
 
 .tanaw-data-page .tanaw-data-search:focus-visible,
@@ -637,7 +637,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-data-page .tanaw-data-table-head {
   border-color: rgb(71 85 105 / 0.12);
   background: #f1f5f3;
-  color: #536274;
+  color: var(--tanaw-text-secondary);
 }
 
 .tanaw-data-page .tanaw-data-table-head th {
@@ -670,7 +670,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   min-height: 44px;
   border-color: rgb(71 85 105 / 0.12);
   background: #f4f7f5;
-  color: #64748b;
+  color: var(--tanaw-text-muted);
 }
 
 .tanaw-operations-switcher {
@@ -681,7 +681,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-operations-switcher__tab {
   border-color: transparent;
   background: transparent;
-  color: #526174;
+  color: var(--tanaw-text-secondary);
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -692,12 +692,12 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-operations-switcher__tab:hover {
   border-color: rgb(5 150 105 / 0.16);
   background: rgb(255 255 255 / 0.78);
-  color: #076143;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-operations-switcher__tab[aria-selected="true"] {
   border-color: rgb(5 150 105 / 0.32);
-  background: #087455;
+  background: var(--tanaw-action);
   color: #ffffff;
   box-shadow:
     0 7px 18px rgb(5 95 63 / 0.17),
@@ -738,7 +738,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   justify-content: space-between;
   padding: 0 1rem;
   border-bottom: 1px solid rgb(71 85 105 / 0.12);
-  color: #526174;
+  color: var(--tanaw-text-secondary);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -752,7 +752,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   place-items: center;
   border-radius: 999px;
   background: rgb(5 150 105 / 0.1);
-  color: #087455;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-operations-queue__items {
@@ -769,7 +769,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   padding: 0.85rem;
   border: 1px solid transparent;
   border-radius: 14px;
-  color: #526174;
+  color: var(--tanaw-text-secondary);
   text-align: left;
   transition: 150ms ease;
 }
@@ -790,10 +790,10 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 
 .tanaw-operations-queue__item[aria-pressed="true"] {
   border-color: rgb(5 150 105 / 0.3);
-  background: #ffffff;
+  background: var(--tanaw-surface);
   box-shadow:
     0 8px 22px rgb(15 23 42 / 0.08),
-    inset 3px 0 0 #0b8a64;
+    inset 3px 0 0 var(--tanaw-accent-ink);
 }
 
 .tanaw-operations-queue__code,
@@ -804,14 +804,14 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 
 .tanaw-operations-queue__code {
   margin-bottom: 0.25rem;
-  color: #087455;
+  color: var(--tanaw-accent-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.7rem;
   font-weight: 800;
 }
 
 .tanaw-operations-queue__title {
-  color: #17251f;
+  color: var(--tanaw-text);
   font-size: 0.82rem;
   font-weight: 800;
 }
@@ -845,7 +845,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-operations-detail__eyebrow,
 .tanaw-operations-detail__response span,
 .tanaw-operations-detail__facts dt {
-  color: #64748b;
+  color: var(--tanaw-text-muted);
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -861,14 +861,14 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 }
 
 .tanaw-operations-detail__title-row h3 {
-  color: #12221b;
+  color: var(--tanaw-text);
   font-size: clamp(1.05rem, 2vw, 1.35rem);
   font-weight: 850;
 }
 
 .tanaw-operations-detail__title-row p {
   margin-top: 0.3rem;
-  color: #526174;
+  color: var(--tanaw-text-secondary);
   font-size: 0.8rem;
   font-weight: 650;
 }
@@ -876,7 +876,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-operations-detail__summary {
   max-width: 78ch;
   margin-top: 1.25rem;
-  color: #334155;
+  color: var(--tanaw-text-secondary);
   font-size: 0.9rem;
   line-height: 1.7;
 }
@@ -891,7 +891,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 
 .tanaw-operations-detail__response p {
   margin-top: 0.35rem;
-  color: #294338;
+  color: var(--tanaw-text-secondary);
   font-size: 0.8rem;
   line-height: 1.55;
 }
@@ -914,7 +914,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 .tanaw-operations-detail__facts dd {
   margin-top: 0.4rem;
   overflow-wrap: anywhere;
-  color: #263a31;
+  color: var(--tanaw-text);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -927,7 +927,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   margin-top: 1.1rem;
   padding: 0.6rem 0.9rem;
   border-radius: 11px;
-  background: #087455;
+  background: var(--tanaw-action);
   color: #ffffff;
   font-size: 0.72rem;
   font-weight: 800;
@@ -935,7 +935,7 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
 }
 
 .tanaw-operations-detail__action:hover {
-  background: #075f47;
+  background: var(--tanaw-action-hover);
   transform: translateY(-1px);
 }
 
@@ -987,12 +987,12 @@ html.dark .tanaw-audit-command__identity h2,
 html.dark .tanaw-operations-command__identity h2,
 html.dark .tanaw-operations-queue__title,
 html.dark .tanaw-operations-detail__title-row h3 {
-  color: #eef7f2;
+  color: var(--tanaw-text);
 }
 
 html.dark .tanaw-audit-command__identity p,
 html.dark .tanaw-operations-command__identity p {
-  color: #91a6b5;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-audit-ledger {
@@ -1003,11 +1003,11 @@ html.dark .tanaw-audit-ledger {
 
 html.dark .tanaw-audit-ledger__heading {
   border-color: var(--tanaw-border-subtle);
-  color: #9cafbd;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-audit-cell > svg {
-  color: #8299aa;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-data-page .tanaw-data-search,
@@ -1043,7 +1043,7 @@ html.dark .tanaw-data-page .tanaw-data-table-head {
 }
 
 html.dark .tanaw-data-page .tanaw-data-table-body {
-  color: #d5dde2;
+  color: var(--tanaw-text);
 }
 
 html.dark .tanaw-data-page .tanaw-data-table-row {
@@ -1073,7 +1073,7 @@ html.dark .tanaw-data-page .tanaw-data-footer {
 html.dark .tanaw-data-page .tanaw-data-empty-icon {
   border: 1px solid rgb(52 211 153 / 0.18);
   background: rgb(16 185 129 / 0.1);
-  color: #6ee7b7;
+  color: var(--tanaw-accent-ink);
   box-shadow: 0 10px 26px rgb(0 0 0 / 0.2);
 }
 
@@ -1082,13 +1082,13 @@ html.dark .tanaw-operations-switcher {
 }
 
 html.dark .tanaw-operations-switcher__tab {
-  color: #aebdca;
+  color: var(--tanaw-text-secondary);
 }
 
 html.dark .tanaw-operations-switcher__tab:hover {
   border-color: rgb(52 211 153 / 0.18);
   background: rgb(255 255 255 / 0.045);
-  color: #d1fae5;
+  color: var(--tanaw-label);
 }
 
 html.dark .tanaw-operations-switcher__tab[aria-selected="true"] {
@@ -1115,11 +1115,11 @@ html.dark .tanaw-operations-queue {
 
 html.dark .tanaw-operations-queue__heading {
   border-color: var(--tanaw-border-subtle);
-  color: #9cafbd;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-operations-queue__item {
-  color: #9cafbd;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-operations-queue__item:hover {
@@ -1144,12 +1144,12 @@ html.dark .tanaw-operations-detail {
 html.dark .tanaw-operations-detail__eyebrow,
 html.dark .tanaw-operations-detail__response span,
 html.dark .tanaw-operations-detail__facts dt {
-  color: #91a6b5;
+  color: var(--tanaw-text-muted);
 }
 
 html.dark .tanaw-operations-detail__title-row p,
 html.dark .tanaw-operations-detail__summary {
-  color: #bccbd5;
+  color: var(--tanaw-text-secondary);
 }
 
 html.dark .tanaw-operations-detail__response {
@@ -1159,7 +1159,7 @@ html.dark .tanaw-operations-detail__response {
 
 html.dark .tanaw-operations-detail__response p,
 html.dark .tanaw-operations-detail__facts dd {
-  color: #d5e5dc;
+  color: var(--tanaw-text);
 }
 
 html.dark .tanaw-operations-detail__facts > div {
@@ -1306,7 +1306,7 @@ html.dark .tanaw-operations-detail__facts > div {
 .tanaw-compliance-panel__icon {
   border: 1px solid rgb(5 150 105 / 0.18);
   background: rgb(5 150 105 / 0.09);
-  color: #047857;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-compliance-summary {
@@ -1317,7 +1317,7 @@ html.dark .tanaw-operations-detail__facts > div {
 
 .tanaw-compliance-summary[data-tone="complete"] svg,
 .tanaw-compliance-summary[data-tone="complete"] strong {
-  color: #047857;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-compliance-summary[data-tone="pending"] svg,
@@ -1346,7 +1346,7 @@ html.dark .tanaw-operations-detail__facts > div {
 }
 
 .tanaw-compliance-progress > span {
-  background: #059669;
+  background: var(--tanaw-action);
 }
 
 .tanaw-compliance-item[data-state="pending"] .tanaw-compliance-progress > span {
@@ -1393,7 +1393,7 @@ html.dark .tanaw-dashboard-scroll::-webkit-scrollbar-thumb:hover {
 html.dark .tanaw-compliance-panel__icon {
   border-color: rgb(52 211 153 / 0.18);
   background: rgb(52 211 153 / 0.1);
-  color: #6ee7b7;
+  color: var(--tanaw-accent-ink);
 }
 
 html.dark .tanaw-compliance-summary {
@@ -1402,12 +1402,12 @@ html.dark .tanaw-compliance-summary {
 
 html.dark .tanaw-compliance-summary[data-tone="complete"] svg,
 html.dark .tanaw-compliance-summary[data-tone="complete"] strong {
-  color: #6ee7b7;
+  color: var(--tanaw-accent-ink);
 }
 
 html.dark .tanaw-compliance-summary[data-tone="pending"] svg,
 html.dark .tanaw-compliance-summary[data-tone="pending"] strong {
-  color: #fcd34d;
+  color: var(--tanaw-gold-ink);
 }
 
 html.dark .tanaw-compliance-item {
@@ -1429,12 +1429,12 @@ html.dark .tanaw-information-banner,
 html.dark .tanaw-activation-banner {
   border-color: rgb(52 211 153 / 0.26);
   background: linear-gradient(135deg, rgb(6 78 59 / 0.24), rgb(16 25 35 / 0.94));
-  color: #d8f7ea;
+  color: var(--tanaw-label);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
 }
 
 html.dark .tanaw-activation-banner :where(.tanaw-activation-banner__icon, .tanaw-activation-banner__label) {
-  color: #79e7bd;
+  color: var(--tanaw-accent-ink);
 }
 
 html.dark .tanaw-activation-banner__title {
@@ -1442,7 +1442,7 @@ html.dark .tanaw-activation-banner__title {
 }
 
 html.dark .tanaw-activation-banner__copy {
-  color: #bfe8d6;
+  color: var(--tanaw-label);
 }
 
 :where(a[href], button, input, select, textarea, summary, [role="button"]):focus-visible {
@@ -1538,7 +1538,7 @@ html.dark .tanaw-activation-banner__copy {
 
 .tanaw-toast--error {
   border-color: rgb(164 14 14 / 0.18) !important;
-  border-left-color: #a40e0e !important;
+  border-left-color: var(--color-tanaw-red) !important;
   background: linear-gradient(135deg, rgb(255 255 255 / 0.98) 0%, rgb(255 245 245 / 0.98) 58%, rgb(255 250 235 / 0.96) 100%) !important;
 }
 
@@ -1549,7 +1549,7 @@ html.dark .tanaw-activation-banner__copy {
 }
 
 .tanaw-toast--error .tanaw-toast__icon {
-  color: #a40e0e;
+  color: var(--color-tanaw-red);
 }
 
 .tanaw-toast__message {
@@ -1580,7 +1580,7 @@ html.dark .tanaw-toast {
   border-color: rgb(110 231 183 / 0.24) !important;
   border-left-color: #34d399 !important;
   background: linear-gradient(135deg, rgb(22 32 51 / 0.98) 0%, rgb(13 20 36 / 0.98) 58%, rgb(53 43 24 / 0.95) 100%) !important;
-  color: #f8fafc !important;
+  color: var(--tanaw-text) !important;
   box-shadow:
     0 22px 50px rgb(0 0 0 / 0.48),
     0 1px 0 rgb(255 255 255 / 0.04) inset !important;
@@ -1593,7 +1593,7 @@ html.dark .tanaw-toast--error {
 }
 
 html.dark .tanaw-toast__icon {
-  color: #34d399;
+  color: var(--tanaw-accent-ink);
 }
 
 html.dark .tanaw-toast--error .tanaw-toast__icon {

@@ -22,7 +22,7 @@ export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, 
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search enterprise, manager, category, or barangay"
-          className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+          className="focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect value={barangay} onChange={onBarangayChange} options={barangays.map((item): [string, string] => [item, item])} />
@@ -39,7 +39,7 @@ export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, 
       />
       <button
         onClick={onRegister}
-        className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+        className="bg-tanaw-civic hover:bg-tanaw-civic-deep inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
       >
         <Building2 size={16} /> Register Enterprise
       </button>

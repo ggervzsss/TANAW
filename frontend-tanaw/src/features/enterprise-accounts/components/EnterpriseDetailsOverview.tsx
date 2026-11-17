@@ -16,7 +16,7 @@ export function EnterpriseDetailsOverview({ canChangeStatus, details, enterprise
       <section className="rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-4">
-            <span className="bg-tgreen-dark/10 text-tgreen-dark flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <span className="bg-tanaw-ledger/10 text-tanaw-ledger flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <Building2 size={24} />
             </span>
             <div className="min-w-0">

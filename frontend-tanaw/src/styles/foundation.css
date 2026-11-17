@@ -87,21 +87,8 @@
 
 /* Fonts, type scale, brand, map and chart colors come from the design tokens
    (styles/tanaw-tokens.css, generated from design-system/tokens/tanaw.css).
-   Below are only the web app's own palettes that are not design tokens yet. */
+   Below is only the web app's own panel shadow. */
 @theme {
-  --color-tanaw-gray: #e5e5e5;
-  --color-tgreen-dark: #065f46;
-  --color-tgreen-light: #10b981;
-  --color-tgreen-brand: #065f46;
-  --color-tgreen-brandHover: #044a36;
-  --color-charcoal-800: #1f2937;
-  --color-charcoal-900: #111827;
-  --color-charcoal-950: #030712;
-  --color-tblue-dark: #1e3a8a;
-  --color-tblue-base: #2563eb;
-  --color-tblue-light: #93c5fd;
-  --color-tred: #dc2626;
-  --color-tyellow: #f59e0b;
   --shadow-panel: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 

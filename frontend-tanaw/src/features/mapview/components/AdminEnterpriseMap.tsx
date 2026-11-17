@@ -65,7 +65,7 @@ export function AdminEnterpriseMap() {
   }, [closeEnterpriseDetails, selectedEnterprise]);
 
   return (
-    <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
+    <div className="bg-neutral-200 relative min-h-0 flex-1 overflow-hidden">
       <div className="absolute inset-0 z-0">
         <div id="admin-enterprise-map" className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
       </div>

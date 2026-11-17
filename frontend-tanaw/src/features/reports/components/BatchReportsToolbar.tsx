@@ -40,7 +40,7 @@ export function BatchReportsToolbar({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search enterprise, barangay, category, or report ID"
-          className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+          className="focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect
@@ -57,7 +57,7 @@ export function BatchReportsToolbar({
         disabled={!allReady}
         title={!allReady ? "All enterprises must be Ready to Consolidate before generating." : "Generate Final Report"}
         className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition ${
-          allReady ? "bg-tgreen-dark hover:bg-tgreen-light cursor-pointer text-white" : "cursor-not-allowed bg-gray-200 text-gray-400"
+          allReady ? "bg-tanaw-civic hover:bg-tanaw-civic-deep cursor-pointer text-white" : "cursor-not-allowed bg-gray-200 text-gray-400"
         }`}
       >
         <FileSignature size={15} /> Generate Final Report

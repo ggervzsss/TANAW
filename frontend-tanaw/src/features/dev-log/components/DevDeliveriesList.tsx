@@ -48,13 +48,13 @@ function DevLogMessage({ body }: { body: string }) {
           segment.value
         ) : (
           <span key={`${segment.value}-${index}`} className="inline-flex max-w-full items-center gap-1 align-middle">
-            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tgreen-dark break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
+            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tanaw-ledger break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
               {segment.value}
             </a>
             <button
               type="button"
               onClick={() => void copyLink(segment.value)}
-              className="text-tgreen-dark inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              className="text-tanaw-ledger inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
               aria-label="Copy link"
               title="Copy link"
             >
