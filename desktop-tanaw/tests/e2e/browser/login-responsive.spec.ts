@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockRememberedSession } from "./support/preload";
+import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-brand-test",
@@ -102,7 +103,7 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await expect(identifierShell).toHaveAttribute("data-state", "valid");
   await identifier.focus();
   await expect(identifierShell).toHaveCSS("background-color", "rgb(16, 30, 50)");
-  await expect(identifier).toHaveCSS("caret-color", "rgb(164, 201, 184)");
+  await expect(identifier).toHaveCSS("caret-color", await token(page, "--tanaw-green"));
 
   await password.fill("A readable Enterprise passphrase");
   await page.getByRole("button", { name: "Show password" }).click();

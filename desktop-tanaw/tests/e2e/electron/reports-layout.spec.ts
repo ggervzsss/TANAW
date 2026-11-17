@@ -172,11 +172,12 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     const mainCard = (await page.locator(".report-create-card").boundingBox())!;
     const createTab = (await page.getByRole("tab", { name: "Create Reports" }).boundingBox())!;
     expect(Math.abs(mainCard.x - 46)).toBeLessThanOrEqual(3);
-    expect(Math.abs(mainCard.y - 279)).toBeLessThanOrEqual(3);
+    // Positions follow the design-system type scale (31px page title, 16.5px subtitle).
+    expect(Math.abs(mainCard.y - 261)).toBeLessThanOrEqual(3);
     expect(createTab.width).toBe(216);
     expect(createTab.height).toBe(50);
     expect(Math.abs(visitor.x - 67)).toBeLessThanOrEqual(3);
-    expect(Math.abs(visitor.y - 517)).toBeLessThanOrEqual(3);
+    expect(Math.abs(visitor.y - 499)).toBeLessThanOrEqual(3);
     await page.keyboard.press("Escape");
     await page.locator(".reports-heading h1").click();
     await page.screenshot({ path: testInfo.outputPath("reports-create-1440.png") });

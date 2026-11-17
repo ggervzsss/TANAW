@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-account-1",
@@ -50,7 +51,7 @@ test("applies the complete Enterprise night topbar and preserves the daytime var
 
   const darkTopbar = page.locator('[data-topbar-theme="dark"]');
   await expect(darkTopbar).toBeVisible();
-  await expect(darkTopbar).toHaveCSS("background-color", "rgb(28, 44, 40)");
+  await expect(darkTopbar).toHaveCSS("background-color", await token(page, "--theme-topbar"));
   await expect(darkTopbar).toHaveCSS("background-image", "none");
   const dayImage = page.locator('[data-topbar-image="day"]');
   const nightImage = page.locator('[data-topbar-image="night"]');

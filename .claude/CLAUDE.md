@@ -54,8 +54,11 @@ running the same spec on the base branch.
 
 Remove an entry here once it is fixed.
 
-- desktop browser `dark-mode` spec fails at `theme-and-filters.ts:204`
-  (theme-switch timing).
+- desktop browser and Electron `dark-mode` specs fail at
+  `theme-and-filters.ts:216` (theme-switch commit takes about 155-175ms
+  against a 150ms limit on the Linux Mint laptop).
+- desktop Electron `camera-setup` spec fails on Linux without a Secret
+  Service keyring ("Operating-system protected storage is unavailable").
 - desktop Electron `reports-layout` spec fails a rounding check
   (49.99998 vs 50).
 - desktop browser `enterprise-interactions` tests at lines 279 and 598 are
