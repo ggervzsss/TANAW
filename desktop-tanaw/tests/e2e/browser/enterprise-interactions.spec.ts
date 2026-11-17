@@ -1,6 +1,7 @@
 import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mlResponse, mockCameraSetup, mockMlRequest } from "./support/preload";
+import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-interactions-test",
@@ -137,7 +138,7 @@ test("recovers camera hydration after service startup and restores live updates 
   const emit = (payload: unknown) => page.evaluate((detail) => window.dispatchEvent(new CustomEvent("e2e-ml-live-event", { detail })), payload);
   await emit(envelope);
   await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible({ timeout: 1000 });
-  const box = page.getByText("#7 | 90%", { exact: true }).locator("..");
+  const box = page.locator("[data-track-id=\"7\"]");
   await expect(box).toBeVisible();
   expect(await box.evaluate((element) => (element as HTMLElement).style.left)).toBe("9.375%");
   envelope.data.cameras[0].detections.tracks[0].bbox = [300, 50, 400, 300];
@@ -348,12 +349,14 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(page.getByRole("heading", { name: "Monthly DOT Visitor Report" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Report Workspace" })).toHaveCount(0);
   await expect.poll(() => page.getByText("REP-202607", { exact: true }).count()).toBeGreaterThan(0);
-  await expect(page.locator(".report-create-card")).toHaveCSS("border-radius", "10px");
+  await expect(page.locator(".report-create-card")).toHaveCSS("border-radius", "16px");
   // The date picker lists the reporting month; dark surfaces stay distinct from the card.
   await page.locator(".report-day-picker > button").click();
   const calendar = page.getByRole("group", { name: /^Days of / });
   await expect(calendar).toBeVisible();
-  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", "rgb(38, 49, 58)");
+  const raised = await token(page, "--theme-raised");
+  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", raised);
+  expect(await page.locator(".report-create-card").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe(raised);
   await page.keyboard.press("Escape");
   await expect(calendar).toBeHidden();
   await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
@@ -371,7 +374,7 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await page.getByRole("button", { name: "View REP-202607", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
   await expect(preview).toBeVisible();
-  await expect(preview).toHaveCSS("border-radius", "23px");
+  await expect(preview).toHaveCSS("border-radius", "16px");
   const reportPaper = preview.locator(".var1-document");
   await expect(reportPaper).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(reportPaper).toHaveCSS("color", "rgb(0, 0, 0)");
@@ -898,12 +901,13 @@ test("keeps pending business-email information readable in both themes", async (
   const pendingCard = page.locator(".enterprise-profile-pending-email");
   await expect(pendingCard).toBeVisible();
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).toHaveCSS("color", "rgb(220, 228, 231)");
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", "rgb(183, 194, 201)");
+  const darkTitle = await token(page, "--theme-text");
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).toHaveCSS("color", darkTitle);
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", await token(page, "--theme-secondary"));
   await expect(page.getByRole("button", { name: "Cancel request" })).toBeVisible();
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", "rgb(220, 228, 231)");
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", darkTitle);
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });
 

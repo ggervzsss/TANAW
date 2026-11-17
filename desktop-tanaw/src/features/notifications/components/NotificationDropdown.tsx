@@ -53,7 +53,7 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
               <button
                 disabled={unreadCount === 0}
                 onClick={onMarkAllRead}
-                className="text-[10px] font-bold tracking-wider text-tanaw-ledger uppercase hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
+                className="text-xs font-bold text-tanaw-ledger hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
               >
                 Mark all read
               </button>
@@ -88,8 +88,8 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
             )}
           </div>
           <div className="enterprise-notification-menu__footer shrink-0 border-t border-gray-100 bg-gray-50 p-2.5 text-center">
-            <button onClick={onViewAll} className="text-[10px] font-bold tracking-wider text-gray-500 uppercase hover:text-tanaw-ledger">
-              VIEW ALL NOTIFICATIONS
+            <button onClick={onViewAll} className="text-xs font-bold text-gray-500 hover:text-tanaw-ledger">
+              View all notifications
             </button>
           </div>
         </div>

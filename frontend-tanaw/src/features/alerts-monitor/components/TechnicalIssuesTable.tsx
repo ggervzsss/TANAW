@@ -77,7 +77,7 @@ export function TechnicalIssuesTable({ alerts, filteredAlerts, onOpen, onStatusC
                 <td className="px-4 py-4">
                   <div className="flex flex-col gap-2">
                     <StatusButton disabled={alert.status === "In Review" || alert.status === "Resolved"} onClick={() => onStatusChange(alert, "In Review")}>
-                      Start Work
+                      Start work
                     </StatusButton>
                     <StatusButton disabled={alert.status === "Resolved"} onClick={() => onStatusChange(alert, "Resolved")}>
                       Resolve
@@ -113,7 +113,7 @@ function StatusButton({ children, disabled, onClick }: { children: string; disab
         event.stopPropagation();
         onClick();
       }}
-      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-bold tracking-wide text-gray-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-bold text-gray-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
     >
       {children}
     </button>

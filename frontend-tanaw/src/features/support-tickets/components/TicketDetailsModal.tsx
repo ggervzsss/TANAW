@@ -7,6 +7,7 @@ import { formatTicketTime, ticketStatusLabel } from "../model";
 import { CategoryBadge, PriorityBadge, TicketStatusBadge } from "./TicketBadges";
 import { TicketAttachments } from "./TicketAttachments";
 import { TicketConversation } from "./TicketConversation";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type TicketDetailsModalProps = {
   mode: "admin" | "it";
@@ -141,9 +142,9 @@ function TicketStatusControl({
               type="button"
               disabled={status === statusOption || isPending}
               onClick={() => onStatusChange(statusOption)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
             >
-              {ticketStatusLabel(statusOption)}
+              {toSentenceCase(ticketStatusLabel(statusOption))}
             </button>
           ))}
         </div>

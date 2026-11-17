@@ -8,7 +8,7 @@ async function choose(page: Page, name: string, option: string) {
   await expect(page.getByRole("listbox")).toHaveCount(0);
 }
 /** The computed color of a design token (or theme role) as it applies inside the app shell. */
-async function token(page: Page, name: string) {
+export async function token(page: Page, name: string) {
   return page.evaluate((variable) => {
     const probe = document.createElement("span");
     probe.style.color = `var(${variable})`;

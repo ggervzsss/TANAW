@@ -403,7 +403,7 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
   expect(addressBox!.y).toBeGreaterThan(contactBox!.y + contactBox!.height);
   expect(addressBox!.width).toBeGreaterThan(contactBox!.width * 1.8);
   await expect(detailsDialog.getByText("Not specified", { exact: true })).toBeVisible();
-  await expect(detailsDialog.getByRole("button", { name: "View Visitor Insights" })).toBeVisible();
+  await expect(detailsDialog.getByRole("button", { name: "View visitor insights" })).toBeVisible();
   await detailsDialog.getByRole("button", { name: "Close modal" }).click();
 
   await collapse.click();
@@ -474,11 +474,11 @@ test("presents Visitor Insights as an accessible analytical workspace and highli
   await expect(insights.getByText("Last daily estimate for each establishment")).toBeVisible();
   await expect(insights.locator(".recharts-bar-rectangle")).toHaveCount(2);
 
-  const selectedRange = insights.getByRole("tab", { name: "7 Days" });
+  const selectedRange = insights.getByRole("tab", { name: "7 days" });
   await expect(selectedRange).toHaveAttribute("aria-selected", "true");
   await selectedRange.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(insights.getByRole("tab", { name: "30 Days" })).toHaveAttribute("aria-selected", "true");
+  await expect(insights.getByRole("tab", { name: "30 days" })).toHaveAttribute("aria-selected", "true");
   await insights.getByRole("button", { name: "Close visitor insights" }).click();
   await expect(openInsights).toBeVisible();
 });

@@ -43,10 +43,10 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           <button
             type="button"
             onClick={onOpenInsights}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-800"
           >
             <BarChart3 size={15} />
-            View Visitor Insights
+            View visitor insights
           </button>
         </section>
 
