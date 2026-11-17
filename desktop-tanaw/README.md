@@ -18,7 +18,7 @@ place on the enterprise computer.
 - **Dashboard:** view occupancy, estimated visitor figures, and activity history.
 - **Reports:** prepare submissions, follow their status, and retry pending synchronization.
 - **Support:** create tickets and follow replies.
-- **Account tools:** manage profile and security settings, notifications, display preferences, and help.
+- **Account tools:** manage profile and security settings, notifications, display preferences, developer settings, and help.
 
 ## Dashboard and Reports data
 
@@ -56,8 +56,30 @@ count.
 
 Counts depend on camera placement, lighting, and visibility. Unique visitors are
 estimates based on appearance matching, not facial recognition, and a visitor
-seen by several cameras on the same day counts once. Camera accuracy and
-sustained workloads need validation with representative footage.
+seen by several cameras on the same day counts once. There is one gallery of
+visitors per establishment: a camera's **Unique Visitors** figure counts the
+establishment's visitors seen on that camera today, so with one camera it equals
+the report. Camera accuracy and sustained workloads need validation with
+representative footage.
+
+### Performance profile
+
+**Developer Settings** (account menu) sets how hard this computer works on every
+camera. It is saved on the computer, not with a camera or an account, and
+changing it restarts running cameras with their own settings. Camera Monitoring
+shows the profile in use and its AI frame rate, with a link to change it.
+
+| Profile               | Detector         | Appearance matching    | Use on                                    |
+| --------------------- | ---------------- | ---------------------- | ----------------------------------------- |
+| Auto (recommended)    | Chosen by TANAW  | Chosen by TANAW        | Any computer; the selector shows the pick |
+| Emergency / Low Power | YOLO11n at 480px | Off (Open Space: fast) | Very old computers                        |
+| Compatibility         | YOLO11n at 640px | Off (Open Space: fast) | Older laptops and CPU-only computers      |
+| Balanced              | YOLO11s at 640px | Fast                   | Capable computers                         |
+| High Accuracy         | YOLO11m at 640px | Quality                | Strong computers, ideally with a GPU      |
+
+Auto picks Balanced with an NVIDIA GPU (CUDA), Compatibility with OpenVINO, and
+Emergency otherwise. Only High Accuracy uses the quality appearance model, which
+matches visitors more reliably and runs the more accurate male/female head.
 
 ### Reports and synchronization
 
@@ -91,12 +113,23 @@ visitors. Entries, exits, occupancy and Open Space presence are not split, and n
 screen shows a live male/female count; the split appears in Reports and the DOT
 form.
 
+For testing, **Developer Settings** (account menu) has two switches saved on
+this computer only. **Detection details** labels each person's box with its
+tracker number, state and detection confidence; **Male/female estimate** adds
+that person's live estimate and the evidence behind it. Without them, people get
+a plain box. The live estimate is never stored.
+
 - A small classifier (a "sex head") reads the appearance embedding TANAW
   already computes for re-identification. Every good view of a visitor, on any
   camera, adds evidence.
 - The day's female count is the sum of the visitors' probabilities, adjusted to
   the day's own male/female mix. Visitors never seen clearly enough receive the
   day's share, so there is no "unknown" group.
+- The day's mix starts from an even split worth 20 visitors, so a small day that
+  leans one way moves part of the way rather than being counted as all one sex;
+  a day of hundreds of visitors is set by its own evidence.
+- The fast head (82%) runs with Balanced and lower profiles and the quality head
+  (86%) with High Accuracy (see Performance profile).
 - Estimates need people's bodies in view: mount cameras angled toward people,
   not pointing straight down.
 - The heads live in `ml-service/models/sex_head_fast.npz` and

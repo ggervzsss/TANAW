@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../../../../src/types/enterprise";
 import {
+  applyDevicePerformanceProfile,
   getMlHealth,
   getMlServiceStatus,
   getStreamUrl,
@@ -30,6 +31,33 @@ describe("secure camera service requests", () => {
       expect(call[2]).not.toHaveProperty("password");
       expect(call[2]).not.toHaveProperty("username");
     }
+  });
+
+  it("starts cameras with this computer's performance profile", async () => {
+    const request = vi.fn().mockResolvedValue({ message: "Started" });
+    vi.stubGlobal("window", { tanawCameraCredentials: { request } });
+    vi.stubGlobal("localStorage", { getItem: () => null });
+    await startCameraProcessing("http://127.0.0.1:8765", camera(), "enterprise:1");
+    expect(request.mock.calls[0]?.[2]).toMatchObject({ processing_profile: "auto", reid_mode: "auto" });
+
+    vi.stubGlobal("localStorage", { getItem: () => "high_accuracy" });
+    await startCameraProcessing("http://127.0.0.1:8765", camera(), "enterprise:1");
+    expect(request.mock.calls[1]?.[2]).toMatchObject({ processing_profile: "high_accuracy", reid_mode: "quality" });
+  });
+
+  it("saves this computer's profile and asks the service to restart running cameras", async () => {
+    const request = vi.fn().mockResolvedValue({ body: JSON.stringify({ restarted_count: 2 }), ok: true, status: 200, statusText: "OK" });
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", { clearTimeout, setTimeout, tanawMlService: { request }, addEventListener: () => undefined, removeEventListener: () => undefined });
+    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => void values.set(key, value) });
+
+    await expect(applyDevicePerformanceProfile("http://127.0.0.1:8765", "high_accuracy")).resolves.toBe(2);
+
+    expect(values.get("tanaw:device-performance-profile")).toBe("high_accuracy");
+    const call = request.mock.calls[0]?.[0] as { body: string; method: string; url: string };
+    expect(call.method).toBe("POST");
+    expect(call.url).toContain("/cameras/performance-profile");
+    expect(JSON.parse(call.body)).toEqual({ processing_profile: "high_accuracy", reid_mode: "quality" });
   });
 
   it("delegates credential injection to Electron without sending a password from renderer state", async () => {

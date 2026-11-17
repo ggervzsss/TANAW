@@ -30,6 +30,8 @@ class DisplayTrack:
     identity_score: float | None = None
     identity_source: str | None = None
     counting_debug: dict[str, Any] | None = None
+    # Live, unsaved male/female estimate for developer mode; see CameraProcessingManager.
+    sex_estimate: dict[str, Any] | None = None
 
 
 class CameraFrameRenderer:

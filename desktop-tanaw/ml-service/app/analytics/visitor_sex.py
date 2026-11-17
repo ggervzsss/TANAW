@@ -13,6 +13,12 @@ sum toward half; the probabilities are therefore re-weighted to the day's own mi
 expectation-maximisation over the day's visitors (Saerens et al., 2002), before summing.
 Visitors never seen well enough receive the day's estimated female share, so no "unknown"
 category is needed.
+
+Plain (maximum-likelihood) EM runs away on small or one-sided days: when most visitors lean even
+slightly the same way, every iteration pushes the share further until it reaches 0 or 1 and
+every visitor is counted as one sex. The share is therefore a maximum a posteriori estimate
+with a Beta prior worth ``MIX_PRIOR_STRENGTH`` visitors at an even mix: a day of a few visitors
+moves the share only part of the way, while a day of hundreds is set by its own evidence.
 """
 
 from __future__ import annotations
@@ -29,6 +35,8 @@ MIN_VISITORS_FOR_SHARE = 5
 DEFAULT_FEMALE_SHARE = 0.5
 # Heads are trained and calibrated class-balanced, so their probabilities assume this mix.
 HEAD_FEMALE_PRIOR = 0.5
+# Pseudo-visitors at an even mix that the day's share estimate starts from (see module notes).
+MIX_PRIOR_STRENGTH = 20.0
 
 
 @dataclass(frozen=True)
@@ -69,16 +77,24 @@ def reweight_to_share(probabilities: list[float], share: float) -> list[float]:
 
 
 def adjust_to_day_mix(
-    probabilities: list[float], iterations: int = 200, tolerance: float = 1e-7
+    probabilities: list[float],
+    prior_strength: float = MIX_PRIOR_STRENGTH,
+    iterations: int = 500,
+    tolerance: float = 1e-7,
 ) -> tuple[list[float], float]:
-    """Estimate the day's female share by EM and return probabilities re-weighted to it."""
+    """Estimate the day's female share by MAP-EM and return probabilities re-weighted to it.
+
+    ``prior_strength`` is the number of pseudo-visitors at an even mix; 0 gives plain EM.
+    """
     if not probabilities:
         return [], DEFAULT_FEMALE_SHARE
-    share = sum(probabilities) / len(probabilities)
+    pseudo_female = prior_strength * DEFAULT_FEMALE_SHARE
+    total = len(probabilities) + prior_strength
+    share = (sum(probabilities) + pseudo_female) / total
     adjusted = probabilities
     for _ in range(iterations):
         adjusted = reweight_to_share(probabilities, share)
-        updated = sum(adjusted) / len(adjusted)
+        updated = (sum(adjusted) + pseudo_female) / total
         if abs(updated - share) < tolerance:
             share = updated
             break

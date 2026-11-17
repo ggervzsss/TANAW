@@ -15,6 +15,8 @@ from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
     CameraTestRequest,
+    ProcessingProfile,
+    ReIdMode,
     TripwireLine,
     TripwirePoint,
 )
@@ -335,6 +337,28 @@ class CameraPipelineRegistry:
                 self._config_fingerprints.pop(camera_id, None)
             logger.info("Stopped processing pipeline for camera %s.", camera_id)
             return was_running
+
+    def apply_performance_profile(
+        self, processing_profile: ProcessingProfile, reid_mode: ReIdMode
+    ) -> int:
+        """Restart running cameras with this computer's new performance profile.
+
+        Each camera restarts from the start request it is running with, so no credentials need
+        to be resent. Returns how many cameras were restarted.
+        """
+        with self._lock:
+            running = [pipeline for pipeline in self._pipelines.values() if pipeline.running]
+        restarted = 0
+        for pipeline in running:
+            config = pipeline.current_config
+            if config is None or (
+                config.processing_profile == processing_profile and config.reid_mode == reid_mode
+            ):
+                continue
+            update = {"processing_profile": processing_profile, "reid_mode": reid_mode}
+            if self.request_start(config.model_copy(update=update)):
+                restarted += 1
+        return restarted
 
     def stop_all(self) -> int:
         with self._lifecycle_lock:

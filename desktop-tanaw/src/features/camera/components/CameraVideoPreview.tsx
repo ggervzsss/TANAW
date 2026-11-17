@@ -7,6 +7,8 @@ import { CameraOverlayConfig } from "./CameraOverlayConfig";
 import { Video, Wifi, WifiOff, CircleAlert, RefreshCw } from "lucide-react";
 
 import { DEFAULT_CAMERA_DISPLAY, type CameraDisplayPreferences } from "../model/camera-display";
+import { trackLabelLines } from "../model/track-labels";
+import { useDeveloperSettings } from "../../preferences/developer-settings";
 
 type CameraVideoPreviewProps = {
   displayPreferences?: CameraDisplayPreferences;
@@ -94,6 +96,8 @@ export function CameraVideoPreview({
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
   const visibleTracks = detections.tracks.filter((track) => track.confidence >= activeCam.confidence);
+  const developer = useDeveloperSettings();
+  const showsTrackLabels = developer.detectionLabels || developer.demographics;
   const fpsLabel = health?.analytics_fps ? `${health.analytics_fps.toFixed(1)} AI FPS` : "AI FPS Adaptive";
 
   const clearPreviewTimers = useCallback(() => {
@@ -289,7 +293,7 @@ export function CameraVideoPreview({
           )}
         </div>
       )}
-      {(displayPreferences.people || displayPreferences.labels) && isActuallyLive && contentRect && frameWidth > 0 && frameHeight > 0 && (
+      {(displayPreferences.people || showsTrackLabels) && isActuallyLive && contentRect && frameWidth > 0 && frameHeight > 0 && (
         <div className="pointer-events-none absolute" style={{ height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width }}>
           {visibleTracks.map((track) => {
             const [x1, y1, x2, y2] = track.bbox;
@@ -304,20 +308,30 @@ export function CameraVideoPreview({
             const triggerTop = clampPercent((triggerPoint[1] / frameHeight) * 100);
             const isCrossing = track.direction === "entry" || track.direction === "exit";
             const isOutsideRoi = track.inside_roi === false;
-            const sourceSuffix = track.source_track_id !== track.track_id ? ` | src ${track.source_track_id}` : "";
-            const visit = area?.active_visits.find((v) => v.track_generation === track.track_id);
-            const label = activeCam.analysisMode === "open_space" ? (visit ? "In monitored area" : "Observing") : track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
+            const labelLines = showsTrackLabels
+              ? trackLabelLines(track, {
+                  analysisMode: activeCam.analysisMode ?? "entrance_exit",
+                  inMonitoredArea: Boolean(area?.active_visits.some((visit) => visit.track_generation === track.track_id)),
+                  developer,
+                })
+              : [];
             const tone = getTrackTone(isOutsideRoi, isCrossing);
 
             return (
               <div key={track.track_id} className="contents">
                 <div
-                  className={`absolute bg-transparent ${displayPreferences.people ? `border ${tone.boxClass}` : ""}`}
+                  data-track-id={track.track_id}
+                  className={`absolute bg-transparent ${displayPreferences.people || labelLines.length > 0 ? `border ${tone.boxClass}` : ""}`}
                   style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}
                 >
-                  {displayPreferences.labels && (
-                    <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
-                      {label} | {(track.confidence * 100).toFixed(0)}%
+                  {labelLines.length > 0 && (
+                    <span
+                      data-testid="track-developer-label"
+                      className={`absolute top-1 left-1 grid gap-0.5 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}
+                    >
+                      {labelLines.map((line) => (
+                        <span key={line}>{line}</span>
+                      ))}
                     </span>
                   )}
                 </div>

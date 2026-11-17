@@ -842,6 +842,8 @@ class _ChurningAppearanceResolver:
 
 
 class _SpyReIdentifier:
+    embedding_space = "spy-reid"
+
     def __init__(self) -> None:
         self.embed_calls = 0
 

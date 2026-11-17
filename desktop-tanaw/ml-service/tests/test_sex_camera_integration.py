@@ -9,7 +9,7 @@ import numpy as np
 from app.attributes import SexEstimator, write_sex_head
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
-from app.config.camera_config import CameraStartRequest
+from app.config.camera_config import CameraStartRequest, DetectionTrackResponse
 from app.counting.geometry import Centroid
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.storage.repositories.establishment_repository import day_bounds
@@ -103,3 +103,33 @@ def test_doorway_entry_is_counted_as_female_from_its_evidence(tmp_path: Path) ->
         assert result["entries"] == 1
     finally:
         door.close()
+
+
+def test_live_estimate_is_shown_per_track_but_never_stored(tmp_path: Path) -> None:
+    manager = CameraProcessingManager(str(tmp_path), camera_id=1)
+    try:
+        manager._sex_estimator = estimator(tmp_path, manager, fast=1, quality=1)
+        unseen = manager._live_sex_estimate(1)
+        assert unseen is not None and unseen["female_probability"] is None
+        manager._appearance_buffer.record_sample(1, VECTOR, 0.9, 1)
+        live = manager._live_sex_estimate(1)
+        assert live is not None
+        assert live["female_probability"] > 0.9
+        assert live["evidence_weight"] == 0.9
+        assert manager._live_sex_estimate(0) is None
+        assert manager._live_sex_estimate(-3) is None
+        manager._sex_estimator = SexEstimator()
+        assert manager._live_sex_estimate(1) is None
+        DetectionTrackResponse.model_validate(
+            {
+                "track_id": 1,
+                "source_track_id": 1,
+                "bbox": (0, 0, 10, 20),
+                "confidence": 0.9,
+                "centroid": (5, 10),
+                "trigger_point": (5, 20),
+                "sex_estimate": live,
+            }
+        )
+    finally:
+        manager.close()

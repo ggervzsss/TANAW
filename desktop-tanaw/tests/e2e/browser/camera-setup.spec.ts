@@ -201,7 +201,6 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   expect(state.profiles()[0].name).toBe("Tapo Camera");
   await page.getByRole("tab", { name: "Display", exact: true }).click();
   await page.getByRole("switch", { name: "Show Detected People", exact: true }).click();
-  await page.getByRole("switch", { name: "Show Visitor Labels", exact: true }).click();
   await page.getByRole("tab", { name: "Information", exact: true }).click();
   await expect(page.getByLabel("Camera Name", { exact: true })).toHaveValue("Updated Tapo");
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();

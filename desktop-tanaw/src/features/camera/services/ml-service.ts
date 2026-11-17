@@ -3,6 +3,7 @@ import type { EstablishmentLive, EstablishmentSummary } from "./establishment.ty
 import type { EstablishmentReportPeriod } from "./establishment.types";
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
+import { devicePerformanceRuntime, readDevicePerformanceProfile, writeDevicePerformanceProfile, type DevicePerformanceProfile } from "../model/device-performance";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
 import { assertUniqueCameraIps, canonicalizeCameraIp } from "../utils/camera-ip-uniqueness";
 import {
@@ -303,11 +304,11 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     event_cooldown_seconds: 3.6,
     exit_line: toMlTripwireLine(camera.config.tripwires.exit),
     paired_line_max_gap_seconds: 18,
-    processing_profile: camera.processingProfile,
+    // Detector and appearance models follow this computer's performance profile.
+    ...devicePerformanceRuntime(readDevicePerformanceProfile()),
     runtime_backend: "auto",
     tracker_profile: "auto",
     pending_reid_wait_seconds: 0.6,
-    reid_mode: camera.reidMode ?? "auto",
     reverse_direction: camera.config.reverse,
     roi: toMlRoi(camera.config.roi),
     stream_fps: 24,
@@ -366,6 +367,17 @@ export async function updateCameraCountingConfig(
 
 export async function stopCameraProcessing(baseUrl: string, cameraId: number): Promise<{ message: string }> {
   return requestJson<{ message: string }>(`${baseUrl}/camera/${cameraId}/stop`, { method: "POST" }, 5000);
+}
+
+/** Saves this computer's profile and restarts running cameras with it; returns how many restarted. */
+export async function applyDevicePerformanceProfile(baseUrl: string, profile: DevicePerformanceProfile): Promise<number> {
+  writeDevicePerformanceProfile(profile);
+  const result = await requestJson<{ restarted_count: number }>(
+    `${baseUrl}/cameras/performance-profile`,
+    { method: "POST", body: JSON.stringify(devicePerformanceRuntime(profile)) },
+    10000,
+  );
+  return result.restarted_count;
 }
 
 export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true) {

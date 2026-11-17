@@ -185,6 +185,17 @@ class EstablishmentRepository:
         ]
         return rows, corrections
 
+    def camera_unique_count(self, camera_id: int, business_date: str) -> int:
+        """Establishment visitors identified on one camera that day, as Reports counts them."""
+        with self.database.connection() as db:
+            row = db.execute(
+                "select count(distinct visitor_id) from establishment_observations "
+                "where business_date=? and camera_id=? and qualified=1 "
+                "and visitor_id is not null and identity_confidence='high'",
+                (business_date, camera_id),
+            ).fetchone()
+        return int(row[0])
+
     def today_balance(self, now: datetime | None = None) -> int:
         """The shared Entry / Exit balance since the start of today's business day."""
         now = now or datetime.now(UTC)

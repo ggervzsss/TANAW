@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
 
@@ -13,6 +13,7 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 import numpy as np
 
 from app.analytics.open_space import AreaVisitTracker
+from app.analytics.visitor_sex import MIN_EVIDENCE_WEIGHT, sigmoid
 from app.attributes import SexEstimator, SexEvidence
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
 from app.camera.capture_worker import CaptureWorker
@@ -56,6 +57,9 @@ from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
 from app.storage.repositories.area_repository import parse as parse_area_timestamp
+from app.storage.repositories.establishment_repository import (
+    business_date_for as establishment_business_date,
+)
 from app.storage.session_store import SessionStore
 from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
@@ -151,8 +155,8 @@ class CameraProcessingManager:
         self._area_pending: list[dict[str, Any]] = []
         self._area_interrupt_requested = False
         self._area_last_signature: tuple[object, ...] | None = None
-        self._area_visitor_registry: UniqueVisitorRegistry | None = None
-        self._area_identity_camera_id: int | None = None
+        # The zone's unique visitors as Reports counts them: (business date, count).
+        self._area_unique_visitors: tuple[str, int] | None = None
         self._area_frame_index = 0
         self._establishment_registry: EstablishmentRegistry | None = None
 
@@ -166,6 +170,12 @@ class CameraProcessingManager:
     def running(self) -> bool:
         with self._lock:
             return self._state.running
+
+    @property
+    def current_config(self) -> CameraStartRequest | None:
+        """The start request this camera is running with, credentials included."""
+        with self._lock:
+            return self._config
 
     def test_connection(
         self,
@@ -228,8 +238,7 @@ class CameraProcessingManager:
             self._area_tracker = None
             self._area_snapshot = None
             self._area_snapshot_at = None
-            self._area_visitor_registry = None
-            self._area_identity_camera_id = None
+            self._area_unique_visitors = None
             self._session_updated_at = None
         restored = self.restore_last_session() if restore_session else False
         return {
@@ -601,6 +610,7 @@ class CameraProcessingManager:
                         "identity_score": track.identity_score,
                         "identity_source": track.identity_source,
                         "counting_debug": track.counting_debug,
+                        "sex_estimate": track.sex_estimate,
                     }
                     for track in self._latest_tracks
                 ],
@@ -1263,6 +1273,7 @@ class CameraProcessingManager:
                         tracking_confidence=tracking_confidence,
                         counting_confidence=counting_confidence,
                     ),
+                    sex_estimate=self._live_sex_estimate(track.track_id),
                 )
             )
 
@@ -1319,16 +1330,24 @@ class CameraProcessingManager:
         self._area_frame_index = 0
         self._appearance_buffer.reset()
         self._quality_appearance_buffer.reset()
-        self._area_identity_camera_id = config.camera_id
-        self._area_visitor_registry = UniqueVisitorRegistry(
-            self._session_store,
-            model_name=self._reidentifier.model_name,
-            quality_model_name=self._quality_reidentifier.model_name,
-            identity_namespace=f"open_space:{self._area_revision_id}",
-            record_sightings=False,
-        )
-        self._area_visitor_registry.prepare(config.camera_id)
+        self._refresh_area_unique_visitors(config.camera_id)
         self._publish_area_snapshot()
+
+    def _refresh_area_unique_visitors(self, camera_id: int | None) -> None:
+        """Re-read the zone's unique visitors from the establishment observations.
+
+        The zone shows the same identities Reports counts (one establishment-wide gallery), so a
+        camera's figure never disagrees with the report; with one camera they are equal.
+        """
+        registry = self._establishment_registry
+        if registry is None or camera_id is None:
+            self._area_unique_visitors = None
+            return
+        business_date = establishment_business_date(datetime.now(UTC))
+        self._area_unique_visitors = (
+            business_date,
+            registry.repository.camera_unique_count(camera_id, business_date),
+        )
 
     def _publish_area_snapshot(self) -> None:
         tracker = self._area_tracker
@@ -1342,10 +1361,9 @@ class CameraProcessingManager:
             if tracker.last_frame_at is not None
             else None,
         }
-        registry = self._area_visitor_registry
-        now = datetime.now(UTC)
+        unique = self._area_unique_visitors
         unique_available = bool(
-            registry is not None
+            unique is not None
             and self._config is not None
             and not self._config.preview_only
             and self._config.unique_counting_mode == "estimated_reid"
@@ -1354,12 +1372,8 @@ class CameraProcessingManager:
         )
         snapshot.update(
             unique_visitors_available=unique_available,
-            unique_visitors=(
-                registry.confirmed_visitor_count(self._area_identity_camera_id, now)
-                if registry is not None and unique_available
-                else None
-            ),
-            unique_visitors_date=registry.business_date_for(now) if registry else None,
+            unique_visitors=unique[1] if unique is not None and unique_available else None,
+            unique_visitors_date=unique[0] if unique is not None else None,
         )
         with self._lock:
             self._area_snapshot = snapshot
@@ -1371,12 +1385,10 @@ class CameraProcessingManager:
             observed_at = self._area_snapshot_at
         if snapshot is not None and (observed_at is None or time.monotonic() - observed_at > 5):
             snapshot.update(available=False, presence=None)
-        registry = self._area_visitor_registry
-        if snapshot is not None and registry is not None:
-            if snapshot.get("unique_visitors_date") != registry.business_date_for(
-                datetime.now(UTC)
-            ):
-                snapshot.update(unique_visitors_available=False, unique_visitors=None)
+        if snapshot is not None and snapshot.get(
+            "unique_visitors_date"
+        ) != establishment_business_date(datetime.now(UTC)):
+            snapshot.update(unique_visitors_available=False, unique_visitors=None)
         return snapshot
 
     def _save_area(self, now: float, force: bool = False) -> None:
@@ -1402,6 +1414,10 @@ class CameraProcessingManager:
         at = tracker.timestamp(tracker.last_frame_at if tracker.last_frame_at is not None else now)
         repo.checkpoint(run_id, tracker.active_records(), self._area_pending, state, at)
         self._save_establishment_visits([*tracker.active_records(), *self._area_pending])
+        previous_unique = self._area_unique_visitors
+        self._refresh_area_unique_visitors(self._config.camera_id if self._config else None)
+        if self._area_unique_visitors != previous_unique:
+            self._publish_area_snapshot()
         self._area_pending.clear()
         self._area_last_signature = signature
         self._area_last_save = now
@@ -1509,6 +1525,7 @@ class CameraProcessingManager:
                 trigger_point=(int(t.counting_point.x), int(t.counting_point.y)),
                 inside_roi=t.track_id in observations,
                 counting_eligible=t.track_id in observations,
+                sex_estimate=self._live_sex_estimate(t.track_id),
             )
             for t in tracks
         ]
@@ -1523,14 +1540,17 @@ class CameraProcessingManager:
         height: int,
         now: float,
     ) -> None:
-        registry = self._area_visitor_registry
-        if registry is None or session.config.unique_counting_mode != "estimated_reid":
+        """Collect appearance samples for tracks in the zone.
+
+        Identity is resolved once, by the establishment gallery when visits are saved
+        (``_save_establishment_visits``); the zone keeps no gallery of its own.
+        """
+        if session.config.unique_counting_mode != "estimated_reid":
             return
         if not _fast_reid_enabled(self._effective_reid_mode):
             return
         observed_ids = tracker.observed_track_ids
         inside = {t.track_id: t for t in tracks if t.track_id in observed_ids}
-        updated: set[int] = set()
         for worker, buffer, max_age in (
             (self._reid_worker, self._appearance_buffer, FAST_REID_RESULT_MAX_AGE_SECONDS),
             (
@@ -1553,36 +1573,9 @@ class CameraProcessingManager:
                 buffer.record_sample(
                     track.track_id, result.embedding, result.quality, self._area_frame_index
                 )
-                updated.add(track.track_id)
         for track in inside.values():
             self._schedule_track_embedding(
                 session, frame, track, width, height, now, frame_index=self._area_frame_index
-            )
-            if (
-                track.track_id not in updated
-                or not self._track_has_reid_consensus(track.track_id)
-                or not tracker.record(tracker.visits[track.track_id])["qualified"]
-            ):
-                continue
-            embedding = self._appearance_buffer.embedding_for_track(track.track_id)
-            if embedding is None:
-                continue
-            registry.resolve_entry(
-                track_id=track.track_id,
-                camera_id=session.config.camera_id,
-                embedding=embedding,
-                quality_embedding=self._quality_appearance_buffer.embedding_for_track(
-                    track.track_id
-                ),
-                detection_confidence=track.confidence,
-                bbox=track.bbox,
-                now=tracker.wall_anchor + timedelta(seconds=now - tracker.anchor),
-                excluded_visitor_ids=frozenset(
-                    visitor_id
-                    for other in inside
-                    if other != track.track_id
-                    if (visitor_id := registry.visitor_id_for_track(other)) is not None
-                ),
             )
 
     def _schedule_track_embedding(
@@ -1935,6 +1928,25 @@ class CameraProcessingManager:
         return next((item for item in available if item.weight > 0), None) or next(
             iter(available), None
         )
+
+    def _live_sex_estimate(self, track_id: int) -> dict[str, Any] | None:
+        """The track's current male/female estimate, for developer mode only.
+
+        It is computed from the same evidence a saved observation would carry, but it is never
+        stored: Reports keep only daily totals.
+        """
+        if track_id <= 0:
+            return None
+        evidence = self._sex_evidence(track_id)
+        if evidence is None:
+            return None
+        return {
+            "female_probability": sigmoid(evidence.logit_sum / evidence.weight)
+            if evidence.weight >= MIN_EVIDENCE_WEIGHT
+            else None,
+            "evidence_weight": round(evidence.weight, 3),
+            "model": evidence.model,
+        }
 
     def _save_establishment_visits(self, records: list[dict[str, Any]]) -> None:
         registry, config = self._establishment_registry, self._config

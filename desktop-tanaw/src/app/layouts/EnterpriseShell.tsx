@@ -28,6 +28,7 @@ import {
   SecurityView,
   TicketsView,
   DisplayPreferencesView,
+  DeveloperSettingsView,
   HelpCenterView,
   preloadEnterpriseView,
   scheduleEnterpriseViewPreload,
@@ -46,6 +47,7 @@ const viewRouteById: Record<EnterpriseView, string> = {
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
   "display-preferences": routePaths.enterpriseDisplayPreferences,
+  "developer-settings": routePaths.enterpriseDeveloperSettings,
   help: routePaths.enterpriseHelp,
 };
 
@@ -307,6 +309,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}
               {activeView === "display-preferences" && <DisplayPreferencesView />}
+              {activeView === "developer-settings" && <DeveloperSettingsView />}
               {activeView === "help" && <HelpCenterView />}
               {activeView === "notifications" && (
                 <NotificationsView

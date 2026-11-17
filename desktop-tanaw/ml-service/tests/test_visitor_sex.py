@@ -1,5 +1,6 @@
 """Daily male/female counts: one per unique visitor, always summing to the unique count."""
 
+import math
 import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -64,7 +65,7 @@ def test_every_visitor_is_male_or_female_and_unseen_visitors_take_the_day_share(
     assert counts.state == "estimated"
     assert counts.male_count is not None and counts.female_count is not None
     assert counts.male_count + counts.female_count == 10
-    # 5 seen female + 2 unseen × 0.625 (the day share) = 6.25
+    # Day share (5 + 20 × 0.5) / (8 + 20) ≈ 0.536; 5 seen female + 2 unseen × 0.536 ≈ 6.07
     assert counts.female_count == 6
     assert counts.evidence_share == pytest.approx(0.8)
     assert counts.models == (MODEL,)
@@ -125,11 +126,37 @@ def test_days_far_from_an_even_mix_are_counted_close_to_the_truth() -> None:
 
 def test_mix_adjustment_finds_the_day_share() -> None:
     probabilities = [0.9] * 70 + [0.1] * 30
-    adjusted, share = adjust_to_day_mix(probabilities)
+    adjusted, share = adjust_to_day_mix(probabilities, prior_strength=0)
     assert 0.7 < share < 0.8
     assert sum(adjusted) == pytest.approx(share * 100)
+    _, shrunk = adjust_to_day_mix(probabilities)
+    assert 0.5 < shrunk < share
     assert reweight_to_share([0.5], 0.8) == pytest.approx([0.8])
     assert adjust_to_day_mix([]) == ([], 0.5)
+
+
+# Female probabilities of the ten visitors on a real Open Space test day; plain EM drove the
+# day's share to 1.0 and reported all ten as female.
+LEANING_DAY = [0.391, 0.468, 0.472, 0.505, 0.532, 0.654, 0.707, 0.793, 0.815, 0.818]
+
+
+def test_a_day_leaning_one_way_is_not_counted_as_all_one_sex() -> None:
+    _, runaway = adjust_to_day_mix(LEANING_DAY, prior_strength=0)
+    assert runaway > 0.99
+    adjusted, share = adjust_to_day_mix(LEANING_DAY)
+    assert 0.5 < share < 0.65
+    assert 5 <= round(sum(adjusted)) <= 7
+    rows = [row(f"v{index}", math.log(p / (1 - p))) for index, p in enumerate(LEANING_DAY)]
+    counts = daily_sex_counts(rows, {f"v{index}" for index in range(10)})
+    assert counts.female_count is not None and 5 <= counts.female_count <= 7
+    assert counts.male_count is not None and counts.male_count >= 3
+
+
+@pytest.mark.parametrize("lean", [0.3, 0.45, 0.55, 0.7])
+def test_identical_leaning_visitors_never_collapse_to_one_sex(lean: float) -> None:
+    for visitors in (5, 10, 30):
+        _, share = adjust_to_day_mix([lean] * visitors)
+        assert 0.1 < share < 0.9
 
 
 def test_recent_share_uses_only_estimated_days_with_evidence() -> None:

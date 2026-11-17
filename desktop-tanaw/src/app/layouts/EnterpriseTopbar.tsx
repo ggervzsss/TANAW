@@ -1,4 +1,4 @@
-import { BookOpen, Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
+import { BookOpen, Camera, ChevronDown, Code2, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
@@ -309,6 +309,13 @@ export function EnterpriseTopbar({
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
                     >
                       <SlidersHorizontal size={14} /> Display Preferences
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateFromMenu("developer-settings")}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                    >
+                      <Code2 size={14} /> Developer Settings
                     </button>
                     <button
                       type="button"

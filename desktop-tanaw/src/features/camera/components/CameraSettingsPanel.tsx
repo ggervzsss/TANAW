@@ -422,7 +422,6 @@ export function CameraSettingsPanel(props: Props) {
               <SectionHeading title="Camera Display" description="Choose what appears on this camera's preview. These controls do not change the AI counting rules." />
               <DesignSwitch label="Show Detected People" description="Display boxes around detected people." checked={display.people} onChange={(people) => setDisplay({ ...display, people })} />
               <DesignSwitch label="Show Counting Area" description="Display the boundary of the monitored area." checked={display.area} onChange={(area) => setDisplay({ ...display, area })} />
-              <DesignSwitch label="Show Visitor Labels" description="Show labels beside detected people." checked={display.labels} onChange={(labels) => setDisplay({ ...display, labels })} />
               <p className="settings-display-note">
                 <Info size={20} />
                 These display preferences apply to {activeCam.name} only.

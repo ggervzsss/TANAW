@@ -142,6 +142,14 @@ export type MlDetectionTrack = {
   identity_score: number | null;
   identity_source: string | null;
   counting_debug: Record<string, unknown> | null;
+  /** Live, unsaved male/female estimate for developer mode. Older services omit it. */
+  sex_estimate?: MlLiveSexEstimate | null;
+};
+
+export type MlLiveSexEstimate = {
+  female_probability: number | null;
+  evidence_weight: number;
+  model: string;
 };
 
 export type MlDetections = {

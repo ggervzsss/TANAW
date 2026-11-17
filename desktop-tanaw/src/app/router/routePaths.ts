@@ -10,5 +10,6 @@ export const routePaths = {
   enterpriseNotifications: "/enterprise/notifications",
   enterpriseTickets: "/enterprise/tickets",
   enterpriseDisplayPreferences: "/enterprise/display-preferences",
+  enterpriseDeveloperSettings: "/enterprise/developer-settings",
   enterpriseHelp: "/enterprise/help",
 } as const;

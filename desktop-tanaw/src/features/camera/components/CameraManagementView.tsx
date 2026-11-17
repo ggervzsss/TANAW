@@ -7,6 +7,7 @@ import { useCameraManagement } from "../hooks/useCameraManagement";
 import { CameraAddModal } from "./CameraAddModal";
 import { CameraList, CameraSidebarToggle, CollapsedCameraListRail } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
+import { PerformanceStatus } from "./PerformanceStatus";
 
 type CameraManagementViewProps = {
   cameras: Camera[];
@@ -125,9 +126,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </CameraDialog>
       )}
 
-      <div className="camera-page-heading mb-4 shrink-0 px-1">
-        <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Monitoring</h2>
-        <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">View camera status and check if the counting is working properly.</p>
+      <div className="camera-page-heading mb-4 flex shrink-0 items-end justify-between gap-4 px-1">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Monitoring</h2>
+          <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">View camera status and check if the counting is working properly.</p>
+        </div>
+        <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
       </div>
 
       <div

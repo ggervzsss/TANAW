@@ -37,6 +37,7 @@ from app.config.camera_config import (
     EnterpriseContextRequest,
     EnterpriseContextResponse,
     HealthResponse,
+    PerformanceProfileRequest,
     SessionResponse,
 )
 from app.config.report_config import (
@@ -203,6 +204,23 @@ def update_camera_counting_config(
         raise CameraApiError(
             409, "tripwire_worker_update_failed", redact_stream_credentials(str(exc))
         ) from exc
+
+
+@router.post("/cameras/performance-profile")
+def apply_performance_profile(
+    payload: PerformanceProfileRequest, request: Request
+) -> dict[str, Any]:
+    try:
+        restarted = _registry(request).apply_performance_profile(
+            payload.processing_profile, payload.reid_mode
+        )
+    except CameraCapacityError as exc:
+        raise CameraApiError(429, "capacity_limit", str(exc)) from exc
+    except ValueError as exc:
+        raise CameraApiError(
+            400, "invalid_camera_configuration", redact_stream_credentials(str(exc))
+        ) from exc
+    return {"message": "Performance profile applied.", "restarted_count": restarted}
 
 
 @router.post("/cameras/stop")
