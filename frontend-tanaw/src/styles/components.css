@@ -1519,7 +1519,7 @@ html.dark .tanaw-activation-banner__copy {
   border-radius: 16px !important;
   background: linear-gradient(135deg, rgb(255 255 255 / 0.98) 0%, rgb(244 251 246 / 0.98) 58%, rgb(255 250 235 / 0.98) 100%) !important;
   color: var(--tanaw-text) !important;
-  font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif !important;
+  font-family: var(--font-sans) !important;
   font-size: 0.9375rem !important;
   font-weight: 600 !important;
   line-height: 1.35 !important;

@@ -21,7 +21,7 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
         <div
           className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
             verified
-              ? "border-emerald-200 bg-emerald-50 text-[#065f46] dark:border-emerald-400/22 dark:bg-emerald-400/9 dark:text-emerald-300"
+              ? "border-emerald-200 bg-emerald-50 text-tanaw-ledger dark:border-emerald-400/22 dark:bg-emerald-400/9 dark:text-emerald-300"
               : "border-red-200 bg-red-50 text-red-700 dark:border-red-400/22 dark:bg-red-400/9 dark:text-red-200"
           }`}
         >
@@ -61,7 +61,7 @@ type DetailRowProps = {
 function DetailRow({ label, mono = false, tooltip, value }: DetailRowProps) {
   return (
     <InfoTooltip content={tooltip} focusable={false}>
-      <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 transition-colors group-hover:border-[#065f46]/30 group-focus:border-[#065f46]/30 dark:border-white/8 dark:bg-white/3 dark:group-hover:border-emerald-300/22">
+      <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 transition-colors group-hover:border-tanaw-ledger/30 group-focus:border-tanaw-ledger/30 dark:border-white/8 dark:bg-white/3 dark:group-hover:border-emerald-300/22">
         <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-500">{label}</p>
         <p className={`mt-1 text-xs leading-snug font-semibold wrap-break-word text-gray-800 dark:text-slate-200 ${mono ? "font-mono" : ""}`}>{value}</p>
       </div>

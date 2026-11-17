@@ -63,7 +63,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
             <div className="flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:text-slate-100">
               <div>
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
-                <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
+                <h3 className="text-(--tanaw-text) mt-1 text-lg font-bold">Official Artifact Viewer</h3>
                 <p className="text-xs font-semibold text-gray-500">LGU official format with data lineage.</p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -232,7 +232,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <header className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50/70 px-6 py-5 max-sm:px-5 dark:border-red-300/25 dark:bg-red-500/10">
                 <div className="min-w-0">
                   <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-red-700 uppercase">{report.id}</p>
-                  <h2 id="return-final-report-title" className="text-tanaw-navy text-xl leading-tight font-bold">
+                  <h2 id="return-final-report-title" className="text-(--tanaw-text) text-xl leading-tight font-bold">
                     Return Final Report for Revision
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-800">

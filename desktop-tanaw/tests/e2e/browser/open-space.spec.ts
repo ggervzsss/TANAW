@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mlResponse, mockMlRequest } from "./support/preload";
+import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 import type { Camera } from "../../../src/types/enterprise";
 
 test.describe.configure({ timeout: 60_000 });
@@ -442,5 +442,30 @@ test("camera settings tabs, scoped display saves, cancellation, editor undo and 
     await expect(settings.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
     await expect.poll(() => settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("camera-settings-" + width + ".png"), fullPage: true });
+  }
+});
+
+// Design review captures (DESIGN.md): run with TANAW_DESIGN_CAPTURE=<folder> to save screenshots.
+test("captures Dashboard and Camera Setup for design review", async ({ page }) => {
+  const folder = process.env.TANAW_DESIGN_CAPTURE;
+  test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setup(page, true, true);
+  for (const theme of ["light", "dark"] as const) {
+    await switchTheme(page, theme);
+    await page.goto("/#/enterprise/dashboard");
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.screenshot({ path: `${folder}/dashboard-${theme}.png`, fullPage: true });
+    await page.goto("/#/enterprise/cameras");
+    await expect(page.getByRole("heading", { name: "Live Metrics", exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.screenshot({ path: `${folder}/cameras-${theme}.png` });
+    await page.getByRole("button", { name: "Edit configuration" }).click();
+    await expect(page.getByRole("region", { name: "Camera Settings", exact: true })).toBeVisible();
+    await page.screenshot({ path: `${folder}/camera-settings-${theme}.png` });
+    await page.goto("/#/enterprise/developer-settings");
+    await expect(page.getByRole("heading", { name: "Developer Settings", exact: true })).toBeVisible();
+    await page.screenshot({ path: `${folder}/developer-settings-${theme}.png`, fullPage: true });
   }
 });

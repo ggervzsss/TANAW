@@ -124,7 +124,7 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
               <button
                 onClick={() => void onSave()}
                 disabled={isSaving || isStarting || Boolean(cameraIpError)}
-                className="flex items-center gap-1.5 rounded-xl bg-[#065f46] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
+                className="flex items-center gap-1.5 rounded-xl bg-tanaw-ledger px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 <Save size={14} /> {isSaving ? "Saving..." : isStarting ? "Restoring..." : "Save Config"}
               </button>
@@ -133,7 +133,7 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
             <>
               <button
                 onClick={onEdit}
-                className="camera-settings-button rounded-xl border border-gray-200 bg-white p-2 text-gray-500 transition-colors hover:border-[#065f46] hover:text-[#065f46] dark:border-white/10 dark:bg-white/3 dark:text-slate-400 dark:hover:border-emerald-400/35 dark:hover:text-emerald-300"
+                className="camera-settings-button rounded-xl border border-gray-200 bg-white p-2 text-gray-500 transition-colors hover:border-tanaw-ledger hover:text-tanaw-ledger dark:border-white/10 dark:bg-white/3 dark:text-slate-400 dark:hover:border-emerald-400/35 dark:hover:text-emerald-300"
                 aria-label="Edit configuration"
               >
                 <Settings size={20} /> <span>Settings</span>

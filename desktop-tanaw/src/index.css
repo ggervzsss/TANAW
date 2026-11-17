@@ -1,66 +1,30 @@
 @import "tailwindcss";
+/* TANAW design tokens, generated from design-system/tokens/tanaw.css (see design-system/DESIGN.md). */
+@import "./styles/tanaw-tokens.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
-  --font-sans: "Inter", "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
-  --text-xs: 0.78125rem;
-  --text-sm: 0.90625rem;
-  --text-base: 1.03125rem;
-  --text-lg: 1.15625rem;
-  --text-xl: 1.28125rem;
-  --text-2xl: 1.5625rem;
-  --text-3xl: 1.9375rem;
-  --text-4xl: 2.375rem;
-  --text-5xl: 3.0625rem;
-  --text-6xl: 3.8125rem;
-  --color-tanaw-green: #055b25;
-  --color-tanaw-green-dark: #044a1e;
-  --color-tanaw-navy: #2a3063;
-  --color-tanaw-red: #a40e0e;
-}
-
+/* Older variable names still used by the app, mapped onto the design tokens. */
 :root {
   --tanaw-root-font-size: 16px;
-  --tanaw-green: #064e2f;
-  --tanaw-green-dark: #033d24;
-  --tanaw-green-soft: #0f6b43;
-  --tanaw-gold: #d7b35a;
-  --tanaw-bg: #f7f7f3;
-  --tanaw-card: #ffffff;
-  --tanaw-text: #10241b;
-  --tanaw-muted: #6b7280;
-  --tanaw-border: #d8ded8;
-  --tanaw-error: #dc2626;
-  --tanaw-page-bg: #eef5f0;
-  --tanaw-page-bg-gradient: linear-gradient(145deg, #eef5f0, #f6f8f6);
-  --tanaw-surface: #ffffff;
-  --tanaw-surface-raised: #ffffff;
-  --tanaw-surface-inset: #f0f5f1;
-  --tanaw-control-bg: #ffffff;
-  --tanaw-control-hover: #edf4ef;
-  --tanaw-secondary-text: #64748b;
-  --tanaw-muted-text: #7b8794;
+  --tanaw-green: var(--tanaw-accent-ink);
+  --tanaw-green-dark: var(--tanaw-action-hover);
+  --tanaw-gold: var(--tanaw-gold-line);
+  --tanaw-secondary-text: var(--tanaw-text-muted);
   --tanaw-border-subtle: rgb(71 85 105 / 0.18);
   --tanaw-border-strong: rgb(71 85 105 / 0.3);
-  --tanaw-focus-ring: #0f766e;
-  --tanaw-shadow-soft: 0 12px 30px rgb(15 23 42 / 0.08);
-  --tanaw-shadow-raised: 0 18px 42px rgb(15 23 42 / 0.12);
-  --tanaw-topbar-height: 5.5rem;
+  --tanaw-shadow-soft: var(--shadow-tanaw-soft);
+  --tanaw-shadow-raised: var(--shadow-tanaw-raised);
   color-scheme: light;
+}
+
+.dark {
+  --tanaw-border-subtle: rgb(174 188 201 / 0.16);
+  --tanaw-border-strong: rgb(174 188 201 / 0.28);
 }
 
 html {
   font-size: var(--tanaw-root-font-size);
-}
-
-html[data-interface-scale="compact"] {
-  --tanaw-topbar-height: 5rem;
-}
-
-html[data-interface-scale="comfortable"] {
-  --tanaw-topbar-height: 6rem;
 }
 
 html[data-interface-scale="compact"] [data-density-adjustable="true"] {
@@ -69,14 +33,6 @@ html[data-interface-scale="compact"] [data-density-adjustable="true"] {
 
 html[data-interface-scale="comfortable"] [data-density-adjustable="true"] {
   padding: clamp(2rem, 3vw, 3rem) !important;
-}
-
-
-
-@media (max-width: 640px) {
-  :root {
-    --tanaw-topbar-height: 4.5rem;
-  }
 }
 
 html,
@@ -162,7 +118,7 @@ textarea,
   border-radius: 16px !important;
   background: linear-gradient(135deg, rgb(255 255 255 / 0.98) 0%, rgb(244 251 246 / 0.98) 58%, rgb(255 250 235 / 0.98) 100%) !important;
   color: var(--tanaw-text) !important;
-  font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif !important;
+  font-family: var(--font-sans) !important;
   font-size: 0.9375rem !important;
   font-weight: 600 !important;
   line-height: 1.35 !important;
@@ -1096,41 +1052,42 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 }
 
 /* Enterprise shell overrides */
+/* Enterprise shell roles, mapped onto the design tokens (light; theme-tokens.css maps dark). */
 .enterprise-shell {
-  --enterprise-app-bg: #f4f8f5;
-  --enterprise-card-bg: #ffffff;
-  --enterprise-card-elevated-bg: #ffffff;
-  --enterprise-panel-bg: #f0f5f1;
-  --enterprise-input-bg: #ffffff;
-  --enterprise-border: #c6d6cb;
-  --enterprise-border-soft: #d6e2d9;
-  --enterprise-text: #111827;
-  --enterprise-muted: #475569;
-  --enterprise-muted-soft: #64748b;
-  --enterprise-green-accent: #065f46;
-  --enterprise-gold-accent: #b7952b;
-  --enterprise-chart-entry: #047857;
-  --enterprise-chart-occupancy: #c96706;
-  --enterprise-chart-peak: #9a7218;
-  --enterprise-chart-grid: #d9e2dc;
-  --enterprise-chart-axis: #64748b;
-  --enterprise-chart-cursor: #64748b;
-  --enterprise-chart-active-stroke: #ffffff;
+  --enterprise-app-bg: var(--tanaw-page);
+  --enterprise-card-bg: var(--tanaw-surface);
+  --enterprise-card-elevated-bg: var(--tanaw-surface-raised);
+  --enterprise-panel-bg: var(--tanaw-surface-inset);
+  --enterprise-input-bg: var(--tanaw-control-bg);
+  --enterprise-border: var(--tanaw-border);
+  --enterprise-border-soft: var(--tanaw-border-soft);
+  --enterprise-text: var(--tanaw-text);
+  --enterprise-muted: var(--tanaw-text-secondary);
+  --enterprise-muted-soft: var(--tanaw-text-muted);
+  --enterprise-green-accent: var(--tanaw-accent-ink);
+  --enterprise-gold-accent: var(--tanaw-gold-ink);
+  --enterprise-chart-entry: var(--tanaw-chart-entry);
+  --enterprise-chart-occupancy: var(--tanaw-chart-occupancy);
+  --enterprise-chart-peak: var(--tanaw-chart-peak);
+  --enterprise-chart-grid: var(--tanaw-chart-grid);
+  --enterprise-chart-axis: var(--tanaw-chart-axis);
+  --enterprise-chart-cursor: var(--tanaw-chart-axis);
+  --enterprise-chart-active-stroke: var(--tanaw-surface);
   min-height: 100vh;
-  color: #0f172a;
-  background: #eef5f0;
+  color: var(--tanaw-text);
+  background: var(--tanaw-page-gradient);
 }
 
 .enterprise-topbar {
   position: relative;
   isolation: isolate;
   overflow: visible;
-  background-image: linear-gradient(90deg, #043817 0%, #075526 44%, #0c6a32 100%);
+  background-image: var(--tanaw-topbar-gradient);
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .dark .enterprise-topbar {
-  background-image: linear-gradient(90deg, #02090d 0%, #061714 48%, #0b2520 100%);
+  background-image: var(--tanaw-topbar-gradient);
   border-bottom-color: rgb(167 243 208 / 0.1);
   box-shadow: 0 16px 44px rgb(0 0 0 / 0.58);
 }

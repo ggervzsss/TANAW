@@ -63,7 +63,7 @@ export function EnterpriseFullMapView({
           <header className="flex flex-wrap items-start justify-between gap-4 border-b border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] px-5 py-4 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
             <div className="min-w-0">
               <p className="text-[10px] font-black tracking-[0.18em] text-emerald-700/80 uppercase">Map Location</p>
-              <h3 className="text-tanaw-navy mt-1 text-xl leading-tight font-bold">Full Map View</h3>
+              <h3 className="text-(--tanaw-text) mt-1 text-xl leading-tight font-bold">Full Map View</h3>
               <p className="mt-1 max-w-3xl text-sm text-slate-500">Click inside San Pedro or drag the marker to refine the exact enterprise location.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">

@@ -22,9 +22,9 @@ const variantStyles: Record<ConfirmationDialogVariant, { accent: string; button:
     icon: "text-tanaw-red",
   },
   default: {
-    accent: "border-[#065f46]",
-    button: "bg-[#065f46] hover:bg-[#044a36]",
-    icon: "text-[#065f46]",
+    accent: "border-tanaw-ledger",
+    button: "bg-tanaw-ledger hover:bg-[#044a36]",
+    icon: "text-tanaw-ledger",
   },
 };
 

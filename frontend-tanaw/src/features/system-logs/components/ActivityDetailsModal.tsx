@@ -24,7 +24,7 @@ export function ActivityDetailsModal({ activity, role, timeFormat, onClose }: { 
           <button
             type="button"
             onClick={openTicket}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+            className="mt-3 inline-flex min-h-10.5 items-center justify-center gap-2 rounded-xl bg-tanaw-civic px-4 text-sm font-bold text-white shadow-sm transition hover:bg-tanaw-civic-deep"
           >
             <TicketCheck size={14} /> Open Support Request
           </button>

@@ -171,7 +171,7 @@ export function SelectDropdown({
         data-reports-popup-trigger={reportsDismissal ? "" : undefined}
         onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-left font-semibold text-gray-800 shadow-sm transition outline-none hover:border-emerald-700/50 focus:border-[#065f46] focus:ring-2 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:opacity-60 dark:border-slate-600 dark:bg-[#111b2f] dark:text-slate-100 ${size === "compact" ? "min-h-8 rounded-md px-2 py-1.5 text-xs" : "min-h-10 rounded-xl px-3 py-2.5 text-sm"}`}
+        className={`flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-left font-semibold text-gray-800 shadow-sm transition outline-none hover:border-emerald-700/50 focus:border-tanaw-ledger focus:ring-2 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:opacity-60 dark:border-slate-600 dark:bg-[#111b2f] dark:text-slate-100 ${size === "compact" ? "min-h-8 rounded-md px-2 py-1.5 text-xs" : "min-h-10 rounded-xl px-3 py-2.5 text-sm"}`}
       >
         <span className="truncate">{selectedOption?.label ?? "Select an option"}</span>
         <span className="flex shrink-0 items-center gap-2">

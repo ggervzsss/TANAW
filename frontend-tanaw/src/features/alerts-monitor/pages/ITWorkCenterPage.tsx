@@ -62,8 +62,8 @@ export function ITWorkCenterPage() {
             role="tab"
             aria-selected={view === item.id}
             onClick={() => setView(item.id)}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black tracking-wide uppercase transition ${
-              view === item.id ? "bg-emerald-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700"
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
+              view === item.id ? "bg-tanaw-civic text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700"
             }`}
           >
             {item.label}

@@ -48,7 +48,7 @@ export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-
             <div className="min-w-0">
               {eyebrow && <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">{eyebrow}</p>}
               <div className="relative w-fit max-w-full">
-                <h2 className="text-tanaw-navy text-xl leading-tight font-bold tracking-tight wrap-break-word dark:text-white">{title}</h2>
+                <h2 className="text-(--tanaw-text) text-xl leading-tight font-bold tracking-tight wrap-break-word dark:text-white">{title}</h2>
                 <span className="pointer-events-none absolute -bottom-2 left-0 block h-px w-full bg-[#d9b44a]/70" aria-hidden="true" data-modal-title-accent />
               </div>
             </div>

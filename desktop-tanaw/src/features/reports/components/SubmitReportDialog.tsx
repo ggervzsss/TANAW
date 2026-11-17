@@ -60,12 +60,12 @@ export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: Submit
           aria-modal="true"
           aria-labelledby="confirm-report-submission-title"
           aria-describedby="confirm-report-submission-description"
-          className="animate-in fade-in w-full max-w-md rounded-2xl border border-t-4 border-emerald-100 border-t-[#065f46] bg-white p-6 shadow-2xl dark:border-slate-600 dark:border-t-emerald-400 dark:bg-[#121c31] dark:shadow-[0_28px_80px_rgba(0,0,0,0.58)]"
+          className="animate-in fade-in w-full max-w-md rounded-2xl border border-t-4 border-emerald-100 border-t-tanaw-ledger bg-white p-6 shadow-2xl dark:border-slate-600 dark:border-t-emerald-400 dark:bg-[#121c31] dark:shadow-[0_28px_80px_rgba(0,0,0,0.58)]"
           onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="mb-2 flex items-start justify-between gap-4">
             <h3 id="confirm-report-submission-title" className="flex items-center gap-2 text-lg font-bold text-[#111827] dark:text-slate-100">
-              <Send size={20} className="text-[#065f46] dark:text-emerald-300" /> Confirm Submission
+              <Send size={20} className="text-tanaw-ledger dark:text-emerald-300" /> Confirm Submission
             </h3>
             <button
               type="button"
@@ -91,7 +91,7 @@ export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: Submit
             <button
               disabled={isSubmitting}
               onClick={onConfirm}
-              className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
+              className="flex items-center gap-2 rounded-xl bg-tanaw-ledger px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               <Check size={16} /> {isSubmitting ? "Saving Locally..." : "Yes, Submit"}
             </button>

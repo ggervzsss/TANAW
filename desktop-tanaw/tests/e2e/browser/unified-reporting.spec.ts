@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { mlResponse, mockMlRequest } from "./support/preload";
+import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 
 test.describe.configure({ timeout: 60_000 });
 const fixtures = Object.fromEntries(
@@ -257,5 +257,23 @@ test("report filters, preview and responsive workspace retain the existing layou
     const workspace = page.locator("[data-reports-surface='var1-workspace']");
     await expect.poll(() => workspace.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("reports-" + width + ".png"), fullPage: true });
+  }
+});
+
+// Design review captures (DESIGN.md): run with TANAW_DESIGN_CAPTURE=<folder> to save screenshots.
+test("captures Reports for design review", async ({ page }) => {
+  const folder = process.env.TANAW_DESIGN_CAPTURE;
+  test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setup(page, "mixed", true);
+  for (const theme of ["light", "dark"] as const) {
+    await switchTheme(page, theme);
+    await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("tab", { name: "Reports History", exact: true }).click();
+    await page.screenshot({ path: `${folder}/reports-history-${theme}.png`, fullPage: true });
+    await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+    await page.screenshot({ path: `${folder}/reports-create-${theme}.png`, fullPage: true });
   }
 });

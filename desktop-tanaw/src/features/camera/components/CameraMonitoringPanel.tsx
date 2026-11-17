@@ -71,7 +71,7 @@ export function CameraMonitoringPanel({
   const processButtonDisabled = isProcessRunning ? isStopping : isStarting;
   const processButtonClassName = isProcessRunning
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
-    : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
+    : "bg-tanaw-ledger text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
   const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
   const serviceIssue = serviceIssueSource ? getUserFacingIssueMessage(serviceIssueSource) : null;
   const serviceNeedsRecovery = Boolean(!serviceOnline && (serviceStatus?.error || serviceError));
@@ -219,7 +219,7 @@ export function CameraMonitoringPanel({
                 type="button"
                 onClick={onTestConnection}
                 disabled={isTesting || isProcessingThisCamera}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#065f46]/30 bg-white px-2 py-2.5 text-[11px] font-bold text-[#065f46] transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-tanaw-ledger/30 bg-white px-2 py-2.5 text-[11px] font-bold text-tanaw-ledger transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
               >
                 <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
               </button>
@@ -254,7 +254,7 @@ type MetricBoxProps = {
 
 function MetricBox({ icon: Icon, label, tone, tooltip, value, detail }: MetricBoxProps) {
   const toneClass = {
-    entry: "border-emerald-200 bg-emerald-50 text-[#065f46] dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-300",
+    entry: "border-emerald-200 bg-emerald-50 text-tanaw-ledger dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-300",
     exit: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/25 dark:bg-red-400/12 dark:text-red-200",
     occupancy: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/12 dark:text-blue-200",
     unique: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-200",
@@ -292,7 +292,7 @@ function StatusRow({ icon: Icon, issue, label, tone, tooltip }: StatusRowProps) 
   const toneClass = {
     error: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/22 dark:bg-red-400/9 dark:text-red-200",
     neutral: "border-gray-200 bg-gray-50 text-gray-600 dark:border-white/8 dark:bg-white/3 dark:text-slate-300",
-    ok: "border-emerald-200 bg-emerald-50 text-[#065f46] dark:border-emerald-400/22 dark:bg-emerald-400/9 dark:text-emerald-300",
+    ok: "border-emerald-200 bg-emerald-50 text-tanaw-ledger dark:border-emerald-400/22 dark:bg-emerald-400/9 dark:text-emerald-300",
   }[tone];
 
   return (

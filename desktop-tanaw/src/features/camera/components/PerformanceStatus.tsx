@@ -16,7 +16,7 @@ export function PerformanceStatus({ effectiveProfile, analyticsFps }: { effectiv
       </span>
       <Link
         to={routePaths.enterpriseDeveloperSettings}
-        className="rounded font-semibold text-[#065f46] underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none dark:text-emerald-300"
+        className="rounded font-semibold text-tanaw-ledger underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none dark:text-emerald-300"
       >
         Change
       </Link>

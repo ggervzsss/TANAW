@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import type { Camera } from "../../../../src/types/enterprise";
 import type { MlCameraStates, MlHealth } from "../../../../src/features/camera/services/ml-service.types";
 
@@ -135,4 +135,11 @@ export async function mockCameraSetup(page: Page, enterpriseId: string) {
       },
     };
   });
+}
+
+/** Switches the enterprise theme with the topbar toggle (a reload would end the mocked session). */
+export async function switchTheme(page: Page, theme: "light" | "dark") {
+  const toggle = page.getByRole("button", { name: theme === "dark" ? "Switch to dark mode" : "Switch to light mode" });
+  if (await toggle.isVisible()) await toggle.click();
+  await expect(page.locator("html")).toHaveClass(theme === "dark" ? /\bdark\b/ : /^(?!.*\bdark\b)/);
 }

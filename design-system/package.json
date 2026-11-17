@@ -1,0 +1,10 @@
+{
+  "name": "tanaw-design-system",
+  "private": true,
+  "description": "Reference library for TANAW's design. Not a dependency of either app.",
+  "type": "module",
+  "scripts": {
+    "tokens:sync": "node scripts/sync-tokens.mjs",
+    "tokens:check": "node scripts/sync-tokens.mjs --check"
+  }
+}

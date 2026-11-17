@@ -16,7 +16,7 @@ export function ReportAuditTrail({ activeReport }: ReportAuditTrailProps) {
       <div className="space-y-4">
         {activeReport.auditTrail.map((log, index) => (
           <div key={`${log.time}-${index}`} className="flex gap-3 text-xs">
-            <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#065f46] shadow-[0_0_4px_#065f46]"></div>
+            <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-tanaw-ledger shadow-[0_0_4px_#065f46]"></div>
             <div>
               <p className="font-semibold text-[#111827]">{log.action}</p>
               <p className="mt-0.5 text-gray-500">

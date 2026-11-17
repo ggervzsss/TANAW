@@ -122,7 +122,7 @@ export function UnifiedMetricsHeader({ metrics, ariaLabel = "Summary metrics", c
                 <div className="tanaw-unified-metrics__segment group relative flex min-h-40 w-full flex-col justify-between overflow-hidden px-6 py-6 sm:px-7 sm:py-7">
                   <span className="tanaw-unified-metrics__hover pointer-events-none absolute inset-0" aria-hidden="true" />
                   <div className="relative z-10">
-                    <p className="text-[11px] leading-4 font-bold tracking-[0.14em] text-[#1b4332] uppercase sm:text-xs dark:text-emerald-200">{controlSegment.title}</p>
+                    <p className="text-[11px] leading-4 font-bold tracking-label text-tanaw-forest uppercase sm:text-xs dark:text-emerald-200">{controlSegment.title}</p>
                     {controlSegment.description && <div className="mt-3 text-[13px] leading-relaxed font-medium text-slate-500 dark:text-slate-400">{controlSegment.description}</div>}
                   </div>
                   <div className="relative z-10 mt-5">{controlSegment.content}</div>
@@ -158,7 +158,7 @@ function MetricSegment({ metric, labelId }: { metric: UnifiedMetric; labelId: st
       <div className="relative z-10 flex w-full items-start justify-between gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex min-h-5 items-start gap-2.5">
-            <p id={labelId} className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.14em] text-[#1b4332] uppercase sm:text-xs dark:text-emerald-200">
+            <p id={labelId} className="min-w-0 text-[11px] leading-4 font-bold tracking-label text-tanaw-forest uppercase sm:text-xs dark:text-emerald-200">
               {metric.title}
             </p>
             {metric.badge && <span className="shrink-0">{metric.badge}</span>}

@@ -195,7 +195,7 @@ export function CameraVideoPreview({
   return (
     <div
       ref={containerRef}
-      className={`relative h-full min-h-72 w-full overflow-hidden rounded-[18px] border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
+      className={`relative h-full min-h-72 w-full overflow-hidden rounded-tanaw-xl border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
     >
       {streamIsAvailable ? (
         <img

@@ -138,7 +138,7 @@ function printFindings(findings) {
 
 const cssPath = path.join(projectRoot, "src/index.css");
 const css = await fs.readFile(cssPath, "utf8");
-const designSystem = await __unstable__loadDesignSystem(css, { base: projectRoot });
+const designSystem = await __unstable__loadDesignSystem(css, { base: path.dirname(cssPath) });
 const files = await listSourceFiles(path.join(projectRoot, "src"));
 files.push(path.join(projectRoot, "index.html"));
 

@@ -73,7 +73,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
 
 function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-[18px] border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 dark:border-slate-700 dark:bg-[#121c31] dark:ring-emerald-300/20 ${className}`}>
+    <div className={`rounded-tanaw-xl border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 dark:border-slate-700 dark:bg-[#121c31] dark:ring-emerald-300/20 ${className}`}>
       <div className="text-tanaw-green flex items-center gap-2">
         {icon}
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
@@ -86,7 +86,7 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
     <div
-      className={`flex min-w-0 items-start gap-3 rounded-[18px] border border-slate-200 bg-slate-50/80 p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
+      className={`flex min-w-0 items-start gap-3 rounded-tanaw-xl border border-slate-200 bg-slate-50/80 p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
     >
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">

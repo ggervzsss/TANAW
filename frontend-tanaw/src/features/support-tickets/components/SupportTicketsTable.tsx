@@ -107,7 +107,7 @@ function TicketRow({ ticket, onOpen, timeFormat }: { ticket: SupportTicket; onOp
       </td>
       <td className="px-4 py-4 align-top">
         <p className="text-[11px] font-bold text-gray-500 uppercase">{formatTicketTime(ticket.createdAt, timeFormat)}</p>
-        <button type="button" className="mt-2 inline-flex items-center gap-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">
+        <button type="button" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-tanaw-ledger">
           <Eye size={12} />
           Inspect
         </button>

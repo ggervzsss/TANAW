@@ -38,7 +38,7 @@ export function DeveloperSettingsView() {
   return (
     <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-sans duration-500">
       <header>
-        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">This computer</p>
+        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">This computer</p>
         <h2 className="text-2xl font-bold tracking-tight text-[#111827] dark:text-white">Developer Settings</h2>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-slate-300">
           Detection models and diagnostic overlays for testing cameras. They are saved on this computer only and apply to every camera on it.
@@ -46,7 +46,7 @@ export function DeveloperSettingsView() {
       </header>
 
       <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_22px_60px_rgba(15,23,42,0.08)] dark:border-white/10">
-        <div className="h-1.5 bg-linear-to-r from-[#065f46] via-[#45a549] to-[#d6ad33]" />
+        <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-tanaw-live to-[#d6ad33]" />
         <SectionHeading icon={<Gauge size={18} />} title="Performance profile" description="How hard this computer works on every camera. Changing it restarts running cameras." />
         <fieldset className="p-6">
           <legend className="sr-only">Performance profile</legend>

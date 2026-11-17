@@ -253,7 +253,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange, onEdit
     <div ref={overlayRef} className={`absolute inset-0 ${canEdit ? "" : "pointer-events-none"}`} onPointerDownCapture={() => { if (canEdit) onEditCheckpoint?.(); }} onKeyDownCapture={() => { if (canEdit) onEditCheckpoint?.(); }} onKeyDown={handleKeyDown} tabIndex={canEdit ? 0 : -1}>
       {showRoiOverlay && (
         <div
-          className={`pointer-events-none absolute border-2 border-dashed ${isEditMode ? "border-[#2d5eff] bg-[#2d5eff]/10" : "border-[#2d5eff]/60 bg-[#2d5eff]/5"}`}
+          className={`pointer-events-none absolute border-2 border-dashed ${isEditMode ? "border-tanaw-blue bg-tanaw-blue/10" : "border-tanaw-blue/60 bg-tanaw-blue/5"}`}
           style={{
             top: `${config.roi.top}%`,
             left: `${config.roi.left}%`,
@@ -261,7 +261,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange, onEdit
             height: `${config.roi.height}%`,
           }}
         >
-          <span className="absolute right-1 bottom-1 rounded-lg bg-white/90 px-1 text-[9px] font-bold text-[#2d5eff] shadow-sm">ROI</span>
+          <span className="absolute right-1 bottom-1 rounded-lg bg-white/90 px-1 text-[9px] font-bold text-tanaw-blue shadow-sm">ROI</span>
         </div>
       )}
 

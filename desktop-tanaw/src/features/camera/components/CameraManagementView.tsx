@@ -136,12 +136,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
       <div
         data-camera-sidebar={isCameraListCollapsed ? "collapsed" : "expanded"}
-        className={`grid min-h-0 flex-1 transition-[grid-template-columns,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+        className={`grid min-h-0 flex-1 transition-[grid-template-columns,gap] duration-300 ease-tanaw motion-reduce:transition-none ${
           isCameraListCollapsed ? "grid-cols-[30px_minmax(0,1fr)] gap-3" : "grid-cols-[minmax(190px,230px)_minmax(0,1fr)] gap-4 max-[900px]:grid-cols-[176px_minmax(0,1fr)] max-[900px]:gap-3"
         }`}
       >
         <div id="configured-cameras-panel" className="relative min-h-0 min-w-0 overflow-visible">
-          <div className="h-full min-h-0 overflow-hidden rounded-[18px]">
+          <div className="h-full min-h-0 overflow-hidden rounded-tanaw-xl">
             <div
               {...(isCameraListCollapsed ? { inert: "" } : {})}
               aria-hidden={isCameraListCollapsed}

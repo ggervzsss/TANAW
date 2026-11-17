@@ -111,7 +111,7 @@ export function ReportActionConfirmDialog({
               </span>
               <div className="min-w-0">
                 <p className={`mb-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] uppercase ring-1 ${styles.badge}`}>{eyebrow}</p>
-                <h2 id="report-action-confirm-title" className="text-tanaw-navy text-xl leading-tight font-bold dark:text-white">
+                <h2 id="report-action-confirm-title" className="text-(--tanaw-text) text-xl leading-tight font-bold dark:text-white">
                   {title}
                 </h2>
                 <p id="report-action-confirm-message" className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">

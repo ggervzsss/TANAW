@@ -107,7 +107,7 @@ function SpatialDirectory(props: AdminMapDirectoryProps) {
             title={showBoundaries ? "Hide barangay boundaries" : "Show barangay boundaries"}
             aria-pressed={showBoundaries}
             onClick={() => onShowBoundariesChange(!showBoundaries)}
-            className="tanaw-map-directory__boundaries inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3 text-[11px] font-bold tracking-[0.06em] uppercase"
+            className="tanaw-map-directory__boundaries inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3 text-[11px] font-bold"
           >
             Boundaries
           </button>
@@ -196,7 +196,7 @@ function SelectedBarangayDirectory({
             aria-label="Back to Barangay Directory"
             title="Return to all barangays"
             onClick={onBack}
-            className="tanaw-map-directory__back inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold tracking-[0.06em] uppercase"
+            className="tanaw-map-directory__back inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold"
           >
             <ArrowLeft size={12} className="text-tanaw-sky shrink-0" /> All Barangays
           </button>

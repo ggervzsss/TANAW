@@ -11,7 +11,7 @@ type Props = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#065f46] focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-600 dark:bg-[#0f172a] dark:text-slate-100";
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-600 dark:bg-[#0f172a] dark:text-slate-100";
 
 /**
  * The camera's address. Supported brands need only the IP address; TANAW finds a working

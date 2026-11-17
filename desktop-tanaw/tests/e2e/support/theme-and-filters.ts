@@ -7,6 +7,17 @@ async function choose(page: Page, name: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
   await expect(page.getByRole("listbox")).toHaveCount(0);
 }
+/** The computed color of a design token (or theme role) as it applies inside the app shell. */
+async function token(page: Page, name: string) {
+  return page.evaluate((variable) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${variable})`;
+    (document.querySelector(".enterprise-shell") ?? document.body).appendChild(probe);
+    const value = getComputedStyle(probe).color;
+    probe.remove();
+    return value;
+  }, name);
+}
 async function geometry(page: Page, selector: string) {
   return page.locator(selector).evaluateAll((nodes) =>
     nodes.map((node) => {
@@ -27,7 +38,8 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   if (await page.locator("html").evaluate((root) => root.classList.contains("dark"))) await toggle(page).click();
   await expect(page.locator(".overview-metric").first()).toHaveCSS("opacity", "1");
   await page.mouse.move(0, 0);
-  await expect.poll(async () => (await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section")).every((node) => node.border === "rgb(220, 231, 223)")).toBe(true);
+  const cardBorder = await token(page, "--tanaw-border-soft");
+  await expect.poll(async () => (await geometry(page, ".overview-metrics,.overview-charts > section,.overview-secondary > section")).every((node) => node.border === cardBorder)).toBe(true);
   const before = await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section");
   await page.evaluate(() => {
     const button = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark mode"]')!;
@@ -36,7 +48,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
     Object.assign(window, { __themeImmediate: { dark: document.documentElement.classList.contains("dark"), elapsed: performance.now() - t } });
   });
   expect(await page.evaluate(() => (window as unknown as { __themeImmediate: { dark: boolean } }).__themeImmediate.dark)).toBe(true);
-  await expect(page.locator(".overview-metric").first()).toHaveCSS("background-color", "rgb(31, 39, 47)");
+  await expect(page.locator(".overview-metrics")).toHaveCSS("background-color", await token(page, "--tanaw-surface"));
   const dark = await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section");
   dark.forEach((node, i) => {
     expect({ x: node.x, y: node.y, w: node.w, h: node.h, font: node.font, size: node.size, weight: node.weight }).toEqual({
@@ -68,17 +80,17 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
     await settings.getByRole("tab", { name: section, exact: true }).click();
     await auditDarkContrast(page, info, `camera-${section}`, ".camera-settings");
     await page.screenshot({ path: info.outputPath(`dark-camera-${section.toLowerCase()}.png`), fullPage: true });
-    await expect(settings.locator(".camera-settings-identity")).toHaveCSS("border-top-color", "rgb(45, 55, 64)");
-    await expect(settings.locator(".camera-settings-footer")).toHaveCSS("border-top-color", "rgb(45, 55, 64)");
-    await expect(settings.locator(".camera-settings-content")).toHaveCSS("scrollbar-color", "rgb(99, 116, 126) rgb(27, 34, 41)");
+    await expect(settings.locator(".camera-settings-identity")).toHaveCSS("border-top-color", await token(page, "--theme-divider"));
+    await expect(settings.locator(".camera-settings-footer")).toHaveCSS("border-top-color", await token(page, "--theme-divider"));
+    await expect(settings.locator(".camera-settings-content")).toHaveCSS("scrollbar-color", `${await token(page, "--theme-scrollbar")} ${await token(page, "--theme-surface-low")}`);
   }
   await settings.getByRole("tab", { name: "Information", exact: true }).click();
-  await expect(settings.getByLabel("Camera Name", { exact: true })).toHaveCSS("border-bottom-color", "rgb(113, 130, 140)");
+  await expect(settings.getByLabel("Camera Name", { exact: true })).toHaveCSS("border-bottom-color", await token(page, "--theme-outline"));
   await page.screenshot({ path: info.outputPath("dark-camera-settings.png"), fullPage: true });
   await settings.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   const add = page.getByRole("dialog", { name: "Camera Information", exact: true });
-  await expect(add).toHaveCSS("background-color", "rgb(38, 49, 58)");
+  await expect(add).toHaveCSS("background-color", await token(page, "--theme-raised"));
   await expect(page.locator(".camera-dialog-backdrop")).toHaveCSS("backdrop-filter", "blur(2.5px)");
   await auditDarkContrast(page, info, "add-camera", ".camera-dialog");
   await page.screenshot({ path: info.outputPath("dark-add-camera.png"), fullPage: true });
@@ -98,7 +110,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await auditDarkContrast(page, info, "create-reports", ".tanaw-reports-workspace");
   await page.screenshot({ path: info.outputPath("dark-create-reports.png"), fullPage: true });
   await page.locator(".report-day-picker > button").click();
-  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", "rgb(38, 49, 58)");
+  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", await token(page, "--theme-raised"));
   await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await expect(page.getByRole("button", { name: "Apply Filter", exact: true })).toHaveCount(0);
@@ -148,7 +160,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   expect(new Set(tones.map((item) => item.bg)).size).toBe(5);
   expect(await page.evaluate(() => (window as unknown as { __filterPageIdentity: string }).__filterPageIdentity)).toBe("same-document");
   await page.getByRole("combobox", { name: "Filter reports by status" }).click();
-  await expect(page.locator(".tanaw-dropdown-menu")).toHaveCSS("background-color", "rgb(38, 49, 58)");
+  await expect(page.locator(".tanaw-dropdown-menu")).toHaveCSS("background-color", await token(page, "--theme-raised"));
   await page.keyboard.press("Escape");
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "no-preference" });

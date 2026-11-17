@@ -54,7 +54,7 @@ function StatusButton({ disabled, icon: Icon, label, onClick }: { disabled: bool
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex min-h-10.5 items-center justify-center gap-2 rounded-xl bg-tanaw-civic px-4 text-sm font-bold text-white shadow-sm transition hover:bg-tanaw-civic-deep disabled:cursor-not-allowed disabled:opacity-60"
     >
       <Icon size={14} />
       {label}
