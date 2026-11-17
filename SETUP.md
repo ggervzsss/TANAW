@@ -163,7 +163,6 @@ cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
 npm run models:setup
-npm run models:setup:reid
 ```
 
 Create .env.local in desktop-tanaw with:
@@ -175,8 +174,12 @@ VITE_API_BASE_URL=http://localhost:8000
 This points the desktop at the local backend. Preserve other values if that
 file already exists.
 
-Model setup downloads detector weights and exports the appearance-matching
-models. It needs internet access and can take several minutes. The first desktop
+Model setup downloads the detector weights. It needs internet access and can
+take several minutes. The appearance-matching (ReID) models and the
+male/female heads trained on them come with the repository, so do not
+re-export them: `npm run models:setup:reid` keeps existing files and only
+exports one that is missing, and replacing them means retraining the heads
+(see `desktop-tanaw/README.md`). The first desktop
 launch may also download the Electron runtime. Let each command finish successfully
 before moving on.
 

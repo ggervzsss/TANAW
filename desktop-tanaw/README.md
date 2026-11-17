@@ -101,9 +101,11 @@ form.
   not pointing straight down.
 - The heads live in `ml-service/models/sex_head_fast.npz` and
   `sex_head_quality.npz`, each with a JSON model card of its measured accuracy.
-  Without them, reports fall back to a This City total. `npm run models:verify --
---reid quality --require-sex-heads` checks that they match the installed ReID
-  models.
+  Each head accepts only the exact ReID file it was trained on
+  (`person_reid_cpu.onnx` and `person_reid.onnx`), checked by SHA-256. Without a
+  matching pair, reports fall back to a This City total.
+  `npm run models:verify -- --reid quality --require-sex-heads` checks the
+  pair, and `ml:bundle` runs that check before building an installer.
 
 The heads are trained on PA-100K, a public dataset of 100,000 labelled
 surveillance images released under CC BY 4.0 (see Credits). It is downloaded
@@ -120,10 +122,15 @@ uv run python -m scripts.train_sex_head --reid quality --train ~/Datasets/PA-100
 ```
 
 Repeat both with `--reid fast` (without `--train-limit`) for the fast head.
-The trained heads and their model cards are kept in git, so a fresh clone has
-them; the rest of `models/` comes from `models:setup` and `models:setup:reid`.
-A head works only with the exact ReID model file it was trained on.
-`models:verify` flags a mismatch, which retraining fixes. On
+
+The trained heads, their model cards and the two ReID ONNX files they were
+trained on are kept in git, so a fresh clone has a matching set; the YOLO
+weights in `models/` still come from `npm run models:setup`.
+`npm run models:setup:reid` keeps existing ReID files and only exports one that
+is missing, because a re-export differs byte for byte. Replacing a ReID file
+(`models:setup:reid -- --force`, or a different model) means retraining its
+head with the commands above. To undo an accidental change, restore the
+committed file with `git checkout -- ml-service/models/person_reid.onnx`. On
 PA-100K's test split the quality head reaches 86% balanced accuracy and the
 fast head 82%, so prefer the quality model where male and female figures
 matter.
