@@ -60,7 +60,7 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
             {canResolve ? "Review requests. Email changes can be approved only after ownership verification." : "Visible for admin review. IT personnel apply or decline these requests."}
           </p>
         </div>
-        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 uppercase dark:border-amber-300/25 dark:bg-amber-400/10 dark:text-amber-200">
+        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 dark:border-amber-300/25 dark:bg-amber-400/10 dark:text-amber-200">
           {requests.length} pending
         </span>
       </div>
@@ -142,7 +142,7 @@ function RequestStatusBadge({ request }: { request: AccountProfileChangeRequest 
   const expired = request.status === "expired";
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${verified ? "bg-emerald-100 text-emerald-700" : expired ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}
+      className={`rounded-full px-2 py-0.5 text-[10px] font-black ${verified ? "bg-emerald-100 text-emerald-700" : expired ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}
     >
       {labels[request.status]}
     </span>

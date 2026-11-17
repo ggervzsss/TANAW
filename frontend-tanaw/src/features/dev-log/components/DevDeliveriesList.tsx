@@ -5,6 +5,7 @@ import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import type { DevDelivery } from "../services";
 import { splitDevLogMessage } from "../utils/devLogMessage";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliveries: DevDelivery[]; isLoading: boolean; timeFormat: SystemTimeFormat }) {
   if (deliveries.length === 0)
@@ -20,14 +21,14 @@ export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliv
       {deliveries.map((delivery) => (
         <article key={delivery.id} className="grid gap-4 p-5 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="space-y-2">
-            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700">
               <Mail size={13} /> Email
             </span>
             <div>
               <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
               <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
             </div>
-            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 uppercase">{delivery.status}</span>
+            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600">{toSentenceCase(delivery.status)}</span>
           </aside>
           <section className="min-w-0">
             <h2 className="mb-2 text-sm font-black text-slate-900">{delivery.subject}</h2>

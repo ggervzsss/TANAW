@@ -22,7 +22,7 @@ export function NotificationsView({ notifications, unreadCount, onMarkAllRead, o
           type="button"
           disabled={unreadCount === 0}
           onClick={onMarkAllRead}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black tracking-wide text-tanaw-ledger uppercase shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300"
+          className="inline-flex shrink-0 items-center gap-2 rounded-tanaw-md border border-emerald-100 bg-white px-4 py-2 text-xs font-black text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300"
         >
           <CheckCheck size={15} />
           Mark all read

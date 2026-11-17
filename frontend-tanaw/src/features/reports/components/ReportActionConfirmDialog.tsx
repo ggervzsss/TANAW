@@ -110,7 +110,7 @@ export function ReportActionConfirmDialog({
                 <Icon size={22} />
               </span>
               <div className="min-w-0">
-                <p className={`mb-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] uppercase ring-1 ${styles.badge}`}>{eyebrow}</p>
+                <p className={`mb-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${styles.badge}`}>{eyebrow}</p>
                 <h2 id="report-action-confirm-title" className="text-(--tanaw-text) text-xl leading-tight font-bold dark:text-white">
                   {title}
                 </h2>

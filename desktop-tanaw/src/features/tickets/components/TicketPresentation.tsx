@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { SupportTicket } from "../services/tickets";
+import { toSentenceCase } from "../../../utils/sentence-case";
 
 export function TicketStatusBadge({ status }: { status: SupportTicket["status"] }) {
   const className =
@@ -8,7 +9,7 @@ export function TicketStatusBadge({ status }: { status: SupportTicket["status"] 
       : status === "In Review"
         ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-500/10 dark:text-amber-100"
         : "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-300/20 dark:bg-blue-500/10 dark:text-blue-100";
-  return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide uppercase ${className}`}>{status}</span>;
+  return <span className={`rounded-full border px-3 py-1 text-[10px] font-black ${className}`}>{toSentenceCase(status)}</span>;
 }
 
 export function TicketBadge({ children, tone }: { children: ReactNode; tone: "info" | "neutral" | "warning" }) {

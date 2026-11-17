@@ -131,7 +131,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                   </p>
                 </div>
                 {!showsUnique && insights.busiestPeriodLabel && (
-                  <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black uppercase">Peak: {insights.busiestPeriodLabel}</span>
+                  <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black">Peak: {insights.busiestPeriodLabel}</span>
                 )}
               </div>
               <label className="tanaw-visitor-insights__muted mt-3 flex items-center gap-2 text-xs font-semibold">

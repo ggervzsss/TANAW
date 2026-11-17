@@ -5,6 +5,7 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import type { GatewayStatus, MonitoringStatus, OccupancyStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
@@ -108,7 +109,7 @@ function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
     "Not Configured": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(status)}</span>;
 }
 
 function OccupancyStatusBadge({ status }: { status: OccupancyStatus }) {
@@ -119,7 +120,7 @@ function OccupancyStatusBadge({ status }: { status: OccupancyStatus }) {
     "No Data": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(status)}</span>;
 }
 
 function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
@@ -138,5 +139,5 @@ function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
     Closed: "Closed",
   };
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{label[status]}</span>;
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(label[status])}</span>;
 }

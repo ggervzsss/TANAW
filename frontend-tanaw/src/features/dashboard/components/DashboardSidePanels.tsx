@@ -25,7 +25,7 @@ export function DashboardSidePanels({ overview }: { overview: DashboardOverview 
             </div>
             {overview.summary && (
               <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black tracking-wide uppercase ${hasUnavailableApps ? "bg-amber-100 text-amber-800 dark:bg-amber-400/12 dark:text-amber-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/12 dark:text-emerald-200"}`}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${hasUnavailableApps ? "bg-amber-100 text-amber-800 dark:bg-amber-400/12 dark:text-amber-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/12 dark:text-emerald-200"}`}
               >
                 {hasUnavailableApps ? `${overview.unavailableDesktopAppCount} unavailable` : "All online"}
               </span>

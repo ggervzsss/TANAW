@@ -55,6 +55,11 @@ typography:
     fontWeight: 700
     lineHeight: 1.33
     letterSpacing: "0.14em"
+  badge:
+    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 600
+    lineHeight: 1.33
   metric:
     fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
     fontSize: "2.5rem"
@@ -115,7 +120,7 @@ components:
   badge:
     rounded: "{rounded.pill}"
     padding: "4px 10px"
-    typography: "{typography.label}"
+    typography: "{typography.badge}"
   camera-list-item-active:
     backgroundColor: "#ecfdf5"
     textColor: "{colors.ledger-green}"
@@ -277,6 +282,8 @@ The type scale is the app's own, set in `tokens/tanaw.css`: 12.5, 14.5, 16.5, 18
   under 70 characters per line.
 - **Label** (700, 12px, 0.14em tracking, uppercase): metric names, table headers,
   section eyebrows. Forest Label on light surfaces.
+- **Badge** (600, 12px, sentence case, no extra tracking): status badges, counters
+  and segmented filters.
 - **Metric** (600, 40px, 1, tabular figures): the large counts in metric strips.
 
 ### Named Rules
@@ -364,6 +371,14 @@ filters.
 - **Style:** tinted pill with a matching 1px outline and dark text of the same hue
   (12px, 600). An optional leading dot for live states.
 - **State:** success emerald, warning amber, danger red, info blue, neutral slate.
+- **Case:** sentence case, with no wide tracking ("Running", "5 unavailable", "In
+  review", not "RUNNING"). Acronyms keep their capitals ("ML service ready"). Status
+  values that arrive in Title Case or as machine values go through `toSentenceCase`
+  (`src/utils/sentence-case.ts` on the desktop, `src/shared/utils/sentenceCase.ts` on
+  the web); never apply it to names people typed.
+
+**The Quiet Badge Rule.** Uppercase belongs to labels that name a figure or a column.
+A badge states a condition, so it reads as a short sentence.
 
 ### Cards / Containers
 
@@ -476,4 +491,5 @@ emerald fill (#ecfdf5), a Ledger Green outline and name.
 - **Don't** put large display numbers inside tables.
 - **Don't** set page titles in navy, or any text in Montserrat.
 - **Don't** make buttons uppercase or pill-shaped.
+- **Don't** make status badges uppercase or widely tracked.
 - **Don't** use the Map and Chart Palette for buttons, text or page chrome.

@@ -2,6 +2,7 @@ import { DetailField, ExpandableTableText, ModalFrame } from "@/shared/component
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode, TechnicalIssueUrgency } from "@/shared/types";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
   const { timeFormat } = useSystemDisplayPreferences();
@@ -32,7 +33,7 @@ export function UrgencyBadge({ urgency }: { urgency: TechnicalIssueUrgency }) {
     Important: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
     Urgent: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
   };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[urgency]}`}>{urgency}</span>;
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[urgency]}`}>{urgency}</span>;
 }
 
 export function SeverityBadge({ severity, label = severity }: { severity: AlertSeverity; label?: string }) {
@@ -41,7 +42,7 @@ export function SeverityBadge({ severity, label = severity }: { severity: AlertS
     Warning: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
     Critical: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
   };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[severity]}`}>{label}</span>;
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[severity]}`}>{toSentenceCase(label)}</span>;
 }
 
 export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode }) {
@@ -59,7 +60,7 @@ export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode })
     "Remote Review": "Check Remotely",
     "Admin Monitoring": "Admin Monitoring",
   };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{labels[mode]}</span>;
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[mode]}`}>{toSentenceCase(labels[mode])}</span>;
 }
 
 export function AlertStatusBadge({ status, label }: { status: PriorityAlert["status"]; label?: string }) {
@@ -69,5 +70,5 @@ export function AlertStatusBadge({ status, label }: { status: PriorityAlert["sta
     Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
   const resolvedLabel = label ?? (status === "New" ? "Needs Attention" : status === "In Review" ? "Working on It" : "Resolved");
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{resolvedLabel}</span>;
+  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${classes[status]}`}>{toSentenceCase(resolvedLabel)}</span>;
 }

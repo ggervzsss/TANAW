@@ -346,7 +346,7 @@ test("preview status transitions mask service placeholders and recover without f
   await page.screenshot({ path: info.outputPath("camera-offline.png"), fullPage: true });
   await page.getByRole("button", { name: "Start camera", exact: true }).click();
   await expect(overlay).toHaveClass(/is-hidden/, { timeout: 12000 });
-  await expect(page.getByText("People in Area: 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("People in area: 1", { exact: true })).toBeVisible();
 });
 
 test("switching counting methods preserves calibration and stages counting until Save", async ({ page }) => {

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { PortalNotification } from "../hooks/usePortalNotifications";
 import { notificationToneClasses } from "../model";
 import { NotificationIcon } from "./NotificationIcon";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type PortalNotificationDropdownProps = {
   isOpen: boolean;
@@ -102,7 +103,7 @@ export function PortalNotificationDropdown({
                       <span>{notification.source}</span>
                       <span className="h-1 w-1 rounded-full bg-slate-300" />
                       <span>{notification.time}</span>
-                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 ring-1 ${notificationToneClasses[notification.tone].badge}`}>{notification.statusLabel}</span>}
+                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ${notificationToneClasses[notification.tone].badge}`}>{toSentenceCase(notification.statusLabel)}</span>}
                     </span>
                   </span>
                 </button>

@@ -12,6 +12,7 @@ import { InputField, SelectField, TicketFieldError, TicketPanelHeader } from "./
 import { maxTicketPhotoCount, ticketPriorities, ticketSortOptions } from "../model/ticket-draft";
 import { useTicketsWorkspace } from "../hooks/useTicketsWorkspace";
 import { ticketFieldClassName } from "../utils/ticket-form-style";
+import { toSentenceCase } from "../../../utils/sentence-case";
 
 export function TicketsView() {
   const {
@@ -285,8 +286,8 @@ export function TicketsView() {
                     </div>
                     <TicketStatusBadge status={ticket.status} />
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black tracking-wide uppercase">
-                    <TicketBadge tone="info">{ticket.category}</TicketBadge>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black">
+                    <TicketBadge tone="info">{toSentenceCase(ticket.category)}</TicketBadge>
                     <TicketBadge tone={ticket.priority === "Urgent" || ticket.priority === "High" ? "warning" : "neutral"}>{ticket.priority}</TicketBadge>
                     {ticket.affectedArea && <TicketBadge tone="neutral">{ticket.affectedArea}</TicketBadge>}
                     {ticket.cameraNode && <TicketBadge tone="neutral">{ticket.cameraNode}</TicketBadge>}

@@ -2,6 +2,7 @@ import { Clock3, Inbox } from "lucide-react";
 import type { PortalNotification } from "../hooks/usePortalNotifications";
 import { notificationToneClasses } from "../model";
 import { NotificationIcon } from "./NotificationIcon";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type NotificationListProps = {
   isLoading: boolean;
@@ -47,7 +48,7 @@ function NotificationRow({ notification, onOpen }: { notification: PortalNotific
           <span>{notification.source}</span>
           <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
           <span>{notification.time}</span>
-          {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 ring-1 ${classes.badge}`}>{notification.statusLabel}</span>}
+          {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ${classes.badge}`}>{toSentenceCase(notification.statusLabel)}</span>}
         </span>
       </span>
     </button>

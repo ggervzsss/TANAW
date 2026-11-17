@@ -349,9 +349,9 @@ export function CameraVideoPreview({
 
       <div className={`camera-preview-badges absolute top-3 right-3 left-3 flex items-start justify-between gap-3 ${!isActuallyLive ? "invisible" : ""}`}>
         <div className="flex min-w-0 flex-wrap gap-1.5">
-          <PreviewBadge label="● LIVE" tone="ok" />
-          <PreviewBadge label={`People in Area: ${activeCam.analysisMode === "open_space" ? (area?.available ? (area.presence ?? "—") : "—") : (counts.occupancy ?? "—")}`} tone="neutral" />
-          <PreviewBadge label={health?.model_ready ? "Model Ready" : health?.model_loading ? "Model Loading" : "Model Standby"} tone={health?.model_ready ? "ok" : "neutral"} />
+          <PreviewBadge label="● Live" tone="ok" />
+          <PreviewBadge label={`People in area: ${activeCam.analysisMode === "open_space" ? (area?.available ? (area.presence ?? "—") : "—") : (counts.occupancy ?? "—")}`} tone="neutral" />
+          <PreviewBadge label={health?.model_ready ? "Model ready" : health?.model_loading ? "Model loading" : "Model standby"} tone={health?.model_ready ? "ok" : "neutral"} />
         </div>
         {streamIsAvailable && (
           <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
