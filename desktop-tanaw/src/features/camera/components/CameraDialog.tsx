@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type KeyboardEventHandler, type ReactNode } from "react";
 import { motion, useReducedMotion, useIsPresent } from "motion/react";
 import { X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
@@ -14,6 +14,7 @@ export function CameraDialog({
   children,
   footer,
   onClose,
+  onKeyDown,
   className = "",
   busy = false,
 }: {
@@ -22,6 +23,7 @@ export function CameraDialog({
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   className?: string;
   busy?: boolean;
 }) {
@@ -111,6 +113,7 @@ export function CameraDialog({
           aria-labelledby={`${id}-title`}
           aria-describedby={description ? `${id}-description` : undefined}
           aria-busy={busy}
+          onKeyDown={onKeyDown}
           className={`camera-dialog ${className}`}
         >
           <header>

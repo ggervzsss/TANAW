@@ -58,7 +58,7 @@ describe("map interaction state", () => {
     });
 
     expect(selected).toMatchObject({
-      selectedBarangayName: "Cuyab",
+      selectedBarangayName: null,
       selectedEnterpriseId: "enterprise-2",
       cameraTarget: {
         type: "enterprise",
@@ -76,6 +76,16 @@ describe("map interaction state", () => {
 
     expect(latest.selectedBarangayName).toBe("C");
     expect(latest.cameraTarget).toEqual({ type: "barangay", barangayName: "C" });
+  });
+
+  it("reopens an enterprise without issuing the same camera target again", () => {
+    const select = { type: "select-enterprise", barangayName: "Cuyab", enterpriseId: "enterprise-2" } as const;
+    const selected = mapInteractionReducer(initialMapInteractionState, select);
+    const closed = mapInteractionReducer(selected, { type: "close-enterprise", enterpriseId: select.enterpriseId });
+    const reopened = mapInteractionReducer(closed, select);
+
+    expect(reopened.selectedEnterpriseId).toBe(select.enterpriseId);
+    expect(reopened.cameraTarget).toBe(selected.cameraTarget);
   });
 });
 

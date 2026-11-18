@@ -125,6 +125,7 @@ function responseForPath(path: string, query: URLSearchParams): { body: unknown;
       status: 200,
       body: {
         api_contract_version: 2,
+        live_stream_frames_only: true,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,

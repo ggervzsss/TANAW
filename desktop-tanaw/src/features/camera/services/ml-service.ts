@@ -380,8 +380,9 @@ export async function applyDevicePerformanceProfile(baseUrl: string, profile: De
   return result.restarted_count;
 }
 
-export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true) {
+export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true, generation?: number) {
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
+  if (generation !== undefined) params.set("generation", String(generation));
   if (window.tanawMlService) return `tanaw-ml://service/camera/${cameraId}/stream?${params.toString()}`;
   return `${baseUrl}/camera/${cameraId}/stream?${params.toString()}`;
 }
@@ -392,12 +393,8 @@ export function getMlCameraWebSocketUrl(baseUrl: string) {
   return url.toString();
 }
 
-export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isProcessing: boolean) {
-  if (camera && isProcessing) {
-    return getStreamUrl(baseUrl, camera.id, version, false);
-  }
-
-  return camera ? getStreamUrl(baseUrl, camera.id, version) : "";
+export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isReady: boolean, generation?: number) {
+  return camera && isReady ? getStreamUrl(baseUrl, camera.id, version, false, generation) : "";
 }
 
 function toMlTripwireLine(line: Camera["config"]["tripwires"]["entry"]) {

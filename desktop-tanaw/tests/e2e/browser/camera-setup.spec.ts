@@ -35,6 +35,7 @@ async function setup(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let profiles = [camera(1), camera(2)];
   let status = "running";
+  let streamGeneration = 1;
   let failTest = false;
   let failWrite = false;
   const requests: { path: string; body: Record<string, unknown> }[] = [];
@@ -49,23 +50,24 @@ async function setup(page: Page) {
     }),
   );
   await page.route("**/operational/**", (route) => route.fulfill({ json: [] }));
-  await page.route("**/camera-test-frame.svg", (route) =>
+  await page.route(/\/camera-test-frame\.svg(?:\?|$)/, (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#486456"/><path d="M0 300L180 90 640 280V360H0Z" fill="#708579"/><rect x="280" y="70" width="80" height="120" rx="10" fill="#c9d6cc"/></svg>',
     }),
   );
   await page.addInitScript(() => {
+    const previewUrl = (value: string) => value.startsWith("tanaw-ml://") ? new URL(`/camera-test-frame.svg${new URL(value).search}`, location.origin).href : value;
     const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
     Object.defineProperty(HTMLImageElement.prototype, "src", {
       ...source,
       set(value: string) {
-        source.set!.call(this, value.startsWith("tanaw-ml://") ? new URL("/camera-test-frame.svg", location.origin).href : value);
+        source.set!.call(this, previewUrl(value));
       },
     });
     const original = Element.prototype.setAttribute;
     Element.prototype.setAttribute = function (name, value) {
-      return original.call(this, name, this instanceof HTMLImageElement && name === "src" && value.startsWith("tanaw-ml://") ? new URL("/camera-test-frame.svg", location.origin).href : value);
+      return original.call(this, name, this instanceof HTMLImageElement && name === "src" ? previewUrl(value) : value);
     };
     const records: Record<string, { username: string; passwordConfigured: boolean }> = {
       "1": { username: "operator", passwordConfigured: true },
@@ -99,6 +101,7 @@ async function setup(page: Page) {
       model_ready: true,
       model_loading: false,
       raw_frame_id: 10,
+      stream_generation: streamGeneration,
       raw_frame_stale_ms: 50,
       stream_frame_stale_ms: 50,
       analytics_fps: 12,
@@ -171,6 +174,7 @@ async function setup(page: Page) {
     setStatus: (next: string) => {
       status = next;
     },
+    advanceStream: () => ++streamGeneration,
     setFailTest: (value: boolean) => {
       failTest = value;
     },
@@ -226,7 +230,7 @@ test("area dragging, Undo, validation, cancel and resize preserve the saved poly
   await page.getByRole("tab", { name: "Counting Area", exact: true }).click();
   await page.getByRole("button", { name: "Edit Counting Area", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Edit Counting Area", exact: true });
-  const svg = dialog.getByRole("img", { name: "Monitored area polygon" });
+  const svg = dialog.getByRole("group", { name: "Monitored area polygon" });
   await expect(svg).toBeVisible();
   const point = svg.getByRole("button", { name: "Zone vertex 1" });
   const bounds = (await svg.boundingBox())!;
@@ -234,7 +238,7 @@ test("area dragging, Undo, validation, cancel and resize preserve the saved poly
   await page.mouse.down();
   await page.mouse.move(bounds.x + bounds.width * 0.25, bounds.y + bounds.height * 0.3, { steps: 10 });
   await page.mouse.up();
-  await expect(point).toHaveAttribute("cx", "25");
+  await expect.poll(async () => Number(await point.getAttribute("cx"))).toBeCloseTo(25, 0);
   await dialog.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(point).toHaveAttribute("cx", "15");
   await point.focus();
@@ -251,7 +255,7 @@ test("area dragging, Undo, validation, cancel and resize preserve the saved poly
   const resized = (await svg.boundingBox())!;
   await page.mouse.move(resized.x + resized.width * 0.5, resized.y + resized.height * 0.95, { steps: 10 });
   await page.mouse.up();
-  await expect(dialog.getByRole("button", { name: "Use this Area", exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Use this Area", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Close Edit Counting Area", exact: true }).click();
   await page.getByRole("dialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard Changes", exact: true }).click();
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();
@@ -306,7 +310,21 @@ test("Add Camera keeps the reference form and verifies connection before persist
   await page.screenshot({ path: info.outputPath("add-camera-information.png"), fullPage: true });
   await modal.getByRole("button", { name: "Add Camera", exact: true }).click();
   const connection = page.getByRole("dialog", { name: "Camera Connection", exact: true });
-  await connection.getByLabel("Camera IP Address").fill("192.168.1.11");
+  const ip = connection.getByLabel("Camera IP Address");
+  const defaultDark = await page.locator("html").evaluate((element) => element.classList.contains("dark"));
+  for (const dark of [false, true]) {
+    await page.locator("html").evaluate((element, dark) => element.classList.toggle("dark", dark), dark);
+    await page.keyboard.press("Tab");
+    for (const label of ["Camera IP Address", "Camera Username", "Camera Password"]) {
+      const field = connection.getByLabel(label, { exact: false }).first();
+      await field.focus();
+      await expect(field).toHaveCSS("outline-width", "2px");
+      await expect(field).toHaveCSS("outline-style", "solid");
+      await expect(field).toHaveCSS("outline-offset", "-2px");
+    }
+  }
+  await page.locator("html").evaluate((element, dark) => element.classList.toggle("dark", dark), defaultDark);
+  await ip.fill("192.168.1.11");
   await expect(connection.getByText("A camera with this IP address is already configured", { exact: false })).toBeVisible();
   await expect(connection.getByRole("button", { name: "Test & Add Camera" })).toBeDisabled();
   await connection.getByLabel("Camera IP Address").fill("192.168.1.30");
@@ -329,10 +347,12 @@ test("Add Camera keeps the reference form and verifies connection before persist
   expect(JSON.stringify(state.profiles())).not.toContain("camera-secret");
 });
 
-test("preview status transitions mask service placeholders and recover without fabricated counts", async ({ page }, info) => {
+test("camera startup and reconnect do not attach a stream until the service reports real video", async ({ page }, info) => {
   const state = await setup(page);
   const overlay = page.locator(".camera-preview-state");
+  const video = page.locator('img[alt$="live camera stream"]');
   await expect(overlay).toHaveClass(/is-hidden/);
+  await expect(video).toBeVisible();
   for (const [status, label] of [
     ["starting", "Preparing your camera"],
     ["reconnecting", "Restoring connection"],
@@ -342,11 +362,30 @@ test("preview status transitions mask service placeholders and recover without f
     state.setStatus(status);
     await expect(overlay.getByRole("heading", { name: label })).toBeVisible({ timeout: 12000 });
     await expect(overlay).not.toHaveClass(/is-hidden/);
+    await expect(video).toHaveCount(0);
+    if (status === "starting" || status === "reconnecting") await expect(overlay.getByLabel("Connecting")).toBeVisible();
   }
   await page.screenshot({ path: info.outputPath("camera-offline.png"), fullPage: true });
   await page.getByRole("button", { name: "Start camera", exact: true }).click();
   await expect(overlay).toHaveClass(/is-hidden/, { timeout: 12000 });
+  await expect(video).toBeVisible();
   await expect(page.getByText("People in area: 1", { exact: true })).toBeVisible();
+
+  let releaseFrame!: () => void;
+  const firstFrame = new Promise<void>((resolve) => { releaseFrame = resolve; });
+  await page.route(/\/camera-test-frame\.svg\?.*generation=2(?:&|$)/, async (route) => {
+    await firstFrame;
+    await route.fallback();
+  });
+  try {
+    state.advanceStream();
+    await expect(video).toHaveAttribute("src", /overlay=0.*generation=2/);
+    await expect(video).toBeHidden();
+    await expect(overlay.getByRole("heading", { name: "Connecting to camera" })).toBeVisible();
+  } finally {
+    releaseFrame();
+  }
+  await expect(video).toBeVisible();
 });
 
 test("switching counting methods preserves calibration and stages counting until Save", async ({ page }) => {

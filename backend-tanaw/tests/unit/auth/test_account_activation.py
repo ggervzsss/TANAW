@@ -61,30 +61,50 @@ def test_activation_configuration_has_safe_development_defaults() -> None:
     assert settings.account_activation_ttl_hours == 24
 
 
-def test_activation_email_contains_a_link_without_an_emailed_password() -> None:
+@pytest.mark.parametrize("role", [AccountRole.STAFF, AccountRole.ENTERPRISE])
+def test_activation_email_contains_a_link_without_an_emailed_password(role: AccountRole) -> None:
     account = Account(
         email="user@example.com",
         password_hash="unusable-password-hash",
-        role=AccountRole.STAFF,
+        role=role,
         display_name="Test User",
         title="LGU Staff",
         status=AccountStatus.ACTIVE,
     )
-    activation_url = "https://tanaw.example/activate-account?token=secret-token"
+    activation_url = "http://localhost:5173/portal/activate-account#token=secret-token"
+    expires_label = "2026-07-12 12:00 UTC"
+    enterprise_id = "sample_001@tanaw.sanpedro" if role == AccountRole.ENTERPRISE else None
 
     content = account_activation_email(
         EmailRecipient(
             display_name=account.display_name,
             email=account.email,
             role=account.role,
+            enterprise_id=enterprise_id,
         ),
         activation_url,
-        "2026-07-12 12:00 UTC",
+        expires_label,
     )
 
     assert content.subject == "Activate your TANAW account"
     assert activation_url in content.text
-    assert activation_url.replace("&", "&amp;") in content.html
+    assert f'href="{activation_url}"' in content.html
+    assert (
+        'src="https://cdn.jsdelivr.net/gh/ggervzsss/TANAW@0bce8584a387f61c7410222ce3a2a90c8d2bcb32'
+        '/frontend-tanaw/public/apple-touch-icon.png"' in content.html
+    )
+    assert 'alt="TANAW eagle logo"' in content.html
+    assert 'href="http://localhost:5173/portal/login"' in content.html
+    for body in (content.text, content.html.replace("<wbr>", "")):
+        assert account.email in body
+        assert expires_label in body
+        if enterprise_id:
+            assert "Enterprise ID" in body
+            assert "Contact email" in body
+            assert enterprise_id in body
+        else:
+            assert "Username" in body
+            assert "Enterprise ID" not in body
     assert "Temporary password" not in content.text
     assert "unusable-password-hash" not in content.text
     assert "unusable-password-hash" not in content.html

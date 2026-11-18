@@ -6,10 +6,17 @@ describe("ML service compatibility contract", () => {
     expect(hasCompatibleMlHealth({ status: "ok", running: true })).toBe(false);
   });
 
+  it("rejects a legacy runtime that can emit placeholder video", () => {
+    expect(
+      hasCompatibleMlHealth({ api_contract_version: 2, tripwire_hot_update: true, max_configured_cameras: 6, max_concurrent_cameras: 2 }),
+    ).toBe(false);
+  });
+
   it("requires both the contract version and collection runtime shape", () => {
     expect(
       hasCompatibleMlHealth({
         api_contract_version: 2,
+        live_stream_frames_only: true,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -18,6 +25,7 @@ describe("ML service compatibility contract", () => {
     expect(
       hasCompatibleMlHealth({
         api_contract_version: 3,
+        live_stream_frames_only: true,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -26,6 +34,7 @@ describe("ML service compatibility contract", () => {
     expect(
       hasCompatibleMlHealth({
         api_contract_version: 2,
+        live_stream_frames_only: true,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
       }),

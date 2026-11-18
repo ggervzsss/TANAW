@@ -1,6 +1,6 @@
 import type { MonitoringStatus, OccupancyStatus } from "@/shared/types";
 
-export type MonitoringStatusTone = "running" | "partial" | "stopped" | "fault";
+export type MonitoringStatusTone = "running" | "partial" | "stopped" | "fault" | "unavailable";
 
 export type MonitoringStatusPresentation = {
   badgeClass: string;
@@ -29,19 +29,26 @@ const monitoringStatusPresentations: Record<MonitoringStatusTone, MonitoringStat
     color: "#dc2626",
     tone: "fault",
   },
+  unavailable: {
+    badgeClass: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-400/25 dark:bg-slate-400/5 dark:text-slate-300",
+    color: "#394858",
+    tone: "unavailable",
+  },
 };
 
 export const monitoringStatusLegend: { label: string; tone: MonitoringStatusTone }[] = [
   { label: "All Running", tone: "running" },
   { label: "Partial", tone: "partial" },
-  { label: "Stopped", tone: "stopped" },
+  { label: "Inactive", tone: "stopped" },
   { label: "Fault", tone: "fault" },
+  { label: "Unavailable", tone: "unavailable" },
 ];
 
 export function getMonitoringStatusPresentation(status: MonitoringStatus): MonitoringStatusPresentation {
   if (status === "Fully Monitoring") return monitoringStatusPresentations.running;
   if (status === "Partially Monitoring" || status === "Updates Delayed") return monitoringStatusPresentations.partial;
   if (status === "Fault") return monitoringStatusPresentations.fault;
+  if (status === "Not Configured") return monitoringStatusPresentations.unavailable;
   return monitoringStatusPresentations.stopped;
 }
 

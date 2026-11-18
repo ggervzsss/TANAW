@@ -9,7 +9,7 @@ import {
 } from "../../../../../src/features/mapview/utils/mapStatusStyles";
 
 describe("enterprise map monitoring styles", () => {
-  it.each(["Stopped", "Offline", "Not Configured"] as const)("uses neutral gray styling for %s enterprises", (status) => {
+  it.each(["Stopped", "Offline"] as const)("uses neutral gray styling for %s enterprises", (status) => {
     expect(getMonitoringStatusColor(status)).toBe("#64748b");
     expect(getDarkMonitoringBadgeClass(status)).toContain("slate");
     expect(getDarkMonitoringBadgeClass(status)).not.toContain("red");
@@ -31,7 +31,7 @@ describe("enterprise map monitoring styles", () => {
     ["Updates Delayed", "partial"],
     ["Stopped", "stopped"],
     ["Offline", "stopped"],
-    ["Not Configured", "stopped"],
+    ["Not Configured", "unavailable"],
     ["Fault", "fault"],
   ] as const)("shares the %s presentation with markers and directory badges", (status, tone) => {
     const presentation = getMonitoringStatusPresentation(status);
@@ -44,8 +44,9 @@ describe("enterprise map monitoring styles", () => {
     expect(monitoringStatusLegend).toEqual([
       { label: "All Running", tone: "running" },
       { label: "Partial", tone: "partial" },
-      { label: "Stopped", tone: "stopped" },
+      { label: "Inactive", tone: "stopped" },
       { label: "Fault", tone: "fault" },
+      { label: "Unavailable", tone: "unavailable" },
     ]);
   });
 

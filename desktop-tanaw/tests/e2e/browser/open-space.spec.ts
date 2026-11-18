@@ -35,7 +35,7 @@ const camera: Camera = {
   config,
 };
 
-async function setup(page: Page, configured = true, mixed = false) {
+async function setup(page: Page, configured = true, mixed = false, frame = { width: 640, height: 360 }) {
   let signedIn = false;
   let profiles: Camera[] = [{ ...camera, analysisMode: "open_space", openSpace: configured ? zone : null }];
   if (mixed) {
@@ -54,7 +54,7 @@ async function setup(page: Page, configured = true, mixed = false) {
   await page.route("**/operational/notifications", (route) => route.fulfill({ json: [] }));
   await page.route("**/operational/tickets", (route) => route.fulfill({ json: [] }));
   await page.route("**/e2e-camera.svg", (route) =>
-    route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#123"/></svg>' }),
+    route.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}"><rect width="100%" height="100%" fill="#123"/></svg>` }),
   );
   await page.addInitScript(() => {
     const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
@@ -191,7 +191,7 @@ async function setup(page: Page, configured = true, mixed = false) {
             camera_id: 1,
             analysis_mode: "open_space",
             counts: { running, status: running ? "running" : "stopped", error: null, entry: null, exit: null, occupancy: null },
-            detections: { running, status: "running", frame_width: 640, frame_height: 360, tracks: [] },
+            detections: { running, status: "running", frame_width: frame.width, frame_height: frame.height, tracks: [] },
             health,
             session: { running, status: "running", counts: { running } },
             area: {
@@ -303,13 +303,15 @@ test("adds Entry / Exit and Open Space cameras into one live occupancy without a
   await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
 });
 
-for (const viewport of [
-  { width: 1440, height: 1000 },
-  { width: 1024, height: 768 },
-]) {
-  test(`draws and moves bottom-edge zone points with tools outside the image at ${viewport.width}px`, async ({ page }, testInfo) => {
-    const state = await setup(page, false);
+for (const { viewport, frame, theme } of [
+  { viewport: { width: 1440, height: 1000 }, frame: { width: 640, height: 360 }, theme: "dark" },
+  { viewport: { width: 1024, height: 768 }, frame: { width: 480, height: 640 }, theme: "light" },
+] as const) {
+  test(`edits and saves a centered zone on a ${frame.width}×${frame.height} feed at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const state = await setup(page, false, false, frame);
     await page.setViewportSize(viewport);
+    await switchTheme(page, theme);
     await page.goto("/#/enterprise/cameras");
     await expect(page.getByText("Zone setup required.", { exact: false })).toBeVisible();
     await expect(page.getByText("Live observations unavailable", { exact: true })).toBeVisible();
@@ -320,55 +322,101 @@ for (const viewport of [
     await expect(page.getByRole("textbox", { name: "Camera Username", exact: true })).toHaveValue("camera");
     await page.getByRole("tab", { name: "Counting Area", exact: true }).click();
     await page.getByRole("button", { name: "Edit Counting Area", exact: true }).click();
-    const svg = page.getByRole("img", { name: "Monitored area polygon" });
-    const tools = page.getByRole("region", { name: "Monitored area editing tools", exact: true });
-    await expect(tools.getByRole("button", { name: "Clear zone", exact: true })).toBeDisabled();
-    await expect(tools.getByText("Waiting for a live preview to place points.", { exact: true })).toHaveCount(0);
-    await svg.scrollIntoViewIfNeeded();
-    const bounds = await svg.boundingBox();
-    expect(bounds).not.toBeNull();
-    const toolBounds = await tools.boundingBox();
-    expect(toolBounds!.y).toBeGreaterThanOrEqual(bounds!.y + bounds!.height);
-    const draw = async () => {
-      for (const [x, y] of [
-        [0.2, 0.3],
-        [0.8, 0.3],
-        [0.8, 0.95],
-        [0.2, 0.95],
-      ]) {
-        await svg.scrollIntoViewIfNeeded();
-        const current = (await svg.boundingBox())!;
-        await page.mouse.click(current.x + current.width * x, current.y + current.height * y);
-      }
+    const dialog = page.getByRole("dialog", { name: "Edit Counting Area", exact: true });
+    const svg = dialog.getByRole("group", { name: "Monitored area polygon" });
+    const tools = dialog.getByRole("region", { name: "Monitored area editing tools", exact: true });
+    const point = (index: number) => svg.getByRole("button", { name: `Zone vertex ${index}`, exact: true });
+    const points = svg.getByRole("button", { name: /Zone vertex/ });
+    const undo = dialog.getByRole("button", { name: "Undo", exact: true });
+    const remove = tools.getByRole("button", { name: "Delete Point", exact: true });
+    const reset = tools.getByRole("button", { name: "Reset box", exact: true });
+    const useArea = dialog.getByRole("button", { name: "Use this Area", exact: true });
+    const coordinate = async (index: number, axis: "x" | "y") => Number(await point(index).getAttribute(`c${axis}`)) / 100;
+    const expectPoint = async (index: number, x: number, y: number) => {
+      await expect.poll(() => coordinate(index, "x")).toBeCloseTo(x, 2);
+      await expect.poll(() => coordinate(index, "y")).toBeCloseTo(y, 2);
     };
-    await draw();
-    await expect(svg.locator("circle")).toHaveCount(4);
-    await tools.getByRole("button", { name: "Undo point", exact: true }).click();
-    await expect(svg.locator("circle")).toHaveCount(3);
+    await expect(points).toHaveCount(4);
+    await expectPoint(1, 0.25, 0.25);
+    await expectPoint(3, 0.75, 0.75);
+    await expect(undo).toBeDisabled();
+    await svg.scrollIntoViewIfNeeded();
+    const bounds = (await svg.boundingBox())!;
+    const image = (await dialog.locator('img[alt$="live camera stream"]').boundingBox())!;
+    expect(bounds.width / bounds.height).toBeCloseTo(frame.width / frame.height, 4);
+    expect(bounds.x + bounds.width / 2).toBeCloseTo(image.x + image.width / 2, 0);
+    expect(bounds.y + bounds.height / 2).toBeCloseTo(image.y + image.height / 2, 0);
+    expect((await tools.boundingBox())!.y).toBeGreaterThanOrEqual(bounds.y + bounds.height);
+
+    const click = async (x: number, y: number) => {
+      await svg.scrollIntoViewIfNeeded();
+      const rect = (await svg.boundingBox())!;
+      await page.mouse.click(rect.x + rect.width * x, rect.y + rect.height * y);
+    };
+    const drag = async (fromX: number, fromY: number, toX: number, toY: number) => {
+      await svg.scrollIntoViewIfNeeded();
+      const rect = (await svg.boundingBox())!;
+      await page.mouse.move(rect.x + rect.width * fromX, rect.y + rect.height * fromY);
+      await page.mouse.down();
+      await page.mouse.move(rect.x + rect.width * toX, rect.y + rect.height * toY, { steps: 8 });
+      await page.mouse.up();
+    };
+
+    await click(0.1, 0.1);
+    await expect(points).toHaveCount(4);
+    await drag(0.5, 0.5, 0.6, 0.58);
+    await expectPoint(1, 0.35, 0.33);
+    await expectPoint(3, 0.85, 0.83);
+    await undo.click();
+    await expectPoint(1, 0.25, 0.25);
+
+    await drag(0.25, 0.25, -0.03, -0.04);
+    await expectPoint(1, 0, 0);
+    await expect(point(1)).toHaveAttribute("aria-pressed", "true");
+    await drag(0, 0, 0.06, 0.06);
+    await expectPoint(1, 0.06, 0.06);
+    await expectPoint(2, 0.75, 0.06);
+    await drag(0.45, 0.06, 0.45, 0.18);
+    await expectPoint(2, 0.75, 0.18);
+
+    await click(0.4, await coordinate(1, "y"));
+    await expect(points).toHaveCount(5);
+    await expect(point(2)).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Delete");
+    await expect(points).toHaveCount(4);
+    await point(1).focus();
+    await remove.click();
+    await expect(points).toHaveCount(3);
+    await point(1).focus();
+    await expect(remove).toBeDisabled();
+    await page.keyboard.press("Backspace");
+    await expect(points).toHaveCount(3);
+    await undo.click();
+    await expect(points).toHaveCount(4);
+
     await tools.getByRole("button", { name: "Clear zone", exact: true }).click();
-    await expect(svg.locator("circle")).toHaveCount(0);
-    await tools.getByText("Drawing help", { exact: true }).click();
-    await expect(tools.getByText("Click the image to add points.", { exact: false })).toBeVisible();
-    await draw();
-    const lowerPoint = svg.getByRole("button", { name: "Zone vertex 4", exact: true });
-    await lowerPoint.scrollIntoViewIfNeeded();
-    const current = (await svg.boundingBox())!;
-    await page.mouse.move(current.x + current.width * 0.2, current.y + current.height * 0.95);
-    await page.mouse.down();
-    await page.mouse.move(current.x + current.width * 0.2, current.y + current.height * 0.9, { steps: 5 });
-    await page.mouse.up();
-    await expect.poll(async () => Number(await lowerPoint.getAttribute("cy"))).toBeCloseTo(90, 0);
-    await lowerPoint.focus();
-    await lowerPoint.press("ArrowUp");
-    await expect.poll(async () => Number(await lowerPoint.getAttribute("cy"))).toBeCloseTo(89.5, 0);
-    await lowerPoint.press("ArrowDown");
-    await expect.poll(async () => Number(await lowerPoint.getAttribute("cy"))).toBeCloseTo(90, 0);
+    await expect(points).toHaveCount(0);
+    await expect(useArea).toBeDisabled();
+    await click(0.2, 0.2);
+    await click(0.8, 0.2);
+    await click(0.5, 0.75);
+    await expect(points).toHaveCount(3);
+    await reset.click();
+    await expectPoint(1, 0.25, 0.25);
+    await expectPoint(3, 0.75, 0.75);
+    await drag(0.75, 0.75, 1.02, 1.04);
+    await expectPoint(3, 1, 1);
+    await drag(1, 1, 0.88, 0.9);
+    await expectPoint(3, 0.88, 0.9);
+    await page.setViewportSize({ width: viewport.width - 100, height: viewport.height + 50 });
+    await expectPoint(3, 0.88, 0.9);
     await page.screenshot({ path: testInfo.outputPath("zone-tools-outside-preview.png"), fullPage: true });
-    await page.getByRole("button", { name: "Use this Area", exact: true }).click();
+    await useArea.click();
     await page.getByRole("button", { name: "Save Changes", exact: true }).click();
     await expect.poll(() => state.profiles()[0].openSpace?.polygon.length).toBe(4);
-    expect(state.profiles()[0].openSpace?.polygon[0].x).toBeCloseTo(0.2, 2);
-    expect(state.profiles()[0].openSpace?.polygon[0].y).toBeCloseTo(0.3, 2);
+    expect(state.profiles()[0].openSpace?.polygon[0].x).toBeCloseTo(0.25, 2);
+    expect(state.profiles()[0].openSpace?.polygon[0].y).toBeCloseTo(0.25, 2);
+    expect(state.profiles()[0].openSpace?.polygon[2].x).toBeCloseTo(0.88, 2);
     expect(state.profiles()[0].openSpace?.polygon[3].y).toBeCloseTo(0.9, 2);
     await expect.poll(() => state.starts.length).toBe(1);
     expect(state.starts[0]).toMatchObject({ analysis_mode: "open_space", preview_only: false, open_space: { zone_id: "main" } });

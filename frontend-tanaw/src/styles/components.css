@@ -458,9 +458,7 @@ html.dark .it-portal-main {
   line-height: 1.55;
 }
 
-.tanaw-data-page .tanaw-data-search,
-.tanaw-data-page .tanaw-data-filter > button,
-.tanaw-data-page button.tanaw-data-filter {
+.tanaw-data-page .tanaw-data-search {
   min-height: 44px;
   border-color: rgb(100 116 139 / 0.24);
   border-radius: 12px;
@@ -471,18 +469,34 @@ html.dark .it-portal-main {
     inset 0 1px 0 rgb(255 255 255 / 0.76);
 }
 
-.tanaw-data-page .tanaw-data-search:hover,
-.tanaw-data-page .tanaw-data-filter > button:hover,
-.tanaw-data-page button.tanaw-data-filter:hover {
+.tanaw-data-page .tanaw-data-search:hover {
   border-color: rgb(5 150 105 / 0.34);
   background: var(--tanaw-surface);
 }
 
-.tanaw-data-page .tanaw-data-search:focus-visible,
-.tanaw-data-page .tanaw-data-filter > button:focus-visible,
-.tanaw-data-page button.tanaw-data-filter:focus-visible {
+.tanaw-data-page .tanaw-data-search:focus-visible {
   border-color: rgb(5 150 105 / 0.72);
   box-shadow: 0 0 0 3px rgb(5 150 105 / 0.14);
+}
+
+.tanaw-data-page .tanaw-data-filter > .tanaw-select-trigger {
+  min-height: 44px;
+  border-color: var(--tanaw-control-border);
+  border-radius: 12px;
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  box-shadow: var(--shadow-tanaw-resting);
+}
+
+.tanaw-data-page .tanaw-data-filter > .tanaw-select-trigger:hover {
+  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-data-page .tanaw-data-filter > .tanaw-select-trigger:is(:focus-visible, [aria-expanded="true"]) {
+  border-color: var(--tanaw-focus-ring);
+  background: var(--tanaw-control-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tanaw-focus-ring) 18%, transparent);
 }
 
 .tanaw-data-page .tanaw-admin-workspace__table {
@@ -867,22 +881,19 @@ html.dark .tanaw-audit-cell > svg {
   color: var(--tanaw-text-muted);
 }
 
-html.dark .tanaw-data-page .tanaw-data-search,
-html.dark .tanaw-data-page .tanaw-data-filter {
+html.dark .tanaw-data-page .tanaw-data-search {
   border-color: var(--tanaw-border-subtle);
   background: var(--tanaw-control-bg);
   color: var(--tanaw-text);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
 }
 
-html.dark .tanaw-data-page .tanaw-data-search:hover,
-html.dark .tanaw-data-page .tanaw-data-filter:hover {
+html.dark .tanaw-data-page .tanaw-data-search:hover {
   border-color: var(--tanaw-border-strong);
   background: var(--tanaw-control-hover);
 }
 
-html.dark .tanaw-data-page .tanaw-data-search:focus,
-html.dark .tanaw-data-page .tanaw-data-filter:focus {
+html.dark .tanaw-data-page .tanaw-data-search:focus {
   border-color: rgb(52 211 153 / 0.72);
   background: var(--tanaw-control-focus);
   outline: none;

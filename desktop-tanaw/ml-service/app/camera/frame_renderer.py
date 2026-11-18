@@ -285,29 +285,3 @@ class CameraFrameRenderer:
         if not ok:
             raise RuntimeError("Failed to encode processed frame.")
         return buffer.tobytes()
-
-    def build_status_frame(self, message: str) -> bytes:
-        frame = np.zeros((540, 960, 3), dtype=np.uint8)
-        frame[:] = (17, 24, 39)
-        cv2.line(frame, (480, 0), (480, 540), (59, 130, 246), 2)
-        cv2.putText(
-            frame,
-            "TANAW ML Camera Service",
-            (270, 236),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.85,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            message[:72],
-            (90, 288),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (203, 213, 225),
-            2,
-            cv2.LINE_AA,
-        )
-        return self.encode_frame(frame)

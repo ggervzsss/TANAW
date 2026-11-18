@@ -69,6 +69,11 @@ test("keeps the password fields, confirmation guidance, requirements, and action
 
   expect(order.every((position) => position >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));
+  const requirements = page.getByRole("region", { name: "Password requirements" });
+  await expect(requirements.getByRole("listitem")).toHaveCount(2);
+  await expect(requirements.getByText(/password manager/)).toHaveCount(0);
+  await expect(requirements.locator("+ p")).toContainText("Special characters are optional.");
+  await expect(page.getByLabel("New Password", { exact: true })).toHaveAttribute("aria-describedby", "activation-password-tip");
   await expect(page.getByLabel("Confirm Password", { exact: true })).toHaveAttribute("aria-describedby", /confirm-password-guidance/);
 
   const spacing = await page.locator("form").evaluate((form) => {

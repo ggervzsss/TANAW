@@ -281,6 +281,10 @@ export async function proxyMlServiceStream(request: Request) {
     headers: mlServiceHeaders(),
     signal: request.signal,
   });
+  if (response.ok && response.headers.get("X-TANAW-Stream-Frames") !== "live-only") {
+    await response.body?.cancel();
+    return new Response("Incompatible camera stream. Update or restart the TANAW ML service.", { status: 502 });
+  }
   return new Response(response.body, {
     headers: response.headers,
     status: response.status,

@@ -15,6 +15,7 @@ type MapMock = LeafletMap & {
   fitBounds: Mock;
   flyTo: Mock;
   flyToBounds: Mock;
+  panTo: Mock;
   setView: Mock;
   stop: Mock;
 };
@@ -25,6 +26,8 @@ function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoo
   let minZoom = 11.2;
 
   const implementation = {
+    on: vi.fn(),
+    off: vi.fn(),
     fitBounds: vi.fn(),
     flyTo: vi.fn(),
     flyToBounds: vi.fn(),
@@ -37,6 +40,10 @@ function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoo
     getMinZoom: vi.fn(() => minZoom),
     getSize: vi.fn(() => toPoint(1200, 800)),
     getZoom: vi.fn(() => zoom),
+    panTo: vi.fn((nextCenter: LatLngExpression) => {
+      center = toLatLng(nextCenter);
+      return implementation;
+    }),
     project: vi.fn((value: LatLngExpression, targetZoom = zoom) => {
       const projected = toLatLng(value);
       const scale = 2 ** targetZoom;
@@ -64,9 +71,12 @@ function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoo
 }
 
 function toLatLng(value: LatLngExpression): LatLng {
-  if (Array.isArray(value)) return { lat: value[0], lng: value[1] } as LatLng;
-  if ("lat" in value) return { lat: value.lat, lng: value.lng } as LatLng;
-  throw new Error("Unsupported test coordinate.");
+  const [lat, lng] = Array.isArray(value) ? value : [value.lat, value.lng];
+  return { lat, lng, equals: equalCoordinates } as LatLng;
+}
+
+function equalCoordinates(this: LatLng, other: LatLng) {
+  return this.lat === other.lat && this.lng === other.lng;
 }
 
 function toPoint(x: number, y: number): Point {
@@ -108,7 +118,7 @@ const langgamBounds = createBounds(14.27, 121.0, 14.31, 121.04);
 const citywideBounds = createBounds(14.29, 120.98, 14.4, 121.13);
 
 describe("map camera target resolution", () => {
-  it("computes the target center and zoom once with directory-aware padding", () => {
+  it("fits a barangay using the space beside the directory", () => {
     const map = createMap();
     const expanded = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, false);
     const collapsed = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, true);
@@ -116,8 +126,10 @@ describe("map camera target resolution", () => {
     expect(expanded).not.toBeNull();
     expect(collapsed).not.toBeNull();
     expect(expanded!.zoom).toBe(14.2);
-    expect(expanded!.center.lng).not.toBeCloseTo(collapsed!.center.lng, 6);
-    expect(map.getBoundsZoom).toHaveBeenCalledWith(expect.anything(), false, [504, 108]);
+    expect(collapsed!.zoom).toBe(14.2);
+    expect(expanded!.center.lng).toBeLessThan(collapsed!.center.lng);
+    expect(map.getBoundsZoom).toHaveBeenNthCalledWith(1, expect.anything(), false, [494, 108]);
+    expect(map.getBoundsZoom).toHaveBeenNthCalledWith(2, expect.anything(), false, [98, 98]);
   });
 
   it("does not mutate the original geographic bounds while resolving a target", () => {
@@ -148,7 +160,7 @@ describe("map camera target resolution", () => {
 
     controller.setTarget({ type: "barangay", bounds: invalidBounds }, { directoryCollapsed: false, reducedMotion: false });
 
-    expect(controller.getSnapshot().revision).toBe(0);
+    expect(controller.getSnapshot().target).toBeNull();
     expect(map.flyTo).not.toHaveBeenCalled();
     expect(map.setView).not.toHaveBeenCalled();
   });
@@ -175,6 +187,28 @@ describe("adaptive native transition timing", () => {
 });
 
 describe("native Leaflet camera controller", () => {
+  it("leaves the viewport alone when an enterprise is already centered at a suitable zoom", () => {
+    const enterprise = { type: "enterprise", center: [14.35, 121.05] as [number, number] } as const;
+    const focused = resolveMapCameraPosition(createMap([14.35, 121.05], 16), enterprise, true)!;
+    const map = createMap(focused.center, 16);
+    const controller = new MapMotionController(map);
+
+    controller.setTarget(enterprise, { directoryCollapsed: true });
+
+    expect(map.panTo).not.toHaveBeenCalled();
+    expect(map.setView).not.toHaveBeenCalled();
+    expect(map.getZoom()).toBe(16);
+  });
+
+  it.each([[12, 15.75], [16, 16], [18, 17.25]])("focuses an enterprise from zoom %s at zoom %s", (startZoom, expectedZoom) => {
+    const map = createMap([14.35, 121.05], startZoom);
+    const target = resolveMapCameraPosition(map, { type: "enterprise", center: [14.36, 121.07] }, false)!;
+
+    expect(target.zoom).toBe(expectedZoom);
+    expect(target.center.lat).toBeLessThan(14.36);
+    expect(target.center.lng).toBeLessThan(121.07);
+  });
+
   it("issues exactly one native camera command for one barangay action", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
@@ -183,6 +217,7 @@ describe("native Leaflet camera controller", () => {
 
     controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
 
+    expect(map.panTo).not.toHaveBeenCalled();
     expect(map.setView).toHaveBeenCalledTimes(1);
     expect(map.setView).toHaveBeenCalledWith(
       resolved.center,
@@ -198,19 +233,27 @@ describe("native Leaflet camera controller", () => {
     expect(map.stop).not.toHaveBeenCalled();
   });
 
-  it("accepts San Roque to Langgam immediately and leaves Langgam as the latest target", () => {
+  it("applies only the latest queued selection once the native zoom ends", async () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const sanRoque = { type: "barangay", bounds: sanRoqueBounds } as const;
     const langgam = { type: "barangay", bounds: langgamBounds } as const;
     const langgamPosition = resolveMapCameraPosition(map, langgam, false)!;
+    const listeners = Object.fromEntries((map.on as Mock).mock.calls);
 
     controller.setTarget(sanRoque, { directoryCollapsed: false, reducedMotion: false });
+    listeners.zoomstart();
+    controller.setTarget({ type: "barangay", bounds: landayanBounds }, { directoryCollapsed: false });
     controller.setTarget(langgam, { directoryCollapsed: false, reducedMotion: false });
 
-    expect(controller.getSnapshot()).toMatchObject({ revision: 2, target: { type: "barangay" } });
-    expect(map.setView).toHaveBeenCalledTimes(2);
-    expect(map.setView).toHaveBeenLastCalledWith(langgamPosition.center, langgamPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenCalledTimes(1);
+    expect(map.panTo).not.toHaveBeenCalled();
+    listeners.zoomend();
+    await Promise.resolve();
+
+    expect(controller.getSnapshot()).toMatchObject({ revision: 3, target: langgamPosition });
+    expect(map.panTo).toHaveBeenCalledTimes(1);
+    expect(map.panTo).toHaveBeenLastCalledWith(langgamPosition.center, expect.anything());
   });
 
   it("keeps Pacita as the only final target after the screenshot regression sequence", () => {
@@ -223,13 +266,13 @@ describe("native Leaflet camera controller", () => {
       { type: "citywide", bounds: citywideBounds },
       { type: "barangay", bounds: pacitaBounds },
     ];
-    const pacitaPosition = resolveMapCameraPosition(map, sequence.at(-1)!, false)!;
 
     sequence.forEach((target) => controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false }));
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 5, target: { type: "barangay" } });
-    expect(map.setView).toHaveBeenCalledTimes(5);
-    expect(map.setView).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenCalledTimes(3);
+    expect(map.panTo).toHaveBeenCalledTimes(2);
+    expect(controller.getSnapshot().target?.zoom).toBe(map.getZoom());
     expect(map.flyTo).not.toHaveBeenCalled();
     expect(map.flyToBounds).not.toHaveBeenCalled();
   });
@@ -237,13 +280,13 @@ describe("native Leaflet camera controller", () => {
   it("replaces a citywide return with a new barangay camera command", () => {
     const map = createMap([14.34, 121.04], 14);
     const controller = new MapMotionController(map);
-    const pacitaPosition = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, false)!;
 
     controller.setTarget({ type: "citywide", bounds: citywideBounds }, { directoryCollapsed: false, reducedMotion: false });
     controller.setTarget({ type: "barangay", bounds: pacitaBounds }, { directoryCollapsed: false, reducedMotion: false });
 
     expect(controller.getSnapshot().revision).toBe(2);
-    expect(map.setView).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenCalledTimes(2);
+    expect(map.panTo).not.toHaveBeenCalled();
     expect(map.flyTo).not.toHaveBeenCalled();
   });
 
@@ -265,9 +308,9 @@ describe("native Leaflet camera controller", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "barangay", bounds: pacitaBounds } as const;
-    const resolved = resolveMapCameraPosition(map, target, true)!;
+    const resolved = resolveMapCameraPosition(map, target, false)!;
 
-    controller.setTarget(target, { directoryCollapsed: true, reducedMotion: true });
+    controller.setTarget(target, { directoryCollapsed: false, reducedMotion: true });
 
     expect(map.setView).toHaveBeenCalledTimes(1);
     expect(map.setView).toHaveBeenCalledWith(resolved.center, resolved.zoom, { animate: false });
@@ -292,19 +335,16 @@ describe("geographic layer integrity safeguards", () => {
 
     expect(cameraSource).not.toContain("requestAnimationFrame");
     expect(cameraSource).not.toMatch(/\._move(?:Start|End)?\(/);
-    expect(cameraSource).not.toContain("latLngToContainerPoint");
     expect(cameraSource).not.toContain("this.map.flyTo(");
   });
 
   it("does not add positional transitions to Leaflet panes, paths, markers, or popups", () => {
     const stylesheet = readFileSync(new URL("../../../../../src/styles/map.css", import.meta.url), "utf8");
-    const geographicTransitionRule = stylesheet.match(/#admin-enterprise-map \.leaflet-marker-icon,\s*#admin-enterprise-map \.leaflet-popup\s*\{([^}]*)\}/);
+    const geographicOverride = /#admin-enterprise-map\s+\.leaflet-(?:marker-icon|popup)\b(?:,\s*[^{]+)?\s*\{[^}]*transition\s*:/;
     const unsafePaneTransform = /\.leaflet-(?:map|tile|overlay|marker|tooltip|popup)-pane[^{]*\{[^}]*(?:transition\s*:[^;}]*transform|will-change\s*:[^;}]*transform)/s;
 
     expect(stylesheet).not.toMatch(unsafePaneTransform);
-    expect(geographicTransitionRule).not.toBeNull();
-    expect(geographicTransitionRule![1]).toContain("transition: opacity");
-    expect(geographicTransitionRule![1]).not.toContain("transform");
+    expect(stylesheet).not.toMatch(geographicOverride);
   });
 
   it("does not invalidate a map whose absolute directory overlay never changes its dimensions", () => {

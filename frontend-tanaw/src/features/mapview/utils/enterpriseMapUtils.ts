@@ -2,6 +2,7 @@ import L from "leaflet";
 import type { MapEnterprise } from "@/shared/types";
 import type { LeafletMapTheme } from "./leafletTheme";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { getDarkMonitoringBadgeClass } from "./mapStatusStyles";
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
@@ -96,11 +97,11 @@ export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane:
   const isAdmin = variant === "admin";
 
   return {
-    color: isDark ? "#7893aa" : "#2a3063",
-    weight: isAdmin ? 1.2 : 1,
-    opacity: isDark ? 0.78 : isAdmin ? 0.86 : 0.78,
-    fillColor: isDark ? mixHexColors(getGeoJsonColor(name), "#10243a", 0.58) : getGeoJsonColor(name),
-    fillOpacity: isDark ? (isAdmin ? 0.27 : 0.22) : isAdmin ? 0.48 : 0.34,
+    color: isDark ? (isAdmin ? "#96beaf" : "#7893aa") : isAdmin ? "#3d6e63" : "#2a3063",
+    weight: isAdmin ? 2 : 1,
+    opacity: isAdmin ? 0.92 : 0.78,
+    fillColor: isDark ? mixHexColors(getGeoJsonColor(name), isAdmin ? "#244843" : "#10243a", isAdmin ? 0.48 : 0.58) : getGeoJsonColor(name),
+    fillOpacity: isDark ? 0.22 : isAdmin ? 0.25 : 0.34,
     pane,
     className: `${isAdmin ? "tanaw-boundary-path" : "tanaw-location-boundary-path"} outline-none`,
   };
@@ -109,40 +110,57 @@ export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane:
 export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#55e0b0",
-      fillOpacity: 0.48,
-      opacity: 0.98,
-      weight: 3,
+      color: "#abe6c9",
+      fillColor: "#459e80",
+      fillOpacity: 0.31,
+      opacity: 1,
+      weight: 3.25,
     };
   }
 
-  return activeBoundaryStyle;
+  return {
+    color: "#167052",
+    fillColor: "#49a981",
+    fillOpacity: 0.31,
+    opacity: 1,
+    weight: 3,
+  };
 }
 
 export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#53677d",
-      fillOpacity: 0.09,
-      opacity: 0.5,
-      weight: 1,
+      color: "#93baad",
+      fillOpacity: 0.18,
+      opacity: 0.82,
+      weight: 1.75,
     };
   }
 
-  return dimmedBoundaryStyle;
+  return {
+    color: "#557a6e",
+    fillOpacity: 0.17,
+    opacity: 0.84,
+    weight: 1.65,
+  };
 }
 
 export function getHoverBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#b9e7ff",
-      fillOpacity: 0.39,
-      opacity: 0.96,
-      weight: 2.2,
+      color: "#cae7dc",
+      fillOpacity: 0.34,
+      opacity: 0.98,
+      weight: 2.6,
     };
   }
 
-  return hoverBoundaryStyle;
+  return {
+    color: "#2d8b6d",
+    fillOpacity: 0.34,
+    opacity: 0.97,
+    weight: 2.5,
+  };
 }
 
 export function normalizeGeoJson(payload: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
@@ -408,15 +426,31 @@ export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
   return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${name}</h3><p class="tanaw-map-popup__meta">San Pedro, Laguna ${postalCode}</p><span class="tanaw-map-popup__badge">${toSentenceCase(`${type} boundary`)}</span></div>`;
 }
 
-export function createTooltipHtml(enterprise: MapEnterprise, color: string) {
-  const cameraCount = enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras active` : "No camera telemetry";
-
-  return `<div class="tanaw-map-tooltip"><h4 class="tanaw-map-tooltip__title">${escapeHtml(enterprise.name)}</h4><p class="tanaw-map-tooltip__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-tooltip__meta" style="color:${color};">${escapeHtml(enterprise.monitoringStatus)} · ${escapeHtml(cameraCount)}</p></div>`;
+export function createTooltipHtml(enterprise: MapEnterprise) {
+  return createEnterpriseMapSummary(enterprise, false);
 }
 
-export function createPopupHtml(enterprise: MapEnterprise, color: string) {
-  const cameraCount = enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras active` : "No camera telemetry";
-  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "—";
-  const unique = enterprise.estimatedUniqueCount?.toLocaleString() ?? "—";
-  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${occupancy} live occupancy | ${unique} est. unique</p><p class="tanaw-map-popup__meta">${escapeHtml(cameraCount)} · Occupancy: ${escapeHtml(enterprise.occupancyStatus)}</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${escapeHtml(toSentenceCase(enterprise.monitoringStatus))}</span></div>`;
+export function createPopupHtml(enterprise: MapEnterprise) {
+  return `${createEnterpriseMapSummary(enterprise, true)}
+    <button type="button" class="tanaw-enterprise-popup__details">View Details <span aria-hidden="true">→</span></button>`;
+}
+
+function createEnterpriseMapSummary(enterprise: MapEnterprise, expanded: boolean) {
+  const cameras = enterprise.cameraMonitoring;
+  const cameraCount = cameras ? `${cameras.healthyCameraCount}/${cameras.configuredCameraCount} reporting` : "Unavailable";
+  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "Unavailable";
+  const address = enterprise.fullAddress;
+  const location = [enterprise.category, enterprise.barangay].filter(Boolean).join(" · ");
+  const isOccupancyAlert = enterprise.occupancyStatus === "Warning" || enterprise.occupancyStatus === "High Occupancy";
+  return `<div class="tanaw-map-marker-summary">
+    <strong>${escapeHtml(enterprise.name)}</strong>
+    ${location ? `<p class="tanaw-map-marker-summary__location">${escapeHtml(location)}</p>` : ""}
+    ${address && address !== location ? `<p>${escapeHtml(address)}</p>` : ""}
+    <span class="tanaw-map-marker-summary__status ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}">${escapeHtml(toSentenceCase(enterprise.monitoringStatus))}</span>
+    <dl>
+      <div><dt>Cameras</dt><dd>${cameraCount}</dd></div>
+      <div><dt>Live occupancy</dt><dd>${occupancy}</dd></div>
+      ${(isOccupancyAlert || expanded) && enterprise.totalLiveOccupancy != null ? `<div><dt>Occupancy status</dt><dd>${escapeHtml(enterprise.occupancyStatus)}</dd></div>` : ""}
+    </dl>
+  </div>`;
 }

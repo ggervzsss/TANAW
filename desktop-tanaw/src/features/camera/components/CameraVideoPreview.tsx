@@ -14,6 +14,8 @@ type CameraVideoPreviewProps = {
   displayPreferences?: CameraDisplayPreferences;
   onRetry?: () => void | Promise<boolean | void>;
   onEditCheckpoint?: () => void;
+  selectedZonePoint?: number | null;
+  onSelectZonePoint?: (index: number | null) => void;
   activeCam: Camera;
   area?: MlAreaState | null;
   counts: MlCounts;
@@ -40,6 +42,8 @@ export function CameraVideoPreview({
   displayPreferences = DEFAULT_CAMERA_DISPLAY,
   onRetry,
   onEditCheckpoint,
+  selectedZonePoint,
+  onSelectZonePoint,
   area,
   activeCam,
   counts,
@@ -60,9 +64,11 @@ export function CameraVideoPreview({
   const retryTimerRef = useRef<number | null>(null);
   const [contentRect, setContentRect] = useState<ContentRect | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
-  const [previewState, setPreviewState] = useState<CameraPreviewState>("connecting");
+  const [connectionState, setConnectionState] = useState<Exclude<CameraPreviewState, "live">>("connecting");
+  const [decodedStreamUrl, setDecodedStreamUrl] = useState<string | null>(null);
   const streamIsAvailable = Boolean(isProcessing && streamUrl);
   const effectiveStreamUrl = useMemo(() => withPreviewRetryVersion(streamUrl, previewAttempt), [previewAttempt, streamUrl]);
+  const previewState = streamIsAvailable && decodedStreamUrl === effectiveStreamUrl ? "live" : connectionState;
   const isStarting = counts.status === "starting" || counts.status === "connecting" || activeCam.status === "starting";
   const hasFreshFrame = health?.raw_frame_id !== 0 && (health?.raw_frame_stale_ms == null || health.raw_frame_stale_ms < 5000);
   const isActuallyLive = streamIsAvailable && previewState === "live" && hasFreshFrame && ["running", "degraded"].includes(counts.status);
@@ -92,6 +98,7 @@ export function CameraVideoPreview({
   }[presentation];
   const StatusIcon = loading ? Wifi : presentation === "error" ? CircleAlert : WifiOff;
   const overlayConfig = isEditMode && editForm ? editForm.config : activeCam.config;
+  const isZoneEditor = isEditMode && editForm?.analysisMode === "open_space";
   const shouldShowConfigOverlay = isEditMode || displayPreferences.area;
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
@@ -114,11 +121,12 @@ export function CameraVideoPreview({
   const schedulePreviewRetry = useCallback(() => {
     if (previewSourceRef.current !== streamUrl) return;
     if (retryTimerRef.current !== null) return;
+    setDecodedStreamUrl(null);
     if (!canRetryPreview(previewAttempt)) {
-      setPreviewState("failed");
+      setConnectionState("failed");
       return;
     }
-    setPreviewState("retrying");
+    setConnectionState("retrying");
     const retrySource = streamUrl;
     retryTimerRef.current = window.setTimeout(() => {
       retryTimerRef.current = null;
@@ -130,7 +138,8 @@ export function CameraVideoPreview({
   useEffect(() => {
     clearPreviewTimers();
     setPreviewAttempt(0);
-    setPreviewState("connecting");
+    setDecodedStreamUrl(null);
+    setConnectionState("connecting");
   }, [activeCam.id, clearPreviewTimers, streamUrl]);
 
   useEffect(() => {
@@ -142,13 +151,13 @@ export function CameraVideoPreview({
       clearPreviewTimers();
       return;
     }
-    setPreviewState("connecting");
+    setConnectionState("connecting");
     const startedAt = Date.now();
     const checkForDecodedFrame = () => {
       const image = previewImageRef.current;
       if (image && hasRenderablePreviewFrame(image.naturalWidth, image.naturalHeight)) {
         connectWatchdogRef.current = null;
-        setPreviewState("live");
+        setDecodedStreamUrl(effectiveStreamUrl);
         return;
       }
       if (Date.now() - startedAt >= 10_000) {
@@ -170,7 +179,8 @@ export function CameraVideoPreview({
     }
 
     const updateContentRect = () => {
-      const bounds = container.getBoundingClientRect();
+      // The image fills the padding box, so the overlay must exclude the preview border too.
+      const bounds = { width: container.clientWidth, height: container.clientHeight };
       const frameAspect = frameWidth / frameHeight;
       const containerAspect = bounds.width / bounds.height;
 
@@ -195,7 +205,7 @@ export function CameraVideoPreview({
   return (
     <div
       ref={containerRef}
-      className={`relative h-full min-h-72 w-full overflow-hidden rounded-tanaw-xl border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
+      className={`relative h-full min-h-72 w-full rounded-tanaw-xl border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isZoneEditor ? "" : "overflow-hidden"} ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
     >
       {streamIsAvailable ? (
         <img
@@ -203,7 +213,7 @@ export function CameraVideoPreview({
           key={effectiveStreamUrl}
           src={effectiveStreamUrl}
           alt={`${activeCam.name} live camera stream`}
-          className="absolute inset-0 h-full w-full object-contain"
+          className={`absolute inset-0 h-full w-full rounded-[inherit] object-contain ${isActuallyLive ? "" : "invisible"}`}
           draggable={false}
           onError={(event) => {
             if (!isCurrentPreviewRequest(previewSourceRef.current, streamUrl, previewImageRef.current, event.currentTarget)) return;
@@ -215,15 +225,16 @@ export function CameraVideoPreview({
           }}
           onLoad={(event) => {
             if (!isCurrentPreviewRequest(previewSourceRef.current, streamUrl, previewImageRef.current, event.currentTarget)) return;
+            if (!hasRenderablePreviewFrame(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) return;
             if (connectWatchdogRef.current !== null) {
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
             }
-            setPreviewState("live");
+            setDecodedStreamUrl(effectiveStreamUrl);
           }}
         />
       ) : null}
-      <div className={`camera-preview-state ${isActuallyLive ? "is-hidden" : ""}`} data-state={presentation} aria-hidden={isActuallyLive}>
+      <div className={`camera-preview-state rounded-[inherit] ${isActuallyLive ? "is-hidden" : ""}`} data-state={presentation} aria-hidden={isActuallyLive}>
         <div className="camera-preview-state-brand">
           <Video size={18} />
           <span>
@@ -252,8 +263,9 @@ export function CameraVideoPreview({
                   return;
                 }
                 clearPreviewTimers();
+                setDecodedStreamUrl(null);
                 setPreviewAttempt((attempt) => (attempt === 0 ? 1 : 0));
-                setPreviewState("connecting");
+                setConnectionState("connecting");
               }}
               disabled={!onRetry && !streamIsAvailable}
             >
@@ -269,12 +281,14 @@ export function CameraVideoPreview({
       </div>
 
       {shouldShowConfigOverlay && isActuallyLive && (
-        <div className="absolute" style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
+        <div className={`absolute ${isZoneEditor ? "z-20" : ""}`} style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
           {(isEditMode && editForm ? editForm : activeCam).analysisMode === "open_space" ? (
             <OpenSpaceOverlay
               value={(isEditMode && editForm ? editForm : activeCam).openSpace}
               editable={isEditMode && Boolean(contentRect) && isActuallyLive}
               onEditCheckpoint={onEditCheckpoint}
+              selectedPoint={selectedZonePoint}
+              onSelectPoint={onSelectZonePoint}
               onChange={(openSpace) => onEditFormChange((current) => (current?.analysisMode === "open_space" ? { ...current, openSpace } : current))}
             />
           ) : (
@@ -347,7 +361,7 @@ export function CameraVideoPreview({
         </div>
       )}
 
-      <div className={`camera-preview-badges absolute top-3 right-3 left-3 flex items-start justify-between gap-3 ${!isActuallyLive ? "invisible" : ""}`}>
+      <div className={`camera-preview-badges pointer-events-none absolute top-3 right-3 left-3 flex items-start justify-between gap-3 ${!isActuallyLive ? "invisible" : ""}`}>
         <div className="flex min-w-0 flex-wrap gap-1.5">
           <PreviewBadge label="● Live" tone="ok" />
           <PreviewBadge label={`People in area: ${activeCam.analysisMode === "open_space" ? (area?.available ? (area.presence ?? "—") : "—") : (counts.occupancy ?? "—")}`} tone="neutral" />

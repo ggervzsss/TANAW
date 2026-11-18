@@ -1,15 +1,19 @@
 import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point } from "leaflet";
 
-const DIRECTORY_BREAKPOINT_PX = 820;
-const EXPANDED_DIRECTORY_OCCLUSION_PX = 448;
+export const COMPACT_MAP_MAX_WIDTH = 1100;
+const EXPANDED_DIRECTORY_OCCLUSION_PX = 438;
+const EXPANDED_INSIGHTS_OCCLUSION_PX = 480;
 const DEFAULT_CITYWIDE_BOUNDS_PADDING = 0.04;
 const DEFAULT_CITYWIDE_MAX_ZOOM = 14.35;
-const PROJECTION_ZOOM = 18;
+const BARANGAY_MAX_ZOOM = 16.75;
+const ENTERPRISE_MIN_ZOOM = 15.75;
+const ENTERPRISE_MAX_ZOOM = 17.25;
 
-export type ResolvedMapCameraTarget = { type: "citywide"; bounds: LatLngBounds } | { type: "barangay"; bounds: LatLngBounds } | { type: "enterprise"; center: LatLngExpression; zoom: number };
+export type ResolvedMapCameraTarget = { type: "citywide"; bounds: LatLngBounds } | { type: "barangay"; bounds: LatLngBounds } | { type: "enterprise"; center: LatLngExpression };
 
 export type MapCameraTransitionOptions = {
   directoryCollapsed: boolean;
+  insightsOpen?: boolean;
   immediate?: boolean;
   reducedMotion?: boolean;
 };
@@ -36,40 +40,39 @@ export function calculateAdaptiveMapDuration(distancePx: number, zoomDelta: numb
   return Math.round(clamp(baseDuration, 250, 900));
 }
 
-export function resolveMapCameraPosition(map: LeafletMap, target: ResolvedMapCameraTarget, directoryCollapsed: boolean): ResolvedMapCameraPosition | null {
-  if (target.type === "enterprise") {
-    return {
-      center: map.unproject(map.project(target.center, PROJECTION_ZOOM), PROJECTION_ZOOM),
-      type: target.type,
-      zoom: clamp(target.zoom, map.getMinZoom(), map.getMaxZoom()),
-    };
+export function resolveMapCameraPosition(map: LeafletMap, target: ResolvedMapCameraTarget, directoryCollapsed: boolean, insightsOpen = false): ResolvedMapCameraPosition | null {
+  if (target.type === "citywide") return getDefaultCitywideCamera(map, target.bounds, directoryCollapsed, insightsOpen);
+  if (target.type === "barangay") {
+    return target.bounds.isValid() ? resolveBoundsCameraPosition(map, target, directoryCollapsed, insightsOpen, 0.08, BARANGAY_MAX_ZOOM) : null;
   }
-
-  if (!target.bounds.isValid()) return null;
-
-  if (target.type === "citywide") {
-    return getDefaultCitywideCamera(map, target.bounds, directoryCollapsed);
-  }
-
-  return resolveBoundsCameraPosition(map, target, directoryCollapsed, 0.22, 14.35);
+  const zoom = clamp(clamp(map.getZoom(), ENTERPRISE_MIN_ZOOM, ENTERPRISE_MAX_ZOOM), map.getMinZoom(), map.getMaxZoom());
+  const { left, right } = getMapPanelInsets(map.getSize().x, directoryCollapsed, insightsOpen);
+  const projected = map.project(target.center, zoom);
+  return {
+    center: map.unproject([projected.x + (right - left) / 2, projected.y - (map.getSize().y < 480 ? 38 : 26)], zoom),
+    type: target.type,
+    zoom,
+  };
 }
 
-export function getDefaultCitywideCamera(map: LeafletMap, bounds: LatLngBounds, directoryCollapsed: boolean): ResolvedMapCameraPosition | null {
+export function getDefaultCitywideCamera(map: LeafletMap, bounds: LatLngBounds, directoryCollapsed: boolean, insightsOpen = false): ResolvedMapCameraPosition | null {
   if (!bounds.isValid()) return null;
 
-  return resolveBoundsCameraPosition(map, { type: "citywide", bounds }, directoryCollapsed, DEFAULT_CITYWIDE_BOUNDS_PADDING, DEFAULT_CITYWIDE_MAX_ZOOM);
+  return resolveBoundsCameraPosition(map, { type: "citywide", bounds }, directoryCollapsed, insightsOpen, DEFAULT_CITYWIDE_BOUNDS_PADDING, DEFAULT_CITYWIDE_MAX_ZOOM);
 }
 
 function resolveBoundsCameraPosition(
   map: LeafletMap,
   target: Extract<ResolvedMapCameraTarget, { type: "citywide" | "barangay" }>,
   directoryCollapsed: boolean,
+  insightsOpen: boolean,
   boundsPadding: number,
   maxZoom: number,
 ): ResolvedMapCameraPosition {
-  const hasDirectoryOffset = !directoryCollapsed && map.getSize().x >= DIRECTORY_BREAKPOINT_PX;
-  const paddingTopLeft: [number, number] = hasDirectoryOffset ? [EXPANDED_DIRECTORY_OCCLUSION_PX, target.type === "citywide" ? 48 : 52] : [42, 42];
-  const paddingBottomRight: [number, number] = target.type === "citywide" ? [48, 48] : [56, 56];
+  const { left, right } = getMapPanelInsets(map.getSize().x, directoryCollapsed, insightsOpen);
+  const paddingTopLeft: [number, number] = [left || 42, left ? 52 : 42];
+  const edgePadding = target.type === "citywide" ? 48 : 56;
+  const paddingBottomRight: [number, number] = [right || edgePadding, edgePadding];
   const paddedBounds = target.bounds.pad(boundsPadding);
   const totalPadding = [paddingTopLeft[0] + paddingBottomRight[0], paddingTopLeft[1] + paddingBottomRight[1]] as unknown as Point;
   const zoom = clamp(map.getBoundsZoom(paddedBounds, false, totalPadding), map.getMinZoom(), Math.min(map.getMaxZoom(), maxZoom));
@@ -81,55 +84,112 @@ function resolveBoundsCameraPosition(
   };
 }
 
+export function getMapPanelInsets(width: number, directoryCollapsed: boolean, insightsOpen: boolean) {
+  const desktop = width > COMPACT_MAP_MAX_WIDTH;
+  return {
+    left: desktop && !directoryCollapsed ? EXPANDED_DIRECTORY_OCCLUSION_PX : 0,
+    right: desktop && insightsOpen ? EXPANDED_INSIGHTS_OCCLUSION_PX : 0,
+  };
+}
+
 export class MapMotionController {
   private constraintsKey: string | null = null;
   private disposed = false;
   private durationMs = 0;
   private revision = 0;
   private target: ResolvedMapCameraPosition | null = null;
+  private zooming = false;
+  private moving = false;
+  private pending: { target: ResolvedMapCameraTarget; options: MapCameraTransitionOptions } | null = null;
   private readonly map: LeafletMap;
 
   constructor(map: LeafletMap) {
     this.map = map;
+    map.on("zoomstart", this.onZoomStart);
+    map.on("zoomend", this.onZoomEnd);
+    map.on("movestart", this.onMoveStart);
+    map.on("moveend", this.onMoveEnd);
   }
 
   setTarget(target: ResolvedMapCameraTarget, options: MapCameraTransitionOptions) {
     if (this.disposed) return this.revision;
+    const revision = ++this.revision;
+    // Leaflet ignores a fresh animated zoom while an earlier one is in progress.
+    if (this.zooming) {
+      this.pending = { target, options };
+    } else {
+      this.pending = null;
+      this.move(target, options);
+    }
+    return revision;
+  }
 
+  clearPendingSelection() {
+    if (this.pending?.target.type !== "citywide") this.pending = null;
+  }
+
+  isMoving() {
+    return this.moving || this.zooming || this.pending !== null;
+  }
+
+  private onMoveStart = () => { this.moving = true; };
+  private onMoveEnd = () => { this.moving = false; };
+
+  private onZoomStart = () => {
+    this.zooming = true;
+  };
+
+  private onZoomEnd = () => {
+    this.zooming = false;
+    if (!this.pending) return;
+    queueMicrotask(() => {
+      if (this.disposed || this.zooming || !this.pending) return;
+      const { target, options } = this.pending;
+      this.pending = null;
+      this.move(target, options);
+    });
+  };
+
+  private move(target: ResolvedMapCameraTarget, options: MapCameraTransitionOptions) {
     if (target.type === "citywide" && target.bounds.isValid()) {
       this.configureCitywideConstraints(target.bounds);
     }
 
-    const targetPosition = resolveMapCameraPosition(this.map, target, options.directoryCollapsed);
-    if (!targetPosition) return this.revision;
+    const targetPosition = resolveMapCameraPosition(this.map, target, options.directoryCollapsed, options.insightsOpen);
+    if (!targetPosition) return;
 
     const reducedMotion = options.reducedMotion ?? prefersReducedMapMotion();
-    const nextRevision = ++this.revision;
-
     this.target = targetPosition;
 
     if (options.immediate === true || reducedMotion) {
       this.durationMs = 0;
       this.map.setView(targetPosition.center, targetPosition.zoom, { animate: false });
-      return nextRevision;
+      return;
     }
 
     const currentCenter = this.map.getCenter();
     const currentZoom = this.map.getZoom();
     const distancePx = this.map.project(currentCenter, currentZoom).distanceTo(this.map.project(targetPosition.center, currentZoom));
+    if (targetPosition.zoom === currentZoom && distancePx <= 1) {
+      this.durationMs = 0;
+      return;
+    }
     const durationMs = calculateAdaptiveMapDuration(distancePx, targetPosition.zoom - currentZoom, targetPosition.type);
     this.durationMs = durationMs;
+    if (targetPosition.zoom === currentZoom) {
+      this.map.panTo(targetPosition.center, { animate: true, duration: durationMs / 1000, easeLinearity: 0.25 });
+      return;
+    }
 
     // setView keeps the zoom bounded between the current and target values.
     // Unlike flyTo, it cannot create a lower-zoom flight arc before returning
-    // to the citywide target, and Leaflet still moves every geographic pane
+    // to the target, and Leaflet still moves every geographic pane
     // through the same native camera lifecycle.
     this.map.setView(targetPosition.center, targetPosition.zoom, {
       animate: true,
       duration: durationMs / 1000,
       easeLinearity: 0.25,
     });
-    return nextRevision;
   }
 
   getSnapshot() {
@@ -143,6 +203,11 @@ export class MapMotionController {
   dispose() {
     this.disposed = true;
     this.target = null;
+    this.pending = null;
+    this.map.off("zoomstart", this.onZoomStart);
+    this.map.off("zoomend", this.onZoomEnd);
+    this.map.off("movestart", this.onMoveStart);
+    this.map.off("moveend", this.onMoveEnd);
   }
 
   private configureCitywideConstraints(bounds: LatLngBounds) {

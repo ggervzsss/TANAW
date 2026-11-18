@@ -13,7 +13,7 @@ export type MapInteractionAction =
   | { type: "select-barangay"; barangayName: string }
   | { type: "select-enterprise"; barangayName: string; enterpriseId: string }
   | { type: "clear-barangay"; reason: MapDeselectReason }
-  | { type: "close-enterprise" }
+  | { type: "close-enterprise"; enterpriseId: string }
   | { type: "show-area-insights" }
   | { type: "show-enterprise-insights"; enterpriseId: string };
 
@@ -46,13 +46,12 @@ export function mapInteractionReducer(state: MapInteractionState, action: MapInt
     }
     case "select-enterprise":
       return {
-        cameraTarget: {
-          type: "enterprise",
-          barangayName: action.barangayName,
-          enterpriseId: action.enterpriseId,
-        },
+        cameraTarget:
+          state.cameraTarget.type === "enterprise" && state.cameraTarget.enterpriseId === action.enterpriseId
+            ? state.cameraTarget
+            : { type: "enterprise", barangayName: action.barangayName, enterpriseId: action.enterpriseId },
         insightEnterpriseId: null,
-        selectedBarangayName: action.barangayName,
+        selectedBarangayName: state.selectedBarangayName,
         selectedEnterpriseId: action.enterpriseId,
       };
     case "clear-barangay": {
@@ -63,7 +62,7 @@ export function mapInteractionReducer(state: MapInteractionState, action: MapInt
       return initialMapInteractionState;
     }
     case "close-enterprise":
-      return state.selectedEnterpriseId === null ? state : { ...state, selectedEnterpriseId: null };
+      return state.selectedEnterpriseId === action.enterpriseId ? { ...state, selectedEnterpriseId: null } : state;
     case "show-area-insights":
       return state.insightEnterpriseId === null ? state : { ...state, insightEnterpriseId: null };
     case "show-enterprise-insights":

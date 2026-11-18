@@ -19,8 +19,8 @@ export function ActivityDetailsModal({ activity, role, timeFormat, onClose }: { 
     <ModalFrame title="Activity Details" eyebrow={role === "admin" ? activityGroupFor(activity) : activity.id} onClose={onClose} maxWidthClassName={role === "admin" ? "max-w-4xl" : undefined}>
       <ActivityDetailFields activity={activity} timeFormat={timeFormat} variant={role} />
       {ticketId && (
-        <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">This activity is connected to an enterprise support request. Open it to review the full request, attachments, status, and response.</p>
+        <div className="mt-5 rounded-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-4">
+          <p className="text-sm font-semibold text-(--tanaw-text-secondary)">This activity is connected to an enterprise support request. Open it to review the full request, attachments, status, and response.</p>
           <button
             type="button"
             onClick={openTicket}

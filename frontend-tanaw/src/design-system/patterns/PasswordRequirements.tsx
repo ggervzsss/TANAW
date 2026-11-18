@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/patterns/PasswordRequirements.tsx instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: 29ce785c8d4b3c44d254fdf8f518e17d3bef28c1e6ed8eb401389dee92442c14
+ * Source SHA-256: dda7cde4a804212cf8ba269b0dae4b5850e268cfef1caa1d992c4db95d66f275
  */
 import { CheckCircle2, Circle, Info, XCircle } from "lucide-react";
 import { cn } from "../lib/cn";
@@ -17,13 +17,14 @@ export type PasswordRequirementsProps = {
   minLength: number;
   maxLength: number;
   className?: string;
+  showTip?: boolean;
 };
 
 /**
  * The live checklist under a new-password field. The app supplies the policy's verdict, so the
  * rules stay with the app (and match the backend) while the look is shared.
  */
-export function PasswordRequirements({ status, minLength, maxLength, className = "mt-2" }: PasswordRequirementsProps) {
+export function PasswordRequirements({ status, minLength, maxLength, className = "mt-2", showTip = true }: PasswordRequirementsProps) {
   const requirements = [
     {
       key: "length",
@@ -43,9 +44,9 @@ export function PasswordRequirements({ status, minLength, maxLength, className =
       aria-label="Password requirements"
       className={cn("tanaw-password-requirements rounded-tanaw-lg border border-(--tanaw-success-line) bg-(--tanaw-success-surface) px-4 py-3", className)}
     >
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="tanaw-password-requirements__header mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold tracking-label text-(--tanaw-label) uppercase">Password requirements</p>
-        <span className="text-xs font-semibold text-(--tanaw-accent-ink) tabular-nums">
+        <span className="tanaw-password-requirements__count text-xs font-semibold text-(--tanaw-accent-ink) tabular-nums">
           {status.characterCount} {status.characterCount === 1 ? "character" : "characters"}
         </span>
       </div>
@@ -54,10 +55,12 @@ export function PasswordRequirements({ status, minLength, maxLength, className =
           <RequirementItem key={requirement.key} label={requirement.label} state={requirement.state} />
         ))}
       </ul>
-      <p className="mt-2 flex items-start gap-2 text-xs leading-5 font-medium text-(--tanaw-text-muted)">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" />
-        <span>Passwords, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
-      </p>
+      {showTip && (
+        <p className="mt-2 flex items-start gap-2 text-xs leading-5 font-medium text-(--tanaw-text-muted)">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" />
+          <span>Passwords, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
+        </p>
+      )}
       <span className="sr-only" aria-live="polite">
         {status.hasValue ? `${metCount} of ${requirements.length} password requirements met.` : "Enter a new password to check its requirements."}
       </span>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { getAccountPreferences, updateAccountPreferences } from "@/shared/services/accountService";
 import {
@@ -9,16 +9,20 @@ import {
   persistThemePreference,
   resolveThemePreference,
 } from "@/shared/utils/theme";
-import type { ResolvedTheme, ThemePreference } from "@/shared/utils/theme";
+import type { ThemePreference } from "@/shared/utils/theme";
+import { transitionPortalTheme } from "@/shared/utils/themeTransition";
 
-export function usePortalThemePreference() {
+export function usePortalThemePreference(animateTheme: boolean) {
   const [theme, setTheme] = useState<ThemePreference>(getStoredThemePreference);
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveThemePreference(getStoredThemePreference()));
+  const [systemTheme, setSystemTheme] = useState(() => resolveThemePreference("system"));
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const skipNextSaveRef = useRef(true);
   const storedThemeAtMountRef = useRef<ThemePreference | null>(getStoredThemePreferenceOrNull());
   const themeRef = useRef(theme);
   const userSelectedThemeRef = useRef(false);
+  const switching = useRef(false);
+  const [isSwitchingTheme, setIsSwitchingTheme] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -43,16 +47,26 @@ export function usePortalThemePreference() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     themeRef.current = theme;
-    const applyTheme = () => setResolvedTheme(applyThemePreference(theme));
     persistThemePreference(theme);
-    applyTheme();
+    applyThemePreference(theme);
     if (theme !== "system") return undefined;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => mediaQuery.removeEventListener("change", applyTheme);
-  }, [theme]);
+    const onSystemChange = () => {
+      const next = resolveThemePreference("system");
+      const apply = () => {
+        if (themeRef.current === "system") {
+          applyThemePreference("system");
+          setSystemTheme(next);
+        }
+      };
+      if (animateTheme) void transitionPortalTheme(next, apply).catch(apply);
+      else apply();
+    };
+    mediaQuery.addEventListener("change", onSystemChange);
+    return () => mediaQuery.removeEventListener("change", onSystemChange);
+  }, [animateTheme, theme]);
 
   useEffect(() => {
     if (!preferencesLoaded) return;
@@ -64,9 +78,29 @@ export function usePortalThemePreference() {
   }, [preferencesLoaded, theme]);
 
   const toggleTheme = () => {
+    if (switching.current) return;
     userSelectedThemeRef.current = true;
-    setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
+    const next = resolveThemePreference(themeRef.current) === "dark" ? "light" : "dark";
+    if (!animateTheme) {
+      setTheme(next);
+      return;
+    }
+
+    switching.current = true;
+    setIsSwitchingTheme(true);
+    const apply = () => {
+      themeRef.current = next;
+      setTheme(next);
+      applyThemePreference(next);
+      persistThemePreference(next);
+    };
+    void transitionPortalTheme(next, apply)
+      .catch(apply)
+      .finally(() => {
+        switching.current = false;
+        setIsSwitchingTheme(false);
+      });
   };
 
-  return { resolvedTheme, toggleTheme };
+  return { resolvedTheme, toggleTheme, isSwitchingTheme };
 }

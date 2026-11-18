@@ -86,9 +86,9 @@ class CameraProcessingManager:
         self._latest_raw_frame_captured_at: float | None = None
         self._latest_processed_at: float | None = None
         self._latest_stream_encoded_at: float | None = None
-        self._latest_jpeg: bytes | None = None
         self._latest_stream_jpeg: bytes | None = None
         self._latest_stream_frame_id = 0
+        self._stream_generation = 0
         self._latest_processed_frame: np.ndarray | None = None
         self._latest_processed_frame_id = 0
         self._latest_tracks: list[DisplayTrack] = []
@@ -265,9 +265,6 @@ class CameraProcessingManager:
             self._area_snapshot = None
             self._config = config
             self._state = RuntimeState(running=True, status="starting", error=None)
-            self._latest_jpeg = self._frame_renderer.build_status_frame("Checking camera stream...")
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id += 1
             self._persist_session_locked()
             self._raw_frame_condition.notify_all()
 
@@ -275,9 +272,6 @@ class CameraProcessingManager:
         if not ok:
             with self._raw_frame_condition:
                 self._state = RuntimeState(running=False, status="failed", error=message)
-                self._latest_jpeg = self._frame_renderer.build_status_frame(message)
-                self._latest_stream_jpeg = self._latest_jpeg
-                self._latest_stream_frame_id += 1
                 self._persist_session_locked()
                 self._raw_frame_condition.notify_all()
             raise CameraStreamUnavailableError(message)
@@ -345,9 +339,6 @@ class CameraProcessingManager:
             self._processing_frame_age_ms = None
             self._processing_frames_skipped = 0
             self._reid_results_stale = 0
-            self._latest_jpeg = self._frame_renderer.build_status_frame("Initializing ML model...")
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id += 1
             # Starting is an active lifecycle state. Publishing it before model
             # warmup lets the collection runtime endpoint represent startup and
             # makes capacity accounting include in-flight pipelines.
@@ -365,9 +356,6 @@ class CameraProcessingManager:
             safe_message = redact_stream_credentials(f"Unable to initialize ML model: {exc}")
             with self._raw_frame_condition:
                 self._state = RuntimeState(running=False, status="failed", error=safe_message)
-                self._latest_jpeg = self._frame_renderer.build_status_frame(safe_message)
-                self._latest_stream_jpeg = self._latest_jpeg
-                self._latest_stream_frame_id += 1
                 self._persist_session_locked()
                 self._raw_frame_condition.notify_all()
             raise RuntimeError(safe_message) from exc
@@ -395,19 +383,7 @@ class CameraProcessingManager:
             self._counting_track_resolver.reset()
             self._active_session = session
             self._config = config
-            self._latest_jpeg = self._frame_renderer.build_status_frame(
-                "Starting camera processing..."
-            )
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id = 0
             self._state = RuntimeState(running=True, status="connecting", error=None)
-            self._latest_raw_frame = None
-            self._latest_raw_frame_id = 0
-            self._latest_raw_frame_captured_at = None
-            self._latest_processed_at = None
-            self._latest_stream_encoded_at = None
-            self._latest_processed_frame = None
-            self._latest_processed_frame_id = 0
             self._latest_tracks = []
             self._reader_thread = threading.Thread(
                 target=self._capture_loop,
@@ -491,6 +467,7 @@ class CameraProcessingManager:
                 session.stop_event.set()
                 self._flush_pending_entry_events(session, time.monotonic(), force=True)
             self._active_session = None
+            self._invalidate_stream_frames_locked()
             self._raw_frame_condition.notify_all()
 
         for thread in threads:
@@ -511,20 +488,11 @@ class CameraProcessingManager:
             self._reader_thread = None
             self._processing_thread = None
             self._stream_thread = None
-            self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
-            self._latest_raw_frame_captured_at = None
-            self._latest_processed_at = None
-            self._latest_stream_encoded_at = None
-            self._latest_processed_frame = None
             self._latest_processed_frame_id = 0
+            self._latest_stream_frame_id = 0
             self._latest_tracks = []
             self._pending_entry_events.clear()
-            self._latest_jpeg = self._frame_renderer.build_status_frame(
-                "Camera processing stopped."
-            )
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id += 1
             self._state.running = False
             if self._state.status not in {"error", "failed"}:
                 self._state.status = "stopped"
@@ -680,6 +648,7 @@ class CameraProcessingManager:
                 "raw_frame_id": self._latest_raw_frame_id,
                 "processed_frame_id": self._latest_processed_frame_id,
                 "stream_frame_id": self._latest_stream_frame_id,
+                "stream_generation": self._stream_generation,
                 "raw_frame_stale_ms": _age_ms(now, self._latest_raw_frame_captured_at),
                 "processed_frame_stale_ms": _age_ms(now, self._latest_processed_at),
                 "stream_frame_stale_ms": _age_ms(now, self._latest_stream_encoded_at),
@@ -786,50 +755,47 @@ class CameraProcessingManager:
         finally:
             self._restoring_session = False
 
+    def _invalidate_stream_frames_locked(self) -> None:
+        # Readers and workers use the generation to discard work from the previous connection.
+        self._stream_generation += 1
+        self._latest_raw_frame = None
+        self._latest_raw_frame_captured_at = None
+        self._latest_processed_frame = None
+        self._latest_processed_at = None
+        self._latest_tracks = []
+        self._latest_stream_jpeg = None
+        self._latest_stream_encoded_at = None
+
     def wait_for_stream_frame(
-        self, last_frame_id: int, timeout: float = 1.0, overlay: bool = True
-    ) -> tuple[bytes, int]:
-        if not overlay:
-            return self._wait_for_clean_stream_frame(last_frame_id, timeout)
+        self, cursor: tuple[int, int], timeout: float = 1.0, overlay: bool = True
+    ) -> tuple[bytes | None, tuple[int, int]]:
+        def has_new_frame() -> bool:
+            if overlay:
+                return self._latest_stream_jpeg is not None and (
+                    self._stream_generation, self._latest_stream_frame_id
+                ) > cursor
+            return self._latest_raw_frame is not None and (
+                self._stream_generation, self._latest_raw_frame_id
+            ) > cursor
 
         with self._raw_frame_condition:
-            self._raw_frame_condition.wait_for(
-                lambda: self._latest_stream_frame_id > last_frame_id,
-                timeout=timeout,
-            )
+            if not self._raw_frame_condition.wait_for(has_new_frame, timeout=timeout):
+                return None, cursor
+            if overlay:
+                return self._latest_stream_jpeg, (self._stream_generation, self._latest_stream_frame_id)
+            assert self._latest_raw_frame is not None
+            frame = self._latest_raw_frame.copy()
+            next_cursor = (self._stream_generation, self._latest_raw_frame_id)
 
-            if self._latest_stream_jpeg is not None:
-                return self._latest_stream_jpeg, self._latest_stream_frame_id
+        encoded = self._frame_renderer.encode_frame(frame)
+        with self._lock:
+            if self._stream_generation != next_cursor[0]:
+                return None, cursor
+        return encoded, next_cursor
 
-            if self._latest_jpeg is not None:
-                return self._latest_jpeg, last_frame_id
-
-        return self._frame_renderer.build_status_frame("No camera stream available."), last_frame_id
-
-    def _wait_for_clean_stream_frame(
-        self, last_frame_id: int, timeout: float = 1.0
-    ) -> tuple[bytes, int]:
-        frame: np.ndarray | None = None
-        frame_id = last_frame_id
-        fallback: bytes | None = None
-        with self._raw_frame_condition:
-            self._raw_frame_condition.wait_for(
-                lambda: self._latest_raw_frame_id > last_frame_id,
-                timeout=timeout,
-            )
-
-            if self._latest_raw_frame is not None:
-                frame = self._latest_raw_frame.copy()
-                frame_id = self._latest_raw_frame_id
-
-            elif self._latest_jpeg is not None:
-                fallback = self._latest_jpeg
-
-        if frame is not None:
-            return self._frame_renderer.encode_frame(frame), frame_id
-        if fallback is not None:
-            return fallback, last_frame_id
-        return self._frame_renderer.build_status_frame("No camera stream available."), last_frame_id
+    def is_stream_generation_current(self, generation: int) -> bool:
+        with self._lock:
+            return generation == self._stream_generation
 
     def _capture_loop(self, session: ProcessingSession) -> None:
         config = session.config
@@ -860,11 +826,7 @@ class CameraProcessingManager:
             else:
                 self._state = RuntimeState(running=True, status="reconnecting", error=safe_message)
             self._area_interrupt_requested = True
-            self._latest_jpeg = self._frame_renderer.build_status_frame(
-                "Reconnecting camera stream..."
-            )
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id += 1
+            self._invalidate_stream_frames_locked()
             self._persist_session_locked()
             self._raw_frame_condition.notify_all()
         logger.warning(
@@ -913,7 +875,7 @@ class CameraProcessingManager:
                     self._visitor_registry.cleanup_expired()
                     last_cleanup_at = time.monotonic()
 
-                frame, frame_id, captured_at = self._wait_for_latest_frame(
+                frame, frame_id, captured_at, generation = self._wait_for_latest_frame(
                     session, last_processed_frame_id
                 )
                 if frame is None:
@@ -935,6 +897,8 @@ class CameraProcessingManager:
                 with self._lock:
                     if not self._is_current_session_locked(session):
                         return
+                    if generation != self._stream_generation:
+                        continue
                     self._latest_processed_frame = frame
                     self._latest_processed_frame_id = frame_id
                     self._latest_processed_at = time.monotonic()
@@ -999,6 +963,7 @@ class CameraProcessingManager:
                     entry_count,
                     exit_count,
                     occupancy_count,
+                    generation,
                 ) = frame_snapshot
 
                 started_at = time.monotonic()
@@ -1021,6 +986,8 @@ class CameraProcessingManager:
                 with self._raw_frame_condition:
                     if not self._is_current_session_locked(session):
                         return
+                    if generation != self._stream_generation:
+                        continue
                     self._latest_stream_jpeg = encoded
                     self._latest_stream_frame_id += 1
                     self._latest_stream_encoded_at = time.monotonic()
@@ -1068,11 +1035,12 @@ class CameraProcessingManager:
                 counts.entry,
                 counts.exit,
                 counts.occupancy,
+                self._stream_generation,
             )
 
     def _wait_for_latest_frame(
         self, session: ProcessingSession, last_processed_frame_id: int
-    ) -> tuple[np.ndarray | None, int, float | None]:
+    ) -> tuple[np.ndarray | None, int, float | None, int]:
         with self._raw_frame_condition:
             self._raw_frame_condition.wait_for(
                 lambda: (
@@ -1089,12 +1057,13 @@ class CameraProcessingManager:
                 or self._latest_raw_frame is None
                 or self._latest_raw_frame_id <= last_processed_frame_id
             ):
-                return None, last_processed_frame_id, None
+                return None, last_processed_frame_id, None, self._stream_generation
 
             return (
                 self._latest_raw_frame.copy(),
                 self._latest_raw_frame_id,
                 self._latest_raw_frame_captured_at,
+                self._stream_generation,
             )
 
     def _detect_and_count(
@@ -1832,9 +1801,7 @@ class CameraProcessingManager:
 
             safe_message = redact_stream_credentials(message)
             self._state = RuntimeState(running=False, status="failed", error=safe_message)
-            self._latest_jpeg = self._frame_renderer.build_status_frame(safe_message)
-            self._latest_stream_jpeg = self._latest_jpeg
-            self._latest_stream_frame_id += 1
+            self._invalidate_stream_frames_locked()
             session.stop_event.set()
             self._active_session = None
             self._persist_session_locked()

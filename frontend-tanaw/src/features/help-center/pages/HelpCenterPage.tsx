@@ -33,7 +33,7 @@ function HelpCenterHome({ role, articles }: { role: UserRole; articles: HelpArti
           <h2 className="mt-2 text-2xl font-bold">How can we help?</h2>
           <div className="relative mt-5 max-w-3xl">
             <Search className="absolute top-1/2 left-4 -translate-y-1/2 text-emerald-700" size={20} aria-hidden="true" />
-            <input value={query} onChange={(event) => { setQuery(event.target.value); setCategory(null); }} type="search" aria-label="Search help articles" placeholder="Search help articles..." className="h-13 w-full rounded-2xl border border-white/30 bg-white pr-12 pl-12 text-base text-slate-950 shadow-lg outline-none placeholder:text-slate-400 focus:ring-4 focus:ring-emerald-300/35" />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setCategory(null); }} type="search" aria-label="Search help articles" placeholder="Search help articles..." className="h-13 w-full rounded-2xl border border-(--tanaw-control-border) bg-(--tanaw-control-bg) pr-12 pl-12 text-base text-(--tanaw-text) shadow-lg outline-none placeholder:text-(--tanaw-text-muted) focus:ring-4 focus:ring-emerald-300/35" />
             {query && <button type="button" aria-label="Clear help search" onClick={() => setQuery("")} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={17} /></button>}
           </div>
         </Panel>

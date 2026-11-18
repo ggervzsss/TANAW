@@ -68,7 +68,7 @@ export function PortalNotificationDropdown({
                   type="button"
                   disabled={notifications.length === 0 || unreadCount === 0}
                   onClick={onMarkAllRead}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-(--tanaw-control-border) bg-white px-3 text-xs font-bold text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3 text-xs font-bold text-(--tanaw-accent-ink) shadow-sm transition hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <CheckCheck size={13} />
                   Mark all read

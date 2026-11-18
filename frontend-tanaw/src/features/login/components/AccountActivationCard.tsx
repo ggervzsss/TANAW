@@ -89,7 +89,7 @@ function ActivationForm({ details, errors, isSubmitting, pageMessage, values, on
         </div>
       </div>
       <div className="tanaw-activation-password-fields grid gap-4">
-        <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
+        <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} guidanceId="activation-password-tip" />
         <PasswordField
           label="Confirm Password"
           name="confirmPassword"
@@ -107,7 +107,10 @@ function ActivationForm({ details, errors, isSubmitting, pageMessage, values, on
           guidanceId="confirm-password-guidance"
         />
       </div>
-      <PasswordRequirements password={values.newPassword} className="mt-3 mb-4" />
+      <PasswordRequirements password={values.newPassword} className="mt-3" showTip={false} />
+      <p id="activation-password-tip" className="mt-2 mb-4 px-1 text-xs leading-5 text-(--tanaw-text-muted)">
+        <strong className="font-semibold">Tip:</strong> Spaces and Unicode characters are allowed. Password managers are supported. Special characters are optional.
+      </p>
       {pageMessage && (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
           <AlertCircle className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />

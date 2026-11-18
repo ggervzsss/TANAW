@@ -7,6 +7,7 @@ import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraMo
 import { DEFAULT_ROI, FIXED_DETECTION_SETTINGS, getDefaultTripwires } from "../model/camera-management";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
 import { validateOpenSpace } from "../utils/open-space";
+import { centeredZone, deleteZonePoint, withZonePolygon } from "../utils/open-space-editor";
 import { CameraConnectionFields } from "./CameraConnectionFields";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
@@ -15,7 +16,7 @@ import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { CameraDialog } from "./CameraDialog";
 import { getMlCameraStates, getMlHealth, getMlServiceStatus, testCameraConnection } from "../services/ml-service";
 import type { CameraPreviewPanelProps } from "./CameraPreviewPanel";
-import type { Camera } from "../../../types/enterprise";
+import type { Camera, OpenSpaceSettings } from "../../../types/enterprise";
 
 const tabs = [
   { id: "information", label: "Information", icon: CircleDot },
@@ -31,6 +32,7 @@ export function CameraSettingsPanel(props: Props) {
   const { activeCam, editForm, onEditFormChange, onCancelEdit, onSave, counts, area, health, detections, streamUrl, hasStoredPassword, storageKey = "tanaw-camera" } = props;
   const [tab, setTab] = useState<Tab>("information");
   const [editorForm, setEditorForm] = useState<Camera | null>(null);
+  const [selectedZonePoint, setSelectedZonePoint] = useState<number | null>(null);
   const [previewState, setPreviewState] = useState<CameraPreviewState>(props.initialPreviewState ?? "connecting");
   const editorHistory = useRef<Camera[]>([]);
   const editorInitial = useRef<Camera | null>(null);
@@ -79,6 +81,7 @@ export function CameraSettingsPanel(props: Props) {
   const isLive = videoStatus === "Live";
   const ready = counts.running && previewState === "live" && (detections.frame_width ?? 0) > 0 && (detections.frame_height ?? 0) > 0;
   const zoneError = editorForm?.analysisMode === "open_space" ? (editorForm.openSpace ? validateOpenSpace(editorForm.openSpace) : "Draw a monitored area first.") : null;
+  const zoneAfterDeletion = editorForm?.openSpace && selectedZonePoint !== null ? deleteZonePoint(editorForm.openSpace, selectedZonePoint) : null;
   const cancelSettings = () => {
     if (!busy) {
       if (dirty) setDiscard("settings");
@@ -129,14 +132,34 @@ export function CameraSettingsPanel(props: Props) {
   };
   const openEditor = () => {
     const draft = structuredClone(editForm);
+    if (draft.analysisMode === "open_space" && !draft.openSpace?.polygon.length) draft.openSpace = centeredZone(draft.openSpace);
     editorInitial.current = structuredClone(draft);
     editorHistory.current = [];
+    setSelectedZonePoint(null);
     setEditorForm(draft);
   };
   const checkpoint = () => {
     if (editorForm) editorHistory.current.push(structuredClone(editorForm));
   };
   const updateEditor: Dispatch<SetStateAction<Camera | null>> = (next) => setEditorForm((current) => (typeof next === "function" ? next(current) : next));
+  const changeZone = (openSpace: OpenSpaceSettings) => {
+    if (editorForm?.analysisMode !== "open_space") return;
+    if (JSON.stringify(openSpace) === JSON.stringify(editorForm.openSpace)) return;
+    checkpoint();
+    setEditorForm({ ...editorForm, openSpace });
+    setSelectedZonePoint(null);
+  };
+  const removeZonePoint = () => {
+    if (zoneAfterDeletion) changeZone(zoneAfterDeletion);
+  };
+  const undoEditor = () => {
+    let previous = editorHistory.current.pop();
+    while (previous && JSON.stringify(previous) === JSON.stringify(editorForm)) previous = editorHistory.current.pop();
+    if (previous) {
+      setSelectedZonePoint(null);
+      setEditorForm(previous);
+    }
+  };
   const cancelEditor = () => {
     if (JSON.stringify(editorForm) !== JSON.stringify(editorInitial.current)) setDiscard("editor");
     else setEditorForm(null);
@@ -497,19 +520,21 @@ export function CameraSettingsPanel(props: Props) {
       {editorForm && (
         <CameraDialog
           title="Edit Counting Area"
-          description={editorForm.analysisMode === "open_space" ? "Drag the corners of the area you want to monitor." : "Drag the Entry and Exit lines to set where visitors are counted."}
+          description={editorForm.analysisMode === "open_space" ? "Adjust the area of the live video you want to monitor." : "Drag the Entry and Exit lines to set where visitors are counted."}
           className="camera-area-dialog"
           onClose={cancelEditor}
+          onKeyDown={(event) => {
+            if (editorForm.analysisMode !== "open_space" || selectedZonePoint === null || (event.key !== "Delete" && event.key !== "Backspace")) return;
+            event.preventDefault();
+            if (!event.repeat) removeZonePoint();
+          }}
           footer={
             <>
               <button
                 className="design-button"
                 type="button"
-                onClick={() => {
-                  let previous = editorHistory.current.pop();
-                  while (previous && JSON.stringify(previous) === JSON.stringify(editorForm)) previous = editorHistory.current.pop();
-                  if (previous) setEditorForm(previous);
-                }}
+                disabled={editorHistory.current.length === 0}
+                onClick={undoEditor}
               >
                 Undo
               </button>
@@ -527,7 +552,7 @@ export function CameraSettingsPanel(props: Props) {
             </>
           }
         >
-          <div className="counting-editor-preview">
+          <div className={`counting-editor-preview ${editorForm.analysisMode === "open_space" ? "counting-editor-preview--zone" : ""}`}>
             <CameraVideoPreview
               area={area}
               activeCam={activeCam}
@@ -539,6 +564,8 @@ export function CameraSettingsPanel(props: Props) {
               isEditMode
               onEditFormChange={updateEditor}
               onEditCheckpoint={checkpoint}
+              selectedZonePoint={selectedZonePoint}
+              onSelectZonePoint={setSelectedZonePoint}
               onPreviewStateChange={setPreviewState}
               streamUrl={streamUrl}
               displayPreferences={display}
@@ -547,18 +574,15 @@ export function CameraSettingsPanel(props: Props) {
           </div>
           {editorForm.analysisMode === "open_space" && (
             <OpenSpaceZoneControls
-              value={editorForm.openSpace}
+              pointCount={editorForm.openSpace?.polygon.length ?? 0}
               previewReady={ready}
-              onChange={(openSpace) => {
-                checkpoint();
-                setEditorForm({ ...editorForm, openSpace });
-              }}
+              selectedPoint={selectedZonePoint}
+              canDelete={Boolean(zoneAfterDeletion)}
+              error={zoneError}
+              onDelete={removeZonePoint}
+              onClear={() => changeZone(withZonePolygon(editorForm.openSpace, []))}
+              onReset={() => changeZone(centeredZone(editorForm.openSpace))}
             />
-          )}
-          {zoneError && (
-            <p className="design-note" role="status">
-              {zoneError}
-            </p>
           )}
           {!counts.running && (
             <button className="design-button" type="button" disabled={props.isStarting} onClick={props.onStartProcessing}>

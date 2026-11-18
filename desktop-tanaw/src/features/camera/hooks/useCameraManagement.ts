@@ -120,8 +120,9 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const configuredCameraLimit = serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
   const cameraStorageFingerprint = getCameraStorageFingerprint(cameras);
   cameraProfilesForStorageRef.current = cameras.map(redactCameraForStorage);
-  const previewIsReady = !isActiveCameraStarting && isCameraPreviewReady(activeState);
-  const streamUrl = useMemo(() => getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, previewIsReady), [activeCam, mlBaseUrl, previewIsReady, streamVersion]);
+  const previewIsReady = !isActiveCameraStarting && !isRestartingService && isCameraPreviewReady(activeState);
+  const streamGeneration = activeState?.health.stream_generation ?? undefined;
+  const streamUrl = getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, previewIsReady, streamGeneration);
   const newCameraIpConflict = useMemo(() => findCameraIpConflict(cameras, newCam.cameraHost), [cameras, newCam.cameraHost]);
   const editedCameraIpConflict = useMemo(() => (editForm ? findCameraIpConflict(cameras, editForm.cameraHost ?? "", editForm.id) : undefined), [cameras, editForm]);
 
