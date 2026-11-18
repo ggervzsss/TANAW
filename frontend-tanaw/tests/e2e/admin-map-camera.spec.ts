@@ -275,6 +275,8 @@ test("keeps the tile grid, boundary renderer, and pin together in every animated
 });
 
 test("switches between enterprise previews, reports missing telemetry, and keeps both panel controls responsive", async ({ page }, testInfo) => {
+  // Several previews, panel toggles and settled camera readings take longer than the default.
+  test.setTimeout(60_000);
   const offlineEnterprise: MapEnterprise = {
     ...mapEnterprise, id: "offline-enterprise", name: "Offline Enterprise", lng: mapEnterprise.lng + 0.006,
     monitoringStatus: "Offline", occupancyStatus: "No Data", totalLiveOccupancy: null, cameraMonitoring: null,
