@@ -70,3 +70,6 @@ Remove an entry here once it is fixed.
   (49.99998 vs 50).
 - desktop browser `enterprise-interactions` tests at lines 279 and 598 are
   flaky; rerun once before treating them as failures.
+- desktop Electron `dashboard-interactions` spec is flaky at its chart
+  tooltip check (`dashboard-interactions.spec.ts:159`, fails about 2 of 3
+  runs on main as of November 2026); rerun once before treating it as a failure.
