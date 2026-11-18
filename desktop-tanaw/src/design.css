@@ -584,7 +584,7 @@
 .design-button.primary:hover {
   background: var(--tanaw-action-hover);
 }
-:where(.overview-layout, .camera-settings, .design-modal) button:disabled {
+:where(.overview-layout, .camera-settings) button:disabled {
   opacity: 0.5;
 }
 .design-button:active:not(:disabled),
@@ -597,52 +597,6 @@
 .danger-button {
   color: var(--tanaw-danger);
   border-color: var(--tanaw-danger-line);
-}
-.design-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: rgb(38 91 54 / 23%);
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  font-family: var(--font-sans);
-  animation: design-fade 160ms ease-out;
-}
-.design-modal {
-  width: min(1020px, 100%);
-  max-height: calc(100dvh - 48px);
-  overflow: auto;
-  background: var(--tanaw-surface, white);
-  color: var(--tanaw-text);
-  border: 1px solid var(--tanaw-border);
-  border-radius: var(--radius-tanaw-lg);
-  box-shadow: 0 2px 4px rgb(0 0 0 / 30%);
-  padding: 32px 46px;
-  animation: design-enter 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-.design-modal > header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.design-modal h2 {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  line-height: 1.2;
-}
-.design-modal header p {
-  font-size: var(--text-sm);
-  color: var(--tanaw-secondary-text);
-  margin-top: 4px;
-}
-.design-modal > footer {
-  display: flex;
-  justify-content: end;
-  gap: 20px;
-  margin-top: 25px;
 }
 .counting-editor-preview {
   aspect-ratio: 1.66;
@@ -867,40 +821,6 @@
   gap: 24px;
   padding: 22px 0;
   border-bottom: 1px solid var(--enterprise-border-soft);
-}
-.design-switch-row label {
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-.design-switch-row p {
-  font-size: var(--text-sm);
-  color: var(--enterprise-muted);
-  line-height: 1.35;
-  margin-top: 4px;
-}
-.design-switch {
-  width: 72px;
-  height: 34px;
-  border-radius: 999px;
-  background: var(--tanaw-control-border-hover);
-  border: 1px solid var(--tanaw-control-border-hover);
-  flex: 0 0 auto;
-  padding: 3px;
-  transition: background-color 160ms;
-}
-.design-switch span {
-  display: block;
-  background: white;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-.design-switch[aria-checked="true"] {
-  background: var(--tanaw-action);
-}
-.design-switch[aria-checked="true"] span {
-  transform: translateX(37px);
 }
 .settings-subheading {
   font-size: var(--text-lg);
@@ -1230,7 +1150,6 @@
     font-size: var(--text-lg);
   }
   .settings-section-heading p,
-  .design-switch-row p,
   .camera-settings-content > p {
     font-size: 15px;
   }
@@ -1262,15 +1181,6 @@
     padding: 12px 18px;
     min-height: 46px;
   }
-  .design-modal {
-    padding: 24px 18px;
-  }
-  .design-modal h2 {
-    font-size: var(--text-xl);
-  }
-  .design-modal header p {
-    font-size: 16px;
-  }
   .settings-display-note {
     margin: 30px 0;
     font-size: 15px;
@@ -1279,8 +1189,6 @@
 @media (prefers-reduced-motion: reduce) {
   .overview-layout *,
   .camera-settings *,
-  .design-modal-backdrop,
-  .design-modal,
   .tanaw-assistant,
   .assistant-launcher {
     animation: none !important;

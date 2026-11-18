@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { Panel } from "@/shared/components/panel";
 import type { DashboardOverview } from "../model";
+import { Badge } from "../../../design-system";
 
 export function DashboardSidePanels({ overview }: { overview: DashboardOverview }) {
   const hasUnavailableApps = overview.unavailableDesktopAppCount > 0;
@@ -24,11 +25,9 @@ export function DashboardSidePanels({ overview }: { overview: DashboardOverview 
               </div>
             </div>
             {overview.summary && (
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${hasUnavailableApps ? "bg-amber-100 text-amber-800 dark:bg-amber-400/12 dark:text-amber-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/12 dark:text-emerald-200"}`}
-              >
+              <Badge tone={hasUnavailableApps ? "warning" : "success"} className="shrink-0">
                 {hasUnavailableApps ? `${overview.unavailableDesktopAppCount} unavailable` : "All online"}
-              </span>
+              </Badge>
             )}
           </div>
           <p className="mt-4 text-sm leading-6 font-medium text-slate-600 dark:text-slate-300">

@@ -7,6 +7,7 @@ import { enterpriseAccountsQueryKey, resolveEnterpriseProfileChangeRequest } fro
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { Badge } from "../../../design-system";
 
 type EnterpriseProfileRequestsPanelProps = {
   accounts: AccountSummary[];
@@ -60,9 +61,9 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
             {canResolve ? "Review requests. Email changes can be approved only after ownership verification." : "Visible for admin review. IT personnel apply or decline these requests."}
           </p>
         </div>
-        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 dark:border-amber-300/25 dark:bg-amber-400/10 dark:text-amber-200">
+        <Badge tone="warning" className="shrink-0">
           {requests.length} pending
-        </span>
+        </Badge>
       </div>
 
       <div className="space-y-2">
@@ -141,11 +142,9 @@ function RequestStatusBadge({ request }: { request: AccountProfileChangeRequest 
   const verified = request.status === "verified";
   const expired = request.status === "expired";
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-black ${verified ? "bg-emerald-100 text-emerald-700" : expired ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}
-    >
+    <Badge size="sm" tone={verified ? "success" : expired ? "neutral" : "warning"}>
       {labels[request.status]}
-    </span>
+    </Badge>
   );
 }
 

@@ -1,29 +1,7 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
+import { ModalPortal as DesignModalPortal } from "../design-system";
 
-type ModalPortalProps = {
-  children: ReactNode;
-};
-
-export function ModalPortal({ children }: ModalPortalProps) {
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setPortalRoot(document.body);
-  }, []);
-
-  useEffect(() => {
-    if (!portalRoot) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [portalRoot]);
-
-  if (!portalRoot) return null;
-
-  return createPortal(children, portalRoot);
+/** The design-system ModalPortal; this app's overlays always lock page scroll. */
+export function ModalPortal({ children }: { children: ReactNode }) {
+  return <DesignModalPortal lockScroll>{children}</DesignModalPortal>;
 }

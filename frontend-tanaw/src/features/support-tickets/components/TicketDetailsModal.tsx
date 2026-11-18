@@ -8,6 +8,7 @@ import { CategoryBadge, PriorityBadge, TicketStatusBadge } from "./TicketBadges"
 import { TicketAttachments } from "./TicketAttachments";
 import { TicketConversation } from "./TicketConversation";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { Badge } from "../../../design-system";
 
 type TicketDetailsModalProps = {
   mode: "admin" | "it";
@@ -132,7 +133,7 @@ function TicketStatusControl({
           <ShieldCheck size={16} className="text-emerald-700" />
           Request Status
         </h4>
-        {!isItResponder && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700">Read-only</span>}
+        {!isItResponder && <Badge tone="purple">Read-only</Badge>}
       </div>
       {isItResponder ? (
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
