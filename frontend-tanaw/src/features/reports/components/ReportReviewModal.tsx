@@ -58,7 +58,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
             <div className="flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-5 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
               <div>
                 <div className="mb-2 flex items-center gap-3">
-                  <h3 className="text-tanaw-navy text-lg font-bold">Review DOT Form Generation</h3>
+                  <h3 className="text-(--tanaw-text) text-lg font-bold">Review DOT Form Generation</h3>
                   <ReportStatusBadge status={report.status} />
                 </div>
                 <p className="text-xs font-semibold text-gray-500">
@@ -113,7 +113,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               <CountingSummary snapshot={report.payload?.counting} />
 
               <div className="mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="text-tanaw-navy mb-2 text-sm font-semibold">Data Protection & Remarks</h4>
+                <h4 className="text-(--tanaw-text) mb-2 text-sm font-semibold">Data Protection & Remarks</h4>
                 <p className="mb-4 text-xs text-gray-500">{statusMessage}</p>
                 <textarea
                   value={remarks}

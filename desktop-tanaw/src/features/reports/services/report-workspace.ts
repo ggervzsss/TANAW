@@ -1,22 +1,21 @@
-import type { DemoBreakdown } from "../../../types/enterprise";
+import type { DailyOrigins } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, saveLocalReportDraft } from "../../camera/services/ml-service";
-import { prepareDesktopSampleCounts, syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
-import { isPreparedMetrics } from "../model/report-workspace";
+import { syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
 
 const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
 
-export async function persistDemographicDraft(draftKey: string, period: string, reportId: string | null, demo: DemoBreakdown) {
+export async function persistOriginsDraft(draftKey: string, period: string, reportId: string | null, origins: DailyOrigins) {
   try {
     const status = await getMlServiceStatus();
     const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-    if (Object.values(demo).every((value) => value.trim() === "")) {
+    if (Object.keys(origins).length === 0) {
       await deleteLocalReportDraft(baseUrl, draftKey);
       return;
     }
     await saveLocalReportDraft(baseUrl, draftKey, {
       period,
       reportId,
-      reportPayload: { demo, version: 1 },
+      reportPayload: { origins, version: 2 },
     });
   } catch {
     // Local draft persistence is best-effort and must not block report editing.
@@ -42,14 +41,5 @@ export async function syncSubmittedReportToCloud(reportId: string) {
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "The backend could not be reached.";
-  }
-}
-
-export async function prepareNextWorkspaceMetrics() {
-  try {
-    const prepared = await prepareDesktopSampleCounts();
-    return isPreparedMetrics(prepared) ? prepared : null;
-  } catch {
-    return null;
   }
 }

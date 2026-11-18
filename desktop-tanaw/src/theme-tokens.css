@@ -1,0 +1,53 @@
+/* Dark-mode roles used by theme.css and theme-utilities.css, mapped onto the TANAW design
+   tokens (design-system/tokens/tanaw.css, generated into styles/tanaw-tokens.css).
+   Light mode needs no mapping: those stylesheets only style html.dark.
+   Change colors in the design system, not here. */
+html.dark,
+html.dark .enterprise-shell {
+  --theme-canvas: var(--tanaw-page);
+  --theme-surface-low: var(--tanaw-surface-inset);
+  --theme-surface: var(--tanaw-surface);
+  --theme-raised: var(--tanaw-surface-raised);
+  --theme-highest: var(--tanaw-control-hover);
+  --theme-inset: var(--tanaw-surface-inset);
+  --theme-hover: var(--tanaw-control-hover);
+  --theme-text: var(--tanaw-text);
+  --theme-secondary: var(--tanaw-text-secondary);
+  --theme-muted: var(--tanaw-text-muted);
+  --theme-border: var(--tanaw-border);
+  --theme-border-soft: var(--tanaw-border-soft);
+  --theme-divider: var(--tanaw-border-soft);
+  --theme-outline: var(--tanaw-control-border);
+  --theme-accent: var(--tanaw-accent-ink);
+  --theme-accent-strong: var(--tanaw-label);
+  --theme-accent-tint: var(--tanaw-selected-bg);
+  --theme-accent-hover: rgb(16 185 129 / 0.18);
+  --theme-action: var(--tanaw-action);
+  --theme-action-hover: var(--tanaw-action-hover);
+  --theme-on-action: var(--tanaw-on-action);
+  --theme-focus: var(--tanaw-focus-ring);
+  --theme-focus-halo: rgb(94 234 212 / 0.16);
+  --theme-danger-bg: var(--tanaw-danger-bg);
+  --theme-danger-text: var(--tanaw-danger-text);
+  --theme-danger-border: var(--tanaw-danger-line);
+  --theme-warning-bg: var(--tanaw-warning-bg);
+  --theme-warning-text: var(--tanaw-warning-text);
+  --theme-info-bg: var(--tanaw-info-bg);
+  --theme-info-text: var(--tanaw-info-text);
+  --theme-success-bg: var(--tanaw-success-bg);
+  --theme-success-text: var(--tanaw-success-text);
+  --theme-neutral-bg: var(--tanaw-neutral-bg);
+  --theme-neutral-text: var(--tanaw-neutral-text);
+  --theme-returned-bg: rgb(249 115 22 / 0.14);
+  --theme-returned-text: #fdba74;
+  --theme-chart-entry: var(--tanaw-chart-entry);
+  --theme-chart-exit: rgb(110 231 183 / 0.45);
+  --theme-chart-blue: var(--tanaw-chart-occupancy);
+  --theme-chart-third: #93c5fd;
+  --theme-scrollbar: #475569;
+  --theme-shadow: var(--shadow-tanaw-soft);
+  --theme-shadow-raised: var(--shadow-tanaw-raised);
+  --theme-scrim: rgb(2 8 14 / 0.6);
+  --theme-topbar: #061714;
+  --theme-topbar-overlay: var(--tanaw-topbar-overlay);
+}

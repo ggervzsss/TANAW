@@ -38,7 +38,7 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
               type="button"
               disabled={allNotifications.length === 0 || unreadCount === 0}
               onClick={markAllAsRead}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-[10px] font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10 dark:disabled:text-slate-600"
+              className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-xl border border-(--tanaw-control-border) bg-white px-3 text-xs font-bold text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10 dark:disabled:text-slate-600"
             >
               <CheckCheck size={13} />
               Mark all read

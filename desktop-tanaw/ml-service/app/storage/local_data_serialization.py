@@ -48,7 +48,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     required_string_fields = (
         "name",
         "status",
-        "zone",
         "rtsp",
         "processingProfile",
     )
@@ -59,6 +58,8 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     for field in required_string_fields:
         if not isinstance(camera.get(field), str) or not str(camera[field]).strip():
             raise ValueError(f"Camera {field} is required.")
+    if not isinstance(camera.get("zone", ""), str) or len(camera.get("zone", "")) > 120:
+        raise ValueError("Camera location must be 120 characters or fewer.")
     raw_status = str(camera["status"])
     status = (
         "running"
@@ -87,7 +88,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     }
     normalize_rtsp_source(source)
 
-    from app.config.camera_coverage import CameraCoverage
     from app.config.open_space_config import OpenSpaceConfig
 
     mode = camera.get("analysisMode", "entrance_exit")
@@ -99,15 +99,12 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     elif mode == "entrance_exit":
         area = None
 
+    camera = {key: value for key, value in camera.items() if key != "coverage"}
     return {
         **camera,
-        **(
-            {"coverage": CameraCoverage.model_validate(camera["coverage"]).model_dump(mode="json")}
-            if "coverage" in camera
-            else {}
-        ),
         **({"analysisMode": mode, "openSpace": area} if "analysisMode" in camera else {}),
         "id": int(camera["id"]),
+        "zone": camera.get("zone", "").strip(),
         "status": status,
         "cameraHost": source["camera_host"],
         "cameraBrand": source["camera_brand"],

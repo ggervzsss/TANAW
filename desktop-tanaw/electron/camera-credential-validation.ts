@@ -28,3 +28,8 @@ function isMaskedCameraPassword(value: string) {
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
+
+/** Draft test credentials never mutate the secure store; starts ignore renderer replacements. */
+export function resolveCameraRequestCredential(operation: "test" | "start", payload: Record<string, unknown>, stored?: SecureCameraCredential) {
+  return operation === "test" ? resolveCameraCredential({ username: payload.username ?? stored?.username, password: payload.password }, stored) : resolveCameraCredential(stored, stored);
+}

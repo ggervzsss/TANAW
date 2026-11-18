@@ -41,7 +41,7 @@ const final: FinalReport = {
       entry: null,
       exit: null,
       counting: saved.counting,
-      demographics: { thisProvMale: 1, thisProvFemale: 1, otherProvMale: 0, otherProvFemale: 0, foreignMale: 0, foreignFemale: 0 },
+      demographics: { thisProvMale: 1, thisProvFemale: 1, thisProvUnspecified: 0, otherProvMale: 0, otherProvFemale: 0, foreignMale: 0, foreignFemale: 0 },
     },
   ],
 };

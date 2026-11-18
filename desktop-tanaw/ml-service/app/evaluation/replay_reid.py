@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from statistics import mean
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 import numpy as np
 
+from app.analytics.visitor_sex import daily_sex_counts
+from app.attributes import SexEstimator, TrackSexTally
 from app.counting.tripwire_counter import TripwireCounter
 from app.reid import (
     PersonReIdentifier,
@@ -35,7 +38,7 @@ class ReplayIdentityUpdate(TypedDict):
 class ReplayReIdCoordinator:
     """Deterministic, one-frame-delayed equivalent of the live ReID workers."""
 
-    def __init__(self, mode: ReIdReplayMode) -> None:
+    def __init__(self, mode: ReIdReplayMode, sex_estimator: SexEstimator | None = None) -> None:
         missing = missing_reid_models(mode)
         if missing:
             names = ", ".join(profile.filename for profile in missing)
@@ -63,6 +66,7 @@ class ReplayReIdCoordinator:
             max_edge_clip_fraction=0.25,
             stop_when_full=True,
         )
+        self._sex_tally = TrackSexTally(sex_estimator or SexEstimator())
         self._pending_fast: list[PendingEmbedding] = []
         self._pending_quality: list[PendingEmbedding] = []
         self._fast_inference_ms: list[float] = []
@@ -103,6 +107,13 @@ class ReplayReIdCoordinator:
                     pending.quality,
                     frame_index,
                 )
+                if self.fast is not None:
+                    self._sex_tally.add(
+                        resolution.track_id,
+                        pending.embedding,
+                        pending.quality,
+                        self.fast.embedding_space,
+                    )
             updates.extend(self._apply_resolution(counter, resolution, "fast"))
 
         for pending in self._pending_quality:
@@ -123,6 +134,13 @@ class ReplayReIdCoordinator:
                     pending.quality,
                     frame_index,
                 )
+                if self.quality is not None:
+                    self._sex_tally.add(
+                        resolution.track_id,
+                        pending.embedding,
+                        pending.quality,
+                        self.quality.embedding_space,
+                    )
             updates.extend(self._apply_resolution(counter, resolution, "quality"))
 
         self._pending_fast = []
@@ -208,6 +226,24 @@ class ReplayReIdCoordinator:
             ),
         }
 
+    def sex_estimate(self, track_ids: Iterable[int]) -> dict[str, Any]:
+        """Male/female counts for the given tracks, as the app counts unique visitors."""
+        spaces = [model.embedding_space for model in (self.quality, self.fast) if model]
+        visitors = {str(track_id) for track_id in track_ids}
+        rows = []
+        for visitor in visitors:
+            evidence = self._sex_tally.evidence(int(visitor), spaces)
+            rows.append(
+                {
+                    "visitor_id": visitor,
+                    "identity_confidence": "high",
+                    "sex_logit_sum": evidence.logit_sum if evidence else None,
+                    "sex_weight": evidence.weight if evidence else 0.0,
+                    "sex_model": evidence.model if evidence else None,
+                }
+            )
+        return {"unique_count": len(visitors), **daily_sex_counts(rows, visitors).as_metrics()}
+
     @staticmethod
     def _require_ready(reidentifier: PersonReIdentifier, profile: str) -> None:
         status = reidentifier.status()
@@ -244,6 +280,7 @@ class ReplayReIdCoordinator:
         counter.remap_track(resolution.remap_from, resolution.remap_to)
         self.fast_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self.quality_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+        self._sex_tally.remap(resolution.remap_from, resolution.remap_to)
         self._remaps += 1
         updates.append(
             {

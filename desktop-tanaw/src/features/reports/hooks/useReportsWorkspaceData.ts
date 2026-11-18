@@ -27,7 +27,6 @@ export function metricsFromEstablishment(summary: EstablishmentSummary): Metrics
 
 export function reportBaselineError(summary: EstablishmentSummary | null): string | null {
   if (!summary || summary.reconciliation_state === "not_collected") return "No observations have been collected for this reporting period.";
-  if (summary.reconciliation_state === "configuration_required") return "Complete camera counting roles and coverage relationships before submitting this period.";
   if (summary.identification_state === "unavailable") return "The visitor estimate is unavailable for this reporting period.";
   return null;
 }

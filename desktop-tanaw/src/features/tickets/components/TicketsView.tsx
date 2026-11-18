@@ -12,6 +12,7 @@ import { InputField, SelectField, TicketFieldError, TicketPanelHeader } from "./
 import { maxTicketPhotoCount, ticketPriorities, ticketSortOptions } from "../model/ticket-draft";
 import { useTicketsWorkspace } from "../hooks/useTicketsWorkspace";
 import { ticketFieldClassName } from "../utils/ticket-form-style";
+import { toSentenceCase } from "../../../utils/sentence-case";
 
 export function TicketsView() {
   const {
@@ -57,7 +58,7 @@ export function TicketsView() {
     <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-sans duration-500">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Support</p>
+          <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Support</p>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827] dark:text-white">Support Tickets</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-slate-200">
             Submit camera, reporting, maintenance, or account concerns for {enterpriseName}. Admin and IT personnel will be notified.
@@ -199,8 +200,8 @@ export function TicketsView() {
                 data-form-error-focus
                 className={`flex w-full flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center transition ${
                   isDragActive
-                    ? "border-[#065f46] bg-emerald-50 text-[#065f46] dark:border-emerald-300/60 dark:bg-emerald-500/15 dark:text-emerald-100"
-                    : "border-gray-200 bg-gray-50 text-gray-500 hover:border-[#065f46]/50 hover:bg-emerald-50/70 dark:border-slate-600 dark:bg-[#0f172a] dark:text-slate-200 dark:hover:border-emerald-300/50 dark:hover:bg-emerald-500/10"
+                    ? "border-tanaw-ledger bg-emerald-50 text-tanaw-ledger dark:border-emerald-300/60 dark:bg-emerald-500/15 dark:text-emerald-100"
+                    : "border-gray-200 bg-gray-50 text-gray-500 hover:border-tanaw-ledger/50 hover:bg-emerald-50/70 dark:border-slate-600 dark:bg-[#0f172a] dark:text-slate-200 dark:hover:border-emerald-300/50 dark:hover:bg-emerald-500/10"
                 }`}
               >
                 <UploadCloud size={22} />
@@ -234,7 +235,7 @@ export function TicketsView() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#065f46] px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition hover:-translate-y-0.5 hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-[#065f46]/70"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition hover:-translate-y-0.5 hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-tanaw-ledger/70"
             >
               {isSubmitting ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
               {isSubmitting ? "Submitting..." : "Submit Ticket"}
@@ -273,7 +274,7 @@ export function TicketsView() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs font-bold text-[#065f46] dark:text-emerald-200">{ticket.code}</p>
+                      <p className="font-mono text-xs font-bold text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
                       <ExpandableText
                         primary={ticket.subject}
                         secondary={ticket.description}
@@ -285,8 +286,8 @@ export function TicketsView() {
                     </div>
                     <TicketStatusBadge status={ticket.status} />
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black tracking-wide uppercase">
-                    <TicketBadge tone="info">{ticket.category}</TicketBadge>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black">
+                    <TicketBadge tone="info">{toSentenceCase(ticket.category)}</TicketBadge>
                     <TicketBadge tone={ticket.priority === "Urgent" || ticket.priority === "High" ? "warning" : "neutral"}>{ticket.priority}</TicketBadge>
                     {ticket.affectedArea && <TicketBadge tone="neutral">{ticket.affectedArea}</TicketBadge>}
                     {ticket.cameraNode && <TicketBadge tone="neutral">{ticket.cameraNode}</TicketBadge>}
@@ -299,7 +300,7 @@ export function TicketsView() {
                       </TicketBadge>
                     )}
                     <span className="ml-auto text-gray-400 dark:text-slate-300">{formatTicketTime(ticket.createdAt, timeFormat)}</span>
-                    <span className="inline-flex items-center gap-1 text-[#065f46] dark:text-emerald-200">
+                    <span className="inline-flex items-center gap-1 text-tanaw-ledger dark:text-emerald-200">
                       <Eye size={11} />
                       Inspect
                     </span>

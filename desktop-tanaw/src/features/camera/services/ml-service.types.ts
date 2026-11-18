@@ -142,6 +142,14 @@ export type MlDetectionTrack = {
   identity_score: number | null;
   identity_source: string | null;
   counting_debug: Record<string, unknown> | null;
+  /** Live, unsaved male/female estimate for developer mode. Older services omit it. */
+  sex_estimate?: MlLiveSexEstimate | null;
+};
+
+export type MlLiveSexEstimate = {
+  female_probability: number | null;
+  evidence_weight: number;
+  model: string;
 };
 
 export type MlDetections = {
@@ -309,14 +317,25 @@ export type SamplePreparationRequest = {
   entries: number;
   exits: number;
   uniqueCount: number;
-  peakOccupancy: number;
   period: string;
   reportId: string;
+};
+
+export type SamplePreparationResult = {
+  enterprise_id: string;
+  enterprise_name: string | null;
+  period: string;
+  prepared: boolean;
+  days: number;
 };
 
 export type CameraTestResult = {
   ok: boolean;
   message: string;
+  /** The working, credential-free stream address TANAW chose for this camera. */
+  stream_url?: string | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 export type MlServiceErrorCode =

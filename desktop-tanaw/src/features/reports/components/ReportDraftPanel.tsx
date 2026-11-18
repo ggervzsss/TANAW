@@ -1,84 +1,186 @@
-import React from "react";
-import { Card } from "../../../components/Card";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DemographicsBreakdown } from "./DemographicsBreakdown";
+import { type Dispatch, type SetStateAction } from "react";
+import { CalendarDays, Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
+import { InfoTooltip } from "../../../components/InfoTooltip";
+import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import { useAuthStore } from "../../login/stores/auth-store";
+import { formatReportingPeriodLabel } from "../utils/reporting-period";
+import { getDemographicAllocationStatus } from "../utils/demographics";
+import { VisitorDetails } from "./VisitorDetails";
+import { missingDays, type ReportDay } from "../model/daily-origins";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
 import { ReportDraftAlerts } from "./ReportDraftAlerts";
-import { ReportDraftHeader } from "./ReportDraftHeader";
-import { ReportingPeriodField } from "./ReportingPeriodField";
 import { SupplementaryNotes } from "./SupplementaryNotes";
-import { SystemLockedMetrics } from "./SystemLockedMetrics";
 import { CountingDetails } from "./CountingDetails";
 
-type ReportDraftPanelProps = {
+type Props = {
+  enterpriseName: string;
+  reviewed?: boolean;
   activeReport: ReportRecord | null;
   activeReportId: string | null;
+  days: ReportDay[];
   demo: DemoBreakdown;
+  hasDailyOrigins: boolean;
   isReadOnly: boolean;
   isPeriodChanging: boolean;
   metricsError: string | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
-  previousDemo?: DemoBreakdown | null;
   validationError: string | null;
   onSubmitPrompt: () => void;
+  onReview: () => void;
   onRefreshCounts?: () => void;
-  setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
-  setNotes: React.Dispatch<React.SetStateAction<string>>;
+  setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
+  setNotes: Dispatch<SetStateAction<string>>;
 };
 
 export function ReportDraftPanel({
+  enterpriseName,
+  reviewed = false,
   activeReport,
   activeReportId,
+  days,
   demo,
+  hasDailyOrigins,
   isReadOnly,
   isPeriodChanging,
   metricsError,
   metrics,
   notes,
   period,
-  previousDemo = null,
   validationError,
   onSubmitPrompt,
+  onReview,
   onRefreshCounts,
-  setDemo,
+  setOrigins,
   setNotes,
-}: ReportDraftPanelProps) {
-  const isCurrentReport = !activeReport;
-
+}: Props) {
+  const category = useAuthStore((state) => state.user?.category);
+  const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
+  const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
+  const steps = [
+    { label: "Complete Visitor Details", done: complete },
+    { label: "Review Report Form", done: submitted || (reviewed && complete) },
+    { label: "Submit Report", done: submitted },
+  ];
   return (
-    <Card
-      className={`relative h-fit overflow-hidden rounded-[22px] border p-5 shadow-[0_18px_42px_rgba(15,23,42,0.08)] transition-colors dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)] ${isReadOnly ? "border-gray-300 border-t-gray-400" : activeReport?.status === "Returned for Revision" ? "border-amber-200 border-t-[#ffd200]" : "border-emerald-800/18 border-t-[#065f46]"} border-t-[3px]`}
-    >
-      <ReportDraftHeader activeReport={activeReport} activeReportId={activeReportId} isReadOnly={isReadOnly} />
-      <ReportDraftAlerts activeReport={activeReport} />
-
-      <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
-        <ReportingPeriodField
-          description={isCurrentReport ? "Use Report Submissions to switch between current and pending reporting periods." : "This is the period saved with the selected report."}
-          isLoading={isPeriodChanging}
-          label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
-          period={period}
-        />
-        <SystemLockedMetrics demo={demo} metrics={metrics} />
-        <CountingDetails metrics={metrics} />
+    <section className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
+      <div className="report-information">
+        <div className="report-information-left">
+          <header>
+            <h2>Monthly DOT Visitor Report</h2>
+            <p>Create and manage your monthly tourism reports.</p>
+          </header>
+          <dl className="report-information-fields">
+            <div>
+              <dt>Tourism Site / Attraction</dt>
+              <dd>
+                <MapPin aria-hidden="true" />
+                <span>{enterpriseName}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Tourism Period</dt>
+              <dd>
+                <CalendarDays aria-hidden="true" />
+                <span>{formatReportingPeriodLabel(period)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Tourism Attraction</dt>
+              <dd>
+                <Landmark aria-hidden="true" />
+                <span>{category || "Not recorded"}</span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div className="report-system-count" role="group" aria-label="Visitor counted by TANAW">
+          <div>
+            <h3>Visitor counted by TANAW</h3>
+            <output aria-label="System unique visitor count">{isPeriodChanging ? "…" : metrics.counting || activeReport ? metrics.unique.toLocaleString() : "—"}</output>
+            <p>Unique Visitor</p>
+          </div>
+          <div className="report-readonly">
+            <strong>
+              <LockKeyhole aria-hidden="true" />
+              Read only
+            </strong>
+            <p>
+              Automatically loaded
+              <br />
+              from the system
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="report-create-body">
+        <section className="report-visitor-card" aria-label="Visitor Details">
+          <VisitorDetails days={days} hasDailyOrigins={hasDailyOrigins} demo={demo} metrics={metrics} isReadOnly={isReadOnly || isPeriodChanging} period={period} setOrigins={setOrigins} />
+        </section>
+        <aside className="report-next-steps" aria-label="Next Steps">
+          <h3>
+            <Menu aria-hidden="true" />
+            Next Steps
+            {!isReadOnly && (metricsError || validationError) && (
+              <InfoTooltip className="report-availability-hint" content={metricsError || validationError || ""} ariaLabel="Report availability">
+                <Info size={17} aria-hidden="true" />
+              </InfoTooltip>
+            )}
+          </h3>
+          <ol>
+            {steps.map((step, index) => (
+              <li key={step.label} data-complete={step.done} aria-current={!step.done && (index === 0 || steps[index - 1].done) ? "step" : undefined}>
+                <span className="report-step-indicator" aria-hidden="true">
+                  {step.done && <Check />}
+                </span>
+                <span>{step.label}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="report-workflow-actions">
+            <button type="button" className="reports-button reports-primary" disabled={isPeriodChanging} onClick={onReview}>
+              <FileText aria-hidden="true" />
+              Review Report Form
+            </button>
+            <ReportDraftActions
+              activeReport={activeReport}
+              isReadOnly={isReadOnly}
+              metricsError={isPeriodChanging ? "Loading report data…" : metricsError}
+              validationError={validationError}
+              onSubmitPrompt={onSubmitPrompt}
+            />
+            {isReadOnly && (
+              <p className="report-workflow-status">
+                {activeReport?.status} · {activeReportId}
+              </p>
+            )}
+            {!isReadOnly && (metricsError || validationError) && (
+              <p className="sr-only" role="status">
+                {metricsError || validationError}
+              </p>
+            )}
+          </div>
+        </aside>
+      </div>
+      {/* Keep supporting workflows compact; they no longer form stacked workspace cards. */}
+      <div className="report-supporting-controls">
+        <ReportDraftAlerts activeReport={activeReport} />
         {activeReport?.status === "Returned for Revision" && onRefreshCounts && (
-          <button
-            type="button"
-            disabled={isPeriodChanging}
-            onClick={onRefreshCounts}
-            className="text-sm font-semibold text-emerald-800 underline underline-offset-2 disabled:opacity-50 dark:text-emerald-300"
-          >
+          <button type="button" className="reports-text-button" disabled={isPeriodChanging} onClick={onRefreshCounts}>
             Refresh reconciled counts for this revision
           </button>
         )}
-        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} previousDemo={previousDemo} setDemo={setDemo} uniqueCap={metrics.unique} />
-        <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
-        <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />
-        <ReportAuditTrail activeReport={activeReport} />
+        <details>
+          <summary>Report details, notes and camera evidence</summary>
+          <div className="report-supporting-content">
+            <CountingDetails metrics={metrics} />
+            <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
+            <ReportAuditTrail activeReport={activeReport} />
+          </div>
+        </details>
       </div>
-    </Card>
+    </section>
   );
 }

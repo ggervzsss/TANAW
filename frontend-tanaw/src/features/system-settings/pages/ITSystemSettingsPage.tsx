@@ -108,7 +108,7 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 dark:border-red-300/25 dark:bg-red-500/10">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[10px] font-bold tracking-wide text-red-700 uppercase dark:text-red-200">Delete Old Activity</span>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-red-700 uppercase dark:bg-red-950/45 dark:text-red-200 dark:ring-1 dark:ring-red-300/20">Destructive</span>
+        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-red-700 dark:bg-red-950/45 dark:text-red-200 dark:ring-1 dark:ring-red-300/20">Destructive</span>
       </div>
       <p className="mb-4 text-sm leading-6 text-red-900 dark:text-red-100">
         Permanently deletes activity history older than the saved retention period. Use this only when older hidden records should be removed from storage.

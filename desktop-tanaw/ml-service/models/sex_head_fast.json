@@ -1,0 +1,58 @@
+{
+  "calibration": {
+    "caches": [
+      "pa100k_fast_val.npz"
+    ],
+    "ece_before": 0.030069796180197936,
+    "images": 10000
+  },
+  "created_at": "2026-11-16T10:38:28.136034+00:00",
+  "embedding_space": "torchreid_osnet_x0_25_msmt17_onnx@41af7195355d4249609b3500da3a333f6bddb3b483c934fde693cf38d2569760:128x256:head_mask=0",
+  "evaluation": {
+    "accuracy": 0.8235,
+    "accuracy_by_view": {
+      "back": 0.8451167379151595,
+      "front": 0.8058645096056622,
+      "side": 0.8201402805611222
+    },
+    "back_view_accuracy": 0.8451167379151595,
+    "balanced_accuracy": 0.8238084361148713,
+    "caches": [
+      "pa100k_fast_test.npz"
+    ],
+    "expected_calibration_error": 0.035040271658567025,
+    "female_share": 0.3896,
+    "identities": 10000,
+    "identity_accuracy": 0.8235,
+    "images": 10000,
+    "negative_log_likelihood": 0.40156693208689404,
+    "simulated_share_mae": 0.03786641483872967,
+    "simulated_share_p95": 0.1
+  },
+  "gate_thresholds": {
+    "back_view_accuracy": 0.8,
+    "balanced_accuracy": 0.85,
+    "expected_calibration_error": 0.05,
+    "simulated_share_mae": 0.03
+  },
+  "gates": {
+    "back_view_accuracy": true,
+    "balanced_accuracy": false,
+    "expected_calibration_error": true,
+    "simulated_share_mae": false
+  },
+  "head_path": "sex_head_fast.npz",
+  "iterations": 1500,
+  "l2": 0.0001,
+  "learning_rate": 1.0,
+  "reid": "fast",
+  "temperature": 0.9757620310469021,
+  "training": {
+    "caches": [
+      "pa100k_fast_train.npz"
+    ],
+    "female_share": 0.45615,
+    "images": 80000
+  },
+  "version": "sex-head@274dd8bd1b1c56ef"
+}

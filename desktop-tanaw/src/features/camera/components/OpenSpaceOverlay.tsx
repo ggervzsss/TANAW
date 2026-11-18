@@ -1,9 +1,33 @@
-import { useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { OpenSpaceSettings } from "../../../types/enterprise";
 
-export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpaceSettings | null | undefined; editable: boolean; onChange: (next: OpenSpaceSettings) => void }) {
+export function OpenSpaceOverlay({
+  value,
+  editable,
+  onChange,
+  onEditCheckpoint,
+}: {
+  value: OpenSpaceSettings | null | undefined;
+  editable: boolean;
+  onChange: (next: OpenSpaceSettings) => void;
+  onEditCheckpoint?: () => void;
+}) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const svg = useRef<SVGSVGElement>(null);
+  const [aspect, setAspect] = useState(1);
+  useEffect(() => {
+    const element = svg.current;
+    if (!element) return;
+    const updateSize = () => {
+      const bounds = element.getBoundingClientRect();
+      if (bounds.height > 0) setAspect(bounds.width / bounds.height);
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const points = value?.polygon ?? [];
   const update = (polygon: OpenSpaceSettings["polygon"]) => onChange({ zone_id: "main", zone_name: "Monitored area", ...value, polygon });
   const coordinate = (event: PointerEvent<SVGSVGElement>) => {
@@ -13,13 +37,17 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
   return (
     <div className="absolute inset-0">
       <svg
+        ref={svg}
         role="img"
         aria-label="Monitored area polygon"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         className={`absolute inset-0 h-full w-full ${editable ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
         onPointerDown={(event) => {
-          if (editable && dragging === null && points.length < 12) update([...points, coordinate(event)]);
+          if (editable && dragging === null && points.length < 12) {
+            onEditCheckpoint?.();
+            update([...points, coordinate(event)]);
+          }
         }}
         onPointerMove={(event) => {
           if (editable && dragging !== null) update(points.map((p, i) => (i === dragging ? coordinate(event) : p)));
@@ -34,7 +62,8 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
               key={i}
               cx={p.x * 100}
               cy={p.y * 100}
-              r="1.2"
+              r="1.1"
+              style={{ transformBox: "fill-box", transformOrigin: "center", transform: `scaleY(${aspect})` }}
               fill={selected === i ? "#fbbf24" : "#fff"}
               stroke="#0891b2"
               strokeWidth="1"
@@ -44,6 +73,7 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
               aria-label={`Zone vertex ${i + 1}`}
               onPointerDown={(event) => {
                 event.stopPropagation();
+                onEditCheckpoint?.();
                 setSelected(i);
                 setDragging(i);
                 event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
@@ -52,6 +82,7 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
                 if (!editable) return;
                 if (event.key === "Delete" || event.key === "Backspace") {
                   event.preventDefault();
+                  onEditCheckpoint?.();
                   update(points.filter((_, j) => i !== j));
                   return;
                 }
@@ -59,6 +90,7 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
                 const dy = event.key === "ArrowUp" ? -0.005 : event.key === "ArrowDown" ? 0.005 : 0;
                 if (dx || dy) {
                   event.preventDefault();
+                  onEditCheckpoint?.();
                   update(points.map((q, j) => (j === i ? { x: Math.max(0, Math.min(1, q.x + dx)), y: Math.max(0, Math.min(1, q.y + dy)) } : q)));
                 }
               }}

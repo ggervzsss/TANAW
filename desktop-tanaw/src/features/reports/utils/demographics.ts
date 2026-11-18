@@ -7,6 +7,8 @@ export type DemographicTotals = {
   male: number;
   otherProvince: number;
   thisProvince: number;
+  /** This Province visitors whose sex was not recorded; excluded from male and female. */
+  unspecified: number;
 };
 
 export type DemographicAllocationStatus = {
@@ -19,14 +21,15 @@ export type DemographicAllocationStatus = {
   validationMessage: string | null;
 };
 
-export function demographicCount(value: string) {
-  const normalized = value.trim();
+export function demographicCount(value: string | undefined) {
+  const normalized = (value ?? "").trim();
   return /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : 0;
 }
 
 export function getDemographicTotals(demo: DemoBreakdown): DemographicTotals {
   const thisProvMale = demographicCount(demo.thisProvMale);
   const thisProvFemale = demographicCount(demo.thisProvFemale);
+  const unspecified = demographicCount(demo.thisProvUnspecified);
   const otherProvMale = demographicCount(demo.otherProvMale);
   const otherProvFemale = demographicCount(demo.otherProvFemale);
   const foreignMale = demographicCount(demo.foreignMale);
@@ -37,15 +40,16 @@ export function getDemographicTotals(demo: DemoBreakdown): DemographicTotals {
   return {
     female,
     foreign: foreignMale + foreignFemale,
-    grandTotal: male + female,
+    grandTotal: male + female + unspecified,
     male,
     otherProvince: otherProvMale + otherProvFemale,
-    thisProvince: thisProvMale + thisProvFemale,
+    thisProvince: thisProvMale + thisProvFemale + unspecified,
+    unspecified,
   };
 }
 
 export function hasInvalidDemographicValue(demo: DemoBreakdown) {
-  return Object.values(demo).some((value) => value.trim() !== "" && !/^\d+$/.test(value.trim()));
+  return Object.values(demo).some((value) => value != null && value.trim() !== "" && !/^\d+$/.test(value.trim()));
 }
 
 export function getDemographicAllocationStatus(demo: DemoBreakdown, uniqueCap: number): DemographicAllocationStatus {
@@ -58,6 +62,12 @@ export function getDemographicAllocationStatus(demo: DemoBreakdown, uniqueCap: n
 
   if (hasInvalidValue) {
     validationMessage = "Demographics values must be non-negative whole numbers.";
+  } else if (
+    demographicCount(demo.thisCityMale) > demographicCount(demo.thisProvMale) ||
+    demographicCount(demo.thisCityFemale) > demographicCount(demo.thisProvFemale) ||
+    demographicCount(demo.thisCityUnspecified) > demographicCount(demo.thisProvUnspecified)
+  ) {
+    validationMessage = "The optional city allocation cannot exceed its saved province total.";
   } else if (excess > 0) {
     validationMessage = "Demographic totals cannot exceed the unique visitor count.";
   } else if (remaining > 0) {
@@ -67,7 +77,7 @@ export function getDemographicAllocationStatus(demo: DemoBreakdown, uniqueCap: n
   return {
     cap,
     excess,
-    isComplete: !hasInvalidValue && totals.grandTotal === cap,
+    isComplete: validationMessage === null && totals.grandTotal === cap,
     isOverCap: excess > 0,
     remaining,
     totals,

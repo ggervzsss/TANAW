@@ -18,8 +18,8 @@ type VisitorInsightsDrawerProps = {
 
 const rangeOptions: { value: VisitorInsightRange; label: string }[] = [
   { value: "today", label: "Today" },
-  { value: "7d", label: "7 Days" },
-  { value: "30d", label: "30 Days" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
 ];
 
 export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeChange, onShowArea, onClose }: VisitorInsightsDrawerProps) {
@@ -72,7 +72,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
               tabIndex={range === option.value ? 0 : -1}
               onClick={() => onRangeChange(option.value)}
               onKeyDown={(event) => handleRangeKeyDown(event, option.value, onRangeChange)}
-              className="tanaw-visitor-insights__segment min-h-10 rounded-xl px-2 py-2 text-[11px] font-black tracking-[0.04em] uppercase"
+              className="tanaw-visitor-insights__segment min-h-10 rounded-xl px-2 py-2 text-[11px] font-black"
             >
               {option.label}
             </button>
@@ -131,7 +131,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                   </p>
                 </div>
                 {!showsUnique && insights.busiestPeriodLabel && (
-                  <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black uppercase">Peak: {insights.busiestPeriodLabel}</span>
+                  <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black">Peak: {insights.busiestPeriodLabel}</span>
                 )}
               </div>
               <label className="tanaw-visitor-insights__muted mt-3 flex items-center gap-2 text-xs font-semibold">

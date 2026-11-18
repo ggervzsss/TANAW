@@ -104,13 +104,13 @@ export function ProfileView() {
   return (
     <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-sans duration-500">
       <div className="mx-auto w-full">
-        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Account</p>
+        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Account</p>
         <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Enterprise Profile</h2>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Manage your establishment's identity and primary contact details.</p>
       </div>
 
       <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
-        <div className="h-1.5 bg-linear-to-r from-[#065f46] via-[#45a549] to-[#d6ad33]" />
+        <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-tanaw-live to-[#d6ad33]" />
         <div className="p-6 md:p-8">
           <div className="enterprise-profile-logo-panel mb-8 flex flex-col items-start gap-6 rounded-3xl border border-emerald-100 bg-linear-to-r from-emerald-50/80 via-white to-amber-50/60 p-5 sm:flex-row sm:items-center">
             <label
@@ -153,7 +153,7 @@ export function ProfileView() {
           {accountChangeStatus && (
             <div
               className={`enterprise-profile-change-notice mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${
-                accountChangeStatus.tone === "success" ? "border-emerald-200 bg-emerald-50 text-[#065f46]" : "border-amber-200 bg-amber-50 text-amber-800"
+                accountChangeStatus.tone === "success" ? "border-emerald-200 bg-emerald-50 text-tanaw-ledger" : "border-amber-200 bg-amber-50 text-amber-800"
               }`}
               data-tone={accountChangeStatus.tone}
             >
@@ -204,7 +204,7 @@ export function ProfileView() {
 
             <div className="enterprise-profile-identity-panel mt-8 space-y-4 rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/70 via-white to-slate-50 p-5 shadow-inner">
               <h4 className="flex items-center gap-2 text-xs font-bold tracking-wider text-[#111827] uppercase">
-                <Shield size={14} className="text-[#065f46]" /> Enterprise Identity (Read-Only)
+                <Shield size={14} className="text-tanaw-ledger" /> Enterprise Identity (Read-Only)
               </h4>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <ReadOnlyIdentityField label="Current Enterprise" value={enterpriseName} />
@@ -218,7 +218,7 @@ export function ProfileView() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex min-w-42.5 items-center justify-center gap-2 rounded-full bg-[#065f46] px-6 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition-colors hover:bg-[#044a36] disabled:bg-[#065f46]/70"
+                className="flex min-w-42.5 items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-6 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition-colors hover:bg-[#044a36] disabled:bg-tanaw-ledger/70"
               >
                 {isLoading ? <RefreshCw size={16} className="animate-spin" /> : isSuccess ? <Check size={16} /> : <Save size={16} />}
                 {isLoading ? "Saving..." : isSuccess ? "Saved Successfully" : "Save Changes"}

@@ -1,8 +1,8 @@
 from typing import Any
 
-from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
 from app.camera.contracts import EnterpriseBinding
-from app.camera.stream_reader import validate_stream
+from app.camera.stream_candidates import StreamSelection, select_stream
+from app.camera.stream_reader import probe_stream
 from app.config.camera_config import CameraTestRequest
 from app.storage.session_store import SessionStore
 
@@ -31,12 +31,16 @@ class LocalOperationsService:
             "session_restored": False,
         }
 
-    def test_connection(self, payload: CameraTestRequest) -> tuple[bool, str]:
-        stream_url = build_authenticated_stream_url(
-            payload.stream_url, payload.username, payload.password
+    def test_connection(self, payload: CameraTestRequest) -> StreamSelection:
+        """Find a working stream for the brand; the chosen address is returned to save."""
+        return select_stream(
+            brand=payload.camera_brand,
+            host=payload.camera_host or "",
+            username=payload.username,
+            password=payload.password,
+            preferred=payload.stream_url,
+            probe=probe_stream,
         )
-        ok, message = validate_stream(stream_url)
-        return ok, redact_stream_credentials(message)
 
     def list_camera_profiles(self) -> list[dict[str, Any]]:
         return self._store.list_camera_profiles()
@@ -87,23 +91,6 @@ class LocalOperationsService:
 
     def mark_events_synced(self) -> int:
         return self._store.mark_events_synced()
-
-    def prepare_sample_counts(self, **values: Any) -> dict[str, Any]:
-        enterprise_id = values.pop("enterprise_id")
-        enterprise_name = values.pop("enterprise_name")
-        if self._enterprise_id != enterprise_id:
-            raise ValueError(
-                f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
-                f"Log into {enterprise_name or enterprise_id} before preparing counts."
-            )
-        summary = self._store.prepare_sample_counts(**values, camera_id=None, camera_name=None)
-        return {
-            **summary,
-            "enterprise_id": enterprise_id,
-            "enterprise_name": enterprise_name,
-            "period": values["period"],
-            "prepared": bool(summary.get("prepared")),
-        }
 
     def close(self) -> None:
         return

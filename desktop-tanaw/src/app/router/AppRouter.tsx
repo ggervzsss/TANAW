@@ -195,6 +195,16 @@ export function AppRouter() {
           }
         />
         <Route
+          path={routePaths.enterpriseDeveloperSettings}
+          element={
+            <RequireAuth>
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="developer-settings" />
+              </RendererReadyBoundary>
+            </RequireAuth>
+          }
+        />
+        <Route
           path={routePaths.enterpriseHelp}
           element={
             <RequireAuth>

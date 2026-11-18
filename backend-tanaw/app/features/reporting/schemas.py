@@ -42,6 +42,8 @@ class DesktopReportSubmissionIngest(BaseModel):
             "otherProvFemale",
             "foreignMale",
             "foreignFemale",
+            # This Province visitors whose sex was not recorded. Optional.
+            "thisProvUnspecified",
         }
         if not isinstance(demo, dict):
             raise ValueError("Demographics are required.")
@@ -89,6 +91,11 @@ class ReportStatusUpdate(BaseModel):
 class ReportDemographicsSummary(BaseModel):
     thisProvMale: int = Field(ge=0)
     thisProvFemale: int = Field(ge=0)
+    thisProvUnspecified: int = Field(
+        default=0,
+        ge=0,
+        description="This Province visitors whose sex was not recorded.",
+    )
     otherProvMale: int = Field(ge=0)
     otherProvFemale: int = Field(ge=0)
     foreignMale: int = Field(ge=0)

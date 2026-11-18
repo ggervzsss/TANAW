@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { PortalNotification } from "../hooks/usePortalNotifications";
 import { notificationToneClasses } from "../model";
 import { NotificationIcon } from "./NotificationIcon";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type PortalNotificationDropdownProps = {
   isOpen: boolean;
@@ -67,7 +68,7 @@ export function PortalNotificationDropdown({
                   type="button"
                   disabled={notifications.length === 0 || unreadCount === 0}
                   onClick={onMarkAllRead}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-[10px] font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-(--tanaw-control-border) bg-white px-3 text-xs font-bold text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
                   <CheckCheck size={13} />
                   Mark all read
@@ -102,7 +103,7 @@ export function PortalNotificationDropdown({
                       <span>{notification.source}</span>
                       <span className="h-1 w-1 rounded-full bg-slate-300" />
                       <span>{notification.time}</span>
-                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 ring-1 ${notificationToneClasses[notification.tone].badge}`}>{notification.statusLabel}</span>}
+                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ${notificationToneClasses[notification.tone].badge}`}>{toSentenceCase(notification.statusLabel)}</span>}
                     </span>
                   </span>
                 </button>
@@ -124,7 +125,7 @@ export function PortalNotificationDropdown({
                 type="button"
                 disabled={!viewAllPath}
                 onClick={onViewAll}
-                className="text-[10px] font-black tracking-wider text-slate-500 uppercase transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="text-xs font-bold text-slate-500 transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-slate-300"
               >
                 VIEW ALL NOTIFICATIONS
               </button>

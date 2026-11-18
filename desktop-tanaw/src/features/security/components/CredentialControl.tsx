@@ -27,7 +27,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
     next: false,
   });
   const inputClassName =
-    "w-full rounded-xl border border-gray-200 bg-white p-3.5 pr-12 font-mono text-sm text-[#111827] shadow-sm outline-none transition-colors focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12";
+    "w-full rounded-xl border border-gray-200 bg-white p-3.5 pr-12 font-mono text-sm text-[#111827] shadow-sm outline-none transition-colors focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/12";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -48,7 +48,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
   return (
     <Card className="rounded-[28px] border-emerald-100/80 p-6 shadow-[0_18px_44px_rgba(15,23,42,0.07)]">
       <h3 className="mb-5 flex items-center gap-2 border-b border-emerald-100 pb-3 text-sm font-bold tracking-wider text-[#111827] uppercase">
-        <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-50 text-[#065f46]">
+        <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-50 text-tanaw-ledger">
           <Key size={16} />
         </span>
         Change Password
@@ -113,7 +113,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
           <button
             type="submit"
             disabled={isLoading}
-            className="flex min-w-45 items-center justify-center gap-2 rounded-full bg-[#065f46] px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition-colors hover:bg-[#044a36] disabled:bg-[#065f46]/70"
+            className="flex min-w-45 items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition-colors hover:bg-[#044a36] disabled:bg-tanaw-ledger/70"
           >
             {isLoading ? <RefreshCw size={16} className="animate-spin" /> : isSuccess ? <Check size={16} /> : <Key size={16} />}
             {isLoading ? "Updating..." : isSuccess ? "Password Updated" : "Update Password"}
@@ -181,7 +181,7 @@ function PasswordInput({ ariaLabel, autoComplete, className, isVisible, maxLengt
         onClick={() => {
           if (value) onToggle();
         }}
-        className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-emerald-50 hover:text-[#065f46] focus-visible:ring-2 focus-visible:ring-[#065f46]/30 focus-visible:outline-none"
+        className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger focus-visible:ring-2 focus-visible:ring-tanaw-ledger/30 focus-visible:outline-none"
       >
         <Icon size={16} />
       </button>

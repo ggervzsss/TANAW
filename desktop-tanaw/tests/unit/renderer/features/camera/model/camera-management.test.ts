@@ -5,11 +5,20 @@ import { getCameraStorageFingerprint, normalizeCamera, redactCameraForStorage } 
 describe("camera profile persistence", () => {
   it.each(["tenda", "custom"] as const)("preserves %s endpoints and brand through storage and reload", (cameraBrand) => {
     const rtsp = "rtsp://192.168.100.136:8554/H264?ch=1&subtype=0";
-    const original: Camera = { ...camera("stopped"), cameraBrand, connectionProfile: "manual", rtsp, username: "admin", password: "secret" };
+    const original: Camera = { ...camera("stopped"), cameraBrand, rtsp, username: "admin", password: "secret" };
     const stored = redactCameraForStorage(original);
     expect(stored.username).toBeUndefined();
     expect(stored.password).toBeUndefined();
-    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand, rtsp, connectionProfile: "manual" });
+    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand, rtsp });
+  });
+
+  it("drops retired settings and applies TANAW's fixed detection tuning", () => {
+    const stored = { ...camera("stopped"), confidence: 0.8, processingProfile: "emergency", coverage: { role: "unconfigured" }, rtspStream: "stream1", autoReconnect: false } as unknown as Camera;
+    const normalized = normalizeCamera(stored) as Camera & Record<string, unknown>;
+    expect(normalized).toMatchObject({ confidence: 0.35, trackingConfidence: 0.15, processingProfile: "auto", reidMode: "auto", uniqueCountingMode: "estimated_reid" });
+    expect(normalized).not.toHaveProperty("coverage");
+    expect(normalized).not.toHaveProperty("rtspStream");
+    expect(normalized).not.toHaveProperty("autoReconnect");
   });
 
   it("keeps Tapo as the default for existing camera profiles", () => {
@@ -20,7 +29,6 @@ describe("camera profile persistence", () => {
     const original: Camera = {
       ...camera("stopped"),
       cameraBrand: "dahua",
-      rtspStream: "stream1",
       rtsp: "rtsp://192.168.100.136:9554/cam/realmonitor?channel=1&subtype=0",
       username: "admin",
       password: "secret",
@@ -28,7 +36,7 @@ describe("camera profile persistence", () => {
     const stored = redactCameraForStorage(original);
     expect(stored.username).toBeUndefined();
     expect(stored.password).toBeUndefined();
-    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand: "dahua", rtspStream: "stream1", rtsp: original.rtsp });
+    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand: "dahua", rtsp: original.rtsp });
   });
   it.each<CameraStatus>(["untested", "online", "offline", "starting", "connecting", "running", "degraded", "reconnecting", "stopped", "failed", "error"])(
     "does not persist the %s runtime status",
@@ -61,7 +69,6 @@ function camera(status: CameraStatus): Camera {
     zone: "Lobby",
     rtsp: "rtsp://192.168.100.136/stream2",
     cameraHost: "192.168.100.136",
-    rtspStream: "stream2",
     processingProfile: "auto",
     confidence: 0.35,
     trackingConfidence: 0.15,

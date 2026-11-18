@@ -20,7 +20,10 @@ DEMO_FIELDS = (
     "otherProvFemale",
     "foreignMale",
     "foreignFemale",
+    # This Province visitors whose sex was not recorded; optional.
+    "thisProvUnspecified",
 )
+OPTIONAL_DEMO_FIELDS = frozenset({"thisProvUnspecified"})
 
 
 def period_bounds(period: str) -> tuple[datetime, datetime]:
@@ -161,7 +164,10 @@ class EstablishmentReportRepository:
             demo = supplied.get("demo")
             if isinstance(demo, dict):
                 demo = {
-                    field: "0" if demo.get(field) == "" else demo.get(field)
+                    field: "0"
+                    if demo.get(field) == ""
+                    or (field in OPTIONAL_DEMO_FIELDS and demo.get(field) is None)
+                    else demo.get(field)
                     for field in DEMO_FIELDS
                 }
             if not isinstance(demo, dict) or any(

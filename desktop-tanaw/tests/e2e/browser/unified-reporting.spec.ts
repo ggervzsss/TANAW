@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { mlResponse, mockMlRequest } from "./support/preload";
+import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 
 test.describe.configure({ timeout: 60_000 });
 const fixtures = Object.fromEntries(
@@ -26,15 +26,8 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
     status: "stopped",
     rtsp: "rtsp://192.168.1.10/stream2",
     cameraHost: "192.168.1.10",
-    rtspStream: "stream2",
     confidence: 0.35,
     processingProfile: "auto",
-    coverage: {
-      role: analysisMode === "entrance_exit" ? "external_boundary" : "internal_observation",
-      relationship: id === 2 ? "contained" : "independent",
-      related_camera_id: id === 2 ? 1 : null,
-      travel_seconds: {},
-    },
     config: { tripwire: 50, reverse: false, roi: { top: 0, left: 0, width: 100, height: 100 } },
     openSpace: null,
   });
@@ -79,15 +72,14 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
           },
         ],
       });
-    if (path.endsWith("/desktop/sample-preparation")) {
-      sampleRequests += 1;
-      return route.fulfill({ json: null });
-    }
+    if (path.endsWith("/desktop/sample-preparation")) return route.fulfill({ json: null });
     return route.fulfill({ json: [] });
   });
   await mockMlRequest(page, "*", (request) => {
     const path = new URL(request.url).pathname;
     const reply = (body: unknown, status = 200) => mlResponse({ status, body: JSON.stringify(body) });
+    // Without a backend sample dataset, nothing synthetic may enter the local ledger.
+    if (path === "/sample/prepare") sampleRequests += 1;
     if (path === "/context/enterprise") return reply({ enterprise_id: user.enterpriseId, enterprise_name: user.enterpriseName });
     if (path === "/cameras") return reply(mode === "mixed" ? [profile(1, "entrance_exit"), profile(2, "open_space")] : [profile(1, mode)]);
     if (path === "/cameras/runtime")
@@ -140,6 +132,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   return {
     counting,
     submissions,
@@ -157,28 +150,48 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     const state = await setup(page, mode);
     const row = page.locator("tbody tr").filter({ hasText: "October 2026" });
     await row.click();
+    await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+    await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
     const basis = page.getByRole("region", { name: "Establishment counting basis" });
     await expect(basis).toContainText("One establishment total from both camera modes");
     await expect(basis).toContainText("someone returning on another day can contribute again");
     await expect(basis).toContainText(mode === "open_space" ? "Not measured" : "4");
-    await expect(page.getByText("Unique visitors: 2", { exact: true })).toBeVisible();
-    // The full demographic allocation uses one establishment baseline.
-    await page.getByPlaceholder("M", { exact: true }).first().fill("1");
-    await page.getByPlaceholder("F", { exact: true }).first().fill("1");
-    await expect(page.getByText("Grand total: 2", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
+    // TANAW fills This City; visitors entered for other origins are deducted from it.
+    await expect(page.getByRole("button", { name: /Selected day: October 10, 2026/ })).toBeVisible();
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("2");
+    // TANAW's male/female estimate of the day's unique visitors fills This City.
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("1");
+    await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
+    await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
+    await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("1");
+    await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("0");
+    await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
+    await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
     await expect.poll(() => state.submissions.length).toBe(1);
     await expect.poll(() => state.getSaved()?.sync_status).toBe("pending_cloud_sync");
     await expect(page.getByRole("button", { name: "Yes, Submit", exact: true })).toHaveCount(0);
     expect(state.uploads.length).toBeGreaterThan(0);
-    expect(state.uploads[0].payload).toMatchObject({ counting: { snapshot_version: state.counting.snapshot_version }, metrics: { unique: 2 } });
+    expect(state.uploads[0].payload).toMatchObject({
+      counting: { snapshot_version: state.counting.snapshot_version },
+      metrics: { unique: 2 },
+      demo: { thisProvMale: "1", thisProvFemale: "1", thisProvUnspecified: "0" },
+      var1: { thisCityMale: "0", thisCityFemale: "1", thisCityUnspecified: "0" },
+      origins: { "2026-10-10": { otherCity: { male: 1, female: 0 } } },
+    });
     expect(state.uploads[0].entries).toBe(mode === "open_space" ? null : 3);
     expect(state.uploads[0].exits).toBe(mode === "open_space" ? null : 4);
     await expect(page.getByText("Open Space reporting is not available")).toHaveCount(0);
     const savedRow = page.locator("tbody tr").filter({ hasText: String(state.getSaved()!.report_id) });
+    await page.getByRole("tab", { name: "Reports History", exact: true }).click();
     await savedRow.getByRole("button", { name: /View/ }).click();
-    const preview = page.getByRole("dialog", { name: "DOT Form Preview" });
+    const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
+    await preview.getByText("Report details and camera evidence", { exact: true }).click();
     await expect(preview.getByRole("region", { name: "Establishment counting basis" })).toContainText(mode === "open_space" ? "Not measured" : "4");
     const downloadEvent = page.waitForEvent("download");
     await preview.getByRole("button", { name: /Download/ }).click();
@@ -200,14 +213,18 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
 test("returned reports keep the old snapshot until counts are explicitly refreshed", async ({ page }) => {
   const state = await setup(page, "open_space", true);
   await page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" }).click();
+  await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
   await expect(page.getByRole("button", { name: "Resubmit Report", exact: true })).toBeVisible();
-  await expect(page.getByText("Unique visitors: 2", { exact: true })).toBeVisible();
-  await expect(page.getByText("Grand total: 2", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
+  await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
   await page.getByRole("button", { name: "Refresh reconciled counts for this revision", exact: true }).click();
-  await expect(page.getByText("Unique visitors: 3", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("3");
   await expect(page.getByRole("button", { name: "Resubmit Report", exact: true })).toBeDisabled();
-  await page.getByPlaceholder("M", { exact: true }).first().fill("2");
-  await expect(page.getByText("Grand total: 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "All from This City", exact: true }).click();
+  await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("3");
+  await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("3");
   await page.getByRole("button", { name: "Resubmit Report", exact: true }).click();
   await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
   await expect.poll(() => state.submissions.length).toBe(1);
@@ -217,4 +234,46 @@ test("returned reports keep the old snapshot until counts are explicitly refresh
   expect(state.submissions[0].metrics).toMatchObject({ unique_count: 3 });
   expect(state.submissions[0].expected_snapshot_version).toBe(fixtures["corrected-open-space"].counting.snapshot_version);
   expect(state.getSaved()?.unique_count).toBe(3);
+});
+
+test("report filters, preview and responsive workspace retain the existing layout", async ({ page }, testInfo) => {
+  await setup(page, "mixed", true);
+  if (await page.getByRole("button", { name: "Switch to light mode" }).isVisible()) await page.getByRole("button", { name: "Switch to light mode" }).click();
+  const search = page.getByRole("searchbox", { name: "Search reports" });
+  await page.locator(".report-history-search > button").click();
+  await search.fill("not-a-report");
+  await expect(page.getByText("No matching reports found.", { exact: true })).toBeVisible();
+  await search.fill("REP-FIXTURE");
+  await expect(page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" })).toHaveCount(1);
+  await search.fill("");
+  await page.getByRole("combobox", { name: "Filter reports by status" }).click();
+  await page.getByRole("option", { name: "Returned for Revision", exact: true }).click();
+  await expect(page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" })).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Filter reports by status" }).click();
+  await page.getByRole("option", { name: "All Statuses", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("reports-desktop.png"), fullPage: true });
+  for (const width of [1024, 760, 430]) {
+    await page.setViewportSize({ width, height: 900 });
+    const workspace = page.locator("[data-reports-surface='var1-workspace']");
+    await expect.poll(() => workspace.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("reports-" + width + ".png"), fullPage: true });
+  }
+});
+
+// Design review captures (DESIGN.md): run with TANAW_DESIGN_CAPTURE=<folder> to save screenshots.
+test("captures Reports for design review", async ({ page }) => {
+  const folder = process.env.TANAW_DESIGN_CAPTURE;
+  test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setup(page, "mixed", true);
+  for (const theme of ["light", "dark"] as const) {
+    await switchTheme(page, theme);
+    await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("tab", { name: "Reports History", exact: true }).click();
+    await page.screenshot({ path: `${folder}/reports-history-${theme}.png`, fullPage: true });
+    await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+    await page.screenshot({ path: `${folder}/reports-create-${theme}.png`, fullPage: true });
+  }
 });

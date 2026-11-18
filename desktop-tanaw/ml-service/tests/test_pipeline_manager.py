@@ -1,5 +1,6 @@
 import tempfile
 import threading
+import time
 import unittest
 from typing import Any, cast
 from unittest.mock import patch
@@ -30,6 +31,10 @@ class FakePipeline(CameraProcessingManager):
     @property
     def running(self) -> bool:
         return self.running_value
+
+    @property
+    def current_config(self) -> CameraStartRequest | None:
+        return self.config
 
     def bind_enterprise(
         self,
@@ -482,6 +487,38 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             self.assertIs(pipeline.config, updated)
             self.assertTrue(pipeline.running)
 
+    def test_performance_profile_restarts_only_running_cameras_with_their_own_settings(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(
+                directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
+            )
+            registry.bind_enterprise("enterprise@example.test")
+            running = _config(1).model_copy(update={"username": "admin", "password": "secret"})
+            registry.start(running)
+            registry.start(_config(2))
+            registry.stop(2)
+            first = cast(FakePipeline, registry.require_pipeline(1))
+            second = cast(FakePipeline, registry.require_pipeline(2))
+
+            self.assertEqual(registry.apply_performance_profile("high_accuracy", "quality"), 1)
+            deadline = time.monotonic() + 2
+            while first.start_calls < 2 and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            assert first.config is not None
+            self.assertEqual(first.start_calls, 2)
+            self.assertEqual(
+                (first.config.processing_profile, first.config.reid_mode),
+                ("high_accuracy", "quality"),
+            )
+            # The camera restarts from its own start request, credentials included.
+            self.assertEqual((first.config.username, first.config.password), ("admin", "secret"))
+            self.assertFalse(second.running)
+            self.assertEqual(second.start_calls, 1)
+            self.assertEqual(registry.apply_performance_profile("high_accuracy", "quality"), 0)
+
     def test_latest_changed_request_wins_while_an_older_start_is_pending(self) -> None:
         first_update_started = threading.Event()
         release_first_update = threading.Event()
@@ -557,28 +594,12 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            registry.replace_camera_profiles(
-                [
-                    {
-                        **_profile(1),
-                        "coverage": {"role": "external_boundary", "relationship": "independent"},
-                    },
-                    {
-                        **_profile(2),
-                        "coverage": {
-                            "role": "external_boundary",
-                            "relationship": "alternative",
-                            "related_camera_id": 1,
-                        },
-                    },
-                ]
-            )
+            registry.replace_camera_profiles([_profile(1), _profile(2)])
             registry.start(_config(1))
             registry.start(_config(2))
             registry.record_occupancy_correction(
                 new_occupancy=7,
                 reason="Manual recount",
-                camera_id=1,
             )
 
             states = registry.camera_states()

@@ -14,8 +14,8 @@ type NotificationDropdownProps = {
 
 const notificationIconByType = (type: EnterpriseNotification["type"]) => {
   if (type === "critical") return <AlertTriangle size={16} className="text-tanaw-red" />;
-  if (type === "warning") return <AlertCircle size={16} className="text-[#ffd200]" />;
-  return <CheckCircle size={16} className="text-[#2d5eff]" />;
+  if (type === "warning") return <AlertCircle size={16} className="text-tanaw-yellow" />;
+  return <CheckCircle size={16} className="text-tanaw-blue" />;
 };
 
 export function NotificationDropdown({ isOpen, notifications, unreadCount, onToggleOpen, onMarkAllRead, onSelectNotification, onViewAll, triggerVariant = "default" }: NotificationDropdownProps) {
@@ -25,7 +25,7 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
       ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/14 bg-black/18 text-white/88 shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-emerald-100/24 hover:bg-emerald-200/9 hover:shadow-[0_10px_24px_rgba(0,0,0,0.4)] active:translate-y-0"
       : triggerVariant === "topbar"
         ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
-        : `relative rounded-full p-2.5 transition-colors ${isOpen ? "bg-gray-100 text-[#065f46]" : "border border-gray-100 bg-white text-gray-500 shadow-sm hover:bg-gray-50"}`;
+        : `relative rounded-full p-2.5 transition-colors ${isOpen ? "bg-gray-100 text-tanaw-ledger" : "border border-gray-100 bg-white text-gray-500 shadow-sm hover:bg-gray-50"}`;
 
   return (
     <div className="relative">
@@ -53,7 +53,7 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
               <button
                 disabled={unreadCount === 0}
                 onClick={onMarkAllRead}
-                className="text-[10px] font-bold tracking-wider text-[#065f46] uppercase hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
+                className="text-xs font-bold text-tanaw-ledger hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
               >
                 Mark all read
               </button>
@@ -69,12 +69,12 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
               >
                 <div className="mt-0.5 shrink-0">{notificationIconByType(notification.type)}</div>
                 <div className="flex-1">
-                  <p className={`text-sm leading-snug transition-colors group-hover:text-[#065f46] ${!notification.read ? "font-bold text-[#111827]" : "font-medium text-gray-700"}`}>
+                  <p className={`text-sm leading-snug transition-colors group-hover:text-tanaw-ledger ${!notification.read ? "font-bold text-[#111827]" : "font-medium text-gray-700"}`}>
                     {notification.message}
                   </p>
                   <p className="mt-1.5 text-[10px] font-bold tracking-wider text-gray-400 uppercase">{notification.time}</p>
                 </div>
-                {!notification.read && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#2d5eff] shadow-sm"></div>}
+                {!notification.read && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-tanaw-blue shadow-sm"></div>}
               </div>
             ))}
             {notifications.length === 0 && (
@@ -88,8 +88,8 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
             )}
           </div>
           <div className="enterprise-notification-menu__footer shrink-0 border-t border-gray-100 bg-gray-50 p-2.5 text-center">
-            <button onClick={onViewAll} className="text-[10px] font-bold tracking-wider text-gray-500 uppercase hover:text-[#065f46]">
-              VIEW ALL NOTIFICATIONS
+            <button onClick={onViewAll} className="text-xs font-bold text-gray-500 hover:text-tanaw-ledger">
+              View all notifications
             </button>
           </div>
         </div>

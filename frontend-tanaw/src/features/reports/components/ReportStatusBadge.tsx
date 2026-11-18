@@ -1,4 +1,5 @@
 import type { FinalReportStatus, ReportStatus } from "@/shared/types";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 export function ReportStatusBadge({ status }: { status: ReportStatus | FinalReportStatus }) {
   const classes =
@@ -14,5 +15,5 @@ export function ReportStatusBadge({ status }: { status: ReportStatus | FinalRepo
               ? "border-gray-200 bg-gray-100 text-gray-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300"
               : "border-gray-300 bg-gray-200 text-gray-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200";
 
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase ${classes}`}>{status}</span>;
+  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold ${classes}`}>{toSentenceCase(status)}</span>;
 }

@@ -5,11 +5,18 @@ import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnecti
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import type { CameraCredentialMetadataRecords } from "../services/camera-credentials";
 import { MlServiceRequestError } from "../services/ml-service";
-import { validateCameraCoverage } from "../utils/camera-coverage";
 
 export type CameraAction = "requesting-start" | "saving" | "starting" | "stopping" | "testing";
 export const DEFAULT_COUNTING_CONFIDENCE = 0.35;
 export const DEFAULT_TRACKING_CONFIDENCE = 0.15;
+/** Detection tuning chosen by TANAW for reliable counting; users do not configure it. */
+export const FIXED_DETECTION_SETTINGS = {
+  confidence: DEFAULT_COUNTING_CONFIDENCE,
+  processingProfile: "auto",
+  reidMode: "auto",
+  trackingConfidence: DEFAULT_TRACKING_CONFIDENCE,
+  uniqueCountingMode: "estimated_reid",
+} as const satisfies Partial<Camera>;
 export const DEFAULT_ROI: Camera["config"]["roi"] = { top: 0, left: 0, width: 100, height: 100 };
 const PREVIOUS_DEFAULT_ROI: Camera["config"]["roi"] = { top: 10, left: 10, width: 80, height: 80 };
 
@@ -22,16 +29,11 @@ export function isStartAction(action: CameraAction | undefined) {
 }
 
 export function validateCamera(camera: Camera, hasStoredPassword: boolean) {
-  const coverageError = validateCameraCoverage(camera.coverage, camera.id);
-  if (coverageError) return coverageError;
   if (!isValidIpv4(camera.cameraHost ?? "")) return "Camera IP must be a valid IPv4 address.";
   if (!camera.username?.trim()) return "Enter the camera username.";
   if (!hasStoredPassword) return "Enter the camera password.";
   const streamError = validateCameraConnection(camera);
   if (streamError) return streamError;
-  if (!Number.isFinite(camera.confidence) || camera.confidence < 0.05 || camera.confidence > 0.95) return "Counting confidence must be between 0.05 and 0.95.";
-  if (!Number.isFinite(camera.trackingConfidence ?? 0.15) || (camera.trackingConfidence ?? 0.15) < 0.01 || (camera.trackingConfidence ?? 0.15) > camera.confidence)
-    return "Tracking confidence must be between 0.01 and the counting confidence.";
   if (camera.analysisMode === "open_space" && camera.openSpace) return validateOpenSpace(camera.openSpace);
   return null;
 }
@@ -50,23 +52,17 @@ export function normalizeCamera(camera: Camera): Camera {
   const streamUrl = camera.rtsp ?? "";
   const parsedRtsp = parseRtspConnection(streamUrl);
   const cameraHost = camera.cameraHost ?? parsedRtsp.host;
-  const rtspStream = camera.rtspStream ?? parsedRtsp.streamId;
-  const normalizedStreamUrl = (camera.cameraBrand ?? "tapo") === "tapo" ? buildTapoRtspUrl(cameraHost, rtspStream) || stripStreamCredentials(streamUrl) : stripStreamCredentials(streamUrl.trim());
+  const normalizedStreamUrl =
+    (camera.cameraBrand ?? "tapo") === "tapo" ? buildTapoRtspUrl(cameraHost, parsedRtsp.streamId) || stripStreamCredentials(streamUrl) : stripStreamCredentials(streamUrl.trim());
   const tripwire = camera.config?.tripwire ?? 50;
-  const confidence = camera.confidence ?? DEFAULT_COUNTING_CONFIDENCE;
-  const rawTrackingConfidence = camera.trackingConfidence ?? DEFAULT_TRACKING_CONFIDENCE;
   return {
-    ...camera,
+    ...withoutRetiredSettings(camera),
     cameraHost: cameraHost || undefined,
     cameraBrand: camera.cameraBrand ?? "tapo",
-    confidence,
-    reidMode: normalizeReIdMode(camera.reidMode),
-    trackingConfidence: Math.max(0.01, Math.min(rawTrackingConfidence, confidence)),
-    uniqueCountingMode: normalizeUniqueCountingMode(camera.uniqueCountingMode),
+    // Detection tuning is TANAW's choice, not a camera setting.
+    ...FIXED_DETECTION_SETTINGS,
     password: undefined,
-    processingProfile: normalizeProcessingProfile(camera.processingProfile),
     rtsp: maskStreamCredentials(normalizedStreamUrl),
-    rtspStream,
     status: camera.status && isRuntimeStatus(camera.status) ? "stopped" : (camera.status ?? "untested"),
     username: normalizeOptionalCredential(camera.username),
     config: {
@@ -96,12 +92,11 @@ function clampPercent(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
-function normalizeReIdMode(mode: unknown): Camera["reidMode"] {
-  return mode === "auto" || mode === "off" || mode === "fast" || mode === "quality" ? mode : "auto";
-}
+/** Settings older camera records may still carry; TANAW now chooses or no longer uses them. */
+const RETIRED_CAMERA_SETTINGS = ["coverage", "rtspStream", "connectionProfile", "autoReconnect"];
 
-function normalizeUniqueCountingMode(mode: unknown): Camera["uniqueCountingMode"] {
-  return mode === "entry_only" || mode === "estimated_reid" ? mode : "estimated_reid";
+function withoutRetiredSettings(camera: Camera): Camera {
+  return Object.fromEntries(Object.entries(camera).filter(([key]) => !RETIRED_CAMERA_SETTINGS.includes(key))) as Camera;
 }
 
 export function redactCameraForStorage(camera: Camera): Camera {
@@ -133,10 +128,6 @@ export function applyStoredCameraMetadata(camera: Camera, credentials: CameraCre
 
 function normalizeOptionalCredential(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function normalizeProcessingProfile(profile: unknown): Camera["processingProfile"] {
-  return profile === "auto" || profile === "compatibility" || profile === "balanced" || profile === "high_accuracy" || profile === "emergency" ? profile : "auto";
 }
 
 export function getDefaultTripwires(centerX: number) {

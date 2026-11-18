@@ -7,7 +7,6 @@ import numpy as np
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
 from app.config.camera_config import CameraStartRequest
-from app.config.camera_coverage import CameraCoverage
 from app.config.open_space_config import OpenSpaceConfig, ZonePoint
 from app.counting.geometry import Centroid
 from app.identity.establishment_registry import EstablishmentRegistry
@@ -29,7 +28,6 @@ def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_pat
         door_config = CameraStartRequest(
             camera_id=1,
             stream_url="rtsp://192.168.1.10/stream2",
-            coverage=CameraCoverage(role="external_boundary", relationship="independent"),
         )
         door._config = door_config
         session = ProcessingSession(1, door_config, Event(), "door-run")
@@ -51,9 +49,6 @@ def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_pat
             camera_id=2,
             stream_url="rtsp://192.168.1.11/stream2",
             analysis_mode="open_space",
-            coverage=CameraCoverage(
-                role="internal_observation", relationship="contained", related_camera_id=1
-            ),
             open_space=OpenSpaceConfig(
                 polygon=[
                     ZonePoint(x=0.2, y=0.2),

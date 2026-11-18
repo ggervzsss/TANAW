@@ -242,6 +242,3 @@ class SessionStore:
 
     def mark_events_synced(self) -> int:
         return self._data_store.mark_events_synced()
-
-    def prepare_sample_counts(self, **values: Any) -> dict[str, int | str | None]:
-        return self._data_store.prepare_sample_counts(**values)

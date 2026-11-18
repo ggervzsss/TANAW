@@ -14,6 +14,11 @@ describe("camera form credential validation", () => {
     expect(validateCameraForm(values({ username: "camera-user", password: "1234" }))).toEqual({});
   });
 
+  it("allows the optional location and limits its length", () => {
+    expect(validateCameraForm(values({ zone: "" }))).toEqual({});
+    expect(validateCameraForm(values({ zone: "a".repeat(121) })).zone).toBeDefined();
+  });
+
   it.each(["https://192.168.1.9/video", "0"])("rejects non-RTSP camera sources", (rtsp) => {
     expect(validateCameraForm(values({ rtsp })).rtsp).toBe("Enter a valid RTSP URL starting with rtsp://.");
   });
@@ -25,7 +30,6 @@ function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {
     name: "Lobby Camera",
     password: "device pass",
     rtsp: "rtsp://192.168.1.9/stream2",
-    rtspStream: "stream2",
     username: "camera-user",
     zone: "Lobby",
     ...overrides,

@@ -10,6 +10,7 @@ const viewModules = {
   security: () => import("../../features/security/components/SecurityView"),
   tickets: () => import("../../features/tickets/components/TicketsView"),
   "display-preferences": () => import("../../features/preferences/DisplayPreferencesView"),
+  "developer-settings": () => import("../../features/preferences/DeveloperSettingsView"),
   help: () => import("../../features/help/components/HelpCenterView"),
 } as const;
 
@@ -21,6 +22,7 @@ export const ReportsView = lazy(() => viewModules.reports().then((module) => ({ 
 export const SecurityView = lazy(() => viewModules.security().then((module) => ({ default: module.SecurityView })));
 export const TicketsView = lazy(() => viewModules.tickets().then((module) => ({ default: module.TicketsView })));
 export const DisplayPreferencesView = lazy(() => viewModules["display-preferences"]().then((module) => ({ default: module.DisplayPreferencesView })));
+export const DeveloperSettingsView = lazy(() => viewModules["developer-settings"]().then((module) => ({ default: module.DeveloperSettingsView })));
 export const HelpCenterView = lazy(() => viewModules.help().then((module) => ({ default: module.HelpCenterView })));
 
 export function preloadEnterpriseView(view: EnterpriseView) {

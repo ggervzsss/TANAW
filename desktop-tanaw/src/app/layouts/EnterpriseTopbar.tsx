@@ -1,4 +1,4 @@
-import { BookOpen, Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
+import { BookOpen, Camera, ChevronDown, Code2, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
@@ -285,35 +285,42 @@ export function EnterpriseTopbar({
                     <button
                       type="button"
                       onClick={() => navigateFromMenu("profile")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
                     >
                       <User size={14} /> Edit Profile Info
                     </button>
                     <button
                       type="button"
                       onClick={() => navigateFromMenu("security")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
                     >
                       <Shield size={14} /> Password Settings
                     </button>
                     <button
                       type="button"
                       onClick={() => navigateFromMenu("tickets")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
                     >
                       <LifeBuoy size={14} /> Support Tickets
                     </button>
                     <button
                       type="button"
                       onClick={() => navigateFromMenu("display-preferences")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
                     >
                       <SlidersHorizontal size={14} /> Display Preferences
                     </button>
                     <button
                       type="button"
+                      onClick={() => navigateFromMenu("developer-settings")}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
+                    >
+                      <Code2 size={14} /> Developer Settings
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => navigateFromMenu("help")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
                     >
                       <BookOpen size={14} /> Help Center
                     </button>

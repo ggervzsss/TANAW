@@ -26,7 +26,7 @@ export function ProfileDisplayField({ label, locked = false, onEdit, prefix, val
             type="button"
             aria-label={`Edit ${label}`}
             onClick={onEdit}
-            className="m-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+            className="m-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
           >
             <Pencil size={16} />
           </button>
@@ -166,7 +166,7 @@ export function ProfileEditModal({
                 <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
                 {isPhone ? (
                   <div
-                    className={`flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-[#065f46] focus-within:ring-2 focus-within:ring-[#065f46]/12 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-tanaw-ledger focus-within:ring-2 focus-within:ring-tanaw-ledger/12 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   >
                     <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 text-sm font-bold text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       +63
@@ -198,7 +198,7 @@ export function ProfileEditModal({
                     maxLength={field === "email" ? 254 : undefined}
                     aria-invalid={Boolean(error)}
                     onChange={(event) => onValueChange(event.target.value)}
-                    className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   />
                 )}
                 {(error || !isPhone) && (
@@ -221,7 +221,7 @@ export function ProfileEditModal({
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex min-w-32 items-center justify-center gap-2 rounded-full bg-[#065f46] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-[#065f46]/70"
+                className="flex min-w-32 items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-tanaw-ledger/70"
               >
                 {isSaving && <RefreshCw size={15} className="animate-spin" />}
                 {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : field === "buildingCapacity" ? "Update Capacity" : "Submit Request"}
@@ -267,7 +267,7 @@ function ProfileNameInput({
         aria-invalid={Boolean(error)}
         aria-describedby={error || helperText ? descriptionId : undefined}
         onChange={(event) => onChange(name, event.target.value)}
-        className={`w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+        className={`w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
       />
       {(error || helperText) && (
         <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>

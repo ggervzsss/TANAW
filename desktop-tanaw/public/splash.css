@@ -22,6 +22,12 @@ body {
   background: #f7f7f3;
 }
 
+html.dark body,
+html.dark .tanaw-boot-splash {
+  background: #151b21;
+  color: #e2e9e8;
+}
+
 .tanaw-boot-splash {
   position: relative;
   display: grid;
@@ -31,7 +37,7 @@ body {
   place-items: center;
   background: #f7f7f3;
   color: #10241b;
-  font-family: "Bai Jamjuree", "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Bai Jamjuree", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 .tanaw-boot-splash::before {

@@ -12,6 +12,8 @@ export const DESKTOP_RELEASE_LOCALES = ["en-US", "fil"] as const;
 export const REQUIRED_MODEL_ASSETS = [
   "person_reid.onnx",
   "person_reid_cpu.onnx",
+  "sex_head_fast.npz",
+  "sex_head_quality.npz",
   "yolo11m.pt",
   "yolo11m_640_openvino_model/metadata.yaml",
   "yolo11m_640_openvino_model/yolo11m.bin",

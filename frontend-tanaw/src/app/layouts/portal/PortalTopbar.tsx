@@ -303,7 +303,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     className="absolute right-0 z-1001 mt-3 max-h-[calc(100svh-var(--tanaw-topbar-height)-1rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
                   >
                     <div className="mb-1 border-b border-slate-100 px-4 py-3.5">
-                      <p title={profile.name} className="text-tanaw-navy truncate text-sm font-bold">
+                      <p title={profile.name} className="text-(--tanaw-text) truncate text-sm font-bold">
                         {profile.name}
                       </p>
                       <p title={profile.email} className="truncate text-xs text-gray-500">

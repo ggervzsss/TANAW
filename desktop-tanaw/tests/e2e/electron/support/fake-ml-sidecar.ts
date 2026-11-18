@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
+import type { EstablishmentLive, EstablishmentSummary } from "../../../../src/features/camera/services/establishment.types";
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 export class FakeMlSidecar {
+  // Optional test-owned responses still travel through the real Electron IPC bridge.
+  respond?: (request: IncomingMessage) => { body: unknown; status: number } | undefined | Promise<{ body: unknown; status: number } | undefined>;
   readonly requestPaths: string[] = [];
   readonly requestTokens: string[] = [];
   readonly webSocketTokens: string[] = [];
@@ -71,13 +74,14 @@ export class FakeMlSidecar {
     for (const socket of this.#connections) socket.write(frame);
   }
 
-  #handleRequest(request: IncomingMessage, response: import("node:http").ServerResponse) {
-    const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+  async #handleRequest(request: IncomingMessage, response: import("node:http").ServerResponse) {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const path = url.pathname;
     this.requestPaths.push(path);
     const token = request.headers["x-tanaw-ml-token"];
     if (typeof token === "string") this.requestTokens.push(token);
 
-    const payload = responseForPath(path);
+    const payload = (await this.respond?.(request)) ?? responseForPath(path, url.searchParams);
     response.writeHead(payload.status, { "Content-Type": "application/json" });
     response.end(JSON.stringify(payload.body));
   }
@@ -115,7 +119,7 @@ export class FakeMlSidecar {
   }
 }
 
-function responseForPath(path: string): { body: unknown; status: number } {
+function responseForPath(path: string, query: URLSearchParams): { body: unknown; status: number } {
   if (path === "/health") {
     return {
       status: 200,
@@ -132,6 +136,54 @@ function responseForPath(path: string): { body: unknown; status: number } {
   if (path === "/cameras/runtime") return { status: 200, body: cameraStatesEvent().data };
   if (path === "/context/enterprise") {
     return { status: 200, body: { enterprise_id: "enterprise-1", enterprise_name: "Electron Test Enterprise", changed: true, session_restored: false } };
+  }
+  // Cloud telemetry also reads the current establishment endpoints. Returning
+  // 404 here used to stop the IPC integration test before its telemetry assert.
+  if (path === "/metrics/establishment/live") {
+    return {
+      status: 200,
+      body: {
+        enterprise_id: "enterprise-1",
+        occupancy: 1,
+        partial_occupancy: 1,
+        state: "estimated",
+        contributions: [],
+        missing_camera_ids: [],
+        movement_available: false,
+        identification_available: false,
+      } satisfies EstablishmentLive,
+    };
+  }
+  if (path === "/metrics/establishment/summary") {
+    return {
+      status: 200,
+      body: {
+        enterprise_id: "enterprise-1",
+        from_at: query.get("start")!,
+        to_at: query.get("end")!,
+        timezone: "Asia/Manila",
+        days: [],
+        days_available: 0,
+        days_requested: 1,
+        snapshot_version: "electron-empty-history",
+        unique_count: 0,
+        confirmed_unique_count: 0,
+        entries: 0,
+        exits: 0,
+        repeat_entry_count: 0,
+        unresolved_observations: 0,
+        qualified_observations: 0,
+        peak_occupancy: null,
+        covered_ms: 0,
+        counting_basis: "sum_of_daily_establishment_unique_visitors",
+        policy_version: 1,
+        reconciliation_state: "not_collected",
+        movement_state: "unavailable",
+        identification_state: "unavailable",
+        coverage_ratio: 0,
+        source_breakdown: [],
+      } satisfies EstablishmentSummary,
+    };
   }
   if (path === "/metrics/summary") {
     return {

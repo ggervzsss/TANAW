@@ -1,28 +1,31 @@
-import type { LocalMetricsSummary } from "../../camera/services/ml-service";
-import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
-import { formatPhilippineDateTime } from "../../../utils/date-time";
+﻿import { CalendarDays } from "lucide-react";
+import type { TrendFilter } from "../types/dashboard";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 
-type DashboardHeaderProps = {
-  summary: LocalMetricsSummary | null;
-  description?: string;
-};
-
-export function DashboardHeader({ summary, description }: DashboardHeaderProps) {
-  const { timeFormat } = useSystemDisplayPreferences();
-
+export function DashboardHeader({ filter, onFilterChange }: { filter: TrendFilter; onFilterChange: (filter: TrendFilter) => void }) {
+  const date = new Date(Date.now()).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric" });
   return (
-    <div className="flex items-center justify-between border-b border-gray-200 pb-3 dark:border-(--enterprise-border-soft)">
+    <header className="overview-header">
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-[#111827] dark:text-(--enterprise-text)">Enterprise Analytics</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-(--enterprise-muted)">
-          {description ?? "Current visitor counts for this establishment."}
-          {!description && summary?.last_event_at && (
-            <span className="ml-2 font-semibold text-[#065f46] dark:text-emerald-300">
-              Last event {formatPhilippineDateTime(summary.last_event_at, timeFormat, { dateStyle: "medium", timeStyle: "short" })}
-            </span>
-          )}
-        </p>
+        <h1>Dashboard</h1>
+        <p>Tourism Overview</p>
       </div>
-    </div>
+      <div className="overview-date">
+        <CalendarDays aria-hidden="true" />
+        <SelectDropdown
+          className="overview-date-dropdown"
+          restoreFocusOnTab
+          menuClassName="dashboard-date-menu"
+          ariaLabel="Dashboard date range"
+          value={filter}
+          onChange={(value) => onFilterChange(value as TrendFilter)}
+          options={[
+            ["Today", `Today, ${date}`],
+            ["Week", "Past 7 days"],
+            ["Month", "Past 30 days"],
+          ]}
+        />
+      </div>
+    </header>
   );
 }

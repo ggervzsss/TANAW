@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
-import { Download, FileText, Search } from "lucide-react";
-import { Badge } from "../../../components/Badge";
-import { Card } from "../../../components/Card";
-import { ExpandableText } from "../../../components/ExpandableText";
+import { Download, Search } from "lucide-react";
 import { SelectDropdown } from "../../../components/SelectDropdown";
+import { ExpandableText } from "../../../components/ExpandableText";
+import { ReportPopover } from "./ReportPopover";
 import type { ReportRecord } from "../../../types/enterprise";
-import { formatReportingPeriodLabel } from "../utils/reporting-period";
+import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
+import { formatPhilippineDateTime } from "../../../utils/date-time";
+import { formatReportingPeriodLabel, reportingMonthKey } from "../utils/reporting-period";
 import type { ReportLedgerRow } from "../model/report-ledger";
 
 export type { ReportLedgerRow } from "../model/report-ledger";
-
-type ReportLedgerTableProps = {
+type Props = {
   activeLedgerKey: string;
   ledgerRows: ReportLedgerRow[];
   onDownloadReport: (report: ReportRecord) => void;
@@ -18,162 +18,173 @@ type ReportLedgerTableProps = {
   onSelectReport: (row: ReportLedgerRow) => void;
 };
 
-export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadReport, onPreviewReport, onSelectReport }: ReportLedgerTableProps) {
+export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadReport, onPreviewReport, onSelectReport }: Props) {
+  const openReport = (row: ReportLedgerRow) => {
+    onSelectReport(row);
+    onPreviewReport(row.report);
+  };
+  const { timeFormat } = useSystemDisplayPreferences();
   const [searchQuery, setSearchQuery] = useState("");
+  const [periodFilter, setPeriodFilter] = useState("year");
   const [statusFilter, setStatusFilter] = useState("All");
-  const statusOptions = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.statusLabel))).sort(), [ledgerRows]);
-  const filteredRows = useMemo(() => {
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    return ledgerRows.filter((row) => {
-      const matchesStatus = statusFilter === "All" || row.statusLabel === statusFilter;
-      const storedPeriod = row.report.period ?? row.report.date;
-      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, storedPeriod, formatReportingPeriodLabel(storedPeriod), row.statusLabel].join(" ").toLowerCase();
-      return matchesStatus && (!normalizedSearchQuery || searchableText.includes(normalizedSearchQuery));
-    });
-  }, [ledgerRows, searchQuery, statusFilter]);
+  const thisYear = new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Manila" }).format(new Date());
+  const statuses = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.statusLabel))).sort(), [ledgerRows]);
+  const periods = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.report.period ?? row.report.date))), [ledgerRows]);
+  const filteredRows = useMemo(
+    () =>
+      ledgerRows.filter((row) => {
+        const period = row.report.period ?? row.report.date;
+        const matchesPeriod =
+          periodFilter === "all" || (periodFilter === "year" ? reportingMonthKey(period).startsWith(`${thisYear}-`) : reportingMonthKey(period) === reportingMonthKey(periodFilter));
+        const text = [row.report.id, row.reportLabel, row.reportDescription, period, formatReportingPeriodLabel(period), row.statusLabel].join(" ").toLowerCase();
+        return matchesPeriod && (statusFilter === "All" || row.statusLabel === statusFilter) && (!searchQuery.trim() || text.includes(searchQuery.trim().toLowerCase()));
+      }),
+    [ledgerRows, periodFilter, statusFilter, thisYear, searchQuery],
+  );
 
   return (
-    <Card className="flex min-h-136 flex-col overflow-hidden rounded-[22px] border border-gray-200 bg-white/95 shadow-[0_18px_42px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)]">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4.5">
-        <div>
-          <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Report Submissions</h3>
-          <p className="mt-1 text-xs text-gray-500">Select a row to load its data into the workspace, or use View to open the DOT form preview.</p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="relative block">
-            <Search size={14} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
-            <span className="sr-only">Search reports</span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search reports"
-              className="h-10 w-48 rounded-xl border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46]"
-            />
-          </label>
+    <section className="report-ledger" aria-label="Report history">
+      <header>
+        <h2>Report History</h2>
+        <p>List of reports created and submitted in the system</p>
+      </header>
+      <form
+        className="report-history-filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <label>
+          <span>Reporting Period</span>
+          <SelectDropdown
+            value={periodFilter}
+            onChange={setPeriodFilter}
+            options={[["all", "All Periods"], ["year", `This Year (${thisYear})`], ...periods.map((period) => [period, formatReportingPeriodLabel(period)] as const)]}
+            ariaLabel="Filter reports by reporting period"
+            menuClassName="reports-dropdown-menu"
+            restoreFocusOnTab
+            reportsDismissal
+          />
+        </label>
+        <label>
+          <span>Reporting Status</span>
           <SelectDropdown
             value={statusFilter}
             onChange={setStatusFilter}
-            options={[["All", "All statuses"], ...statusOptions.map((status) => [status, status] as const)]}
+            options={[["All", "All Statuses"], ...statuses.map((status) => [status, status] as const)]}
             ariaLabel="Filter reports by status"
-            size="compact"
+            menuClassName="reports-dropdown-menu"
+            restoreFocusOnTab
+            reportsDismissal
           />
-        </div>
-      </div>
-
-      <div className="m-2.5 mt-0 flex-1 overflow-x-hidden overflow-y-auto rounded-2xl border border-gray-100 bg-white">
-        <table className="w-full table-fixed text-left text-sm">
+        </label>
+      </form>
+      <ReportPopover className="report-history-search" label="Search reports" icon={<Search size={15} aria-hidden="true" />}>
+        <label>
+          <span className="sr-only">Search reports</span>
+          <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search reports" />
+        </label>
+      </ReportPopover>
+      <div className="report-history-table-scroll" tabIndex={0} role="region" aria-label="Report history table">
+        <table>
           <colgroup>
-            <col className="w-[31%]" />
-            <col className="w-[23%]" />
-            <col className="w-[11%]" />
-            <col className="w-[20%]" />
-            <col className="w-[15%]" />
+            {[16, 17, 16, 14, 16, 10, 11].map((width, index) => (
+              <col key={index} style={{ width: `${width}%` }} />
+            ))}
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+          <thead>
             <tr>
-              <th className="border-b border-gray-200 px-3 py-3 xl:px-5">Report</th>
-              <th className="border-b border-gray-200 px-3 py-3 whitespace-nowrap xl:px-5">Period</th>
-              <th className="border-b border-gray-200 px-3 py-3 text-right whitespace-nowrap xl:px-5">Unique Pax</th>
-              <th className="border-b border-gray-200 px-3 py-3 whitespace-nowrap xl:px-5">Status</th>
-              <th className="border-b border-gray-200 px-3 py-3 text-right whitespace-nowrap xl:px-5">Actions</th>
+              {["Report ID", "Reporting Period", "Visitor Counted", "Status", "Date Submitted", "Time", "Actions"].map((title) => (
+                <th key={title} scope="col">
+                  {title}
+                </th>
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody key={`${periodFilter}:${statusFilter}:${searchQuery}`} className="report-history-results">
             {filteredRows.map((row) => {
               const report = row.report;
-              const isActive = activeLedgerKey === row.key;
-              const periodLabel = formatReportingPeriodLabel(report.period ?? report.date);
+              const submitted = report.submittedAt && !Number.isNaN(Date.parse(report.submittedAt)) ? report.submittedAt : null;
               return (
                 <tr
                   key={row.key}
                   role="button"
                   tabIndex={0}
-                  aria-selected={isActive}
-                  onClick={() => onSelectReport(row)}
+                  aria-selected={activeLedgerKey === row.key}
+                  aria-label={`${row.reportLabel}, ${formatReportingPeriodLabel(report.period ?? report.date)}`}
+                  onClick={(event) => {
+                    if ((event.target as Element).closest("button, a, input, select, textarea, summary")) return;
+                    openReport(row);
+                  }}
                   onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === "Enter" || event.key === " ") {
+                    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                       event.preventDefault();
-                      onSelectReport(row);
+                      openReport(row);
                     }
                   }}
-                  className={`group cursor-pointer transition-[background-color,box-shadow] focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5 shadow-[inset_3px_0_0_#065f46]" : "hover:bg-gray-50"}`}
                 >
-                  <td className="px-3 py-4 xl:px-5">
-                    <ExpandableText
-                      primary={row.reportLabel}
-                      secondary={row.reportDescription}
-                      ariaLabel="report name and description"
-                      className="font-mono text-xs font-semibold text-[#111827]"
-                      secondaryClassName="text-[10px] font-semibold tracking-wider text-gray-400 uppercase"
-                    />
+                  <td className="report-history-id-cell" title={row.reportDescription}>
+                    <ExpandableText primary={report.id} ariaLabel="report name and description" className="report-history-id" />
                   </td>
-                  <td className="px-3 py-4 text-sm font-medium text-gray-700 xl:px-5">{periodLabel}</td>
-                  <td className="px-3 py-4 text-right font-mono font-bold whitespace-nowrap text-[#065f46] xl:px-5">{report.unique?.toLocaleString() || 0}</td>
-                  <td className="px-3 py-4 whitespace-nowrap xl:px-5" title={row.statusLabel}>
-                    <Badge variant={badgeVariant(row)}>
-                      <span className="xl:hidden">{compactStatusLabel(row)}</span>
-                      <span className="hidden xl:inline">{row.statusLabel}</span>
-                    </Badge>
+                  <td>{formatReportingPeriodLabel(report.period ?? report.date)}</td>
+                  <td className="report-history-count">{report.unique.toLocaleString()}</td>
+                  <td>
+                    <span className="report-status" data-tone={statusTone(row)}>
+                      {row.statusLabel}
+                    </span>
+                    {report.syncStatus && report.syncStatus !== "synced" && <span className="report-upload-state">Waiting to upload</span>}
                   </td>
-                  <td className="px-3 py-4 text-right whitespace-nowrap xl:px-5">
-                    <div className="flex flex-nowrap justify-end gap-2 opacity-80 transition-opacity group-hover:opacity-100">
+                  <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { dateStyle: "medium" }) : "—"}</td>
+                  <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { timeStyle: "short" }) : "—"}</td>
+                  <td>
+                    <div className="report-history-actions">
                       <button
                         type="button"
+                        className="report-view-action"
                         aria-label={`View ${row.reportLabel}`}
+                        title="View report"
                         onClick={(event) => {
                           event.stopPropagation();
-                          onPreviewReport(report);
+                          openReport(row);
                         }}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-800/12 bg-emerald-50/60 text-[#065f46] transition-colors hover:border-emerald-700/35 hover:bg-emerald-100/70 hover:text-[#044a36]"
-                        title="View report"
                       >
-                        <FileText size={14} />
+                        View
                       </button>
                       <button
                         type="button"
+                        className="report-download-action"
                         aria-label={`Download ${row.reportLabel}`}
+                        title="Download PDF"
                         onClick={(event) => {
                           event.stopPropagation();
                           onDownloadReport(report);
                         }}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:border-emerald-700/30 hover:bg-emerald-50/60 hover:text-[#065f46]"
-                        title="Download PDF"
                       >
-                        <Download size={14} />
+                        <Download size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </td>
                 </tr>
               );
             })}
-            {filteredRows.length === 0 && (
+            {!filteredRows.length && (
               <tr>
-                <td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-400">
-                  {ledgerRows.length === 0 ? "No reporting periods available yet." : "No reports match the current filters."}
+                <td colSpan={7} className="report-history-empty">
+                  {ledgerRows.length ? "No matching reports found." : "No reporting periods available yet."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-    </Card>
+    </section>
   );
 }
 
-function badgeVariant(row: ReportLedgerRow) {
-  if (row.kind === "current") return "success";
-  if (row.kind === "pending") return "warning";
-  if (row.report.status === "Consolidated") return "success";
-  if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "info";
-  if (row.report.status === "Returned for Revision") return "warning";
-  return "default";
-}
-
-function compactStatusLabel(row: ReportLedgerRow) {
-  if (row.kind === "current") return "Current";
-  if (row.kind === "pending") return "Pending";
-  if (row.report.status === "Returned for Revision") return "Returned";
-  return row.statusLabel;
+function statusTone(row: ReportLedgerRow) {
+  if (row.report.status === "Returned for Revision") return "returned";
+  if (row.kind === "pending" || row.statusLabel === "Pending Submission") return "pending";
+  if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "submitted";
+  if (row.report.status === "Consolidated") return "consolidated";
+  return "draft";
 }

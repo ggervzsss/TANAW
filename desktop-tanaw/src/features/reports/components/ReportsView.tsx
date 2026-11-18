@@ -1,4 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import { Files, History } from "lucide-react";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable } from "./ReportLedgerTable";
@@ -6,6 +7,7 @@ import { SubmitReportDialog } from "./SubmitReportDialog";
 import type { Camera, ReportRecord } from "../../../types/enterprise";
 import { useReportsWorkspace } from "../hooks/useReportsWorkspace";
 import { validateDemographicAllocation } from "../model/report-workspace";
+import { dailyOriginsError } from "../model/daily-origins";
 
 type ReportsViewProps = {
   cameras?: Camera[];
@@ -15,83 +17,155 @@ type ReportsViewProps = {
 };
 
 export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
+  const workspace = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
+  return <ReportsWorkspace workspace={workspace} />;
+}
+function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useReportsWorkspace> }) {
+  const [tab, setTab] = useState<"create" | "history">("create");
+  const [reviewedKey, setReviewedKey] = useState("");
+  const [previewedLedgerKey, setPreviewedLedgerKey] = useState<string | null>(null);
   const {
+    enterpriseName,
     activeLedgerKey,
     activeReport,
     activeReportId,
     blockingMetricsError,
+    days,
     demo,
     displayedMetrics,
     executeSubmit,
     handleDownloadReport,
     handlePreviewReport,
     handleSelectLedgerRow,
+    hasDailyOrigins,
     isPeriodChanging,
     isReadOnly,
     isSubmitting,
     ledgerRows,
     notes,
+    origins,
     period,
     previewReport,
-    previousDemo,
     refreshRevisionCounts,
-    setDemo,
     setNotes,
+    setOrigins,
     setPreviewReport,
     setShowConfirm,
     showConfirm,
     validationError,
-  } = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
+  } = workspace;
+  const reviewKey = JSON.stringify([period, activeReportId, origins, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
+  const previewIsDraft = previewReport?.reportId === (activeReportId ?? "TANAW-DRAFT") && !isReadOnly;
+  const previewValidation = previewReport ? ((previewIsDraft ? dailyOriginsError(days) : null) ?? validateDemographicAllocation(previewReport.metrics, previewReport.demo)) : null;
+  const selectTab = (next: "create" | "history") => {
+    if (next === "create" && previewedLedgerKey) {
+      const row = ledgerRows.find((item) => item.key === previewedLedgerKey);
+      if (row && row.key !== activeLedgerKey) handleSelectLedgerRow(row);
+      setPreviewedLedgerKey(null);
+    }
+    setTab(next);
+  };
 
   return (
-    <div className="tanaw-reports-workspace animate-in fade-in space-y-5 font-sans duration-500" data-reports-surface="camera-setup-generation">
+    <div className="tanaw-reports-workspace" data-reports-surface="var1-workspace">
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          origins={previewReport.origins}
           enterpriseName={enterpriseName}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
           reportId={previewReport.reportId}
-          validationMessage={validateDemographicAllocation(previewReport.metrics, previewReport.demo)}
-          onClose={() => setPreviewReport(null)}
+          validationMessage={previewValidation}
+          onClose={() => {
+            if (previewReport.reportId === (activeReportId ?? "TANAW-DRAFT") && !previewValidation && JSON.stringify(previewReport.origins) === JSON.stringify(origins)) setReviewedKey(reviewKey);
+            setPreviewReport(null);
+          }}
         />
       )}
 
       {showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
 
-      <div className="flex items-center justify-between px-1">
+      <div className="reports-heading">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Reports</h2>
-          <p className="mt-0.5 text-xs font-medium text-gray-500 dark:text-slate-400">Prepare unfinished monthly reports and review submitted report history.</p>
+          <h1>Reports</h1>
+          <p>Create and manage your monthly tourism reports.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(360px,0.82fr)_minmax(0,1.7fr)]">
+      <div className="reports-tabs" role="tablist" aria-label="Reports workspace">
+        {(
+          [
+            ["create", "Create Reports", Files],
+            ["history", "Reports History", History],
+          ] as const
+        ).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            id={`reports-tab-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            aria-controls={`reports-panel-${id}`}
+            tabIndex={tab === id ? 0 : -1}
+            onClick={() => selectTab(id)}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === "Home" ? "create" : event.key === "End" ? "history" : tab === "create" ? "history" : "create";
+              selectTab(next);
+              document.getElementById(`reports-tab-${next}`)?.focus();
+            }}
+          >
+            <Icon aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div id="reports-panel-create" role="tabpanel" aria-labelledby="reports-tab-create" hidden={tab !== "create"} className="reports-tab-panel">
         <ReportDraftPanel
+          enterpriseName={enterpriseName}
+          reviewed={reviewedKey === reviewKey}
           activeReport={activeReport}
           activeReportId={activeReportId}
+          days={days}
           demo={demo}
+          hasDailyOrigins={hasDailyOrigins}
           isReadOnly={isReadOnly}
           isPeriodChanging={isPeriodChanging}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
-          previousDemo={previousDemo}
           validationError={validationError}
           onSubmitPrompt={() => setShowConfirm(true)}
+          onReview={() =>
+            setPreviewReport({
+              demo,
+              origins: hasDailyOrigins ? origins : undefined,
+              metrics: displayedMetrics,
+              notes,
+              period,
+              reportId: activeReportId ?? "TANAW-DRAFT",
+            })
+          }
           onRefreshCounts={refreshRevisionCounts}
-          setDemo={setDemo}
+          setOrigins={setOrigins}
           setNotes={setNotes}
         />
-
+      </div>
+      <div id="reports-panel-history" role="tabpanel" aria-labelledby="reports-tab-history" hidden={tab !== "history"} className="reports-tab-panel">
         <ReportLedgerTable
-          activeLedgerKey={activeLedgerKey}
+          activeLedgerKey={previewedLedgerKey ?? activeLedgerKey}
           ledgerRows={ledgerRows}
           onDownloadReport={handleDownloadReport}
           onPreviewReport={handlePreviewReport}
-          onSelectReport={handleSelectLedgerRow}
+          onSelectReport={(row) => {
+            // Previewing alone must not replace a draft or start its persistence hooks.
+            setPreviewedLedgerKey(row.key);
+          }}
         />
       </div>
     </div>

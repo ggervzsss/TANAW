@@ -11,14 +11,13 @@ import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
-import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
-import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
+import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord } from "../../types/enterprise";
 import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
-import { EnterpriseTopbar } from "./EnterpriseTopbar";
+import { ThemedEnterpriseTopbar } from "./ThemedEnterpriseTopbar";
 import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
 import {
   CameraManagementView,
@@ -29,6 +28,7 @@ import {
   SecurityView,
   TicketsView,
   DisplayPreferencesView,
+  DeveloperSettingsView,
   HelpCenterView,
   preloadEnterpriseView,
   scheduleEnterpriseViewPreload,
@@ -47,6 +47,7 @@ const viewRouteById: Record<EnterpriseView, string> = {
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
   "display-preferences": routePaths.enterpriseDisplayPreferences,
+  "developer-settings": routePaths.enterpriseDeveloperSettings,
   help: routePaths.enterpriseHelp,
 };
 
@@ -68,8 +69,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const notificationStorageKey = `tanaw-enterprise-notifications-read:${user?.id ?? "anonymous"}`;
   const [readNotificationIds, setReadNotificationIds] = useState<Set<number>>(() => readStoredNotificationIds(notificationStorageKey));
   const [toasts, setToasts] = useState<EnterpriseNotification[]>([]);
-  const [theme, setTheme] = useState<ThemePreference>(getInitialThemePreference);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
   const [mlContextAttempt, setMlContextAttempt] = useState(0);
@@ -107,21 +106,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       navigate(routePaths.login, { replace: true });
     }
   }, [currentUserQuery.error, currentUserQuery.isError, logout, navigate]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const applyTheme = () => {
-      setResolvedTheme(applyThemePreference(theme));
-    };
-
-    persistThemePreference(theme);
-    applyTheme();
-
-    if (theme !== "system") return undefined;
-
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => mediaQuery.removeEventListener("change", applyTheme);
-  }, [theme]);
 
   useEffect(() => {
     setActiveView(initialView);
@@ -192,16 +176,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     if (!mlContextReady) return;
     let disposed = false;
     void getMlServiceStatus()
-      .then((status) => Promise.all([
-        listLocalCameras(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL),
-        loadCameraCredentialMetadata(enterpriseCameraStorageKey),
-      ]))
+      .then((status) => Promise.all([listLocalCameras(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL), loadCameraCredentialMetadata(enterpriseCameraStorageKey)]))
       .then(([profiles, metadata]) => {
         if (!disposed && activeViewRef.current !== "cameras") {
           setCameras(profiles.map((profile) => applyStoredCameraMetadata(normalizeCamera(profile), metadata)));
         }
       })
-      .catch(() => { /* Camera Setup provides the detailed connection recovery controls. */ });
+      .catch(() => {
+        /* Camera Setup provides the detailed connection recovery controls. */
+      });
     return () => {
       disposed = true;
     };
@@ -238,15 +221,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     navigate(viewRouteById[view]);
   };
 
-  const toggleTheme = () => {
-    setTheme((currentTheme) => {
-      const nextTheme = resolveThemePreference(currentTheme) === "dark" ? "light" : "dark";
-      persistThemePreference(nextTheme);
-      setResolvedTheme(applyThemePreference(nextTheme));
-      return nextTheme;
-    });
-  };
-
   const notifications = useMemo(
     () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, backendNotifications, timeFormat),
     [backendNotifications, readNotificationIds, reportsHistory, timeFormat],
@@ -279,14 +253,13 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   return (
-    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] font-['Montserrat'] transition-colors duration-300 dark:bg-(--enterprise-app-bg)">
-      <EnterpriseTopbar
+    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] transition-colors duration-300 dark:bg-(--enterprise-app-bg)">
+      <ThemedEnterpriseTopbar
         activeView={activeView}
         displayName={displayName}
         initials={initials}
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
-        resolvedTheme={resolvedTheme}
         unreadCount={unreadCount}
         user={user}
         onLogout={handleLogout}
@@ -299,7 +272,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         }}
         onNotificationsClose={() => setIsNotificationsOpen(false)}
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
-        onToggleTheme={toggleTheme}
       />
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -307,7 +279,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
           ref={contentScrollRef}
           data-form-scroll-container
           data-density-adjustable={activeView !== "cameras"}
-          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
+          className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
             {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
@@ -315,7 +287,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
                 <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
                 {mlContextError && (
                   <>
-                    <p className="mt-2 break-words text-sm">{mlContextError}</p>
+                    <p className="mt-2 text-sm wrap-break-word">{mlContextError}</p>
                     <button
                       type="button"
                       className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
@@ -337,6 +309,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}
               {activeView === "display-preferences" && <DisplayPreferencesView />}
+              {activeView === "developer-settings" && <DeveloperSettingsView />}
               {activeView === "help" && <HelpCenterView />}
               {activeView === "notifications" && (
                 <NotificationsView

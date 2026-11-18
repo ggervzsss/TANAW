@@ -1,88 +1,155 @@
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Card } from "../../../components/Card";
+﻿import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useReducedMotion } from "motion/react";
+import { useId } from "react";
 import type { EstablishmentSummary } from "../../camera/services/ml-service";
 import type { TrendFilter } from "../types/dashboard";
 import { establishmentTrend } from "../utils/establishment";
+import { DashboardChartTooltip } from "./DashboardChartTooltip";
 
-type Props = { summary: EstablishmentSummary | null; range: { start: string; end: string }; filter: TrendFilter; onFilterChange: (filter: TrendFilter) => void; unavailable: boolean };
-
-export function EstablishmentTrendChart({ summary, range, filter, onFilterChange, unavailable }: Props) {
-  const data = establishmentTrend(summary, range);
-  const hasData = data.some((point) => point.visitors !== null || point.occupancy !== null);
-  const observedZero = hasData && data.every((point) => (point.visitors === null || point.visitors === 0) && (point.occupancy === null || point.occupancy === 0));
+type Props = { summary: EstablishmentSummary | null; range: { start: string; end: string }; filter: TrendFilter; unavailable: boolean };
+export function EstablishmentTrendChart({ summary, range, filter, unavailable }: Props) {
+  const reduceMotion = useReducedMotion();
+  const gradientId = useId().replace(/:/g, "");
+  const data = establishmentTrend(summary, range).map((point) => {
+    const day = summary?.days.find((day) => day.business_date === point.date);
+    const measured = day && (day.covered_ms > 0 || day.qualified_observations > 0) && day.movement_state !== "unavailable";
+    return { ...point, entries: measured ? day.entries : null, exits: measured ? day.exits : null };
+  });
+  const trafficData: Array<{ label: string; entries: number | null; exits: number | null }> = data;
+  const occupancyData: Array<{ label: string; occupancy: number | null }> = data;
+  const hasOccupancy = occupancyData.some((point) => point.occupancy !== null);
+  const hasMovement = trafficData.some((point) => point.entries != null || point.exits != null);
+  const observedZero = hasOccupancy && data.every((point) => (point.visitors === null || point.visitors === 0) && (point.occupancy === null || point.occupancy === 0));
+  const empty = (
+    <div className="chart-empty" role="status">
+      {unavailable ? "History unavailable. Check the local camera service." : "No observations available for this period."}
+    </div>
+  );
+  const axes = (
+    <>
+      <CartesianGrid vertical={false} stroke="var(--enterprise-chart-grid)" strokeDasharray="3 5" />
+      <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: "var(--dashboard-chart-baseline)" }} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
+      <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={42} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
+    </>
+  );
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-        <div>
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Establishment history</h3>
-          <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-300">
-            Both camera modes use the same tally. Each day's visitor estimate counts recognized people once across cameras; gaps remain unavailable.
+    <div className="overview-charts">
+      <section className="design-card overview-chart">
+        <header>
+          <h3>Visitor Traffic</h3>
+          <p>
+            Entries vs. Exits <span>· {filter === "Today" ? "today" : filter === "Week" ? "past 7 days" : "past 30 days"}</span>
           </p>
-        </div>
-        <div className="flex rounded-lg border border-slate-200 p-1 dark:border-slate-700" aria-label="Historical visitor trend period">
-          {(["Today", "Week", "Month"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={filter === value}
-              onClick={() => onFilterChange(value)}
-              className={`rounded-md px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${filter === value ? "bg-emerald-800 text-white dark:bg-emerald-700" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}
-            >
-              {value === "Today" ? "Today" : value === "Week" ? "7 days" : "30 days"}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="p-5">
-        {observedZero && (
-          <p role="status" className="mb-4 text-xs text-slate-600 dark:text-slate-300">
-            Available observations recorded no visitor activity. Gaps remain unavailable.
-          </p>
-        )}
-        {hasData ? (
-          <div className="h-80 w-full">
+        </header>
+        {hasMovement ? (
+          <div className="overview-chart-canvas">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data} accessibilityLayer role="img" aria-label={`${filter} establishment visitor and peak occupancy history`} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="2 7" vertical={false} stroke="var(--enterprise-chart-grid)" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="linear"
-                  dataKey="visitors"
-                  name="Estimated daily visitors"
-                  stroke="var(--enterprise-chart-entry)"
-                  strokeWidth={3}
-                  dot={{ r: 3 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
+              <BarChart data={trafficData} accessibilityLayer role="img" aria-label={`${filter} visitor entries and exits`} margin={{ top: 16, right: 20, bottom: 4, left: 0 }}>
+                <defs>
+                  <linearGradient id={`${gradientId}-entries`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--dashboard-entry-highlight)" />
+                    <stop offset="100%" stopColor="var(--enterprise-chart-entry)" />
+                  </linearGradient>
+                  <linearGradient id={`${gradientId}-exits`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--design-chart-exit)" />
+                    <stop offset="100%" stopColor="var(--dashboard-exit-base)" />
+                  </linearGradient>
+                </defs>
+                {axes}
+                <Tooltip
+                  content={<DashboardChartTooltip />}
+                  cursor={{ fill: "var(--dashboard-chart-hover)", stroke: "none" }}
+                  offset={12}
+                  allowEscapeViewBox={{ x: false, y: false }}
+                  wrapperStyle={{ outline: "none", pointerEvents: "none" }}
+                  isAnimationActive={!reduceMotion}
+                  animationDuration={180}
+                  animationEasing="ease-out"
                 />
-                <Line
-                  type="linear"
-                  dataKey="occupancy"
-                  name="Peak occupancy"
-                  stroke="var(--enterprise-chart-occupancy)"
-                  strokeWidth={3}
-                  strokeDasharray="7 4"
-                  dot={{ r: 3 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
+                <Legend verticalAlign="top" align="right" iconType="square" wrapperStyle={{ fontSize: 12, paddingBottom: 14 }} />
+                <Bar
+                  dataKey="entries"
+                  name="Entries"
+                  fill={`url(#${gradientId}-entries)`}
+                  legendType="square"
+                  radius={[5, 5, 0, 0]}
+                  maxBarSize={30}
+                  activeBar={{ stroke: "var(--enterprise-chart-entry)", strokeWidth: 1, fillOpacity: 0.88 }}
+                  isAnimationActive={!reduceMotion}
+                  animationBegin={0}
+                  animationDuration={320}
+                  animationEasing="ease-out"
                 />
-              </LineChart>
+                <Bar
+                  dataKey="exits"
+                  name="Exits"
+                  fill={`url(#${gradientId}-exits)`}
+                  legendType="square"
+                  radius={[5, 5, 0, 0]}
+                  maxBarSize={30}
+                  activeBar={{ stroke: "var(--design-green)", strokeWidth: 1, strokeOpacity: 0.45 }}
+                  isAnimationActive={!reduceMotion}
+                  animationBegin={0}
+                  animationDuration={320}
+                  animationEasing="ease-out"
+                />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div
-            role="status"
-            className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300"
-          >
-            {unavailable
-              ? "Establishment history is unavailable. Check the local camera service."
-              : "No observations have been collected for this period. Configure and start the cameras to record activity."}
-          </div>
+          empty
         )}
-      </div>
-    </Card>
+      </section>
+      <section className="design-card overview-chart">
+        <header>
+          <h3>Occupancy Trend</h3>
+          <p>Highest observed occupancy by day</p>
+          {observedZero && <p role="status">Available observations recorded no visitor activity. Gaps remain unavailable.</p>}
+        </header>
+        {hasOccupancy ? (
+          <div className="overview-chart-canvas">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={occupancyData} accessibilityLayer role="img" aria-label={`${filter} establishment peak occupancy history`} margin={{ top: 34, right: 20, bottom: 4, left: 0 }}>
+                <defs>
+                  <linearGradient id={`${gradientId}-occupancy`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--design-green)" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="var(--design-green)" stopOpacity={0.025} />
+                  </linearGradient>
+                </defs>
+                {axes}
+                <Tooltip
+                  content={<DashboardChartTooltip />}
+                  cursor={{ stroke: "var(--design-green)", strokeOpacity: 0.3, strokeDasharray: "3 3" }}
+                  offset={12}
+                  allowEscapeViewBox={{ x: false, y: false }}
+                  wrapperStyle={{ outline: "none", pointerEvents: "none" }}
+                  isAnimationActive={!reduceMotion}
+                  animationDuration={180}
+                  animationEasing="ease-out"
+                />
+                <Area
+                  type="linear"
+                  dataKey="occupancy"
+                  name="Peak occupancy"
+                  stroke="var(--design-green)"
+                  fill={`url(#${gradientId}-occupancy)`}
+                  fillOpacity={1}
+                  strokeWidth={2.25}
+                  dot={{ r: 3, fill: "var(--enterprise-card-bg)", strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: "var(--design-green)", stroke: "var(--enterprise-card-bg)", strokeWidth: 2 }}
+                  connectNulls={false}
+                  isAnimationActive={!reduceMotion}
+                  animationBegin={0}
+                  animationDuration={320}
+                  animationEasing="ease-out"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          empty
+        )}
+      </section>
+    </div>
   );
 }

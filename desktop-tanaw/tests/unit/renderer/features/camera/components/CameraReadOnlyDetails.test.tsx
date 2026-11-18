@@ -4,14 +4,17 @@ import type { Camera } from "../../../../../../src/types/enterprise";
 import { CameraReadOnlyDetails } from "../../../../../../src/features/camera/components/CameraReadOnlyDetails";
 
 describe("CameraReadOnlyDetails", () => {
-  it("balances the camera settings grid with the configured stream protocol", () => {
-    const markup = renderToStaticMarkup(<CameraReadOnlyDetails activeCam={camera} />);
+  it("shows plain camera details without technical stream settings", () => {
+    const markup = renderToStaticMarkup(<CameraReadOnlyDetails activeCam={{ ...camera, cameraHost: "192.168.1.10" }} />);
 
+    expect(markup).toContain("Camera Mode");
+    expect(markup).toContain("Entry / Exit");
+    expect(markup).toContain("192.168.1.10");
     expect(markup).toContain("Counting Area");
     expect(markup).toContain("Counting Direction");
-    expect(markup).toContain("Counting Mode");
-    expect(markup).toContain("Stream Protocol");
-    expect(markup).toContain(">RTSP<");
+    for (const hidden of ["Stream Protocol", "Camera Address", "Counting role", "High Accuracy", "rtsp://"]) {
+      expect(markup).not.toContain(hidden);
+    }
   });
 });
 

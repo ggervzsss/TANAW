@@ -7,26 +7,26 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from app.analytics.establishment_occupancy import OccupancyMeasurement, reconcile_occupancy
-from app.analytics.establishment_populations import direct_population_anchors, population_contexts
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.contracts import CameraCounts, CountingConfigResult, EnterpriseBinding
 from app.camera.local_operations_service import LocalOperationsService
+from app.camera.stream_candidates import StreamSelection
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
     CameraTestRequest,
+    ProcessingProfile,
+    ReIdMode,
     TripwireLine,
     TripwirePoint,
 )
-from app.config.camera_coverage import CameraCoverage
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
-from app.storage.repositories.establishment_repository import TIMEZONE as REPORTING_TIMEZONE
 from app.storage.repositories.establishment_repository import EstablishmentRepository
+from app.storage.repositories.establishment_sample_repository import prepare_sample_period
 
 logger = logging.getLogger(__name__)
 
@@ -163,15 +163,15 @@ class CameraPipelineRegistry:
         with self._lifecycle_lock:
             return EstablishmentReportRepository(self.establishment_repository().database).periods()
 
-    def test_connection(self, payload: CameraTestRequest) -> tuple[bool, str]:
+    def test_connection(self, payload: CameraTestRequest) -> StreamSelection:
         logger.info(
             "Camera stream test started.",
             extra={"enterprise_id": self._enterprise_id, "camera_id": payload.camera_id},
         )
         result = self._reporting.test_connection(payload)
         logger.log(
-            logging.INFO if result[0] else logging.WARNING,
-            "Camera stream test succeeded." if result[0] else "Camera stream test failed.",
+            logging.INFO if result.ok else logging.WARNING,
+            "Camera stream test succeeded." if result.ok else "Camera stream test failed.",
             extra={"enterprise_id": self._enterprise_id, "camera_id": payload.camera_id},
         )
         return result
@@ -338,6 +338,28 @@ class CameraPipelineRegistry:
             logger.info("Stopped processing pipeline for camera %s.", camera_id)
             return was_running
 
+    def apply_performance_profile(
+        self, processing_profile: ProcessingProfile, reid_mode: ReIdMode
+    ) -> int:
+        """Restart running cameras with this computer's new performance profile.
+
+        Each camera restarts from the start request it is running with, so no credentials need
+        to be resent. Returns how many cameras were restarted.
+        """
+        with self._lock:
+            running = [pipeline for pipeline in self._pipelines.values() if pipeline.running]
+        restarted = 0
+        for pipeline in running:
+            config = pipeline.current_config
+            if config is None or (
+                config.processing_profile == processing_profile and config.reid_mode == reid_mode
+            ):
+                continue
+            update = {"processing_profile": processing_profile, "reid_mode": reid_mode}
+            if self.request_start(config.model_copy(update=update)):
+                restarted += 1
+        return restarted
+
     def stop_all(self) -> int:
         with self._lifecycle_lock:
             return self._stop_all_locked()
@@ -441,36 +463,27 @@ class CameraPipelineRegistry:
             return self._establishment_live_locked(now)
 
     def _establishment_live_locked(self, now: datetime | None = None) -> dict[str, Any]:
+        """Live occupancy: the shared Entry / Exit balance plus every Open Space zone.
+
+        A camera that is stopped or not delivering fresh frames is left out and listed
+        in ``missing_camera_ids``; the running cameras still count.
+        """
         repository = self.establishment_repository()
         profiles = self.list_camera_profiles()
         states = {state["camera_id"]: state for state in self.camera_states()["cameras"]}
         now = now or datetime.now(UTC)
-        coverages = {
-            int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
-            for profile in profiles
-        }
-        contexts = population_contexts(coverages)
-        balances = repository.population_states()
-        measurements: list[OccupancyMeasurement] = []
-        movement_available = False
+        balance = repository.today_balance(now)
+        doors: list[int] = []
+        contributions: list[dict[str, Any]] = []
+        missing: list[int] = []
+        sources: list[dict[str, Any]] = []
         ready_identities: set[int] = set()
         for profile in profiles:
             camera_id = int(profile["id"])
             state = states.get(camera_id, {})
             counts, health = state.get("counts") or {}, state.get("health") or {}
-            coverage = coverages[camera_id]
             area = state.get("area") or {}
             is_area = profile.get("analysisMode") == "open_space"
-            key = contexts[camera_id]["population_key"]
-            population = balances.get(key, {})
-            partial = bool(population.get("partial"))
-            if not population.get("anchored"):
-                partial |= any(
-                    other != key
-                    and other.split(":")[0] == key.split(":")[0]
-                    and value["occupancy"] > 0
-                    for other, value in balances.items()
-                )
             observed_at = None
             if is_area:
                 available = bool(area.get("available") and counts.get("running"))
@@ -483,14 +496,8 @@ class CameraPipelineRegistry:
                         )
                     except (ValueError, TypeError):
                         available = False
-                occupancy = area.get("presence") if available else None
-                track_keys = {
-                    f"{camera_id}:{area.get('run_id')}:{track_id}"
-                    for track_id in area.get("observed_track_ids", [])
-                }
-                identities = repository.identities_for_tracks(
-                    track_keys, now.astimezone(REPORTING_TIMEZONE).date().isoformat()
-                )
+                presence = area.get("presence") if available else None
+                available &= isinstance(presence, int) and presence >= 0
             else:
                 age = health.get("raw_frame_stale_ms")
                 available = bool(
@@ -499,106 +506,58 @@ class CameraPipelineRegistry:
                     and isinstance(age, (int, float))
                     and age <= 5000
                 )
-                occupancy = population.get("occupancy", 0) if available else None
-                identities = set()
-            measurements.append(
-                OccupancyMeasurement(
-                    camera_id,
-                    coverage,
-                    available,
-                    occupancy,
-                    frozenset(identities),
-                    not is_area,
-                    partial=partial if not is_area else False,
-                    observed_at=observed_at,
-                    population_key=key,
+                presence = None
+            if not available:
+                missing.append(camera_id)
+            elif is_area:
+                contributions.append(
+                    {
+                        "camera_ids": [camera_id],
+                        "occupancy": presence,
+                        "state": "estimated",
+                        "basis": "observed_presence",
+                    }
                 )
-            )
-            movement_available |= available and not is_area and coverage.role == "external_boundary"
+            else:
+                doors.append(camera_id)
             if (
                 available
                 and profile.get("uniqueCountingMode", "estimated_reid") == "estimated_reid"
                 and health.get("reid_model_ready")
             ):
                 ready_identities.add(camera_id)
-        anchors = direct_population_anchors(measurements)
-        repository.record_population_anchors(anchors, now)
-        balances = repository.population_states()
-        # A direct frame is a headcount at that frame's timestamp. Later doorway
-        # transitions also apply while the next direct frame is still pending.
-        measurements = [
-            item
-            if not item.boundary_balance
-            else OccupancyMeasurement(
-                item.camera_id,
-                item.coverage,
-                item.available,
-                balances.get(item.population_key or "", {}).get("occupancy", 0)
-                if item.available
-                else None,
-                item.visitor_ids,
-                True,
-                bool(balances.get(item.population_key or "", {}).get("partial"))
-                or (
-                    item.partial and not balances.get(item.population_key or "", {}).get("anchored")
-                ),
-                population_key=item.population_key,
+            sources.append(
+                {
+                    "camera_id": camera_id,
+                    "camera_name": profile.get("name") or f"Camera {camera_id}",
+                    "analysis_mode": "open_space" if is_area else "entrance_exit",
+                    "available": available,
+                    "occupancy": presence,
+                    "observed_at": observed_at.isoformat() if observed_at is not None else None,
+                }
             )
-            for item in measurements
-        ]
-        result = reconcile_occupancy(measurements)
-        for contribution in result["contributions"]:
-            keys = contribution["population_keys"]
-            if len(keys) == 1:
-                balance = balances.get(keys[0], {})
-                if (
-                    contribution["basis"] == "observed_presence"
-                    and contribution["state"] == "estimated"
-                    and balance.get("anchored")
-                ):
-                    if contribution["occupancy"] != balance["occupancy"]:
-                        contribution["occupancy"] = balance["occupancy"]
-                        contribution["basis"] = "observed_presence_and_later_movements"
-                    if balance.get("partial"):
-                        contribution["state"] = "partial"
-        result["partial_occupancy"] = sum(item["occupancy"] for item in result["contributions"])
-        if result["occupancy"] is not None:
-            result["occupancy"] = result["partial_occupancy"]
-        if result["state"] == "estimated" and any(
-            item["state"] == "partial" for item in result["contributions"]
-        ):
-            result["state"] = "partial"
-        result["enterprise_id"] = self._enterprise_id
-        result["movement_available"] = movement_available
-        result["identification_available"] = any(
-            source in ready_identities
-            for item in result["contributions"]
-            for source in item["camera_ids"]
-        )
-        result["population_anchors"] = anchors
-        by_id = {int(profile["id"]): profile for profile in profiles}
-        result["measurement_sources"] = [
-            dict(
-                camera_id=item.camera_id,
-                camera_name=by_id[item.camera_id]["name"],
-                analysis_mode=by_id[item.camera_id].get("analysisMode", "entrance_exit"),
-                coverage=item.coverage.model_dump(),
-                available=item.available,
-                population_key=item.population_key,
-                occupancy=item.occupancy if not item.boundary_balance else None,
-                observed_at=item.observed_at.isoformat() if item.observed_at is not None else None,
-                track_keys=sorted(
-                    {
-                        f"{item.camera_id}:{(states.get(item.camera_id, {}).get('area') or {}).get('run_id')}:{track}"
-                        for track in (states.get(item.camera_id, {}).get("area") or {}).get(
-                            "observed_track_ids", []
-                        )
-                    }
-                ),
+        if doors:
+            contributions.insert(
+                0,
+                {
+                    "camera_ids": doors,
+                    "occupancy": balance,
+                    "state": "estimated",
+                    "basis": "entry_exit_balance",
+                },
             )
-            for item in measurements
-        ]
-        return result
+        total = sum(item["occupancy"] for item in contributions)
+        return {
+            "enterprise_id": self._enterprise_id,
+            "occupancy": total if contributions else None,
+            "partial_occupancy": total,
+            "state": "unavailable" if not contributions else "partial" if missing else "estimated",
+            "contributions": contributions,
+            "missing_camera_ids": missing,
+            "movement_available": bool(doors),
+            "identification_available": bool(ready_identities),
+            "measurement_sources": sources,
+        }
 
     def pipeline(self, camera_id: int) -> CameraProcessingManager | None:
         with self._lock:
@@ -701,25 +660,11 @@ class CameraPipelineRegistry:
             camera_ids = sorted(self._pipelines)
             pending_camera_ids = sorted(self._pending_starts)
             enterprise_id = self._enterprise_id or ""
-        # Doorway diagnostics exclude contained internal and retired populations.
-        profiles = self.list_camera_profiles()
-        contexts = population_contexts(
-            {
-                int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
-                for profile in profiles
-            }
-        )
-        boundary_keys = {
-            context["population_key"]
-            for context in contexts.values()
-            if context["role"] == "external_boundary"
-        }
-        balances = (
-            self.establishment_repository().population_balances()
+        enterprise_occupancy = (
+            self.establishment_repository().today_balance()
             if self._establishment_registry is not None
-            else {}
+            else 0
         )
-        enterprise_occupancy = sum(value for key, value in balances.items() if key in boundary_keys)
         cameras = [self._camera_state(camera_id, enterprise_occupancy) for camera_id in camera_ids]
         return {
             "enterprise_id": enterprise_id,
@@ -782,12 +727,9 @@ class CameraPipelineRegistry:
                 previous = previous_profiles.get(camera_id)
                 if previous is None:
                     continue
-                changed = (
-                    previous.get("analysisMode", "entrance_exit")
-                    != profile.get("analysisMode", "entrance_exit")
-                    or previous.get("openSpace") != profile.get("openSpace")
-                    or previous.get("coverage") != profile.get("coverage")
-                )
+                changed = previous.get("analysisMode", "entrance_exit") != profile.get(
+                    "analysisMode", "entrance_exit"
+                ) or previous.get("openSpace") != profile.get("openSpace")
                 if changed:
                     self.stop(camera_id)
                     with self._lock:
@@ -833,30 +775,7 @@ class CameraPipelineRegistry:
 
     def record_occupancy_correction(self, **values: Any) -> dict[str, Any]:
         with self._lifecycle_lock:
-            profiles = self.list_camera_profiles()
-            coverages = {
-                int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
-                for profile in profiles
-            }
-            contexts = population_contexts(coverages)
-            candidates = {
-                int(profile["id"])
-                for profile in profiles
-                if profile.get("analysisMode") != "open_space"
-                and coverages[int(profile["id"])].role != "unconfigured"
-            }
-            requested = values.pop("camera_id", None)
-            if requested is None:
-                if len({contexts[source]["population_key"] for source in candidates}) != 1:
-                    raise ValueError("Select the camera population to correct.")
-                requested = min(candidates)
-            if requested not in candidates:
-                raise ValueError(
-                    "Manual corrections require a configured Entrance / Exit population balance."
-                )
-            return self.establishment_repository().record_population_correction(
-                population_key=contexts[requested]["population_key"], camera_id=requested, **values
-            )
+            return self.establishment_repository().record_occupancy_correction(**values)
 
     def occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._reporting.occupancy_corrections(limit=limit)
@@ -896,8 +815,17 @@ class CameraPipelineRegistry:
     def mark_events_synced(self) -> int:
         return self._reporting.mark_events_synced()
 
-    def prepare_sample_counts(self, **values: Any) -> dict[str, Any]:
-        return self._reporting.prepare_sample_counts(**values)
+    def prepare_sample_counts(
+        self, *, enterprise_id: str, enterprise_name: str | None, **values: Any
+    ) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            if self._enterprise_id != enterprise_id:
+                raise ValueError(
+                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
+                    f"Log into {enterprise_name or enterprise_id} before preparing counts."
+                )
+            result = prepare_sample_period(self.establishment_repository(), **values)
+        return {**result, "enterprise_id": enterprise_id, "enterprise_name": enterprise_name}
 
     def aggregate_session(self) -> dict[str, Any]:
         states = self.camera_states()

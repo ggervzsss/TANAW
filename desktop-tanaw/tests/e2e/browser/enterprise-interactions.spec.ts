@@ -1,5 +1,7 @@
+import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mlResponse, mockCameraSetup, mockMlRequest } from "./support/preload";
+import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-interactions-test",
@@ -44,6 +46,7 @@ async function signIn(page: Page, configureMl?: () => Promise<void>) {
 
 test("recovers camera hydration after service startup and restores live updates after disconnect", async ({ page }) => {
   test.setTimeout(60_000);
+  await renderTestVideoFrames(page);
   let runtimeReads = 0;
   let profileReads = 0;
   const camera = {
@@ -54,7 +57,6 @@ test("recovers camera hydration after service startup and restores live updates 
     cameraBrand: "tapo",
     cameraHost: "192.168.1.20",
     rtsp: "rtsp://192.168.1.20/stream2",
-    rtspStream: "stream2",
     processingProfile: "auto",
     confidence: 0.35,
     trackingConfidence: 0.15,
@@ -136,7 +138,7 @@ test("recovers camera hydration after service startup and restores live updates 
   const emit = (payload: unknown) => page.evaluate((detail) => window.dispatchEvent(new CustomEvent("e2e-ml-live-event", { detail })), payload);
   await emit(envelope);
   await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible({ timeout: 1000 });
-  const box = page.getByText("#7 | 90%", { exact: true }).locator("..");
+  const box = page.locator("[data-track-id=\"7\"]");
   await expect(box).toBeVisible();
   expect(await box.evaluate((element) => (element as HTMLElement).style.left)).toBe("9.375%");
   envelope.data.cameras[0].detections.tracks[0].bbox = [300, 50, 400, 300];
@@ -228,7 +230,7 @@ test("updates Support Ticket selects together after a theme change", async ({ pa
   });
   expect(lightState.isDark).toBe(false);
   expect(lightState.priorityBackground).toBe(lightState.categoryBackground);
-  expect(lightState.transitionDelay).toBe("0s");
+  expect(lightState.transitionDelay.split(",").every((delay) => delay.trim() === "0s")).toBe(true);
   await expect(category).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(priority).toHaveCSS("background-color", "rgb(255, 255, 255)");
 
@@ -342,54 +344,43 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await page.route("**/operational/reports/intake", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
 
   await page.goto("/#/enterprise/reports");
-  const workspace = page.locator("[data-reports-surface='camera-setup-generation']");
+  const workspace = page.locator("[data-reports-surface='var1-workspace']");
   await expect(workspace).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Report Workspace" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Report Submissions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Monthly DOT Visitor Report" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Report Workspace" })).toHaveCount(0);
   await expect.poll(() => page.getByText("REP-202607", { exact: true }).count()).toBeGreaterThan(0);
-  await expect(page.getByRole("heading", { name: "Report Workspace" }).locator("..")).toHaveCSS("border-radius", "22px");
-  const demographicCards = page.locator(".tanaw-demographic-card");
-  await expect(demographicCards).toHaveCount(3);
-  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(16, 25, 35)");
-  const darkDemographicSurfaces = await page.evaluate(() => {
-    const card = document.querySelector<HTMLElement>(".tanaw-demographic-card");
-    const input = document.querySelector<HTMLElement>(".tanaw-demographic-input");
-    const total = document.querySelector<HTMLElement>(".tanaw-demographic-total");
-    return {
-      card: card ? getComputedStyle(card).backgroundColor : null,
-      input: input ? getComputedStyle(input).backgroundColor : null,
-      total: total ? getComputedStyle(total).backgroundColor : null,
-    };
-  });
-  expect(darkDemographicSurfaces.input).not.toBe("rgb(255, 255, 255)");
-  expect(darkDemographicSurfaces.total).not.toBe("rgb(255, 255, 255)");
-  expect(darkDemographicSurfaces.input).not.toBe(darkDemographicSurfaces.card);
-  expect(darkDemographicSurfaces.total).not.toBe(darkDemographicSurfaces.card);
-
-  await page.getByRole("button", { name: "Assisted" }).click();
-  await expect(page.getByText("Assisted Allocation", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Manual" }).click();
-  await page.getByRole("button", { name: "Fill Remaining" }).click();
+  await expect(page.locator(".report-create-card")).toHaveCSS("border-radius", "16px");
+  // The date picker lists the reporting month; dark surfaces stay distinct from the card.
+  await page.locator(".report-day-picker > button").click();
+  const calendar = page.getByRole("group", { name: /^Days of / });
+  await expect(calendar).toBeVisible();
+  const raised = await token(page, "--theme-raised");
+  await expect(page.locator(".report-day-popover")).toHaveCSS("background-color", raised);
+  expect(await page.locator(".report-create-card").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe(raised);
+  await page.keyboard.press("Escape");
+  await expect(calendar).toBeHidden();
+  await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
   const notes = page.getByPlaceholder("Add notes regarding events, closures, or demographic estimates...");
   await notes.fill("Updated report workspace notes");
   await expect(notes).toHaveValue("Updated report workspace notes");
 
   const search = page.getByPlaceholder("Search reports");
+  await page.getByRole("tab", { name: "Reports History", exact: true }).click();
+  await page.locator(".report-history-search > button").click();
   await search.fill("REP-202607");
   await expect(page.getByText("REP-202607", { exact: true }).first()).toBeVisible();
   await page.getByRole("combobox", { name: "Filter reports by status" }).click();
   await page.getByRole("option", { name: "Consolidated" }).click();
   await page.getByRole("button", { name: "View REP-202607", exact: true }).click();
-  const preview = page.getByRole("dialog", { name: "DOT Form Preview" });
+  const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
   await expect(preview).toBeVisible();
-  await expect(preview).toHaveCSS("border-radius", "26px");
-  await expect(preview.getByText("Ready for Export", { exact: true })).toBeVisible();
-  const reportPaper = preview.locator(".enterprise-dot-document");
+  await expect(preview).toHaveCSS("border-radius", "16px");
+  const reportPaper = preview.locator(".var1-document");
   await expect(reportPaper).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(reportPaper).toHaveCSS("color", "rgb(17, 24, 39)");
-  await expect(reportPaper.getByRole("heading", { name: "TANAW - DOT Visitor Attraction Report" })).toBeVisible();
+  await expect(reportPaper).toHaveCSS("color", "rgb(0, 0, 0)");
+  await expect(reportPaper.getByRole("heading", { name: "TOURISM ATTRACTION VISITOR RECORD" })).toBeVisible();
   await expect(preview.getByRole("button", { name: "Download PDF" })).toBeEnabled();
-  await expect(preview.getByRole("button", { name: "Close Preview", exact: true })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Close preview", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 900, height: 700 });
   await expect(preview).toBeVisible();
   await expect(preview.getByRole("button", { name: "Download PDF" })).toBeVisible();
@@ -397,10 +388,14 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(240, 245, 241)");
+  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+  // A report submitted before daily entry shows its monthly origins, without a date picker.
+  await expect(page.getByRole("table", { name: "Monthly visitor origins" })).toBeVisible();
+  await expect(page.locator(".report-day-picker")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await page.setViewportSize({ width: 1100, height: 760 });
   await expect(workspace).toBeVisible();
-  await expect(page.getByPlaceholder("Search reports")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Search reports", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 });
 
@@ -460,17 +455,17 @@ test("presents unified daily history and distinguishes observed zero from missin
   });
   await mockMlRequest(page, "/reports/local", () => mlResponse({ status: 200, body: "[]" }));
   await page.goto("/#/enterprise/dashboard");
-  await expect(page.getByText("Live Occupancy", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Current Occupancy", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Unique Visitors", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "7 days", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
-  await page.getByRole("button", { name: "30 days", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Dashboard date range" })).toContainText("Today,");
+  await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
+  await selectDashboardPeriod(page, "Month");
   await expect(page.getByText("Available observations recorded no visitor activity. Gaps remain unavailable.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Month establishment visitor and peak occupancy history" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Month establishment peak occupancy history" })).toBeVisible();
   const header = page.locator("[data-unified-metrics-header]");
   await expect(header.locator('[data-metric-segment="visitors"]').getByText("0", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.getByRole("img", { name: "Today establishment visitor and peak occupancy history" })).toBeVisible();
+  await selectDashboardPeriod(page, "Today");
+  await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
@@ -485,10 +480,10 @@ test("keeps the camera-service warning and explains unavailable historical data"
     return mlResponse({ status: 503, body: JSON.stringify({ detail: "Establishment history intentionally unavailable" }) });
   });
   await page.goto("/#/enterprise/dashboard");
-  await expect(page.getByRole("heading", { name: "Enterprise Analytics", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect.poll(() => requests).toBeGreaterThan(0);
-  await expect(page.getByText("Establishment history is unavailable. Check the local camera service.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toHaveCount(0);
+  await expect(page.getByText("History unavailable. Check the local camera service.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toHaveCount(0);
 });
 
 test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {
@@ -719,9 +714,29 @@ test("shows navigation feedback for pointer and keyboard interaction", async ({ 
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
 });
 
+async function renderTestVideoFrames(page: Page) {
+  await page.route("**/interaction-frame.svg", (route) =>
+    route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#486456"/></svg>' }),
+  );
+  await page.addInitScript(() => {
+    const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
+    Object.defineProperty(HTMLImageElement.prototype, "src", {
+      ...source,
+      set(value: string) {
+        source.set!.call(this, value.startsWith("tanaw-ml://") ? new URL("/interaction-frame.svg", location.origin).href : value);
+      },
+    });
+    const original = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) {
+      return original.call(this, name, this instanceof HTMLImageElement && name === "src" && value.startsWith("tanaw-ml://") ? new URL("/interaction-frame.svg", location.origin).href : value);
+    };
+  });
+}
+
 test("themes the camera modal and keeps the minimized Tripwire toolbar draggable", async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
+  await renderTestVideoFrames(page);
   await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
   await page.goto("/#/enterprise/cameras");
   const addCamera = page.getByRole("button", { name: "Add Camera", exact: true });
@@ -729,31 +744,36 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(addCamera).toBeVisible();
   await addCamera.click();
 
-  let dialog = page.getByRole("dialog", { name: "Add Camera" });
+  let dialog = page.locator(".camera-add-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await dialog.getByLabel("Camera Name", { exact: false }).fill("Temporary camera");
+  await dialog.getByRole("button", { name: "Add Camera", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "Camera Connection", exact: true })).toBeVisible();
-  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("secret-camera-password");
+  await dialog.getByLabel("Camera Password", { exact: false }).fill("secret-camera-password");
   await dialog.getByRole("button", { name: "Show password" }).click();
-  await expect(dialog.getByRole("textbox", { name: "Password", exact: true })).toHaveAttribute("type", "text");
+  await expect(dialog.getByLabel("Camera Password", { exact: false })).toHaveAttribute("type", "text");
   await dialog.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Discard Changes", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await addCamera.click();
-  dialog = page.getByRole("dialog", { name: "Add Camera" });
+  dialog = page.locator(".camera-add-dialog");
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Entrance");
-  await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Lobby");
+  await dialog.getByLabel("Camera Name", { exact: false }).fill("Entrance");
+  await dialog.getByLabel("Camera Location", { exact: false }).fill("Lobby");
+  await dialog.getByRole("button", { name: "Add Camera", exact: true }).click();
   await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("127.0.0.1");
-  await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
-  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("camera-password");
+  await dialog.getByLabel("Camera Username", { exact: false }).fill("admin");
+  await dialog.getByLabel("Camera Password", { exact: false }).fill("camera-password");
   await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
   await expect(dialog).toBeHidden();
 
   const controlsHeading = page.getByText("SYSTEM STATUS & CONTROLS", { exact: true });
   await expect(controlsHeading).toBeVisible();
   await expect(page.getByText("Camera Connection", { exact: true })).toBeVisible();
-  await expect(page.getByText("Stream Protocol", { exact: true })).toBeVisible();
+  await expect(page.getByText("IP Address", { exact: true })).toBeVisible();
   await expect(page.getByText("Profile pending", { exact: false })).toHaveCount(0);
   await expect(page.getByText("FPS adaptive", { exact: false })).toHaveCount(0);
   await expect(page.getByText("Frame Telemetry Idle", { exact: false })).toHaveCount(0);
@@ -792,7 +812,38 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
   expect(Number.parseFloat(await addCamera.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThan(12);
 
+  await page.evaluate(async (enterpriseId) => {
+    const response = await window.tanawMlService!.request({ url: "http://127.0.0.1:8765/cameras", method: "GET", timeoutMs: 2500 });
+    const camera = JSON.parse(response.body)[0];
+    const counts = { entry: 0, exit: 0, occupancy: 0, running: true, status: "running", error: null };
+    window.dispatchEvent(
+      new CustomEvent("e2e-ml-live-event", {
+        detail: {
+          type: "camera.states",
+          data: {
+            enterprise_id: enterpriseId,
+            enterprise_occupancy: 0,
+            active_camera_count: 1,
+            pending_camera_ids: [],
+            cameras: [
+              {
+                camera_id: camera.id,
+                counts,
+                detections: { running: true, status: "running", frame_width: 640, frame_height: 360, tracks: [] },
+                health: { status: "ok", model_ready: true, running: true, raw_frame_id: 1, raw_frame_stale_ms: 0, analytics_fps: 12 },
+                area: null,
+                session: { running: true, counts },
+              },
+            ],
+          },
+        },
+      }),
+    );
+  }, enterpriseUser.enterpriseId);
   await page.getByRole("button", { name: "Edit configuration" }).click();
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
+  await page.getByRole("tab", { name: "Counting Area", exact: true }).click();
+  await page.getByRole("button", { name: "Edit Counting Area", exact: true }).click();
   await page.getByRole("button", { name: "Hide tripwire toolbar" }).click();
   const minimized = page.getByRole("button", { name: "Show tripwire toolbar" });
   const toolbar = minimized.locator("..");
@@ -825,8 +876,10 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await minimized.click();
   await expect(page.getByRole("button", { name: "Move tripwire toolbar" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Use this Area", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.setViewportSize({ width: 800, height: 500 });
-  await expect(page.getByRole("heading", { name: "Camera Setup" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Camera Monitoring" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
   await page.getByText("SYSTEM STATUS & CONTROLS", { exact: true }).scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
@@ -848,16 +901,39 @@ test("keeps pending business-email information readable in both themes", async (
   const pendingCard = page.locator(".enterprise-profile-pending-email");
   await expect(pendingCard).toBeVisible();
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).toHaveCSS("color", "rgb(255, 248, 232)");
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", "rgb(216, 222, 232)");
+  const darkTitle = await token(page, "--theme-text");
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).toHaveCSS("color", darkTitle);
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", await token(page, "--theme-secondary"));
   await expect(page.getByRole("button", { name: "Cancel request" })).toBeVisible();
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", "rgb(255, 248, 232)");
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", darkTitle);
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });
 
-test("configures Tenda and custom RTSP endpoints alongside Tapo", async ({ page }) => {
+async function mockStoppedCameraRuntime(page: Page, profiles: () => Array<Record<string, unknown>>) {
+  await mockMlRequest(page, "/cameras/runtime", () =>
+    mlResponse({
+      status: 200,
+      body: JSON.stringify({
+        enterprise_id: enterpriseUser.enterpriseId,
+        enterprise_occupancy: 0,
+        active_camera_count: 0,
+        pending_camera_ids: [],
+        cameras: profiles().map((camera) => ({
+          camera_id: camera.id,
+          counts: { entry: null, exit: null, occupancy: null, running: false, status: "stopped", error: null },
+          detections: { running: false, status: "stopped", frame_width: 640, frame_height: 360, tracks: [] },
+          health: { status: "ok", model_ready: true, running: false },
+          area: { available: false, active_visits: [] },
+          session: {},
+        })),
+      }),
+    }),
+  );
+}
+
+test("sets up Tapo, Tenda and custom RTSP cameras from the IP address alone", async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
@@ -867,6 +943,7 @@ test("configures Tenda and custom RTSP endpoints alongside Tapo", async ({ page 
     if (request.method === "PUT") writes.push(JSON.parse(request.body ?? "{}"));
     return mlResponse({ status: 200, body: JSON.stringify(writes.at(-1)?.cameras ?? []) });
   });
+  await mockStoppedCameraRuntime(page, () => writes.at(-1)?.cameras ?? []);
   const choose = async (name: string, option: string) => {
     await page.getByRole("combobox", { name, exact: true }).click();
     await page.getByRole("option", { name: option, exact: true }).click();
@@ -877,71 +954,61 @@ test("configures Tenda and custom RTSP endpoints alongside Tapo", async ({ page 
     ["Custom RTSP", "Custom Camera", "192.168.1.22"],
   ]) {
     await page.getByRole("button", { name: "Add Camera", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Add Camera" });
-    await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill(name);
-    await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Lobby");
+    const dialog = page.locator(".camera-add-dialog");
+    await dialog.getByLabel("Camera Name", { exact: false }).fill(name);
+    await dialog.getByLabel("Camera Location", { exact: false }).fill("Lobby");
     if (brand !== "TP-Link Tapo") await choose("Camera brand / type", brand);
-    if (brand === "Tenda") {
-      // Select the profile before entering an IP to exercise setup in either order.
-      await choose("Tenda connection profile", "CH3 profile stream (port 8554)");
-    }
+    await dialog.getByRole("button", { name: "Add Camera", exact: true }).click();
     if (brand === "Custom RTSP") {
       await dialog.getByRole("textbox", { name: "RTSP stream address", exact: true }).fill(`rtsp://${ip}:9554/live?channel=2&subtype=0`);
     } else {
       await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill(ip);
+      for (const hidden of ["Video quality", "RTSP port", "Stream path and query", "Tenda connection profile", "Advanced connection settings"]) {
+        await expect(dialog.getByText(hidden, { exact: true })).toHaveCount(0);
+      }
     }
-    await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
-    await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("device-password");
+    await dialog.getByLabel("Camera Username", { exact: false }).fill("admin");
+    await dialog.getByLabel("Camera Password", { exact: false }).fill("device-password");
     if (brand === "Tenda") await page.screenshot({ path: test.info().outputPath("tenda-setup.png"), fullPage: true });
     await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect.poll(() => writes.at(-1)?.cameras.length).toBe(brand === "TP-Link Tapo" ? 1 : brand === "Tenda" ? 2 : 3);
   }
+  // The Tenda address is the one the connection test found working, not a user choice.
   expect(writes.at(-1)?.cameras.map((camera) => camera.rtsp)).toEqual(["rtsp://192.168.1.20/stream2", "rtsp://192.168.1.21:8554/profile1", "rtsp://192.168.1.22:9554/live?channel=2&subtype=0"]);
   await page.getByRole("button", { name: "Edit configuration" }).click();
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "RTSP stream address", exact: true })).toHaveValue("rtsp://192.168.1.22:9554/live?channel=2&subtype=0");
   await page.getByRole("textbox", { name: "RTSP stream address", exact: true }).fill("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
-  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
-  await page.getByRole("button", { name: "Edit configuration" }).click();
-  await expect(page.getByRole("textbox", { name: "RTSP stream address", exact: true })).toHaveValue("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
+  expect(writes.at(-1)?.cameras[2]?.rtsp).toBe("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
   expect(writes.at(-1)?.cameras[0]?.rtsp).toBe("rtsp://192.168.1.20/stream2");
   expect(JSON.stringify(writes)).not.toContain("device-password");
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: /New Tenda CH3/ }).click();
   await page.getByRole("button", { name: "Edit configuration" }).click();
-  await expect(page.getByRole("combobox", { name: "Tenda connection profile" })).toContainText("CH3 profile stream");
-  await page.getByText("Advanced connection settings", { exact: true }).click();
-  await page.getByRole("textbox", { name: "RTSP port", exact: true }).fill("9555");
-  await page.getByRole("textbox", { name: "Stream path and query", exact: true }).fill("/H264?ch=1&subtype=0");
-  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Camera IP Address", exact: true })).toHaveValue("192.168.1.21");
+  await expect(page.getByText("Video Stream", { exact: true })).toHaveCount(0);
+  await page.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.25");
+  await page.getByRole("button", { name: "Test Camera Connection", exact: true }).click();
+  await expect(page.getByText("Camera connection verified", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
-  expect(writes.at(-1)?.cameras[1]?.rtsp).toBe("rtsp://192.168.1.21:9555/H264?ch=1&subtype=0");
-  await page.reload();
-  // This fixture uses a session that is not remembered across reloads.
-  await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
-  await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
-  await page.goto("/#/enterprise/cameras");
-  await page.getByRole("button", { name: /New Tenda CH3/ }).click();
-  await page.getByRole("button", { name: "Edit configuration" }).click();
-  await expect(page.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("9555");
-  await expect(page.getByRole("textbox", { name: "Stream path and query", exact: true })).toHaveValue("/H264?ch=1&subtype=0");
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect.poll(() => writes.at(-1)?.cameras[1]).toMatchObject({ cameraHost: "192.168.1.25", rtsp: "rtsp://192.168.1.25:8554/profile1" });
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   await choose("Camera brand / type", "Tenda");
+  await page.getByLabel("Camera Name", { exact: false }).fill("Small window camera");
+  await page.locator(".camera-add-dialog").getByRole("button", { name: "Add Camera", exact: true }).click();
   await page.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.23");
-  await page.getByText("Advanced connection settings", { exact: true }).click();
   await page.setViewportSize({ width: 375, height: 812 });
-  const dialog = page.getByRole("dialog", { name: "Add Camera" });
-  await dialog.getByRole("textbox", { name: "RTSP port", exact: true }).scrollIntoViewIfNeeded();
+  const dialog = page.locator(".camera-add-dialog");
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath("tenda-setup-small-light.png"), fullPage: true });
 });
 
-test("adds and edits a Dahua camera with generated streams and a custom port", async ({ page }) => {
+test("adds and edits a Dahua camera from its IP address", async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
@@ -951,21 +1018,21 @@ test("adds and edits a Dahua camera with generated streams and a custom port", a
     if (request.method === "PUT") writes.push(JSON.parse(request.body ?? "{}"));
     return mlResponse({ status: 200, body: JSON.stringify(writes.at(-1)?.cameras ?? []) });
   });
+  await mockStoppedCameraRuntime(page, () => writes.at(-1)?.cameras ?? []);
   const choose = async (name: string, option: string) => {
     await page.getByRole("combobox", { name, exact: true }).click();
     await page.getByRole("option", { name: option, exact: true }).click();
   };
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Add Camera" });
+  const dialog = page.locator(".camera-add-dialog");
   await choose("Camera brand / type", "Dahua");
-  await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Dahua B200");
-  await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Entrance");
+  await dialog.getByLabel("Camera Name", { exact: false }).fill("Dahua B200");
+  await dialog.getByLabel("Camera Location", { exact: false }).fill("Entrance");
+  await dialog.getByRole("button", { name: "Add Camera", exact: true }).click();
   await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.23");
-  await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
-  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("device-password");
-  await dialog.getByText("Advanced connection settings", { exact: true }).click();
-  await expect(dialog.getByRole("combobox", { name: "Video quality" })).toContainText("Standard quality");
-  await expect(dialog.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("554");
+  await dialog.getByLabel("Camera Username", { exact: false }).fill("admin");
+  await dialog.getByLabel("Camera Password", { exact: false }).fill("device-password");
+  await expect(dialog.getByText("Use the camera's own username and password", { exact: false })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("dahua-setup.png"), fullPage: true });
   await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -973,37 +1040,21 @@ test("adds and edits a Dahua camera with generated streams and a custom port", a
     .poll(() => writes.at(-1)?.cameras[0])
     .toMatchObject({
       cameraBrand: "dahua",
-      rtspStream: "stream2",
       rtsp: "rtsp://192.168.1.23:554/cam/realmonitor?channel=1&subtype=1",
     });
 
   await page.getByRole("button", { name: "Edit configuration" }).click();
   await expect(page.getByRole("combobox", { name: "Camera brand / type" })).toContainText("Dahua");
-  await page.getByText("Advanced connection settings", { exact: true }).click();
-  await page.getByRole("textbox", { name: "RTSP port", exact: true }).fill("9554");
-  await choose("Video quality", "High quality");
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await page.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.24");
-  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
   await expect
     .poll(() => writes.at(-1)?.cameras[0])
     .toMatchObject({
       cameraBrand: "dahua",
       cameraHost: "192.168.1.24",
-      rtspStream: "stream1",
-      rtsp: "rtsp://192.168.1.24:9554/cam/realmonitor?channel=1&subtype=0",
+      rtsp: "rtsp://192.168.1.24:554/cam/realmonitor?channel=1&subtype=1",
     });
   expect(JSON.stringify(writes)).not.toContain("device-password");
-  await page.reload();
-  await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
-  await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
-  await page.goto("/#/enterprise/cameras");
-  await page.getByRole("button", { name: "Edit configuration" }).click();
-  await expect(page.getByRole("combobox", { name: "Camera brand / type" })).toContainText("Dahua");
-  await expect(page.getByRole("textbox", { name: "Camera IP Address", exact: true })).toHaveValue("192.168.1.24");
-  await page.getByText("Advanced connection settings", { exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("9554");
-  await expect(page.getByRole("combobox", { name: "Video quality" })).toContainText("High quality");
 });

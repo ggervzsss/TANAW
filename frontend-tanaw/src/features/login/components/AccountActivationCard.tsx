@@ -37,7 +37,7 @@ function ActivationHeader() {
       <div className="flex items-center gap-5 sm:gap-7">
         <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5" />
         <div className="min-w-0">
-          <h1 className="tanaw-auth-brand-title font-['Montserrat'] text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
+          <h1 className="tanaw-auth-brand-title font-display text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
           <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">Account Activation</p>
         </div>
       </div>
@@ -50,7 +50,7 @@ function ValidatingState() {
   return (
     <div className="flex min-h-64 flex-col items-center justify-center text-center" aria-live="polite">
       <LoaderCircle className="h-10 w-10 animate-spin text-(--tanaw-green)" aria-hidden="true" />
-      <h2 className="mt-5 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-text)">Checking your activation link</h2>
+      <h2 className="mt-5 font-display text-xl font-extrabold text-(--tanaw-text)">Checking your activation link</h2>
       <p className="mt-2 text-sm leading-6 font-medium text-(--tanaw-muted)">Please wait while TANAW verifies that this link is valid and unused.</p>
     </div>
   );
@@ -62,7 +62,7 @@ function InvalidState({ message }: { message: string }) {
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
         <AlertCircle className="h-7 w-7" aria-hidden="true" />
       </span>
-      <h2 className="mt-5 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-text)">Activation link unavailable</h2>
+      <h2 className="mt-5 font-display text-xl font-extrabold text-(--tanaw-text)">Activation link unavailable</h2>
       <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">{message}</p>
       <p className="mt-2 text-sm leading-6 text-(--tanaw-muted)">Ask TANAW IT personnel to resend the activation email from Accounts Management.</p>
       <Link to={routes.login} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-(--tanaw-green) px-5 py-3 text-sm font-bold text-white transition hover:bg-(--tanaw-green-dark)">
@@ -82,7 +82,7 @@ function ActivationForm({ details, errors, isSubmitting, pageMessage, values, on
           </span>
           <div className="min-w-0">
             <p className="tanaw-activation-banner__label text-xs font-bold tracking-wide text-emerald-700 uppercase">Verified activation link</p>
-            <h2 className="tanaw-activation-banner__title mt-1 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-text)">Welcome, {details.displayName}</h2>
+            <h2 className="tanaw-activation-banner__title mt-1 font-display text-xl font-extrabold text-(--tanaw-text)">Welcome, {details.displayName}</h2>
             <p className="tanaw-activation-banner__copy mt-1 text-sm leading-6 font-medium text-emerald-800">Create the password you will use for your {formatActivationRole(details.role)} account.</p>
             <p className="tanaw-activation-banner__copy mt-1 text-xs font-medium text-emerald-700">Link expires {formatActivationExpiration(details.expiresAt)}.</p>
           </div>
@@ -134,7 +134,7 @@ function SuccessState({ details }: { details: AccountActivationDetails }) {
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
         <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
       </span>
-      <h2 className="mt-5 font-['Montserrat'] text-2xl font-extrabold text-(--tanaw-text)">Account activated</h2>
+      <h2 className="mt-5 font-display text-2xl font-extrabold text-(--tanaw-text)">Account activated</h2>
       <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">
         {isEnterprise
           ? "Your password is ready. Return to the TANAW Enterprise desktop application and sign in with your Enterprise ID or registered email."

@@ -2,3 +2,4 @@ export { activityTimeRanges, isWithinActivityTimeRange, parseActivityTimestamp }
 export type { ActivityTimeRange } from "./timeRange";
 export { applyThemePreference, chooseAuthenticatedThemePreference, getStoredThemePreference, getStoredThemePreferenceOrNull, persistThemePreference, resolveThemePreference } from "./theme";
 export type { ResolvedTheme, ThemePreference } from "./theme";
+export { toSentenceCase } from "./sentenceCase";

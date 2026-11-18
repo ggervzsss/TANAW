@@ -36,8 +36,6 @@ class LocalDataMigrationsTest(unittest.TestCase):
                     "establishment_observations",
                     "establishment_daily_summaries",
                     "establishment_occupancy_intervals",
-                    "establishment_population_openings",
-                    "establishment_population_anchors",
                     "camera_profiles",
                     "camera_monitoring_states",
                     "enterprise_occupancy_state",

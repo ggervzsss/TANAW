@@ -36,6 +36,7 @@ REPORT_DEMOGRAPHIC_FIELDS = (
     "foreignMale",
     "foreignFemale",
 )
+OPTIONAL_REPORT_DEMOGRAPHIC_FIELDS = ("thisProvUnspecified",)
 
 
 async def ingest_report_submission(
@@ -217,6 +218,12 @@ def report_demographics_from_payload(
     values: dict[str, int] = {}
     for field in REPORT_DEMOGRAPHIC_FIELDS:
         value = report_non_negative_int(demo.get(field))
+        if value is None:
+            return None
+        values[field] = value
+    for field in OPTIONAL_REPORT_DEMOGRAPHIC_FIELDS:
+        raw = demo.get(field)
+        value = 0 if raw in (None, "") else report_non_negative_int(raw)
         if value is None:
             return None
         values[field] = value

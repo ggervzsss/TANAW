@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { CAMERA_MODE_LABEL, cameraModeName } from "../../camera/utils/camera-mode";
 import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import { DotFormModal } from "../../reports/components/DotFormModal";
@@ -13,13 +14,16 @@ import { DashboardHeader } from "./DashboardHeader";
 import { DemographicsBreakdownChart } from "./DemographicsBreakdownChart";
 import { EstablishmentMetrics } from "./EstablishmentMetrics";
 import { EstablishmentTrendChart } from "./EstablishmentTrendChart";
+import { TanawAssistant } from "./TanawAssistant";
+import { PeakActivity } from "./PeakActivity";
 import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
 
 type DotPreviewState = { enterpriseId: string | null | undefined; demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName: string; cameras?: Camera[] }) {
-  const [filter, setFilter] = useState<TrendFilter>("Week");
+  const [filter, setFilter] = useState<TrendFilter>("Today");
   const { summary, live, range, error, loading } = useEstablishmentAnalytics(cameras, filter);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
   const [ledger, setLedger] = useState<{ enterpriseId: typeof enterpriseId; reports: ReportRecord[] } | null>(null);
   const reports = ledger && ledger.enterpriseId === enterpriseId ? ledger.reports : [];
@@ -67,94 +71,86 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
   }, [refreshReports, enterpriseId]);
 
   const demographicsReport = reports.find(hasDemographics) ?? reports[0] ?? null;
-  const needsSetup = live?.state === "configuration_required" || summary?.reconciliation_state === "configuration_required";
-  const partial = live?.state === "partial" || summary?.reconciliation_state === "partial";
+  const offline = live?.state === "partial";
+  const partial = summary?.reconciliation_state === "partial";
   return (
-    <div className="animate-in fade-in space-y-6 font-sans duration-500">
-      {preview && preview.enterpriseId === enterpriseId && (
-        <DotFormModal
-          demo={preview.demo}
-          enterpriseName={enterpriseName}
-          metrics={preview.metrics}
-          notes={preview.notes}
-          period={preview.period}
-          reportId={preview.reportId}
-          validationMessage={getDemographicAllocationStatus(preview.demo, preview.metrics.unique).validationMessage}
-          onClose={() => setPreview(null)}
-        />
-      )}
-      <DashboardHeader summary={null} description="One establishment tally from all configured cameras." />
-      <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
-      <section aria-label="Counting coverage" className="space-y-2 border-l-2 border-emerald-700 pl-4 text-sm text-slate-600 dark:border-emerald-400 dark:text-slate-300">
-        {needsSetup ? (
-          <p>
-            Complete the camera counting roles and coverage relationships so TANAW can reconcile shared visitors.{" "}
-            <a className="font-semibold text-emerald-800 underline underline-offset-2 dark:text-emerald-300" href="#/enterprise/cameras">
-              Open Camera Setup
-            </a>
-            .
-          </p>
-        ) : (
-          <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
+    <div className={`overview-layout ${assistantOpen ? "assistant-is-open" : ""}`}>
+      <div className="overview-main">
+        {preview && preview.enterpriseId === enterpriseId && (
+          <DotFormModal
+            demo={preview.demo}
+            enterpriseName={enterpriseName}
+            metrics={preview.metrics}
+            notes={preview.notes}
+            period={preview.period}
+            reportId={preview.reportId}
+            validationMessage={getDemographicAllocationStatus(preview.demo, preview.metrics.unique).validationMessage}
+            onClose={() => setPreview(null)}
+          />
         )}
-        {partial && <p>Some observations or visitor matches are incomplete. These figures are partial estimates.</p>}
-        {summary && (
-          <p className="text-xs">
-            Observation coverage: {summary.coverage_ratio > 0 && summary.coverage_ratio < 0.01 ? "<1" : Math.round(summary.coverage_ratio * 100)}% of the selected period. Unresolved observations:{" "}
-            {summary.unresolved_observations.toLocaleString()}. Live occupancy shows the current observation; other figures follow the period below.
+        <DashboardHeader filter={filter} onFilterChange={setFilter} />
+        {offline && (
+          <p role="status" className="mx-4.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Some cameras are offline. Totals include the cameras that are running.
           </p>
         )}
-      </section>
-      <EstablishmentTrendChart summary={summary} range={range} filter={filter} onFilterChange={setFilter} unavailable={Boolean(error)} />
-      {cameras.length > 0 && (
-        <details className="rounded-xl border border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
-          <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera coverage and contributions</summary>
-          <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">These details explain the establishment tally. Camera figures are not separate report totals.</p>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="py-2 pr-4 font-semibold">Camera</th>
-                  <th className="py-2 pr-4 font-semibold">Mode</th>
-                  <th className="py-2 pr-4 font-semibold">Counting role</th>
-                  <th className="py-2 font-semibold">Occupancy contribution</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cameras.map((camera) => {
-                  const contribution = live?.contributions.find((item) => item.camera_ids.includes(camera.id));
-                  const excluded = live?.excluded_camera_ids.includes(camera.id);
-                  return (
-                    <tr key={camera.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                      <td className="py-3 pr-4">{camera.name}</td>
-                      <td className="py-3 pr-4">{camera.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"}</td>
-                      <td className="py-3 pr-4">
-                        {camera.coverage?.role === "external_boundary" ? "Establishment boundary" : camera.coverage?.role === "internal_observation" ? "Internal observation" : "Setup required"}
-                      </td>
-                      <td className="py-3">
-                        {contribution
-                          ? `${contribution.occupancy.toLocaleString()}${contribution.camera_ids.length > 1 ? " in a shared population" : ""}${contribution.state === "partial" ? " · partial" : ""}`
-                          : excluded
-                            ? "Not added separately"
-                            : "Unavailable"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
+        <EstablishmentTrendChart summary={summary} range={range} filter={filter} unavailable={Boolean(error)} />
+        <div className="overview-secondary">
+          <DemographicsBreakdownChart report={demographicsReport} />
+          <PeakActivity summary={summary} />
+        </div>
         <SubmissionLedgerPreview
+          enterpriseName={enterpriseName}
           reports={reports}
           onPreviewReport={(report) =>
             setPreview({ enterpriseId, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
           }
         />
-        <DemographicsBreakdownChart report={demographicsReport} />
+        <details className="overview-coverage">
+          <summary>Counting coverage and estimate details</summary>
+          <section aria-label="Counting coverage" className="space-y-2 border-l-2 border-emerald-700 pl-4 text-sm text-slate-600 dark:border-emerald-400 dark:text-slate-300">
+            <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
+            {partial && <p>Some visitors could not be recognized or some days have no observations. These figures are partial estimates.</p>}
+            {summary && (
+              <p className="text-xs">
+                Observation coverage: {summary.coverage_ratio > 0 && summary.coverage_ratio < 0.01 ? "<1" : Math.round(summary.coverage_ratio * 100)}% of the selected period. Unresolved observations:{" "}
+                {summary.unresolved_observations.toLocaleString()}. Live occupancy shows the current observation; other figures follow the period below.
+              </p>
+            )}
+          </section>
+        </details>
+        {cameras.length > 0 && (
+          <details className="rounded-xl border border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
+            <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera status</summary>
+            <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Live occupancy adds the Entry / Exit balance of all doors and the people inside every Open Space area.</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <th className="py-2 pr-4 font-semibold">Camera</th>
+                    <th className="py-2 pr-4 font-semibold">{CAMERA_MODE_LABEL}</th>
+                    <th className="py-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cameras.map((camera) => {
+                    const counting = live?.contributions.some((item) => item.camera_ids.includes(camera.id));
+                    return (
+                      <tr key={camera.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                        <td className="py-3 pr-4">{camera.name}</td>
+                        <td className="py-3 pr-4">{cameraModeName(camera.analysisMode)}</td>
+                        <td className="py-3">{counting ? "Counting" : "Offline"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
       </div>
+      <TanawAssistant open={assistantOpen} onToggle={() => setAssistantOpen((value) => !value)} summary={summary} live={live} report={reports[0] ?? null} filter={filter} />
     </div>
   );
 }

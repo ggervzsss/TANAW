@@ -35,7 +35,7 @@ export function countingNotes(value: unknown): string[] {
   if (!data) return [];
   const coverage = data.coverage_ratio > 0 && data.coverage_ratio < 0.01 ? "<1" : Math.round(data.coverage_ratio * 100);
   return [
-    "One establishment total reconciles Entrance / Exit and Open Space observations. Recognized visitors count once across cameras each day. The period adds daily estimates; people returning on different dates may contribute again.",
+    "One establishment total combines Entry / Exit and Open Space observations. Recognized visitors count once across cameras each day. The period adds daily estimates; people returning on different dates may contribute again.",
     `Arrivals: ${measuredCount(data.movement_state === "unavailable" ? null : data.entries)}. Departures: ${measuredCount(data.movement_state === "unavailable" ? null : data.exits)}. Peak simultaneous occupancy: ${measuredCount(data.peak_occupancy)}.`,
     `Observation coverage: ${coverage}% of period. Unresolved observations: ${data.unresolved_observations}. Counting: ${data.reconciliation_state}; movement: ${data.movement_state}; identification: ${data.identification_state}.`,
     "Camera evidence can contain the same visitors. Do not add it to the establishment total.",

@@ -23,7 +23,7 @@ export function CameraIpAddressField({ error, host, onHostChange }: CameraIpAddr
         spellCheck={false}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? "camera-ip-host-error" : undefined}
-        className={`w-full min-w-0 rounded-xl border bg-white px-3 py-2.5 font-mono text-[13px] text-gray-800 transition outline-none focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white ${error ? "border-red-500" : "border-emerald-200 dark:border-slate-600"}`}
+        className={`w-full min-w-0 rounded-xl border bg-white px-3 py-2.5 font-mono text-[13px] text-gray-800 transition outline-none focus:border-tanaw-ledger dark:bg-[#0f172a] dark:text-white ${error ? "border-red-500" : "border-emerald-200 dark:border-slate-600"}`}
       />
       {error ? (
         <p id="camera-ip-host-error" className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">

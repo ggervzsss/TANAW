@@ -369,7 +369,9 @@ def source_demographics(
     }
     if any(value is None for value in values.values()):
         return None
-    return ReportDemographicsSummary.model_validate(values)
+    return ReportDemographicsSummary.model_validate(
+        {**values, "thisProvUnspecified": source.this_prov_unspecified or 0}
+    )
 
 
 def final_report_source_snapshot(
@@ -401,6 +403,7 @@ def update_final_report_source_snapshot(
     demographics = report_demographics_from_payload(payload, source.unique_count)
     snapshot.this_prov_male = demographics.thisProvMale if demographics else None
     snapshot.this_prov_female = demographics.thisProvFemale if demographics else None
+    snapshot.this_prov_unspecified = demographics.thisProvUnspecified if demographics else None
     snapshot.other_prov_male = demographics.otherProvMale if demographics else None
     snapshot.other_prov_female = demographics.otherProvFemale if demographics else None
     snapshot.foreign_male = demographics.foreignMale if demographics else None

@@ -29,7 +29,6 @@ def record_occupancy_correction(
                 reason=payload.reason,
                 actor_id=payload.actor_id,
                 actor_name=payload.actor_name,
-                camera_id=payload.camera_id,
             )
         )
     except ValueError as exc:
@@ -132,7 +131,6 @@ def prepare_sample_counts(payload: SamplePrepareRequest, request: Request) -> Sa
                 entries=payload.entries,
                 exits=payload.exits,
                 unique_count=payload.unique_count,
-                peak_occupancy=payload.peak_occupancy,
                 period=payload.period,
             )
         )

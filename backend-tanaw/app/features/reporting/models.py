@@ -170,6 +170,7 @@ class FinalReportSource(Base):
     counting_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     this_prov_male: Mapped[int | None] = mapped_column(Integer, nullable=True)
     this_prov_female: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    this_prov_unspecified: Mapped[int | None] = mapped_column(Integer, nullable=True)
     other_prov_male: Mapped[int | None] = mapped_column(Integer, nullable=True)
     other_prov_female: Mapped[int | None] = mapped_column(Integer, nullable=True)
     foreign_male: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { MlCameraStates } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { DESKTOP_REPORT_SYNC_EVENT, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
 const REPORT_SYNC_INTERVAL_MS = 20_000;
+const SAMPLE_PREPARATION_INTERVAL_MS = 60_000;
 
 type LiveTelemetryState = {
   lastSignature: string | null;
@@ -18,7 +19,7 @@ type LiveTelemetryState = {
 export function useDesktopCloudSync(contextReady: boolean) {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.user?.role);
-  const syncStateRef = useRef({ reports: false, telemetry: false });
+  const syncStateRef = useRef({ preparation: false, reports: false, telemetry: false });
   const liveTelemetryRef = useRef<LiveTelemetryState>({
     lastSignature: null,
     lastSyncedAt: 0,
@@ -89,6 +90,19 @@ export function useDesktopCloudSync(contextReady: boolean) {
       }
     };
 
+    const runSamplePreparation = async () => {
+      if (syncStateRef.current.preparation || isDisposed) return;
+      syncStateRef.current.preparation = true;
+      try {
+        // Development only: the backend returns nothing unless its sample dataset exists.
+        await prepareDesktopSampleCounts();
+      } catch {
+        // Sample counts are optional; the next interval retries.
+      } finally {
+        syncStateRef.current.preparation = false;
+      }
+    };
+
     const handleLiveCameraStates = (states: MlCameraStates) => {
       const nextSignature = liveCameraStatesSignature(states);
       if (nextSignature === liveTelemetryRef.current.lastSignature) return;
@@ -111,6 +125,8 @@ export function useDesktopCloudSync(contextReady: boolean) {
     };
 
     runAllSync();
+    void runSamplePreparation();
+    const preparationIntervalId = window.setInterval(runSamplePreparation, SAMPLE_PREPARATION_INTERVAL_MS);
     const telemetryIntervalId = window.setInterval(scheduleTelemetrySync, TELEMETRY_RECONCILE_INTERVAL_MS);
     const reportIntervalId = window.setInterval(runReportSync, REPORT_SYNC_INTERVAL_MS);
     window.addEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
@@ -119,6 +135,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
       isDisposed = true;
       clearLiveTelemetryTimer();
       unsubscribeFromReportEvents?.();
+      window.clearInterval(preparationIntervalId);
       window.clearInterval(telemetryIntervalId);
       window.clearInterval(reportIntervalId);
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);

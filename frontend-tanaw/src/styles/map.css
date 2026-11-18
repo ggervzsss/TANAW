@@ -105,7 +105,7 @@
 
 .tanaw-map-tooltip {
   min-width: 140px;
-  font-family: "Bai Jamjuree", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .tanaw-map-tooltip--boundary {
@@ -134,7 +134,7 @@
 .tanaw-map-popup {
   min-width: 190px;
   padding: 2px;
-  font-family: "Bai Jamjuree", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .tanaw-map-popup__title {
@@ -168,7 +168,6 @@
   color: #055b25;
   font-size: 9px;
   font-weight: 800;
-  text-transform: uppercase;
 }
 
 .tanaw-leaflet-map--dark .tanaw-map-tooltip--boundary,

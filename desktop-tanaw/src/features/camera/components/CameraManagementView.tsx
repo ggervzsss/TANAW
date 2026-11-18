@@ -1,11 +1,13 @@
+import { AnimatePresence } from "motion/react";
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { ConfirmationDialog } from "../../../components/ConfirmationDialog";
+import { CameraDialog } from "./CameraDialog";
 import type { Camera } from "../../../types/enterprise";
 import { CAMERA_IP_CONFLICT_MESSAGE } from "../utils/camera-ip-uniqueness";
 import { useCameraManagement } from "../hooks/useCameraManagement";
 import { CameraAddModal } from "./CameraAddModal";
 import { CameraList, CameraSidebarToggle, CollapsedCameraListRail } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
+import { PerformanceStatus } from "./PerformanceStatus";
 
 type CameraManagementViewProps = {
   cameras: Camera[];
@@ -14,6 +16,7 @@ type CameraManagementViewProps = {
 };
 
 export function CameraManagementView({ cameras, setCameras, storageKey }: CameraManagementViewProps) {
+  const [deleting, setDeleting] = useState(false);
   const [isCameraListCollapsed, setIsCameraListCollapsed] = useState(false);
   const {
     activeAction,
@@ -24,6 +27,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    runtimeReady,
     area,
     credentialMetadata,
     detections,
@@ -60,15 +64,17 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   } = useCameraManagement({ cameras, setCameras, storageKey });
 
   return (
-    <div className="animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-sans duration-500">
+    <div className="camera-management animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-sans duration-500">
+      <AnimatePresence>
       {showAddModal && (
-        <CameraAddModal
+        <CameraAddModal key="add-camera"
           newCam={newCam}
           isValidating={isValidating}
           errors={cameraFormErrors}
           duplicateIpError={newCameraIpConflict ? CAMERA_IP_CONFLICT_MESSAGE : undefined}
           onClose={() => {
             setShowAddModal(false);
+            setNewCam({ ...newCam, name: "", zone: "", cameraHost: "", rtsp: "", username: "", password: "" });
             setCameraFormErrors({});
           }}
           onSubmit={handleAddCamera}
@@ -78,34 +84,64 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           }}
         />
       )}
+      </AnimatePresence>
       {cameraPendingDelete && (
-        <ConfirmationDialog
-          cancelLabel="Keep Camera"
-          confirmLabel="Delete Camera"
-          onCancel={() => setCameraPendingDelete(null)}
-          onConfirm={() => void confirmDeleteCamera()}
-          title="Delete Camera"
-          variant="danger"
+        <CameraDialog
+          title="Remove Camera"
+          description={`Remove ${cameraPendingDelete.name}?`}
+          className="camera-confirm-dialog"
+          busy={deleting}
+          onClose={() => setCameraPendingDelete(null)}
+          footer={
+            <>
+              <button type="button" className="design-button" disabled={deleting} onClick={() => setCameraPendingDelete(null)}>
+                Keep Camera
+              </button>
+              <button
+                type="button"
+                className="design-button danger-button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await confirmDeleteCamera();
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting ? "Removing?" : "Remove Camera"}
+              </button>
+            </>
+          }
         >
           <p>
-            Are you sure you want to delete <span className="font-bold text-[#111827] dark:text-white">{cameraPendingDelete.name}</span>? This will stop visitor counting from this camera.
+            This stops visitor counting and removes the configuration for <b>{cameraPendingDelete.name}</b> only.
           </p>
-        </ConfirmationDialog>
+          {monitoringError && (
+            <p className="camera-field-error" role="alert">
+              {monitoringError}
+            </p>
+          )}
+        </CameraDialog>
       )}
 
-      <div className="mb-4 shrink-0 px-1">
-        <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Setup</h2>
-        <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">Local CCTV stream verification, AI counting, and tripwire calibration.</p>
+      <div className="camera-page-heading mb-4 flex shrink-0 items-end justify-between gap-4 px-1">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Monitoring</h2>
+          <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">View camera status and check if the counting is working properly.</p>
+        </div>
+        <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
       </div>
 
       <div
         data-camera-sidebar={isCameraListCollapsed ? "collapsed" : "expanded"}
-        className={`grid min-h-0 flex-1 transition-[grid-template-columns,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+        className={`grid min-h-0 flex-1 transition-[grid-template-columns,gap] duration-300 ease-tanaw motion-reduce:transition-none ${
           isCameraListCollapsed ? "grid-cols-[30px_minmax(0,1fr)] gap-3" : "grid-cols-[minmax(190px,230px)_minmax(0,1fr)] gap-4 max-[900px]:grid-cols-[176px_minmax(0,1fr)] max-[900px]:gap-3"
         }`}
       >
         <div id="configured-cameras-panel" className="relative min-h-0 min-w-0 overflow-visible">
-          <div className="h-full min-h-0 overflow-hidden rounded-[18px]">
+          <div className="h-full min-h-0 overflow-hidden rounded-tanaw-xl">
             <div
               {...(isCameraListCollapsed ? { inert: "" } : {})}
               aria-hidden={isCameraListCollapsed}
@@ -134,6 +170,8 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </div>
         <div className="min-h-0">
           <CameraPreviewPanel
+            runtimeReady={runtimeReady}
+            storageKey={storageKey}
             cameras={cameras}
             area={area}
             activeCam={activeCam}
@@ -159,9 +197,9 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             onEdit={() => setIsEditMode(true)}
             onEditFormChange={setEditForm}
             onRestartService={handleRestartService}
-            onSave={() => void handleSave()}
-            onStartProcessing={() => void handleStartProcessing()}
-            onStopProcessing={() => void handleStopProcessing()}
+            onSave={handleSave}
+            onStartProcessing={handleStartProcessing}
+            onStopProcessing={handleStopProcessing}
             onTestConnection={() => void handleTestConnection()}
           />
         </div>

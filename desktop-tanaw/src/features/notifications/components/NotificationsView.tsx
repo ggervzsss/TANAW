@@ -14,7 +14,7 @@ export function NotificationsView({ notifications, unreadCount, onMarkAllRead, o
     <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-sans duration-500">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Alerts</p>
+          <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Alerts</p>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Notifications</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Review account, security, report, and monitoring updates for this enterprise.</p>
         </div>
@@ -22,7 +22,7 @@ export function NotificationsView({ notifications, unreadCount, onMarkAllRead, o
           type="button"
           disabled={unreadCount === 0}
           onClick={onMarkAllRead}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black tracking-wide text-[#065f46] uppercase shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300"
+          className="inline-flex shrink-0 items-center gap-2 rounded-tanaw-md border border-emerald-100 bg-white px-4 py-2 text-xs font-black text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300"
         >
           <CheckCheck size={15} />
           Mark all read
@@ -44,7 +44,7 @@ export function NotificationsView({ notifications, unreadCount, onMarkAllRead, o
                   <span className={`block text-sm leading-relaxed ${notification.read ? "font-semibold text-gray-700" : "font-black text-[#111827]"}`}>{notification.message}</span>
                   <span className="mt-2 block text-[10px] font-black tracking-wider text-gray-400 uppercase">{notification.time}</span>
                 </span>
-                {!notification.read && <span className="mt-3 h-2.5 w-2.5 shrink-0 rounded-full bg-[#2d5eff] shadow-sm" />}
+                {!notification.read && <span className="mt-3 h-2.5 w-2.5 shrink-0 rounded-full bg-tanaw-blue shadow-sm" />}
               </button>
             ))}
           </div>

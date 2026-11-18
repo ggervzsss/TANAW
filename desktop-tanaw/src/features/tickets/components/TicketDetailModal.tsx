@@ -88,7 +88,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
           className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.5)]"
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="h-1.5 bg-linear-to-r from-[#065f46] via-[#34d399] to-[#d9b44a]" />
+          <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-[#34d399] to-[#d9b44a]" />
           <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 px-6 py-5 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
             <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
             <div className="min-w-0">
@@ -99,7 +99,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
               type="button"
               aria-label="Close ticket details"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-[#065f46] focus:ring-4 focus:ring-[#065f46]/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-tanaw-ledger focus:ring-4 focus:ring-tanaw-ledger/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
             >
               <X size={18} />
             </button>
@@ -108,7 +108,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
           <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-white p-6 dark:bg-[#121c31]">
             {isLoading && (
               <div className="flex min-h-72 flex-col items-center justify-center text-center">
-                <RefreshCw size={28} className="animate-spin text-[#065f46] dark:text-emerald-200" />
+                <RefreshCw size={28} className="animate-spin text-tanaw-ledger dark:text-emerald-200" />
                 <p className="mt-3 text-sm font-black text-[#111827] dark:text-slate-100">Loading ticket details</p>
                 <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-300">Fetching backend-backed support ticket data.</p>
               </div>
@@ -127,7 +127,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                   <section className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5 dark:border-emerald-300/20 dark:from-emerald-500/10 dark:via-[#172033] dark:to-amber-500/10">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-mono text-xs font-bold tracking-wide text-[#065f46] dark:text-emerald-200">{ticket.code}</p>
+                        <p className="font-mono text-xs font-bold tracking-wide text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
                         <h4 className="mt-1 text-lg font-black text-[#111827] dark:text-slate-100">{ticket.subject}</h4>
                         <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">{ticket.description}</p>
                       </div>
@@ -150,7 +150,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                   <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">
-                        <Paperclip size={16} className="text-[#065f46] dark:text-emerald-200" />
+                        <Paperclip size={16} className="text-tanaw-ledger dark:text-emerald-200" />
                         Photos
                       </h4>
                       <span className="text-[11px] font-bold text-gray-400 uppercase dark:text-slate-300">{ticket.attachments.length} attached</span>
@@ -182,7 +182,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
 
                 <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
                   <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">
-                    <MessageSquare size={16} className="text-[#065f46] dark:text-emerald-200" />
+                    <MessageSquare size={16} className="text-tanaw-ledger dark:text-emerald-200" />
                     Conversation
                   </h4>
                   <div
@@ -239,7 +239,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                       <button
                         type="submit"
                         disabled={isReplying}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#065f46] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         {isReplying ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
                         {isReplying ? "Sending..." : "Send Reply"}
@@ -267,7 +267,7 @@ export function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; pho
           className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31]"
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="h-1.5 bg-linear-to-r from-[#065f46] via-[#34d399] to-[#d9b44a]" />
+          <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-[#34d399] to-[#d9b44a]" />
           <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 px-6 py-5 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
             <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
             <div className="min-w-0">
@@ -278,7 +278,7 @@ export function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; pho
               type="button"
               aria-label="Close photo preview"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-[#065f46] focus:ring-4 focus:ring-[#065f46]/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-tanaw-ledger focus:ring-4 focus:ring-tanaw-ledger/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
             >
               <X size={18} />
             </button>
@@ -303,7 +303,7 @@ function TicketAttachmentImage({ alt, attachment, className, showError = false }
         className={`${className} flex items-center justify-center border border-dashed border-gray-200 bg-white text-center text-gray-500 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-300`}
       >
         <span className="flex max-w-full flex-col items-center gap-2 px-3">
-          {isLoading ? <RefreshCw size={showError ? 28 : 18} className="animate-spin text-[#065f46] dark:text-emerald-200" /> : <ImageIcon size={showError ? 30 : 18} />}
+          {isLoading ? <RefreshCw size={showError ? 28 : 18} className="animate-spin text-tanaw-ledger dark:text-emerald-200" /> : <ImageIcon size={showError ? 30 : 18} />}
           {showError && <span className="text-sm font-semibold">{error || "Loading image"}</span>}
         </span>
       </div>

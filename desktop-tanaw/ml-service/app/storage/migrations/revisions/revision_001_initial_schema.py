@@ -155,7 +155,6 @@ SCHEMA_STATEMENTS = (
         correction_id text primary key,
         enterprise_id text,
         camera_id integer,
-        population_key text,
         old_occupancy integer not null default 0,
         new_occupancy integer not null default 0,
         delta integer not null default 0,

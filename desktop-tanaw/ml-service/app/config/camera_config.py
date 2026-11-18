@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.config.camera_coverage import CameraCoverage
 from app.config.open_space_config import OpenSpaceConfig
 from app.config.rtsp_source import normalize_rtsp_source as _normalize_rtsp_source
 
@@ -57,6 +56,13 @@ class RegionOfInterest(BaseModel):
         return self
 
 
+class PerformanceProfileRequest(BaseModel):
+    """This computer's performance profile, applied to every running camera."""
+
+    processing_profile: ProcessingProfile
+    reid_mode: ReIdMode
+
+
 class CameraCountingConfigUpdate(BaseModel):
     require_active_worker: bool = False
     tripwire_position: float = Field(default=0.5, ge=0.1, le=0.9)
@@ -79,7 +85,7 @@ class CameraCountingConfigUpdate(BaseModel):
 
 
 class CameraStartRequest(BaseModel):
-    coverage: CameraCoverage = Field(default_factory=CameraCoverage)
+    auto_reconnect: bool = True
     analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
     preview_only: bool = False
     open_space: OpenSpaceConfig | None = None
@@ -213,6 +219,10 @@ class CameraTestRequest(BaseModel):
 class CameraTestResponse(BaseModel):
     ok: bool
     message: str
+    # The working, credential-free address TANAW chose; save it with the camera.
+    stream_url: str | None = None
+    width: int | None = None
+    height: int | None = None
 
 
 class HealthResponse(BaseModel):
@@ -333,6 +343,14 @@ class CountResponse(BaseModel):
     error: str | None = None
 
 
+class LiveSexEstimate(BaseModel):
+    """A track's current male/female estimate, shown only in developer mode and never stored."""
+
+    female_probability: float | None = None
+    evidence_weight: float = 0.0
+    model: str
+
+
 class DetectionTrackResponse(BaseModel):
     track_id: int
     source_track_id: int
@@ -352,6 +370,7 @@ class DetectionTrackResponse(BaseModel):
     identity_score: float | None = None
     identity_source: str | None = None
     counting_debug: dict[str, Any] | None = None
+    sex_estimate: LiveSexEstimate | None = None
 
 
 class DetectionResponse(BaseModel):

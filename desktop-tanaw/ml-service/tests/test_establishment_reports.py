@@ -6,7 +6,6 @@ from uuid import uuid4
 import numpy as np
 import pytest
 
-from app.config.camera_coverage import CameraCoverage
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.storage.local_data_store import LocalDataStore
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
@@ -31,10 +30,6 @@ def observed(
         track_key=key,
         analysis_mode="open_space" if internal else "entrance_exit",
         kind="area_visit" if internal else "entry",
-        coverage=CameraCoverage(
-            role=area_role if internal else "external_boundary",
-            relationship="independent",
-        ),
         qualified=True,
         first_at=OBSERVED,
         observed_at=OBSERVED,
@@ -85,7 +80,6 @@ def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(
     source = result["counting"]["source_breakdown"][0]
     assert source["additive"] is False
     assert source["entries"] is source["exits"] is None
-    assert service.repository.population_states() == {}
     assert "population_flows" not in result["counting"]["days"][0]
 
 
@@ -217,6 +211,23 @@ def test_blank_zero_demographic_cells_use_the_same_visitor_baseline(tmp_path: Pa
     assert repo.submit(**body)["payload"]["demo"]["foreignMale"] == "0"
 
 
+def test_visitors_without_a_recorded_sex_count_toward_the_baseline(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service, internal=True)
+    repo = EstablishmentReportRepository(service.database)
+    over = request(repo, 1)
+    over["payload"]["demo"]["thisProvUnspecified"] = "1"
+    with pytest.raises(ValueError, match="must match"):
+        repo.submit(**over)
+
+    body = request(repo, 0)
+    body["payload"]["demo"]["thisProvUnspecified"] = "1"
+    body["payload"]["origins"] = {"2026-10-01": {"otherCity": {"male": 0, "female": 0}}}
+    saved = repo.submit(**body)["payload"]
+    assert saved["demo"]["thisProvUnspecified"] == "1"
+    assert saved["origins"] == body["payload"]["origins"]
+
+
 def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.observe(
@@ -225,7 +236,6 @@ def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_p
         track_key="person",
         analysis_mode="open_space",
         kind="area_visit",
-        coverage=CameraCoverage(role="internal_observation", relationship="independent"),
         qualified=True,
         first_at=OBSERVED,
         observed_at=OBSERVED,
@@ -239,7 +249,7 @@ def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_p
         repo.submit(**request(repo, 0))
 
 
-def test_missing_independent_measurements_keep_known_movement_partial(tmp_path: Path):
+def test_offline_camera_keeps_the_running_cameras_counts(tmp_path: Path):
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     service.repository.checkpoint_occupancy(
@@ -254,8 +264,9 @@ def test_missing_independent_measurements_keep_known_movement_partial(tmp_path: 
     )
     repo = EstablishmentReportRepository(service.database)
     result = repo.period_summary("October 2026")
+    # One day of the month was observed; the day itself is a normal estimate.
     assert result["counting"]["movement_state"] == "partial"
-    assert result["counting"]["days"][0]["reconciliation_state"] == "partial"
+    assert result["counting"]["days"][0]["reconciliation_state"] == "estimated"
     assert result["metrics"]["entries"] == 1
 
 
@@ -267,7 +278,7 @@ def test_non_identifying_source_provenance_survives_detail_retention(tmp_path: P
         "counting"
     ]
     evidence = snapshot["source_breakdown"][0]
-    assert evidence["coverage_configurations"][0]["role"] == "external_boundary"
+    assert evidence["analysis_modes"] == ["entrance_exit"]
     assert evidence["embedding_spaces"] == ["person_reid_onnx:3"]
     assert evidence["identity_confidence"] == {"high": 1}
     assert sum(evidence["matching_decisions"].values()) == 1

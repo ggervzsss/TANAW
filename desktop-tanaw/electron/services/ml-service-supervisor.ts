@@ -11,8 +11,17 @@ import { validateMlServiceRequest, type ValidatedMlServiceRequest } from "../ml-
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "../ml-service-contract";
 import { classifyMlServiceStderr } from "../ml-service-log";
 import { createMlDiagnosticLog, createMlDiagnosticOutput } from "../ml-service-diagnostics";
-import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "../ml-service-process";
+import {
+  buildWindowsListenerPidScript,
+  buildWindowsProcessInfoScript,
+  buildWindowsTerminateTreeArgs,
+  isWorkspaceProcess,
+  parseProcessInfo,
+  shouldTerminateExternalService,
+  waitForListenerRelease,
+} from "../ml-service-process";
 import { getCameraCredential, normalizeCameraCredentialId } from "../stores/camera-credential-store";
+import { resolveCameraRequestCredential } from "../camera-credential-validation";
 import { SerializedOperationQueue } from "./serialized-operation-queue";
 import { MlReportLiveEventStream } from "./ml-report-live-events";
 
@@ -355,7 +364,9 @@ export async function requestCameraWithCredentials(scopeInput: unknown, cameraId
   if (!operation || !isObjectRecord(payloadInput)) {
     throw new Error("Unsupported secure camera request.");
   }
-  const credentials = getCameraCredential(scopeInput, cameraIdInput);
+  const stored = getCameraCredential(scopeInput, cameraIdInput);
+  // Test replacements in memory; starting a camera always uses saved credentials.
+  const credentials = resolveCameraRequestCredential(operation, payloadInput, stored ?? undefined);
   if (!credentials?.username) {
     throw new Error("Enter the camera username.");
   }
@@ -374,7 +385,8 @@ export async function requestCameraWithCredentials(scopeInput: unknown, cameraId
     body: JSON.stringify(payload),
     headers: mlServiceHeaders({ "Content-Type": "application/json" }),
     method: "POST",
-    signal: AbortSignal.timeout(operation === "start" ? 30_000 : 8000),
+    // A connection test may try several stream addresses for the camera brand.
+    signal: AbortSignal.timeout(operation === "start" ? 30_000 : 45_000),
   });
   if (!response.ok) {
     throw new Error(`Camera ${operation} request failed (${response.status}).`);
@@ -443,33 +455,22 @@ function parseProcessId(output: string) {
   return Number.isInteger(pid) && pid > 0 ? pid : null;
 }
 
-async function isLocalMlServiceProcess(pid: number) {
-  const commandLine = await getProcessCommandLine(pid);
-  if (!commandLine) {
-    return false;
-  }
-
-  const serviceDir = normalizeProcessPath(getMlServiceDir());
-  return normalizeProcessPath(commandLine).includes(serviceDir);
+function isLocalMlServiceProcess(pid: number) {
+  return isWorkspaceProcess(pid, getMlServiceDir(), getProcessInfo);
 }
 
-async function getProcessCommandLine(pid: number) {
+async function getProcessInfo(pid: number) {
   try {
     if (process.platform === "win32") {
-      const script = `$proc = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" -ErrorAction SilentlyContinue; if ($proc) { $proc.CommandLine }`;
-      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { timeout: 3000, windowsHide: true });
-      return stdout.trim() || null;
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", buildWindowsProcessInfoScript(pid)], { timeout: 3000, windowsHide: true });
+      return parseProcessInfo(stdout, process.platform);
     }
 
-    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { timeout: 3000 });
-    return stdout.trim() || null;
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "ppid=,command="], { timeout: 3000 });
+    return parseProcessInfo(stdout, process.platform);
   } catch {
     return null;
   }
-}
-
-function normalizeProcessPath(value: string) {
-  return path.normalize(value).toLowerCase();
 }
 
 async function terminateProcessId(pid: number, waitMs: number) {

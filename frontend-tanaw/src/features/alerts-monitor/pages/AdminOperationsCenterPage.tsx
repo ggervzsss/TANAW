@@ -95,7 +95,7 @@ export function AdminOperationsCenterPage() {
         action={
           <Link
             to={routes.admin.mapview}
-            className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+            className="inline-flex min-h-10.5 items-center justify-center gap-2 rounded-xl bg-tanaw-civic px-4 text-sm font-bold text-white shadow-sm transition hover:bg-tanaw-civic-deep"
           >
             <MapPinned size={15} />
             Open Live Map
@@ -168,7 +168,7 @@ export function AdminOperationsCenterPage() {
                 tabIndex={view === item.id ? 0 : -1}
                 onClick={() => setView(item.id)}
                 onKeyDown={(event) => handleOperationsTabKeyDown(event, item.id, setView)}
-                className="tanaw-operations-switcher__tab min-h-10 rounded-xl border px-4 py-2 text-xs font-black tracking-[0.04em] uppercase"
+                className="tanaw-operations-switcher__tab min-h-10 rounded-full border px-4 py-2 text-sm font-bold"
               >
                 <span>{item.label}</span>
                 <span className="tanaw-operations-switcher__count">{viewCounts[item.id]}</span>

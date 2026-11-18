@@ -12,7 +12,7 @@ export function ActivateAccountPage() {
   return (
     <section
       ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
+      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) text-(--tanaw-text)"
       data-auth-background-ready={isBackgroundReady}
     >
       <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
@@ -25,7 +25,7 @@ export function ActivateAccountPage() {
         <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end px-2 pb-10 text-white lg:flex xl:pb-14">
           <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
             <ShieldCheck className="mb-5 h-9 w-9 text-(--tanaw-gold)" aria-hidden="true" />
-            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
+            <h2 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
               Secure your TANAW account
             </h2>
             <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />

@@ -133,7 +133,7 @@ function MetricSegment({ metric, labelId, grid }: { metric: UnifiedMetric; label
       <div className="relative z-10 flex w-full items-start justify-between gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex min-h-5 items-start gap-2.5">
-            <p id={labelId} className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.14em] text-[#1b4332] uppercase sm:text-xs dark:text-emerald-200">
+            <p id={labelId} className="min-w-0 text-[11px] leading-4 font-bold tracking-label text-tanaw-forest uppercase sm:text-xs dark:text-emerald-200">
               {metric.title}
             </p>
             {metric.badge && <span className="shrink-0">{metric.badge}</span>}

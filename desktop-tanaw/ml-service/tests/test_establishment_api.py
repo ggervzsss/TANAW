@@ -6,7 +6,6 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.camera.pipeline_manager import CameraPipelineRegistry
-from app.config.camera_coverage import CameraCoverage
 from app.main import create_app
 
 
@@ -76,7 +75,6 @@ def test_summary_api_uses_only_the_bound_enterprises_shared_ledger(tmp_path: Pat
         track_key="person",
         analysis_mode="open_space",
         kind="area_visit",
-        coverage=CameraCoverage(role="internal_observation", relationship="independent"),
         qualified=True,
         first_at=now,
         observed_at=now,
@@ -136,7 +134,6 @@ def test_normal_report_api_freezes_open_space_counts_and_replays_one_submission(
         track_key="person",
         analysis_mode="open_space",
         kind="area_visit",
-        coverage=CameraCoverage(role="internal_observation", relationship="independent"),
         qualified=True,
         first_at=now,
         observed_at=now,

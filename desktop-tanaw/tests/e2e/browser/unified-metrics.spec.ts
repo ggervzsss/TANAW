@@ -1,3 +1,4 @@
+import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Page } from "@playwright/test";
 import { mlResponse, mockMlRequest } from "./support/preload";
 
@@ -37,7 +38,7 @@ const localReport = {
   },
 };
 
-async function signIn(page: Page) {
+async function signIn(page: Page, reportCount = 1) {
   let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
   await page.route("**/auth/login", (route) => {
@@ -86,6 +87,9 @@ async function signIn(page: Page) {
         identification_state: "available",
         unique_count: index === length - 1 ? visitors : 0,
         peak_occupancy: index === length - 1 ? peak : 0,
+        entries: index === length - 1 ? visitors + 10 : 0,
+        exits: index === length - 1 ? visitors - 5 : 0,
+        movement_state: "available",
       }));
       return mlResponse({
         status: 200,
@@ -110,7 +114,17 @@ async function signIn(page: Page) {
         }),
       });
     }
-    if (pathname === "/reports/local") return mlResponse({ status: 200, body: JSON.stringify([localReport]) });
+    if (pathname === "/reports/local")
+      return mlResponse({
+        status: 200,
+        body: JSON.stringify(
+          Array.from({ length: reportCount }, (_, index) => ({
+            ...localReport,
+            report_id: reportCount === 1 ? localReport.report_id : "REP-HISTORY-" + index,
+            submitted_at: new Date(Date.UTC(2026, 6, 29 - index, 8)).toISOString(),
+          })),
+        ),
+      });
     return mlResponse({ status: 503, body: JSON.stringify({ detail: "Unavailable in unified metrics acceptance test" }) });
   });
 
@@ -121,50 +135,72 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
 
-test("renders one responsive establishment header and updates its period consistently", async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.setViewportSize({ width: 1024, height: 900 });
+test("matches the dashboard arrangement and keeps periods, assistant, navigation and responsive layout functional", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await signIn(page);
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
   const header = page.locator("[data-unified-metrics-header]");
   await expect(header).toHaveCount(1);
   await expect(header.locator("[data-metric-segment]")).toHaveCount(4);
-  await expect(header.locator("[data-metric-divider]")).toHaveCount(0);
-  for (const title of ["Live Occupancy", "Unique Visitors", "Entry & Exit Flow", "Peak Occupancy"]) await expect(header.getByText(title, { exact: true })).toBeVisible();
   const segment = (id: string) => header.locator(`[data-metric-segment="${id}"]`);
   await expect(segment("occupancy").getByText("12", { exact: true })).toBeVisible();
-  await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
-  await expect(segment("peak").getByText("98", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
-  await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(segment("visitors").getByText("40", { exact: true })).toBeVisible();
-  await expect(segment("flow").getByText("50 / 35", { exact: true })).toBeVisible();
-  await expect(segment("peak").getByText("18", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "30 days", exact: true }).click();
+  await expect(segment("entries").getByText("50", { exact: true })).toBeVisible();
+  await expect(segment("exits").getByText("35", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visitor Traffic", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Occupancy Trend", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Peak Activity", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("dashboard-collapsed-1440.png"), fullPage: true });
+  await selectDashboardPeriod(page, "Month");
   await expect(segment("visitors").getByText("900", { exact: true })).toBeVisible();
-  await expect(segment("peak").getByText("99", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "7 days", exact: true }).click();
+  await selectDashboardPeriod(page, "Week");
   await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
-  await expect(segment("occupancy").getByText("12", { exact: true })).toBeVisible();
-  const donut = page.locator(".tanaw-demographics-chart .recharts-sector").first();
-  await donut.hover();
-  await expect(page.locator(".tanaw-demographics-chart").getByRole("status")).toBeVisible();
-  const before = await segment("occupancy").boundingBox();
-  await segment("occupancy").hover();
-  const after = await segment("occupancy").boundingBox();
-  expect(after?.width).toBeCloseTo(before?.width ?? 0, 1);
-  expect(after?.height).toBeCloseTo(before?.height ?? 0, 1);
-  for (const zoom of ["90%", "100%", "110%"]) {
-    await page.evaluate((value) => {
-      document.documentElement.style.zoom = value;
-    }, zoom);
-    const size = await header.evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
-    expect(size.width).toBeGreaterThan(0);
-    expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
+  await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
+  const assistant = page.getByRole("complementary", { name: "TANAW AI Assistant" });
+  await expect(assistant).toBeVisible();
+  await assistant.getByRole("button", { name: "Analyze visitor trends" }).click();
+  await expect(assistant.getByRole("log")).toContainText("457 estimated unique visitors");
+  await assistant.getByRole("textbox").fill("Tell me about my reports");
+  await assistant.getByRole("button", { name: "Send message" }).click();
+  await expect(assistant.getByRole("log")).toContainText("July 2026");
+  await page.screenshot({ path: testInfo.outputPath("dashboard-expanded-1440.png"), fullPage: true });
+  await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
+  for (const width of [1024, 760, 430]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.locator(".overview-main").evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`dashboard-${width}.png`), fullPage: true });
   }
-  await page.evaluate(() => {
-    document.documentElement.style.zoom = "100%";
-  });
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await expect(header).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(page.getByRole("heading", { name: "Establishment history", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await page.getByRole("link", { name: "View All" }).click();
+  await expect(page).toHaveURL(/enterprise\/reports/);
+  await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible();
 });
+
+for (const count of [0, 1, 5, 7]) {
+  test(`keeps ${count} real reports compact and enables scrolling only beyond five`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1024 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signIn(page, count);
+    const reports = page.locator(".overview-reports");
+    if (!count) {
+      await expect(reports.getByText("Submitted tourism reports will appear here.", { exact: true })).toBeVisible();
+      await expect(reports.getByRole("region", { name: "Recent report list" })).toHaveCount(0);
+      return;
+    }
+    const list = reports.getByRole("region", { name: "Recent report list" });
+    await expect(list.getByRole("button")).toHaveCount(count);
+    await expect.poll(() => list.evaluate((element) => element.scrollHeight > element.clientHeight + 1)).toBe(count > 5);
+    if (count <= 5) {
+      const boxes = await list.evaluate((element) => {
+        const row = element.querySelector(".recent-report-row")!.getBoundingClientRect();
+        return { height: element.getBoundingClientRect().height, rowHeight: row.height };
+      });
+      expect(boxes.height).toBeCloseTo(count * boxes.rowHeight + (count - 1) * 8 + 6, 0);
+    }
+    await expect(reports.getByRole("button", { name: /Next submitted report|Previous submitted report/ })).toHaveCount(0);
+    await list.getByRole("button").last().click();
+    await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+  });
+}

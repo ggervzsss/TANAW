@@ -18,9 +18,9 @@ export function SystemLockedMetrics({ demo, metrics }: SystemLockedMetricsProps)
         <MetricRow label="Female" value={totals.female.toLocaleString()} />
         <MetricRow label="Demographic Total" value={totals.grandTotal.toLocaleString()} />
         <div className="flex items-center justify-between rounded-xl border border-emerald-800/12 bg-emerald-50/70 px-3 py-3 text-sm shadow-sm dark:bg-emerald-400/8">
-          <span className="font-semibold text-[#065f46]">System Unique Count</span>
+          <span className="font-semibold text-tanaw-ledger">System Unique Count</span>
           <div className="flex flex-col items-end">
-            <span className="font-mono text-lg leading-none font-bold text-[#065f46]">{allocation.cap.toLocaleString()}</span>
+            <span className="font-mono text-lg leading-none font-bold text-tanaw-ledger">{allocation.cap.toLocaleString()}</span>
           </div>
         </div>
       </div>

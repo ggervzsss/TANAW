@@ -1,11 +1,3 @@
-export function shouldPrepareDraftPeriod(nextPeriod: string, currentReportingPeriod: string, localMetricsPeriod: string, pendingCounts: ReadonlyArray<{ period: string }>) {
-  return (
-    !isSameReportingMonth(nextPeriod, currentReportingPeriod) &&
-    !isSameReportingMonth(nextPeriod, localMetricsPeriod) &&
-    pendingCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod))
-  );
-}
-
 export function isSameReportingMonth(first: string, second: string) {
   return reportingMonthKey(first) === reportingMonthKey(second);
 }

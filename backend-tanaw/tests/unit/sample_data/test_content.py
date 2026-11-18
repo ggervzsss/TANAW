@@ -164,7 +164,7 @@ def test_target_enterprise_is_missing_for_four_completed_months_and_current_mont
     assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
 
 
-def test_prepared_counts_cover_four_completed_months_across_year_boundary() -> None:
+def test_prepared_counts_cover_four_completed_months_and_current_month() -> None:
     counts = prepared_counts(
         "ENT-TEST",
         datetime(2026, 2, 15, 12, tzinfo=UTC),
@@ -175,8 +175,9 @@ def test_prepared_counts_cover_four_completed_months_across_year_boundary() -> N
         "November 2025",
         "December 2025",
         "January 2026",
+        "February 2026",
     ]
-    assert len({item["reportId"] for item in counts}) == 4
+    assert len({item["reportId"] for item in counts}) == 5
 
 
 @pytest.mark.asyncio

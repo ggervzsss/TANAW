@@ -28,7 +28,7 @@ describe("portal topbar theme treatment", () => {
   it("uses a materially darker frame and overlay for dark mode", () => {
     const light = getPortalTopbarThemeClasses("light");
     const dark = getPortalTopbarThemeClasses("dark");
-    expect(light.frame).toContain("#043817");
+    expect(light.frame).toContain("from-tanaw-canopy-start");
     expect(dark.frame).toContain("#02090d");
     expect(dark.overlay).toContain("rgba(1,8,11,0.98)");
     expect(dark.dayImage).toContain("opacity-0");

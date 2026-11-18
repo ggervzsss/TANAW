@@ -1,66 +1,54 @@
-import { Activity, ArrowLeftRight, Users, User } from "lucide-react";
-import { UnifiedMetricsHeader } from "../../../components/UnifiedMetricsHeader";
+﻿import { LogIn, LogOut, ScanFace, UsersRound } from "lucide-react";
 import type { EstablishmentLive, EstablishmentSummary } from "../../camera/services/ml-service";
 import type { TrendFilter } from "../types/dashboard";
+import { motion, useReducedMotion } from "motion/react";
 
 type Props = { summary: EstablishmentSummary | null; live: EstablishmentLive | null; filter: TrendFilter; loading: boolean };
-
 export function EstablishmentMetrics({ summary, live, filter, loading }: Props) {
-  const visitorsAvailable = summary && !["not_collected", "configuration_required"].includes(summary.reconciliation_state) && summary.identification_state !== "unavailable";
+  const reduceMotion = useReducedMotion();
+  const visitorsAvailable = summary && summary.reconciliation_state !== "not_collected" && summary.identification_state !== "unavailable";
   const movementAvailable = summary && summary.movement_state !== "unavailable";
-  const period = filter === "Today" ? "Today" : filter === "Week" ? "Past 7 days" : "Past 30 days";
+  const period = filter === "Today" ? "Today’s" : filter === "Week" ? "7-day" : "30-day";
+  const metrics = [
+    {
+      id: "occupancy",
+      title: "Current Occupancy",
+      value: live?.occupancy,
+      description: live?.state === "partial" ? "people inside · some cameras offline" : "people inside",
+      icon: ScanFace,
+    },
+    {
+      id: "entries",
+      title: `${period} Entries`,
+      value: movementAvailable ? summary.entries : null,
+      description: movementAvailable ? "total entries" : "boundary not measured",
+      icon: LogIn,
+    },
+    {
+      id: "exits",
+      title: `${period} Exits`,
+      value: movementAvailable ? summary.exits : null,
+      description: movementAvailable ? "total exits" : "boundary not measured",
+      icon: LogOut,
+    },
+    { id: "visitors", title: "Unique Visitors", value: visitorsAvailable ? summary.unique_count : null, description: "estimated", icon: UsersRound },
+  ];
   return (
-    <UnifiedMetricsHeader
-      layout="grid"
-      ariaLabel="Enterprise analytics summary"
-      metrics={[
-        {
-          id: "occupancy",
-          title: "Live Occupancy",
-          value: live?.occupancy?.toLocaleString(),
-          description:
-            live?.state === "configuration_required"
-              ? "Counting setup required"
-              : live?.state === "partial"
-                ? "Partial estimate · currently inside"
-                : live?.occupancy == null
-                  ? "Observations unavailable"
-                  : "Currently inside the establishment",
-          icon: Users,
-          tone: "success",
-          isLoading: loading,
-          showPulse: live?.occupancy != null,
-        },
-        {
-          id: "visitors",
-          title: "Unique Visitors",
-          value: visitorsAvailable ? summary.unique_count.toLocaleString() : null,
-          description: `${period} · ${filter === "Today" ? "estimated, counted once today" : "daily estimates added together"}`,
-          icon: User,
-          tone: "success",
-          isLoading: loading,
-        },
-        {
-          id: "flow",
-          title: "Entry & Exit Flow",
-          value: movementAvailable ? `${summary.entries.toLocaleString()} / ${summary.exits.toLocaleString()}` : null,
-          description: movementAvailable
-            ? `${period} · observed arrivals / departures${summary.movement_state === "partial" ? " · partial coverage" : ""}`
-            : `${period} · boundary movement not measured`,
-          icon: ArrowLeftRight,
-          tone: "neutral",
-          isLoading: loading,
-        },
-        {
-          id: "peak",
-          title: "Peak Occupancy",
-          value: summary?.peak_occupancy?.toLocaleString(),
-          description: `${period} · highest simultaneous count`,
-          icon: Activity,
-          tone: "neutral",
-          isLoading: loading,
-        },
-      ]}
-    />
+    <section className="overview-metrics" data-unified-metrics-header aria-label="Enterprise analytics summary" aria-busy={loading}>
+      {metrics.map(({ id, title, value, description, icon: Icon }) => (
+        <article className="overview-metric design-card" key={id} data-metric-segment={id}>
+          <span className="overview-metric-icon">
+            <Icon aria-hidden="true" />
+          </span>
+          <div>
+            <h3>{title}</h3>
+            <motion.strong key={`${loading}-${value}`} initial={{ opacity: reduceMotion ? 1 : 0.6 }} animate={{ opacity: 1 }} transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}>
+              {loading ? <span className="design-skeleton" aria-label="Loading count" /> : value == null ? "—" : value.toLocaleString()}
+            </motion.strong>
+            <p>{value == null && !loading ? "Unavailable" : description}</p>
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }

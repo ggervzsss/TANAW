@@ -6,14 +6,7 @@ import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-
 import { isCameraPreviewReady } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
-import {
-  createCameraUpdateGate,
-  getCameraSaveRuntimeAction,
-  hasCameraConnectionChange,
-  hasCameraCountingConfigChange,
-  hasCameraRestartRequiredChange,
-  mergeConfirmedCameraCountingConfig,
-} from "../utils/camera-update";
+import { createCameraUpdateGate, getCameraSaveRuntimeAction, hasCameraConnectionChange, hasCameraCountingConfigChange, hasCameraRestartRequiredChange } from "../utils/camera-update";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   EMPTY_ML_COUNTS,
@@ -41,9 +34,8 @@ type CameraManagementOptions = {
 
 import {
   applyStoredCameraMetadata,
-  DEFAULT_COUNTING_CONFIDENCE,
   DEFAULT_ROI,
-  DEFAULT_TRACKING_CONFIDENCE,
+  FIXED_DETECTION_SETTINGS,
   getCameraStorageFingerprint,
   getDefaultTripwires,
   getTripwireSaveErrorMessage,
@@ -62,14 +54,12 @@ const emptyCameraForm: CameraFormValues = {
   name: "",
   password: "",
   rtsp: "",
-  rtspStream: "stream2",
   username: "",
   zone: "",
 };
 
 export function useCameraManagement({ cameras, setCameras, storageKey }: CameraManagementOptions) {
   const [activeCamId, setActiveCamId] = useState<number | null>(cameras[0]?.id ?? null);
-  const activeCamIdRef = useRef(activeCamId);
   const cameraUpdateGateRef = useRef(createCameraUpdateGate());
   const [isEditMode, setIsEditMode] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -135,9 +125,6 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const newCameraIpConflict = useMemo(() => findCameraIpConflict(cameras, newCam.cameraHost), [cameras, newCam.cameraHost]);
   const editedCameraIpConflict = useMemo(() => (editForm ? findCameraIpConflict(cameras, editForm.cameraHost ?? "", editForm.id) : undefined), [cameras, editForm]);
 
-  useEffect(() => {
-    activeCamIdRef.current = activeCamId;
-  }, [activeCamId]);
   useEffect(() => {
     let disposed = false;
     setHydratedFromStorage(false);
@@ -209,7 +196,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     if (activeCam && !isEditMode) setEditForm({ ...structuredClone(activeCam), password: undefined });
   }, [activeCam, isEditMode]);
 
-  const handleSave = async () => {
+  const handleSave = async (countingEnabled?: boolean) => {
     if (!editForm || !activeCam) return;
     const cameraId = editForm.id;
     if (cameraUpdateGateRef.current.isActive(cameraId)) return;
@@ -238,10 +225,12 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     });
     const countingConfigChanged = hasCameraCountingConfigChange(activeCam, nextCamera);
     const restartRequired = hasCameraRestartRequiredChange(activeCam, nextCamera, Boolean(replacementPassword));
-    const shouldRestart = runtimeAction === "restart";
-    const shouldUpdateCounting = countingConfigChanged && !restartRequired;
+    const desiredRunning = countingEnabled ?? isRunning;
+    const hasOtherProfileChanges = getCameraStorageFingerprint([{ ...activeCam, config: nextCamera.config }]) !== getCameraStorageFingerprint([nextCamera]);
+    const shouldRestart = desiredRunning && (!isRunning || runtimeAction === "restart" || (countingConfigChanged && hasOtherProfileChanges));
+    const shouldUpdateCounting = countingConfigChanged && !restartRequired && !hasOtherProfileChanges;
     const credentialChanged = activeCam.username !== nextCamera.username || Boolean(replacementPassword);
-    const savedCamera: Camera = { ...nextCamera, status: isRunning ? nextCamera.status : connectionChanged ? "untested" : nextCamera.status };
+    const savedCamera: Camera = { ...nextCamera, status: isRunning ? activeCam.status : connectionChanged ? "untested" : activeCam.status };
     const savedCameras = cameras.map((camera) => (camera.id === cameraId ? savedCamera : camera));
     if (!cameraUpdateGateRef.current.begin(cameraId)) return;
     setCameraAction(cameraId, "saving");
@@ -264,11 +253,10 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
         if (isRunning && !acknowledgement.worker_applied) {
           throw new MlServiceRequestError("tripwire_worker_update_failed", "The active camera worker did not acknowledge the Tripwire update.");
         }
-      } else {
-        await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
       }
+      if (!shouldUpdateCounting) await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
       lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
-      setCameras((current) => current.map((camera) => (camera.id === cameraId ? (shouldUpdateCounting ? mergeConfirmedCameraCountingConfig(camera, savedCamera.config) : savedCamera) : camera)));
+      setCameras((current) => current.map((camera) => (camera.id === cameraId ? savedCamera : camera)));
       setCameraError(savedCamera.id, null);
       if (!shouldRestart) {
         notifySuccess(shouldUpdateCounting ? "Tripwire configuration saved" : "Camera configuration updated.");
@@ -285,28 +273,40 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       return;
     }
 
+    if (!desiredRunning && isRunning) {
+      try {
+        await stopCameraProcessing(mlBaseUrl, cameraId);
+        await refreshCameraStates();
+      } catch (error) {
+        setCameraError(cameraId, toErrorMessage(error));
+        setCameraAction(cameraId);
+        cameraUpdateGateRef.current.end(cameraId);
+        return false;
+      }
+    }
     if (!shouldRestart) {
       setCameraAction(cameraId);
       cameraUpdateGateRef.current.end(cameraId);
-      if (activeCamIdRef.current === cameraId) setIsEditMode(false);
-      return;
+      return true;
     }
 
     beginCameraStart(savedCamera.id);
     try {
       await startCameraProcessing(mlBaseUrl, savedCamera, storageKey);
       setCameraAction(savedCamera.id, "starting");
+      notifySuccess("Camera configuration saved. Starting this camera...");
       void refreshCameraStates().catch(() => undefined);
-      if (activeCamIdRef.current === cameraId) setIsEditMode(false);
     } catch (error) {
       const remainsPending = handleCameraStartFailure(savedCamera.id, error);
       if (remainsPending) {
         void refreshCameraStates().catch(() => undefined);
-        if (activeCamIdRef.current === cameraId) setIsEditMode(false);
+      } else {
+        return false;
       }
     } finally {
       cameraUpdateGateRef.current.end(cameraId);
     }
+    return true;
   };
 
   const handleAddCamera = async (event: FormEvent<HTMLFormElement>) => {
@@ -330,19 +330,13 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       analysisMode: newCam.analysisMode ?? "entrance_exit",
       openSpace: null,
       cameraHost: newCam.cameraHost || undefined,
-      confidence: DEFAULT_COUNTING_CONFIDENCE,
-      processingProfile: "auto",
-      reidMode: "auto",
-      trackingConfidence: DEFAULT_TRACKING_CONFIDENCE,
-      uniqueCountingMode: "estimated_reid",
+      ...FIXED_DETECTION_SETTINGS,
       config: { reverse: false, roi: DEFAULT_ROI, tripwire: 50, tripwires: getDefaultTripwires(50) },
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
       cameraBrand: newCam.cameraBrand ?? "tapo",
-      connectionProfile: newCam.connectionProfile,
       rtsp: newCam.rtsp.trim(),
-      rtspStream: newCam.rtspStream,
       status: "untested",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),
@@ -361,9 +355,11 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       return;
     }
 
+    let chosenStream = newCameraNode.rtsp;
     try {
       const result = await testCameraConnection(mlBaseUrl, newCameraNode, storageKey);
       if (!result.ok) throw new Error(result.message);
+      chosenStream = result.stream_url || chosenStream;
     } catch (error) {
       try {
         await deleteCameraCredential(storageKey, newCameraNode.id);
@@ -375,11 +371,18 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       return;
     }
 
-    setCredentialMetadata((current) => ({
-      ...current,
-      [String(newCameraNode.id)]: metadata,
-    }));
-    const verifiedCameraNode: Camera = { ...newCameraNode, status: "online" };
+    const verifiedCameraNode: Camera = { ...newCameraNode, rtsp: chosenStream, status: "online" };
+    try {
+      const savedCameras = [...cameras, verifiedCameraNode];
+      await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
+      lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
+    } catch (error) {
+      await deleteCameraCredential(storageKey, newCameraNode.id).catch(() => undefined);
+      setCameraFormErrors({ rtsp: toErrorMessage(error) });
+      setIsValidating(false);
+      return;
+    }
+    setCredentialMetadata((current) => ({ ...current, [String(newCameraNode.id)]: metadata }));
     setCameras((current) => [...current, verifiedCameraNode]);
     setActiveCamId(verifiedCameraNode.id);
     setNewCam(emptyCameraForm);
@@ -387,6 +390,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     setCameraError(verifiedCameraNode.id, null);
     setIsValidating(false);
     setShowAddModal(false);
+    notifySuccess("Camera added and connection verified.");
   };
 
   const confirmDeleteCamera = async () => {
@@ -394,8 +398,10 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     const cameraId = cameraPendingDelete.id;
     try {
       if (cameraStates[cameraId]?.counts.running) await stopCameraProcessing(mlBaseUrl, cameraId);
-      await deleteCameraCredential(storageKey, cameraId);
       const updated = cameras.filter((camera) => camera.id !== cameraId);
+      await replaceLocalCameras(mlBaseUrl, updated.map(redactCameraForStorage));
+      lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(updated);
+      await deleteCameraCredential(storageKey, cameraId);
       setCameras(updated);
       setCredentialMetadata((current) => {
         const next = { ...current };
@@ -406,6 +412,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       setActiveCamId(updated[0]?.id ?? null);
       setIsEditMode(false);
       setCameraPendingDelete(null);
+      notifySuccess("Camera removed.");
     } catch (error) {
       setCameraError(cameraId, toErrorMessage(error));
     }
@@ -431,6 +438,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    runtimeReady: Boolean(activeState),
     area: activeState?.area ?? null,
     credentialMetadata,
     detections,

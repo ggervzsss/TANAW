@@ -21,9 +21,7 @@ export function hasCameraConnectionChange(previous: Camera, next: Camera, passwo
   return (
     previous.rtsp !== next.rtsp ||
     (previous.cameraBrand ?? "tapo") !== (next.cameraBrand ?? "tapo") ||
-    previous.connectionProfile !== next.connectionProfile ||
     previous.cameraHost !== next.cameraHost ||
-    previous.rtspStream !== next.rtspStream ||
     previous.username !== next.username ||
     passwordChanged
   );
@@ -43,7 +41,6 @@ export function hasCameraRestartRequiredChange(previous: Camera, next: Camera, p
   return (
     (previous.analysisMode ?? "entrance_exit") !== (next.analysisMode ?? "entrance_exit") ||
     JSON.stringify(previous.openSpace ?? null) !== JSON.stringify(next.openSpace ?? null) ||
-    JSON.stringify(previous.coverage ?? null) !== JSON.stringify(next.coverage ?? null) ||
     (next.analysisMode === "open_space" && hasCameraCountingConfigChange(previous, next)) ||
     previous.processingProfile !== next.processingProfile ||
     previous.confidence !== next.confidence ||

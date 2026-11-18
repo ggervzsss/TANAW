@@ -40,6 +40,19 @@ REID_MODEL_PROFILES: dict[ReIdModelKey, ReIdModelProfile] = {
 }
 
 
+# One sex head per embedding space; see app.attributes and scripts/train_sex_head.py.
+SEX_HEAD_FILENAMES: dict[ReIdModelKey, str] = {
+    "fast": "sex_head_fast.npz",
+    "quality": "sex_head_quality.npz",
+}
+
+
+def sex_head_path(key: ReIdModelKey, service_root: Path | None = None) -> Path:
+    return (service_root / "models" if service_root else model_directory()) / SEX_HEAD_FILENAMES[
+        key
+    ]
+
+
 def get_reid_model_profile(key: ReIdModelKey) -> ReIdModelProfile:
     return REID_MODEL_PROFILES[key]
 

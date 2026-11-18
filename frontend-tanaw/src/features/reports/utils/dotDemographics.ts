@@ -37,14 +37,16 @@ function getSubmittedDotDemographics(expectedTotal: number, submitted?: Partial<
   const otherProvFemale = values.otherProvFemale ?? 0;
   const foreignMale = values.foreignMale ?? 0;
   const foreignFemale = values.foreignFemale ?? 0;
-  const submittedTotal = thisProvMale + thisProvFemale + otherProvMale + otherProvFemale + foreignMale + foreignFemale;
+  // This Province visitors whose sex was not recorded (the desktop app does not detect sex yet).
+  const thisProvUnspecified = nonNegativeInteger(submitted.thisProvUnspecified) ?? 0;
+  const submittedTotal = thisProvMale + thisProvFemale + thisProvUnspecified + otherProvMale + otherProvFemale + foreignMale + foreignFemale;
 
   if (submittedTotal !== expectedTotal) return null;
 
   return {
     provMale: thisProvMale,
     provFemale: thisProvFemale,
-    provTotal: thisProvMale + thisProvFemale,
+    provTotal: thisProvMale + thisProvFemale + thisProvUnspecified,
     otherMale: otherProvMale,
     otherFemale: otherProvFemale,
     otherTotal: otherProvMale + otherProvFemale,

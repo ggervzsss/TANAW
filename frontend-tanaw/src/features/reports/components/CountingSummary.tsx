@@ -13,7 +13,7 @@ export function CountingSummary({ snapshot }: { snapshot: unknown }) {
       <details>
         <summary className="cursor-pointer font-semibold">Camera evidence and snapshot</summary>
         {notes.slice(3).map((note) => (
-          <p key={note} className="mt-2 break-words">
+          <p key={note} className="mt-2 wrap-break-word">
             {note}
           </p>
         ))}

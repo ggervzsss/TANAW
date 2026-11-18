@@ -9,6 +9,7 @@ from typing import Any, cast
 import cv2
 import numpy as np
 
+from app.attributes import SexEstimator
 from app.config.camera_config import CameraStartRequest, TripwireLine
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import DETECTOR_PROFILES, YoloPersonTracker
@@ -21,7 +22,7 @@ from app.evaluation.detection_cache import (
     validate_detection_cache,
 )
 from app.evaluation.replay_reid import ReplayReIdCoordinator
-from app.reid import ReIdReplayMode
+from app.reid import ReIdReplayMode, sex_head_path
 from app.tracking import TrackIdentityResolver
 
 PROCESSING_PROFILE_CHOICES = [
@@ -47,6 +48,12 @@ def main() -> None:
         default="auto",
     )
     parser.add_argument("--tracker", choices=["auto", "bytetrack", "botsort"], default="auto")
+    parser.add_argument(
+        "--sex-heads",
+        choices=["installed", "off"],
+        default="installed",
+        help="Estimate male/female for the replayed unique tracks with the installed heads.",
+    )
     parser.add_argument("--tracking-confidence", type=float, default=0.15)
     parser.add_argument("--counting-confidence", type=float, default=0.35)
     parser.add_argument("--sample-fps", type=float)
@@ -154,7 +161,12 @@ def main() -> None:
         if args.detections_cache is not None:
             cache_writer = DetectionCacheWriter(args.detections_cache, cache_metadata)
 
-    reid = ReplayReIdCoordinator(cast(ReIdReplayMode, args.reid))
+    reid = ReplayReIdCoordinator(
+        cast(ReIdReplayMode, args.reid),
+        SexEstimator.from_files([sex_head_path("fast"), sex_head_path("quality")])
+        if args.sex_heads == "installed"
+        else None,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     processing_times_ms: list[float] = []
@@ -364,6 +376,9 @@ def main() -> None:
         "detector_nms_iou": tracker.nms_iou,
         "detector_max_detections": tracker.max_detections,
         "reid": reid.status(),
+        "sex_estimate": (
+            reid.sex_estimate(canonical_unique_stable_tracks) if args.sex_heads != "off" else None
+        ),
         "detection_cache": str(args.detections_cache) if args.detections_cache else None,
         "detection_cache_reused": cached_frames is not None,
         "tracking_confidence": config.tracking_confidence,

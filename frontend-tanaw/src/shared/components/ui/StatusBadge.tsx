@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type BadgeTone = "blue" | "green" | "slate" | "teal" | "amber" | "red";
 
@@ -17,5 +18,5 @@ const classes: Record<BadgeTone, string> = {
 };
 
 export function StatusBadge({ children, tone = "slate" }: StatusBadgeProps) {
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[tone]}`}>{children}</span>;
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[tone]}`}>{typeof children === "string" ? toSentenceCase(children) : children}</span>;
 }

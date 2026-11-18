@@ -40,7 +40,6 @@ class OccupancyCorrectionRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     actor_id: str | None = Field(default=None, max_length=160)
     actor_name: str | None = Field(default=None, max_length=160)
-    camera_id: int | None = None
 
 
 class OccupancyCorrectionResponse(BaseModel):
@@ -152,8 +151,12 @@ class ReportSubmissionRequest(BaseModel):
         )
         if not isinstance(demo, dict) or any(field not in demo for field in fields):
             raise ValueError("All demographics fields are required.")
-        demo = {field: "0" if demo[field] == "" else demo[field] for field in fields}
-        if any(not str(demo[field]).strip().isdigit() for field in fields):
+        # This Province visitors whose sex was not recorded; optional.
+        all_fields = (*fields, "thisProvUnspecified")
+        demo = {
+            field: "0" if demo.get(field) in (None, "") else demo[field] for field in all_fields
+        }
+        if any(not str(demo[field]).strip().isdigit() for field in all_fields):
             raise ValueError("Demographics values must be non-negative whole numbers.")
         assert self.payload is not None
         self.payload["demo"] = demo
@@ -203,15 +206,15 @@ class SamplePrepareRequest(BaseModel):
     entries: int = Field(ge=1, le=100_000)
     exits: int = Field(ge=0, le=100_000)
     unique_count: int = Field(ge=0, le=100_000)
-    peak_occupancy: int = Field(ge=1, le=100_000)
     period: str = Field(min_length=1, max_length=120)
 
 
-class SamplePrepareResponse(MetricsSummaryResponse):
+class SamplePrepareResponse(BaseModel):
     enterprise_id: str
     enterprise_name: str | None = None
-    period: str | None = None
-    prepared: bool = True
+    period: str
+    prepared: bool
+    days: int
 
 
 class ReportSubmissionRecordResponse(BaseModel):

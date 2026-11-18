@@ -26,9 +26,9 @@ export function EnterpriseDetailsOverview({ canChangeStatus, details, enterprise
             </div>
           </div>
           <span
-            className={`rounded-full px-3 py-1 text-xs font-black uppercase ${enterprise.status === "inactive" ? "bg-slate-100 text-slate-600" : enterprise.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+            className={`rounded-full px-3 py-1 text-xs font-black ${enterprise.status === "inactive" ? "bg-slate-100 text-slate-600" : enterprise.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
           >
-            {enterprise.status === "inactive" ? "inactive" : enterprise.isActivated ? "active" : "pending activation"}
+            {enterprise.status === "inactive" ? "Inactive" : enterprise.isActivated ? "Active" : "Pending activation"}
           </span>
         </div>
       </section>

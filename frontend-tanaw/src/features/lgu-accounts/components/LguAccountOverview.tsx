@@ -19,9 +19,9 @@ export function LguAccountSummary({ account, details }: { account: AccountSummar
             <p className="mt-1 text-sm font-medium text-slate-500">{account.email}</p>
           </div>
           <span
-            className={`rounded-full px-3 py-1 text-xs font-black uppercase ${account.status === "inactive" ? "bg-slate-100 text-slate-600" : account.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+            className={`rounded-full px-3 py-1 text-xs font-black ${account.status === "inactive" ? "bg-slate-100 text-slate-600" : account.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
           >
-            {account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}
+            {account.status === "inactive" ? "Inactive" : account.isActivated ? "Active" : "Pending activation"}
           </span>
         </div>
         {isProtected && (
@@ -63,7 +63,7 @@ export function LguEmailChangeRequest({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-black text-amber-950">Email change requested</p>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${request.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${request.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
               {request.canApprove ? "Ownership verified" : "Awaiting verification"}
             </span>
           </div>

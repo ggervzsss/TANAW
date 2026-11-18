@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getEstablishmentSummary, getMlServiceStatus, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
@@ -11,7 +11,6 @@ import {
   buildLedgerRows,
   draftLedgerKey,
   emptyDemo,
-  findPreviousDemo,
   getDemographicDraftKey,
   historyLedgerKey,
   metricsFromReport,
@@ -25,11 +24,12 @@ import { syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { useDemographicDraft } from "./useDemographicDraft";
+import { useOriginsDraft } from "./useOriginsDraft";
+import { monthlyDemoFromDays, reportDays } from "../model/daily-origins";
 import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
 
 type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
-type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
+type Preview = { demo: DemoBreakdown; origins?: DailyOrigins; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: Options) {
   const { timeFormat } = useSystemDisplayPreferences();
@@ -48,25 +48,33 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
-  const { demo, setDemo } = useDemographicDraft({ activeReportId, demographicDraftKey, isReadOnly, period, reportsHistory });
+  const { origins, setOrigins, isHydrating } = useOriginsDraft({ activeReportId, draftKey: demographicDraftKey, isReadOnly, period, reportsHistory });
   const data = useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat });
   const displayedMetrics = revisionMetrics ?? (activeReport ? metricsFromReport(activeReport) : data.liveMetrics);
+  // Submitted reports made before daily entry keep their monthly totals only.
+  const hasDailyOrigins = !isReadOnly || activeReport?.origins !== undefined;
+  const days = useMemo(() => reportDays(period, displayedMetrics, origins), [period, displayedMetrics, origins]);
+  const derivedDemo = useMemo(() => monthlyDemoFromDays(days), [days]);
+  const demo = isReadOnly && activeReport?.demo ? activeReport.demo : derivedDemo;
   const blockingMetricsError = revisionMetrics?.counting ? reportBaselineError(revisionMetrics.counting) : activeReport?.counting ? null : data.metricsError;
-  const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, { checkDuplicatePeriod: !isReadOnly, checkReportingPeriod: !isReadOnly });
+  const validationError = validateReportDraft(displayedMetrics, demo, isReadOnly ? [] : days, period, reportsHistory, activeReportId, {
+    checkDuplicatePeriod: !isReadOnly,
+    checkReportingPeriod: !isReadOnly,
+  });
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
         currentDemo: !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? demo : emptyDemo(),
+        currentOrigins: !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? origins : {},
         currentMetrics: data.currentMetrics,
         currentNotes: !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "",
         currentPeriod: currentReportingPeriod,
         pendingCounts: data.pendingPeriodCounts,
         reportsHistory,
       }),
-    [activeReport, period, currentReportingPeriod, demo, data.currentMetrics, data.pendingPeriodCounts, notes, reportsHistory],
+    [activeReport, period, currentReportingPeriod, demo, origins, data.currentMetrics, data.pendingPeriodCounts, notes, reportsHistory],
   );
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
-  const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [reportsHistory, activeReportId]);
 
   const handleSelectLedgerRow = (row: ReportLedgerRow) => {
     if (submitting.current) return;
@@ -78,10 +86,17 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     setActiveReportId(row.kind === "history" ? row.report.id : null);
     setPeriod(row.report.period ?? row.report.date ?? getCurrentReportingPeriod());
     setNotes(row.kind === "history" ? (row.report.notes ?? "") : "");
-    setDemo(row.kind === "history" ? (row.report.demo ?? emptyDemo()) : emptyDemo());
+    setOrigins(row.kind === "history" ? (row.report.origins ?? {}) : {});
   };
   const handlePreviewReport = (report: ReportRecord) =>
-    setPreviewReport({ demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id });
+    setPreviewReport({
+      demo: report.demo ?? emptyDemo(),
+      origins: report.origins,
+      metrics: metricsFromReport(report),
+      notes: report.notes ?? "",
+      period: report.period ?? report.date,
+      reportId: report.id,
+    });
   const handleDownloadReport = (report: ReportRecord) => {
     const metrics = metricsFromReport(report);
     const reportDemo = report.demo ?? emptyDemo();
@@ -91,7 +106,16 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       handlePreviewReport(report);
       return;
     }
-    downloadDotReportPdf({ enterpriseName, reportId: report.id, period: formatReportingPeriodLabel(report.period ?? report.date), metrics, demo: reportDemo, notes: report.notes ?? "" });
+    downloadDotReportPdf({
+      enterpriseName,
+      reportId: report.id,
+      period: formatReportingPeriodLabel(report.period ?? report.date),
+      metrics,
+      demo: reportDemo,
+      origins: report.origins,
+      notes: report.notes ?? "",
+      attractionType: useAuthStore.getState().user?.category ?? undefined,
+    });
   };
   const refreshRevisionCounts = async () => {
     if (isReadOnly || !activeReport) return;
@@ -115,7 +139,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
 
   const executeSubmit = async () => {
     if (submitting.current || isReadOnly) return;
-    const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
+    const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, days, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
     if (error) {
       notifyError(error);
       return;
@@ -135,7 +159,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       return;
     }
     const statusLabel = activeReportId ? "Resubmitted" : "Submitted";
-    const key = JSON.stringify({ enterpriseId, activeReportId, period, notes, demo, snapshot: counting.snapshot_version });
+    const key = JSON.stringify({ enterpriseId, activeReportId, period, notes, origins, snapshot: counting.snapshot_version });
     if (pendingOperation.current?.key !== key)
       pendingOperation.current = {
         key,
@@ -158,7 +182,16 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         notes,
         period,
         reportId,
-        reportPayload: { auditTrail, demo, notes, period, status: statusLabel },
+        reportPayload: {
+          auditTrail,
+          demo,
+          origins,
+          notes,
+          period,
+          status: statusLabel,
+          // The service normalizes demo to its canonical province fields; the city subset travels separately.
+          var1: { thisCityMale: demo.thisCityMale ?? "", thisCityFemale: demo.thisCityFemale ?? "", thisCityUnspecified: demo.thisCityUnspecified ?? "" },
+        },
       });
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       pendingOperation.current = null;
@@ -198,6 +231,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     activeReport,
     activeReportId,
     blockingMetricsError,
+    days,
     demo,
     displayedMetrics,
     enterpriseName,
@@ -205,17 +239,18 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     handleDownloadReport,
     handlePreviewReport,
     handleSelectLedgerRow,
-    isPeriodChanging: (!activeReport && data.loading) || isRefreshing,
+    hasDailyOrigins,
+    isPeriodChanging: (!activeReport && data.loading) || isRefreshing || isHydrating,
     isReadOnly,
     isSubmitting,
     ledgerRows,
     notes,
     period,
+    origins,
     previewReport,
-    previousDemo,
     refreshRevisionCounts,
-    setDemo,
     setNotes,
+    setOrigins,
     setPreviewReport,
     setShowConfirm,
     showConfirm,

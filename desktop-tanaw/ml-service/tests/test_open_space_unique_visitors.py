@@ -186,6 +186,13 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
                     assert tracker.active_records()[0]["uncertain_gap_count"] == 1
                     assert manager._appearance_buffer.sample_count_for_track(1) == 2
             assert manager.area_state()["unique_visitors"] == 1
+            # The zone figure comes from the same establishment gallery Reports counts.
+            establishment, zone = manager._establishment_registry, manager.area_state()
+            assert establishment is not None and zone is not None
+            report_day = establishment.repository.rebuild_day(
+                zone["unique_visitors_date"], tracker.wall_anchor
+            )
+            assert report_day["unique_count"] == zone["unique_visitors"]
             assert tracker.active_records()[0]["visit_id"] != first_visit
             assert manager._area_repo is not None
             result = manager._area_repo.query(

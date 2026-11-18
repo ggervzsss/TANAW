@@ -45,7 +45,7 @@ export function LoginPage() {
   return (
     <section
       ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
+      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) text-(--tanaw-text)"
       data-auth-background-ready={isBackgroundReady}
     >
       <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
@@ -61,7 +61,7 @@ export function LoginPage() {
             <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
               <SampaguitaIcon className="h-8 w-8" />
             </div>
-            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
+            <h2 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
               Welcome to San Pedro
             </h2>
             <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
@@ -90,7 +90,7 @@ export function LoginPage() {
                   className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5"
                 />
                 <div className="min-w-0">
-                  <h1 className="tanaw-auth-brand-title font-['Montserrat'] text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
+                  <h1 className="tanaw-auth-brand-title font-display text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
                   <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">San Pedro Tourism Management</p>
                 </div>
               </div>
