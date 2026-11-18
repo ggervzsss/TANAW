@@ -191,8 +191,8 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
         await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-${index}-clicked.png`) });
       }
     }
-    await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
-    const assistant = page.getByRole("complementary", { name: "TANAW AI Assistant" });
+    await page.getByRole("button", { name: "Open TANAW Insights" }).click();
+    const assistant = page.getByRole("complementary", { name: "TANAW Insights" });
     const input = assistant.getByRole("textbox");
     await expect(input).toBeFocused();
     await expect(input).toHaveCSS("outline-style", "none");
@@ -200,15 +200,17 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
     await input.fill("What insights can you give me?");
     await assistant.getByRole("button", { name: "Send message" }).click();
     await expect(assistant.getByRole("log")).toContainText("What insights can you give me?");
+    await expect(assistant.getByRole("log")).toContainText("TANAW recorded about");
+    await expect(assistant.getByRole("log")).toHaveAttribute("aria-busy", "false");
     await page.screenshot({ path: testInfo.outputPath(`dashboard-assistant-expanded.png`) });
-    await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
-    await expect(page.getByRole("button", { name: "Open TANAW AI Assistant" })).toBeFocused();
+    await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
+    await expect(page.getByRole("button", { name: "Open TANAW Insights" })).toBeFocused();
     expect(sidecar.requestPaths).toContain("/reports/local");
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
+    await page.getByRole("button", { name: "Open TANAW Insights" }).click();
     await expect(assistant).toBeVisible();
     expect(await page.locator(".overview-layout").evaluate((element) => getComputedStyle(element).transitionDuration)).toContain("0.32s");
-    await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
+    await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
     await expect(assistant).toHaveCount(0);
   } finally {
     if (application) await application.close();

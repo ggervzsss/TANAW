@@ -47,6 +47,15 @@ def establishment_summary(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/hourly")
+def establishment_hourly(request: Request, start: datetime, end: datetime) -> dict[str, Any]:
+    """Anonymous activity by local hour of day, for questions such as the busiest hour."""
+    try:
+        return registry(request).establishment_hourly(start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/live")
 def establishment_live(request: Request) -> dict[str, Any]:
     try:

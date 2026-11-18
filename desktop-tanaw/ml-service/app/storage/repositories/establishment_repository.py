@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from app.analytics.establishment_hourly import hourly_activity
 from app.analytics.establishment_movements import daily_movements
 from app.analytics.visitor_sex import daily_sex_counts
 from app.storage.local_database import LocalDatabase
@@ -20,6 +21,9 @@ from app.storage.local_database import LocalDatabase
 TIMEZONE = ZoneInfo("Asia/Manila")
 POLICY_VERSION = 3
 COUNTING_BASIS = "sum_of_daily_establishment_unique_visitors"
+# Observations and occupancy intervals are kept this many days; see ``cleanup``.
+RETENTION_DAYS = 30
+HOURLY_MAX_DAYS = 31
 
 
 def snapshot_digest(value: dict[str, Any]) -> str:
@@ -473,6 +477,66 @@ class EstablishmentRepository:
         result["snapshot_version"] = snapshot_digest(result)
         return result
 
+    def hourly(self, start: datetime, end: datetime, now: datetime | None = None) -> dict[str, Any]:
+        """Activity by local hour of day across ``[start, end)``, from retained observations."""
+        now = now or datetime.now(UTC)
+        begin, stop = timestamp(start), timestamp(end)
+        if begin >= stop or end - start > timedelta(days=HOURLY_MAX_DAYS):
+            raise ValueError(
+                f"Select an increasing hourly range of at most {HOURLY_MAX_DAYS} days."
+            )
+        start_day = start.astimezone(TIMEZONE).date()
+        end_day = end.astimezone(TIMEZONE).date()
+        if (
+            begin != day_bounds(start_day.isoformat())[0]
+            or stop != day_bounds(end_day.isoformat())[0]
+        ):
+            raise ValueError("Hourly activity requires Asia/Manila midnight boundaries.")
+        with self.database.connection() as db:
+            rows = [
+                dict(row)
+                for row in db.execute(
+                    "select analysis_mode,kind,arrival_observed,first_at "
+                    "from establishment_observations "
+                    "where business_date>=? and business_date<? and qualified=1",
+                    (start_day.isoformat(), end_day.isoformat()),
+                )
+            ]
+            intervals = [
+                dict(row)
+                for row in db.execute(
+                    "select start_at,end_at,occupancy from establishment_occupancy_intervals "
+                    "where start_at<? and end_at>=?",
+                    (stop, begin),
+                )
+            ]
+        hours = hourly_activity(rows, intervals, start, end)
+        days_requested = (end_day - start_day).days
+        retained_from = now.astimezone(TIMEZONE).date() - timedelta(days=RETENTION_DAYS)
+        days_retained = sum(
+            start_day + timedelta(days=offset) >= retained_from for offset in range(days_requested)
+        )
+        observed = any(
+            hour["entries"] or hour["area_visits"] or hour["peak_occupancy"] is not None
+            for hour in hours
+        )
+        return {
+            "enterprise_id": self.database.enterprise_id,
+            "from_at": begin,
+            "to_at": stop,
+            "timezone": "Asia/Manila",
+            "days_requested": days_requested,
+            "days_retained": days_retained,
+            "state": (
+                "unavailable"
+                if not observed
+                else "partial"
+                if days_retained < days_requested
+                else "available"
+            ),
+            "hours": hours,
+        }
+
     def cleanup(self, now: datetime) -> None:
         today = now.astimezone(TIMEZONE).date()
         with self.database.connection() as db:
@@ -485,7 +549,7 @@ class EstablishmentRepository:
             )
             db.execute(
                 "delete from establishment_observations where business_date<?",
-                ((today - timedelta(days=30)).isoformat(),),
+                ((today - timedelta(days=RETENTION_DAYS)).isoformat(),),
             )
             db.execute(
                 "delete from establishment_daily_summaries where business_date<?",
@@ -493,7 +557,7 @@ class EstablishmentRepository:
             )
             db.execute(
                 "delete from establishment_occupancy_intervals where end_at<?",
-                (timestamp(now - timedelta(days=30)),),
+                (timestamp(now - timedelta(days=RETENTION_DAYS)),),
             )
 
     def record_occupancy_correction(

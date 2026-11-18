@@ -1,40 +1,90 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
-import { Bot, Brain, ArrowUpRight, Send, X } from "lucide-react";
-import type { EstablishmentLive, EstablishmentSummary } from "../../camera/services/ml-service";
+import { ArrowUpRight, BarChart3, Send, Sparkles, X } from "lucide-react";
+import { DEFAULT_ML_SERVICE_BASE_URL, getEstablishmentHourly, getEstablishmentLive, getEstablishmentSummary, getMlServiceStatus } from "../../camera/services/ml-service";
+import { useAuthStore } from "../../login/stores/auth-store";
+import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import type { ReportRecord } from "../../../types/enterprise";
 import type { TrendFilter } from "../types/dashboard";
+import { compose, dataNeeds, loadAssistantData, PERIOD_FOR_FILTER, SUGGESTIONS, understand, type AssistantDataSource, type Language, type LanguagePreference, type Reply } from "../assistant";
 
-const prompts = ["Analyze visitor trends", "When are our busiest hours?", "Explain my latest visitor report", "What insights can you give me?"];
-type Message = { id: number; question: string; answer: string };
-export function TanawAssistant({
-  open,
-  onToggle,
-  summary,
-  live,
-  report,
-  filter,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  summary: EstablishmentSummary | null;
-  live: EstablishmentLive | null;
-  report: ReportRecord | null;
-  filter: TrendFilter;
-}) {
+const LANGUAGE_STORAGE_KEY = "tanaw:assistant-language";
+const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguagePreference; label: string; hint: string }> = [
+  { value: "auto", label: "Auto", hint: "Reply in the language of the question" },
+  { value: "en", label: "English", hint: "Always reply in English" },
+  { value: "tl", label: "Tagalog", hint: "Always reply in Tagalog" },
+];
+
+const COPY: Record<Language, { greeting: string; intro: string; prompt: string; tryAsking: string; checking: string; disclosure: string; placeholder: string }> = {
+  en: {
+    greeting: "Hello! I'm TANAW Insights.",
+    intro: "I answer questions about your visitor activity using the counts recorded on this computer. Ask in English or Tagalog.",
+    prompt: "How can I help you?",
+    tryAsking: "Try asking",
+    checking: "Checking your counts…",
+    disclosure: "Answers come only from this computer's counts · Works offline",
+    placeholder: "Ask about your visitors…",
+  },
+  tl: {
+    greeting: "Kumusta! Ako ang TANAW Insights.",
+    intro: "Sinasagot ko ang mga tanong tungkol sa mga bisita gamit ang mga bilang na naitala sa computer na ito. Magtanong sa Tagalog o English.",
+    prompt: "Ano ang maitutulong ko?",
+    tryAsking: "Subukang itanong",
+    checking: "Tinitingnan ang mga bilang…",
+    disclosure: "Galing lang sa mga bilang ng computer na ito · Gumagana kahit offline",
+    placeholder: "Magtanong tungkol sa mga bisita…",
+  },
+};
+
+type Message = { id: number; question: string; reply: Reply | null };
+
+function readLanguagePreference(): LanguagePreference {
+  try {
+    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (stored === "auto" || stored === "en" || stored === "tl") return stored;
+  } catch {
+    // Storage can be unavailable; Auto still works.
+  }
+  return "auto";
+}
+
+function writeLanguagePreference(value: LanguagePreference) {
+  try {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+  } catch {
+    // The choice still applies until the dashboard closes.
+  }
+}
+
+export function TanawAssistant({ open, onToggle, filter, report }: { open: boolean; onToggle: () => void; filter: TrendFilter; report: ReportRecord | null }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [language, setLanguage] = useState<LanguagePreference>(readLanguagePreference);
+  const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
+  const { timeFormat } = useSystemDisplayPreferences();
   const reduceMotion = useReducedMotion();
   const conversation = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLInputElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
-  const nextMessageId = useRef(messages.length);
+  const nextMessageId = useRef(0);
   const savedScroll = useRef(0);
   const followLatest = useRef(false);
   const wasOpen = useRef(open);
-  const seenMessage = useRef<number | undefined>(messages[messages.length - 1]?.id);
+  const mounted = useRef(true);
+  const seenMessage = useRef<number | undefined>(undefined);
   const [latestMessageId, setLatestMessageId] = useState<number | null>(null);
   const lastId = messages[messages.length - 1]?.id;
+  const pending = messages.some((message) => message.reply == null);
+  const lastReplyLanguage = [...messages].reverse().find((message) => message.reply)?.reply?.language;
+  const shownLanguage: Language = language === "auto" ? (lastReplyLanguage ?? "en") : language;
+  const copy = COPY[shownLanguage];
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (!open) {
       if (wasOpen.current) launcher.current?.focus({ preventScroll: true });
@@ -65,38 +115,55 @@ export function TanawAssistant({
       observer.disconnect();
     };
   }, [open, lastId, reduceMotion]);
-  const appendMessage = (question: string, answer: string) => {
-    const id = nextMessageId.current++;
-    followLatest.current = true;
-    setLatestMessageId(id);
-    setMessages((current) => [...current.slice(-19), { id, question, answer }]);
-    setInput("");
+
+  const source = useMemo<AssistantDataSource>(
+    () => ({
+      baseUrl: async () => (await getMlServiceStatus()).baseUrl || DEFAULT_ML_SERVICE_BASE_URL,
+      summary: getEstablishmentSummary,
+      hourly: getEstablishmentHourly,
+      live: getEstablishmentLive,
+      enterpriseId,
+      report,
+    }),
+    [enterpriseId, report],
+  );
+
+  const ask = useCallback(
+    async (question: string) => {
+      const query = question.trim();
+      if (!query || pending) return;
+      const id = nextMessageId.current++;
+      followLatest.current = true;
+      setLatestMessageId(id);
+      setInput("");
+      setMessages((current) => [...current.slice(-19), { id, question: query, reply: null }]);
+      const now = new Date();
+      const plan = understand(query, { defaultPeriod: PERIOD_FOR_FILTER[filter], language });
+      const data = await loadAssistantData(dataNeeds(plan, now), source);
+      const reply = compose(plan, data, { now, timeFormat });
+      if (!mounted.current) return;
+      setMessages((current) => current.map((message) => (message.id === id ? { ...message, reply } : message)));
+    },
+    [filter, language, pending, source, timeFormat],
+  );
+
+  const chooseLanguage = (value: LanguagePreference) => {
+    setLanguage(value);
+    writeLanguagePreference(value);
   };
-  const ask = (question: string) => {
-    const query = question.trim();
-    if (!query) return;
-    const period = filter === "Today" ? "today" : filter === "Week" ? "the past 7 days" : "the past 30 days";
-    const observed = summary?.days.filter((day) => day.covered_ms > 0 || day.qualified_observations > 0) ?? [];
-    const peak = observed.filter((day) => day.peak_occupancy != null).sort((a, b) => b.peak_occupancy! - a.peak_occupancy!)[0];
-    let answer: string;
-    if (/report|monthly|submission/i.test(query))
-      answer = report
-        ? `Your latest saved report covers ${report.period ?? report.date}. It records ${report.unique.toLocaleString()} estimated unique visitors. Status: ${report.status}. Open Recent Reports or View All to inspect the saved counts, demographic allocation, and submission history.`
-        : "There are no saved reports available. Open Reports to review the current reporting period.";
-    else if (/busy|busiest|hour|peak/i.test(query))
-      answer = peak
-        ? `The highest observed occupancy for ${period} was ${peak.peak_occupancy!.toLocaleString()} people on ${peak.business_date}. Hourly establishment data is not available, so I cannot identify a busiest hour. Gaps in observation may affect this peak.`
-        : "No observed occupancy data is available for this period. Start your configured cameras to collect activity.";
-    else if (/trend|insight|visitor|occupancy|entr|exit|count/i.test(query))
-      answer =
-        summary && summary.reconciliation_state !== "not_collected"
-          ? `For ${period}, ${summary.identification_state === "unavailable" ? "unique visitor estimates are unavailable" : `TANAW recorded ${summary.unique_count.toLocaleString()} estimated unique visitors`}. ${summary.movement_state === "unavailable" ? "Boundary entries and exits are not measured." : `Observed entries: ${summary.entries.toLocaleString()}; exits: ${summary.exits.toLocaleString()}.`} Current occupancy: ${live?.occupancy == null ? "unavailable" : `${live.occupancy.toLocaleString()} people`}. Observation coverage: ${Math.round(summary.coverage_ratio * 100)}%. ${summary.reconciliation_state === "partial" ? "These figures are partial estimates." : "Unique counts are daily estimates; multiple days add those estimates together."}`
-          : "Visitor data is unavailable or counting setup is incomplete. Check Camera Setup and start monitoring to collect observations.";
-    else
-      answer =
-        "I can summarize your visitor counts, observed peaks, and latest saved report. Free-form AI analysis is not connected in this application yet. Choose a suggestion to review the available data.";
-    appendMessage(query, answer);
-  };
+
+  const suggestions = (replyLanguage: Language) => (
+    <>
+      <strong className="assistant-try">{COPY[replyLanguage].tryAsking}</strong>
+      {SUGGESTIONS[replyLanguage].map((prompt) => (
+        <button type="button" key={prompt} disabled={pending} onClick={() => void ask(prompt)}>
+          {prompt}
+          <ArrowUpRight size={13} />
+        </button>
+      ))}
+    </>
+  );
+
   return (
     <AnimatePresence initial={false}>
       {!open ? (
@@ -105,7 +172,7 @@ export function TanawAssistant({
           ref={launcher}
           type="button"
           className="assistant-launcher"
-          aria-label="Open TANAW AI Assistant"
+          aria-label="Open TANAW Insights"
           aria-controls="tanaw-assistant-panel"
           aria-expanded={false}
           onClick={onToggle}
@@ -114,27 +181,36 @@ export function TanawAssistant({
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ duration: reduceMotion ? 0 : 0.18 }}
         >
-          <Bot size={48} />
+          <BarChart3 size={44} />
         </motion.button>
       ) : null}
       {open ? (
         <AssistantPanel key="assistant-panel" reduceMotion={Boolean(reduceMotion)}>
           <header>
-            <Bot size={43} />
+            <BarChart3 size={40} />
             <div>
-              <h2>TANAW AI Assistant</h2>
-              <p>Your Smart Tourism Insights Assistant</p>
+              <h2>TANAW Insights</h2>
+              <p>Answers from your establishment's counts</p>
             </div>
-            <button className="design-icon-button" type="button" aria-label="Collapse TANAW AI Assistant" aria-expanded={true} onClick={onToggle}>
+            <button className="design-icon-button" type="button" aria-label="Collapse TANAW Insights" aria-expanded={true} onClick={onToggle}>
               <X size={18} />
             </button>
           </header>
+          <div className="assistant-language" role="group" aria-label="Reply language">
+            <span aria-hidden="true">Reply in</span>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button key={option.value} type="button" aria-pressed={language === option.value} title={option.hint} onClick={() => chooseLanguage(option.value)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
           <div
             ref={conversation}
             className="assistant-conversation"
             role="log"
-            aria-label="Assistant conversation"
+            aria-label="Insights conversation"
             aria-live="polite"
+            aria-busy={pending}
             onScroll={(event) => {
               savedScroll.current = event.currentTarget.scrollTop;
               if (event.currentTarget.scrollHeight - event.currentTarget.scrollTop - event.currentTarget.clientHeight < 24) followLatest.current = true;
@@ -149,26 +225,18 @@ export function TanawAssistant({
               if (["PageUp", "Home", "ArrowUp"].includes(event.key)) followLatest.current = false;
             }}
           >
-            <div className="assistant-message">
-              <Brain />
+            <div className="assistant-message" lang={shownLanguage}>
+              <Sparkles />
               <div>
-                Hello! I’m TANAW, your assistant for understanding visitor activity and tourism reports.
-                <br />
-                <br />I can summarize your available counts and explain how your reports were prepared.
+                <strong>{copy.greeting}</strong>
+                <p>{copy.intro}</p>
               </div>
             </div>
-            <div className="assistant-message">
-              <Brain />
+            <div className="assistant-message" lang={shownLanguage}>
+              <Sparkles />
               <div>
-                <strong>How can I help you?</strong>
-                <p>Explore your visitor data and reports.</p>
-                <strong className="assistant-try">Try asking</strong>
-                {prompts.map((prompt) => (
-                  <button type="button" key={prompt} onClick={() => ask(prompt)}>
-                    {prompt}
-                    <ArrowUpRight size={13} />
-                  </button>
-                ))}
+                <strong>{copy.prompt}</strong>
+                {suggestions(shownLanguage)}
               </div>
             </div>
             {messages.map((message) => (
@@ -180,29 +248,22 @@ export function TanawAssistant({
                 transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
               >
                 <p className="assistant-question">{message.question}</p>
-                <div className="assistant-message">
-                  <Brain />
-                  <div>{message.answer}</div>
+                <div className="assistant-message" lang={message.reply?.language ?? shownLanguage}>
+                  <Sparkles />
+                  {message.reply ? <ReplyBody reply={message.reply} suggestions={suggestions} /> : <div className="assistant-pending">{copy.checking}</div>}
                 </div>
               </motion.div>
             ))}
           </div>
-          <p className="assistant-disclosure">{"Data summaries \u00b7 AI service not connected"}</p>
+          <p className="assistant-disclosure">{copy.disclosure}</p>
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              ask(input);
+              void ask(input);
             }}
           >
-            <input
-              ref={composer}
-              aria-label="Ask TANAW about your visitor data"
-              placeholder="Ask TANAW about your visitor data…"
-              value={input}
-              maxLength={1000}
-              onChange={(event) => setInput(event.target.value)}
-            />
-            <button type="submit" aria-label="Send message" disabled={!input.trim()}>
+            <input ref={composer} aria-label="Ask TANAW about your visitor data" placeholder={copy.placeholder} value={input} maxLength={1000} onChange={(event) => setInput(event.target.value)} />
+            <button type="submit" aria-label="Send message" disabled={!input.trim() || pending}>
               <Send size={23} />
             </button>
           </form>
@@ -212,13 +273,35 @@ export function TanawAssistant({
   );
 }
 
+function ReplyBody({ reply, suggestions }: { reply: Reply; suggestions: (language: Language) => ReactNode }) {
+  return (
+    <div>
+      <p>{reply.text}</p>
+      {reply.details.length > 0 && (
+        <ul className="assistant-details">
+          {reply.details.map((detail) => (
+            <li key={detail}>{detail}</li>
+          ))}
+        </ul>
+      )}
+      {reply.notes.map((note) => (
+        <p key={note} className="assistant-note">
+          {note}
+        </p>
+      ))}
+      {reply.basis && <p className="assistant-basis">{reply.basis}</p>}
+      {reply.suggest && suggestions(reply.language)}
+    </div>
+  );
+}
+
 function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduceMotion: boolean }) {
   const present = useIsPresent();
   return (
     <motion.aside
       id="tanaw-assistant-panel"
       className="design-card tanaw-assistant"
-      aria-label="TANAW AI Assistant"
+      aria-label="TANAW Insights"
       aria-hidden={!present}
       {...(!present ? { inert: "" } : {})}
       initial={{ opacity: 0, x: 10, scale: 0.99 }}

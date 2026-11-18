@@ -127,6 +127,24 @@ html.dark .enterprise-shell .overview-layout .assistant-user-message {
   background: var(--theme-accent-tint);
   color: var(--theme-text);
 }
+html.dark .enterprise-shell .overview-layout .assistant-language {
+  color: var(--theme-muted);
+}
+html.dark .enterprise-shell .overview-layout .assistant-language button {
+  border-color: var(--theme-outline);
+  color: var(--theme-text);
+}
+html.dark .enterprise-shell .overview-layout .assistant-language button[aria-pressed="true"] {
+  border-color: var(--theme-action);
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+}
+html.dark .enterprise-shell .overview-layout :is(.assistant-basis, .assistant-pending) {
+  color: var(--theme-muted);
+}
+html.dark .enterprise-shell .overview-layout .assistant-note {
+  border-color: var(--theme-warning-text);
+}
 html.dark .enterprise-shell .overview-layout .tanaw-assistant form {
   background: var(--theme-inset);
   border-color: var(--theme-outline);
