@@ -150,7 +150,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           </details>
         )}
       </div>
-      <TanawAssistant open={assistantOpen} onToggle={() => setAssistantOpen((value) => !value)} summary={summary} live={live} report={reports[0] ?? null} filter={filter} />
+      <TanawAssistant open={assistantOpen} onToggle={() => setAssistantOpen((value) => !value)} report={reports[0] ?? null} filter={filter} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { AreaMetrics } from "../../open-space/types";
-import type { EstablishmentLive, EstablishmentSummary } from "./establishment.types";
+import type { EstablishmentHourly, EstablishmentLive, EstablishmentSummary } from "./establishment.types";
 import type { EstablishmentReportPeriod } from "./establishment.types";
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
@@ -27,7 +27,7 @@ import {
 } from "./ml-service.types";
 
 export * from "./ml-service.types";
-export type { EstablishmentLive, EstablishmentSummary, DailyEstablishmentMetrics } from "./establishment.types";
+export type { EstablishmentHourly, EstablishmentLive, EstablishmentSummary, DailyEstablishmentMetrics, HourlyEstablishmentActivity } from "./establishment.types";
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
 
@@ -103,6 +103,12 @@ export async function getMlCameraStates(baseUrl: string): Promise<MlCameraStates
 export async function getEstablishmentSummary(baseUrl: string, range: { start: string; end: string } | { period: string }): Promise<EstablishmentSummary> {
   const query = new URLSearchParams(range);
   return requestJson<EstablishmentSummary>(`${baseUrl}/metrics/establishment/summary?${query}`, { method: "GET" }, 10000);
+}
+
+/** Activity by local hour of day for midnight-bounded ranges of at most 31 days. */
+export async function getEstablishmentHourly(baseUrl: string, range: { start: string; end: string }): Promise<EstablishmentHourly> {
+  const query = new URLSearchParams(range);
+  return requestJson<EstablishmentHourly>(`${baseUrl}/metrics/establishment/hourly?${query}`, { method: "GET" }, 10000);
 }
 
 export async function getEstablishmentLive(baseUrl: string): Promise<EstablishmentLive> {

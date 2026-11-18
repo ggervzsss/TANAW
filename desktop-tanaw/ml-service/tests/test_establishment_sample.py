@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from app.storage.repositories.establishment_sample_repository import (
     SAMPLE_SOURCE_NAME,
     prepare_sample_period,
 )
+from app.storage.repositories.report_draft_repository import ReportDraftRepository
 
 NOW = datetime(2026, 11, 16, 4, tzinfo=UTC)
 COUNTS = {"entries": 120, "exits": 108, "unique_count": 90}
@@ -244,3 +246,75 @@ def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path):
         assert submitted.json()["unique_count"] == 90
     finally:
         pipelines.close()
+
+
+def sample_origins(service: EstablishmentRegistry, period: str) -> dict[str, Any]:
+    draft = ReportDraftRepository(service.database).get(f"period:{period}")
+    assert draft is not None
+    origins: dict[str, Any] = draft["payload"]["origins"]
+    return origins
+
+
+def test_past_months_have_origins_confirmed_for_every_visited_day(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    prepare(service, "October 2026")
+
+    origins = sample_origins(service, "October 2026")
+    assert sorted(origins) == [f"2026-10-{day:02d}" for day in range(1, 32)]
+    assert sum(sum(counts.values()) for day in origins.values() for counts in day.values()) > 0
+    days = {
+        day["business_date"]: day["unique_count"]
+        for day in EstablishmentReportRepository(service.database).period_summary("October 2026")[
+            "counting"
+        ]["days"]
+    }
+    for business_date, day in origins.items():
+        others = sum(counts["male"] + counts["female"] for counts in day.values())
+        assert set(day) == {"otherCity", "otherProvince", "foreign"}
+        assert others <= days[business_date]
+
+
+def test_today_and_the_three_days_before_it_are_left_for_the_user(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    # NOW is 16 November in Manila, so 13-16 November stay unfilled.
+    prepare(service, "November 2026")
+
+    assert sorted(sample_origins(service, "November 2026")) == [
+        f"2026-11-{day:02d}" for day in range(1, 13)
+    ]
+
+
+def test_sample_origins_keep_the_users_entries(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    drafts = ReportDraftRepository(service.database)
+    entered = {
+        "otherCity": {"male": 1, "female": 0},
+        "otherProvince": {"male": 0, "female": 0},
+        "foreign": {"male": 0, "female": 0},
+    }
+    drafts.save(
+        "period:November 2026", "November 2026", {"origins": {"2026-11-02": entered}, "version": 2}
+    )
+
+    prepare(service, "November 2026")
+    prepare(service, "November 2026")
+
+    origins = sample_origins(service, "November 2026")
+    assert origins["2026-11-02"] == entered
+    assert len(origins) == 12
+
+
+def test_months_where_recent_days_reach_back_get_no_origins_for_those_days(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    early_december = datetime(2026, 12, 2, 4, tzinfo=UTC)
+    prepare_sample_period(
+        service.repository,
+        report_id="SAMPLE-REP-1",
+        period="November 2026",
+        now=early_december,
+        **COUNTS,
+    )
+
+    origins = sample_origins(service, "November 2026")
+    assert max(origins) == "2026-11-28"
+    assert ReportDraftRepository(service.database).get("period:December 2026") is None

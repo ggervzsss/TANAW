@@ -159,6 +159,10 @@ class CameraPipelineRegistry:
         with self._lifecycle_lock:
             return self.establishment_repository().summary(start, end)
 
+    def establishment_hourly(self, start: datetime, end: datetime) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            return self.establishment_repository().hourly(start, end)
+
     def establishment_report_periods(self) -> list[dict[str, Any]]:
         with self._lifecycle_lock:
             return EstablishmentReportRepository(self.establishment_repository().database).periods()

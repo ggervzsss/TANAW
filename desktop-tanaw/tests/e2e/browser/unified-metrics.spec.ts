@@ -114,6 +114,28 @@ async function signIn(page: Page, reportCount = 1) {
         }),
       });
     }
+    if (pathname === "/metrics/establishment/hourly") {
+      const query = new URL(request.url).searchParams;
+      return mlResponse({
+        status: 200,
+        body: JSON.stringify({
+          enterprise_id: enterpriseUser.enterpriseId,
+          from_at: query.get("start"),
+          to_at: query.get("end"),
+          timezone: "Asia/Manila",
+          days_requested: 1,
+          days_retained: 1,
+          state: "available",
+          hours: Array.from({ length: 24 }, (_, hour) => ({
+            hour,
+            entries: hour === 14 ? 9 : 0,
+            area_visits: 0,
+            peak_occupancy: hour === 14 ? 18 : hour === 10 ? 6 : null,
+            covered_ms: 3600000,
+          })),
+        }),
+      });
+    }
     if (pathname === "/reports/local")
       return mlResponse({
         status: 200,
@@ -157,16 +179,23 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await expect(segment("visitors").getByText("900", { exact: true })).toBeVisible();
   await selectDashboardPeriod(page, "Week");
   await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
-  const assistant = page.getByRole("complementary", { name: "TANAW AI Assistant" });
+  await page.getByRole("button", { name: "Open TANAW Insights" }).click();
+  const assistant = page.getByRole("complementary", { name: "TANAW Insights" });
   await expect(assistant).toBeVisible();
-  await assistant.getByRole("button", { name: "Analyze visitor trends" }).click();
-  await expect(assistant.getByRole("log")).toContainText("457 estimated unique visitors");
+  await assistant.getByRole("button", { name: "Which day had the most visitors this week?" }).click();
+  await expect(assistant.getByRole("log")).toContainText("was the busiest day in the past 7 days, with about 457 visitors.");
+  await assistant.getByRole("textbox").fill("Pinakang busy ng establishment today?");
+  await assistant.getByRole("button", { name: "Send message" }).click();
+  await expect(assistant.getByRole("log")).toContainText("Pinaka-busy ngayong araw bandang 2:00–3:00 PM, na may hanggang 18 tao sa loob nang sabay-sabay.");
+  await expect(assistant.getByRole("button", { name: "Ilan ang bisita ngayong araw?" })).toBeVisible();
+  await assistant.getByRole("button", { name: "Tagalog" }).click();
+  await expect(assistant.getByRole("button", { name: "Tagalog" })).toHaveAttribute("aria-pressed", "true");
+  await assistant.getByRole("button", { name: "Auto" }).click();
   await assistant.getByRole("textbox").fill("Tell me about my reports");
   await assistant.getByRole("button", { name: "Send message" }).click();
   await expect(assistant.getByRole("log")).toContainText("July 2026");
   await page.screenshot({ path: testInfo.outputPath("dashboard-expanded-1440.png"), fullPage: true });
-  await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
+  await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
   for (const width of [1024, 760, 430]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.locator(".overview-main").evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

@@ -96,3 +96,24 @@ export type EstablishmentLive = {
   movement_available: boolean;
   identification_available: boolean;
 };
+
+/** One local hour of day, added up across the requested days. */
+export type HourlyEstablishmentActivity = {
+  hour: number;
+  entries: number;
+  area_visits: number;
+  peak_occupancy: number | null;
+  covered_ms: number;
+};
+
+export type EstablishmentHourly = {
+  enterprise_id: string;
+  from_at: string;
+  to_at: string;
+  timezone: "Asia/Manila";
+  days_requested: number;
+  days_retained: number;
+  /** "partial" when some requested days are older than the 30-day observation retention. */
+  state: "available" | "partial" | "unavailable";
+  hours: HourlyEstablishmentActivity[];
+};

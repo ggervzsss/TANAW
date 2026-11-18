@@ -4,6 +4,7 @@ import pytest
 
 from app.features.sample_data import cli, lifecycle
 from app.features.sample_data.accounts import resolve_target_enterprise
+from app.features.sample_data.helpers import month_starts, reporting_range
 
 
 @pytest.fixture(autouse=True)
@@ -114,3 +115,15 @@ async def test_generation_validates_target_before_creating_accounts(
         await lifecycle.generate_sample_data(MagicMock(), "6m", "full-workflow", "random", "typo")
 
     create_accounts.assert_not_awaited()
+
+
+@pytest.mark.parametrize("command", ["on", "reset"])
+def test_default_range_is_a_year_and_a_half(command: str) -> None:
+    assert cli.parse_args([command, "lolouweng"]).range == "18m"
+
+
+@pytest.mark.parametrize(("range_value", "months"), [("6m", 6), ("12m", 12), ("18m", 18)])
+def test_month_ranges_cover_that_many_reporting_months(range_value: str, months: int) -> None:
+    start, end = reporting_range(range_value)
+
+    assert len(month_starts(start, end)) == months
