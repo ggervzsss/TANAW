@@ -47,7 +47,7 @@ def reporting_range(range_value: str) -> tuple[datetime, datetime]:
         start = now - timedelta(days=30)
         return start.replace(hour=0, minute=0, second=0, microsecond=0), now
 
-    months = 12 if range_value == "12m" else 6
+    months = {"6m": 6, "12m": 12, "18m": 18}.get(range_value, 18)
     current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     return add_months(current_month_start, -(months - 1)), now
 

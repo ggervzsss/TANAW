@@ -25,7 +25,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     on_parser = subparsers.add_parser("on", help="Generate sample data.")
-    on_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
+    on_parser.add_argument("--range", default="18m", choices=["30d", "6m", "12m", "18m"])
     on_parser.add_argument(
         "--scenario",
         default=DEFAULT_SCENARIO,
@@ -40,7 +40,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     reset_parser = subparsers.add_parser(
         "reset", help="Remove and regenerate the deterministic sample dataset."
     )
-    reset_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
+    reset_parser.add_argument("--range", default="18m", choices=["30d", "6m", "12m", "18m"])
     reset_parser.add_argument(
         "--scenario",
         default=DEFAULT_SCENARIO,

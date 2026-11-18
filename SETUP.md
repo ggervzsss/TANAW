@@ -270,8 +270,8 @@ Sample-data scripts also run from the repository root:
 | Remove all local desktop data | ./scripts/local-mockdata-off    | .\scripts\local-mockdata-off.ps1    |
 
 Only one central sample dataset is supported. Reset validates the target before
-replacing the dataset. Defaults are 6m and full-workflow; other ranges are
-30d and 12m, and other scenarios are peak-traffic and camera-health.
+replacing the dataset. Defaults are 18m (a year and a half) and full-workflow; other
+ranges are 30d, 6m and 12m, and other scenarios are peak-traffic and camera-health.
 
 For example:
 
