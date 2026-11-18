@@ -1,8 +1,10 @@
 import asyncio
 import threading
 import unittest
+from collections.abc import AsyncGenerator
 from contextlib import ExitStack
 from tempfile import TemporaryDirectory
+from typing import cast
 from unittest.mock import patch
 
 import cv2
@@ -14,6 +16,11 @@ from app.camera.models import ProcessingSession
 from app.camera.pipeline_manager import CameraPipelineRegistry
 from app.config.camera_config import CameraStartRequest
 from app.main import build_camera_state_envelope, camera_states, create_app, stream
+
+
+def body_frames(body: object) -> AsyncGenerator[bytes, None]:
+    """The stream route's body is its frames() async generator."""
+    return cast(AsyncGenerator[bytes, None], body)
 
 
 class LiveCameraStreamTest(unittest.IsolatedAsyncioTestCase):
@@ -34,12 +41,12 @@ class LiveCameraStreamTest(unittest.IsolatedAsyncioTestCase):
             validation_started = threading.Event()
             finish_validation = threading.Event()
 
-            def validate(_config):
+            def validate(_config: object) -> tuple[bool, str]:
                 validation_started.set()
                 self.assertTrue(finish_validation.wait(4))
                 return True, "Verified"
 
-            def hold_capture(session: ProcessingSession):
+            def hold_capture(session: ProcessingSession) -> None:
                 session.stop_event.wait()
 
             with (
@@ -50,10 +57,12 @@ class LiveCameraStreamTest(unittest.IsolatedAsyncioTestCase):
                 start = asyncio.create_task(asyncio.to_thread(manager.start, config))
                 try:
                     self.assertTrue(await asyncio.to_thread(validation_started.wait, 3))
-                    responses = [await stream(1, request, overlay=overlay) for overlay in (False, True)]
+                    responses = [
+                        await stream(1, request, overlay=overlay) for overlay in (False, True)
+                    ]
                     self.assertEqual(responses[0].headers["cache-control"], "no-store")
                     self.assertEqual(responses[0].headers["x-tanaw-stream-frames"], "live-only")
-                    iterators = [response.body_iterator for response in responses]
+                    iterators = [body_frames(response.body_iterator) for response in responses]
                     first = await self.assert_waiting_for_video(iterators)
                 finally:
                     finish_validation.set()
@@ -71,16 +80,17 @@ class LiveCameraStreamTest(unittest.IsolatedAsyncioTestCase):
                     generation,
                 )
                 bound = await stream(1, request, overlay=False, generation=generation)
+                bound_frames = body_frames(bound.body_iterator)
                 self.assert_live_jpeg(
                     await self.publish_and_read(manager, session, first, (101, 138, 72)),
                     (101, 138, 72),
                 )
-                await asyncio.wait_for(anext(bound.body_iterator), 3)
+                await asyncio.wait_for(anext(bound_frames), 3)
                 reconnect = await self.assert_waiting_for_video(iterators)
                 manager._mark_reconnecting(session, "Test camera disconnected")
                 self.assertEqual(manager.counts()["status"], "reconnecting")
                 with self.assertRaises(StopAsyncIteration):
-                    await asyncio.wait_for(anext(bound.body_iterator), 3)
+                    await asyncio.wait_for(anext(bound_frames), 3)
                 self.assertTrue(all(not task.done() for task in reconnect))
                 self.assert_live_jpeg(
                     await self.publish_and_read(manager, session, reconnect, (64, 91, 160)),
@@ -145,5 +155,6 @@ class LiveCameraStreamTest(unittest.IsolatedAsyncioTestCase):
             headers, jpeg = part.split(b"\r\n\r\n", 1)
             self.assertIn(f"Content-Length: {len(jpeg) - 2}".encode(), headers)
             frame = cv2.imdecode(np.frombuffer(jpeg[:-2], dtype=np.uint8), cv2.IMREAD_COLOR)
+            assert frame is not None
             self.assertEqual(frame.shape, (72, 112, 3))
             np.testing.assert_allclose(frame[44, 25], color, atol=3)

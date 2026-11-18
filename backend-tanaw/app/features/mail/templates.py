@@ -30,6 +30,7 @@ def account_activation_email(
     account: EmailRecipient, activation_url: str, expires_label: str
 ) -> EmailContent:
     sign_in_hint = ""
+    sign_in_fields: tuple[tuple[str, str], ...]
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
         sign_in_fields = (
             ("Enterprise ID", account.enterprise_id),

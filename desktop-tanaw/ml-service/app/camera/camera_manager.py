@@ -771,18 +771,23 @@ class CameraProcessingManager:
     ) -> tuple[bytes | None, tuple[int, int]]:
         def has_new_frame() -> bool:
             if overlay:
-                return self._latest_stream_jpeg is not None and (
-                    self._stream_generation, self._latest_stream_frame_id
-                ) > cursor
-            return self._latest_raw_frame is not None and (
-                self._stream_generation, self._latest_raw_frame_id
-            ) > cursor
+                return (
+                    self._latest_stream_jpeg is not None
+                    and (self._stream_generation, self._latest_stream_frame_id) > cursor
+                )
+            return (
+                self._latest_raw_frame is not None
+                and (self._stream_generation, self._latest_raw_frame_id) > cursor
+            )
 
         with self._raw_frame_condition:
             if not self._raw_frame_condition.wait_for(has_new_frame, timeout=timeout):
                 return None, cursor
             if overlay:
-                return self._latest_stream_jpeg, (self._stream_generation, self._latest_stream_frame_id)
+                return self._latest_stream_jpeg, (
+                    self._stream_generation,
+                    self._latest_stream_frame_id,
+                )
             assert self._latest_raw_frame is not None
             frame = self._latest_raw_frame.copy()
             next_cursor = (self._stream_generation, self._latest_raw_frame_id)
