@@ -12,7 +12,7 @@ from app.analytics.establishment_hourly import hourly_activity
 from app.camera.pipeline_manager import CameraPipelineRegistry
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.main import create_app
-from app.storage.repositories.establishment_repository import day_bounds
+from app.storage.repositories.establishment_repository import TIMEZONE, day_bounds
 
 # 2026-11-10 in Asia/Manila starts at 2026-11-09T16:00Z.
 DAY_START, DAY_END = (datetime.fromisoformat(value) for value in day_bounds("2026-11-10"))
@@ -166,7 +166,8 @@ def test_hourly_api_returns_24_hours_for_the_bound_enterprise_only(tmp_path: Pat
         {"occupancy": 6, "state": "estimated"}, datetime.now(UTC)
     )
     client = TestClient(create_app(pipelines))
-    today = datetime.now(UTC).astimezone(DAY_START.tzinfo)
+    # The business day is Asia/Manila's, which differs from UTC's date from 16:00Z.
+    today = datetime.now(UTC).astimezone(TIMEZONE)
     start, end = (datetime.fromisoformat(value) for value in day_bounds(today.date().isoformat()))
     params = {"start": start.isoformat(), "end": end.isoformat()}
     try:
