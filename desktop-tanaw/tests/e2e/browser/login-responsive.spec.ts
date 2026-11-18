@@ -44,7 +44,7 @@ test("loads the original TANAW typefaces from bundled assets", async ({ page }) 
   await expect(page.locator(".tanaw-auth-brand-title")).toBeVisible();
 
   const typography = await page.evaluate(async () => {
-    await Promise.all([document.fonts.load('400 16px "Inter"', "TANAW"), document.fonts.load('500 16px "Montserrat"', "TANAW"), document.fonts.load('600 16px "Bai Jamjuree"', "TANAW")]);
+    await Promise.all([document.fonts.load('400 16px "Inter"', "TANAW"), document.fonts.load('600 16px "Bai Jamjuree"', "TANAW")]);
 
     const stage = document.querySelector<HTMLElement>(".tanaw-auth-stage");
     const heading = document.querySelector<HTMLElement>(".tanaw-auth-brand-title");
@@ -52,14 +52,14 @@ test("loads the original TANAW typefaces from bundled assets", async ({ page }) 
       baiJamjureeLoaded: document.fonts.check('600 16px "Bai Jamjuree"', "TANAW"),
       headingFamily: heading ? window.getComputedStyle(heading).fontFamily : "",
       interLoaded: document.fonts.check('400 16px "Inter"', "TANAW"),
-      montserratLoaded: document.fonts.check('500 16px "Montserrat"', "TANAW"),
       stageFamily: stage ? window.getComputedStyle(stage).fontFamily : "",
     };
   });
 
-  expect(typography).toMatchObject({ baiJamjureeLoaded: true, interLoaded: true, montserratLoaded: true });
+  expect(typography).toMatchObject({ baiJamjureeLoaded: true, interLoaded: true });
   expect(typography.headingFamily).toContain("Bai Jamjuree");
   expect(typography.stageFamily).toContain("Inter");
+  expect(typography.stageFamily).not.toContain("Montserrat");
   expect(requestedFontUrls.length).toBeGreaterThanOrEqual(3);
   expect(requestedFontUrls.every((url) => new URL(url).pathname.startsWith("/fonts/"))).toBe(true);
 });

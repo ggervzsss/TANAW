@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/tokens/tanaw.css instead.
  * Update with: node design-system/scripts/sync-tokens.mjs
- * Source SHA-256: 45d2bf2c2cf4ed0c700660613b56413cbf26304e4899426abb41b8c01c188d75
+ * Source SHA-256: 6c61c36e37b4f03d120bad3aedb41d5aeb9866b059bee5f2c290b62ffd6a1fea
  */
 /*
  * TANAW design tokens: the single source of truth for color, type, shape, depth and motion.
@@ -18,7 +18,7 @@
 /* ---- Static palette and scales: these become Tailwind utilities (bg-tanaw-civic, text-tanaw-ledger, ...). */
 @theme {
   /* Type */
-  --font-sans: "Inter", "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bai Jamjuree", "Inter", ui-sans-serif, system-ui, sans-serif;
   --text-xs: 0.78125rem;
   --text-sm: 0.90625rem;

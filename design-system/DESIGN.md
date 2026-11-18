@@ -40,28 +40,28 @@ typography:
     fontWeight: 700
     lineHeight: 1.2
   title:
-    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.03125rem"
     fontWeight: 700
     lineHeight: 1.35
   body:
-    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.90625rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 700
     lineHeight: 1.33
     letterSpacing: "0.14em"
   badge:
-    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.33
   metric:
-    fontFamily: "Inter, Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "2.5rem"
     fontWeight: 600
     lineHeight: 1

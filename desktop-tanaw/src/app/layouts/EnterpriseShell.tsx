@@ -253,7 +253,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   return (
-    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] font-['Montserrat'] transition-colors duration-300 dark:bg-(--enterprise-app-bg)">
+    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] transition-colors duration-300 dark:bg-(--enterprise-app-bg)">
       <ThemedEnterpriseTopbar
         activeView={activeView}
         displayName={displayName}
