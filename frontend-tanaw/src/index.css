@@ -1,8 +1,8 @@
 @import "@fortawesome/fontawesome-free/css/all.min.css";
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
-/* TANAW design tokens, generated from design-system/tokens/tanaw.css. foundation.css still
-   overrides them where the web app differs (for example Montserrat body text). */
+/* TANAW design tokens, generated from design-system/tokens/tanaw.css. foundation.css adds
+   only the web app's own panel shadow and maps older variable names onto the tokens. */
 @import "./styles/tanaw-tokens.css";
 @import "./styles/foundation.css";
 @import "./styles/components.css";

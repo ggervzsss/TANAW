@@ -283,7 +283,7 @@ export function LocationPicker({
       </div>
       <div id={mapId} className={`${mapHeightClassName} w-full`} />
       <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 dark:border-slate-700 dark:bg-[#121c31] dark:text-slate-300">
-        <MapPin size={14} className="text-tgreen-dark shrink-0" />
+        <MapPin size={14} className="text-tanaw-ledger shrink-0" />
         <span className="truncate">{getFooterText(isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
       </div>
     </div>

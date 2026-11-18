@@ -49,8 +49,8 @@ hand or no longer matches this folder. `node design-system/scripts/sync-tokens.m
 `.prettierignore` so formatting cannot change it.
 
 Both apps import their copy right after `@import "tailwindcss";` in `src/index.css`.
-The web app's `styles/foundation.css` keeps only its own extra palettes and older
-variable names mapped onto the tokens.
+The web app's `styles/foundation.css` keeps only its panel shadow and older variable
+names mapped onto the tokens.
 
 ## Migration status
 

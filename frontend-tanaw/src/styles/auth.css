@@ -1,7 +1,7 @@
 .tanaw-login-photo {
   position: absolute;
   overflow: hidden;
-  background: #064e2f;
+  background: var(--color-tanaw-canopy-start);
   transform: translateZ(0);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 58%, rgb(0 0 0 / 0.72) 72%, transparent 100%);
   -webkit-mask-size: 100% 100%;

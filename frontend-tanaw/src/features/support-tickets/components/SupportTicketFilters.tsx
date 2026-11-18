@@ -11,7 +11,7 @@ export function SupportTicketFilters({ filters, onChange }: { filters: TicketFil
           value={filters.query}
           onChange={(event) => onChange((current) => ({ ...current, query: event.target.value }))}
           placeholder="Search ticket ID, enterprise, subject, category, or status"
-          className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+          className="tanaw-data-search focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect value={filters.status} onChange={(value) => onChange((current) => ({ ...current, status: value as TicketStatusFilter }))} options={ticketStatusFilters} />
