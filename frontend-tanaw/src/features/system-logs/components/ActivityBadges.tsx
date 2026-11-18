@@ -1,11 +1,11 @@
 import type { SystemLogCategory } from "@/shared/types";
-import { activityGroupClasses, systemLogTypeClasses, type ActivityGroup } from "../model";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { Badge } from "../../../design-system";
+import { activityGroupTones, systemLogTypeTones, type ActivityGroup } from "../model";
 
 export function ActivityGroupBadge({ group }: { group: Exclude<ActivityGroup, "All Activity"> }) {
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${activityGroupClasses[group]}`}>{toSentenceCase(group)}</span>;
+  return <Badge tone={activityGroupTones[group]}>{group}</Badge>;
 }
 
 export function SystemLogTypeBadge({ type }: { type: SystemLogCategory }) {
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${systemLogTypeClasses[type]}`}>{toSentenceCase(type)}</span>;
+  return <Badge tone={systemLogTypeTones[type]}>{type}</Badge>;
 }

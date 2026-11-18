@@ -3,6 +3,7 @@ import type { AccountSummary } from "@/shared/types";
 import { canDeactivateAccount } from "@/shared/utils/accountState";
 import type { LguStatusFilter } from "../types";
 import { lguRoleLabel } from "../utils";
+import { Badge } from "../../../design-system";
 
 type Detail = readonly [string, string];
 type EmailRequest = AccountSummary["profileChangeRequests"][number];
@@ -18,11 +19,9 @@ export function LguAccountSummary({ account, details }: { account: AccountSummar
             <h3 className="mt-1 text-2xl font-black text-slate-950">{account.displayName}</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">{account.email}</p>
           </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-black ${account.status === "inactive" ? "bg-slate-100 text-slate-600" : account.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-          >
+          <Badge tone={account.status === "inactive" ? "neutral" : account.isActivated ? "success" : "warning"}>
             {account.status === "inactive" ? "Inactive" : account.isActivated ? "Active" : "Pending activation"}
-          </span>
+          </Badge>
         </div>
         {isProtected && (
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-white/80 p-3 text-sm font-semibold text-emerald-900">
@@ -63,9 +62,9 @@ export function LguEmailChangeRequest({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-black text-amber-950">Email change requested</p>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${request.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+            <Badge size="sm" tone={request.canApprove ? "success" : "warning"}>
               {request.canApprove ? "Ownership verified" : "Awaiting verification"}
-            </span>
+            </Badge>
           </div>
           <p className="mt-1 text-sm text-amber-900/80">
             Proposed address: <strong className="wrap-break-word">{request.requestedValue}</strong>

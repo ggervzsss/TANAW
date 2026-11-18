@@ -1,0 +1,69 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { SwatchGrid } from "./TokenBlocks";
+
+<Meta title="Foundations/Colors" />
+
+# Colors
+
+A civic palette: deep municipal greens, one gold thread from the city seal, and paper white for records. Each swatch reads the live token in both themes, so this page always matches `tokens/tanaw.css`. Use the **role tokens** (`--tanaw-*`) in components: they change with the theme. The static brand colours (`--color-tanaw-*`, Tailwind utilities like `bg-tanaw-civic`) never change.
+
+## Action and identity
+
+<SwatchGrid
+  items={[
+    { token: "--tanaw-action", name: "Civic Green", use: "The only fill for actions and on states: primary buttons, selected filters, switches, progress." },
+    { token: "--tanaw-action-hover", name: "Civic Green Deep", use: "Hover and pressed state of an action." },
+    { token: "--tanaw-accent-ink", name: "Ledger Green", use: "Green as text and outline: links, active items, selected options." },
+    { token: "--tanaw-label", name: "Forest Label", use: "Uppercase labels on metrics and table headers." },
+    { token: "--tanaw-gold-line", name: "Seal Gold", use: "Lines and marks only, at most once or twice a screen. Never text." },
+    { token: "--tanaw-gold-ink", name: "Gold Ink", use: "Gold that must be read, such as an eyebrow over a title." },
+  ]}
+/>
+
+## Text
+
+<SwatchGrid
+  items={[
+    { token: "--tanaw-text", name: "Ink", use: "Body text, titles and figures. A green-black, never pure black." },
+    { token: "--tanaw-text-secondary", name: "Ink Secondary", use: "Supporting sentences." },
+    { token: "--tanaw-text-muted", name: "Ink Muted", use: "Captions, hints and metadata." },
+    { token: "--tanaw-text-placeholder", name: "Placeholder", use: "Input placeholders." },
+  ]}
+/>
+
+## Surfaces and borders
+
+<SwatchGrid
+  items={[
+    { token: "--tanaw-page", name: "Page Wash", use: "The page behind the cards (a 145° gradient in use)." },
+    { token: "--tanaw-surface", name: "Surface", use: "Cards, tables, inputs and menus." },
+    { token: "--tanaw-surface-raised", name: "Raised", use: "Dialogs, menus and tooltips." },
+    { token: "--tanaw-surface-inset", name: "Inset", use: "Table headers and wells inside cards." },
+    { token: "--tanaw-control-hover", name: "Control Hover", use: "Hover fill for secondary buttons and rows." },
+    { token: "--tanaw-border-soft", name: "Border Soft", use: "Card edges and row dividers." },
+    { token: "--tanaw-control-border", name: "Control Border", use: "Input and secondary button outlines." },
+  ]}
+/>
+
+## Status
+
+<SwatchGrid
+  items={[
+    { token: "--tanaw-live", name: "Live Green", use: "The running-camera dot only." },
+    { token: "--tanaw-danger", name: "Record Red", use: "Destructive actions and their outlines." },
+    { token: "--tanaw-error", name: "Error Red", use: "Validation messages and failed states." },
+    { token: "--tanaw-focus-ring", name: "Focus Teal", use: "The keyboard focus ring on every control." },
+    { token: "--tanaw-success-text", name: "Success", use: "Badge and banner text; pairs with --tanaw-success-bg, -line and -surface." },
+    { token: "--tanaw-warning-text", name: "Warning", use: "Pairs with --tanaw-warning-bg, -line and -surface." },
+    { token: "--tanaw-danger-text", name: "Danger", use: "Pairs with --tanaw-danger-bg, -line and -surface." },
+    { token: "--tanaw-info-text", name: "Information", use: "Pairs with --tanaw-info-bg, -line and --tanaw-information-surface." },
+  ]}
+/>
+
+## Rules
+
+- **The One Action Green Rule.** Only Civic Green fills an action. Other greens are text, outlines or atmosphere.
+- **The Gold Thread Rule.** Gold appears as lines and marks, never as fills or body text.
+- **The Seal Rule.** Navy (`--color-tanaw-navy`) belongs to the city seal and map artwork. Page titles are Ink.
+- **No new greens.** Map any green to Civic Green, Ledger Green, Forest Label or Canopy.
+- Category tones (teal, purple and the status colours) name a kind of thing in metric strips and badges. They are not decoration.

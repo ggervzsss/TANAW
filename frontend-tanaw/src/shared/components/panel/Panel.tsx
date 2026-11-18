@@ -1,19 +1,17 @@
 import type { ComponentType, PropsWithChildren, ReactNode } from "react";
 import type { LucideProps } from "lucide-react";
+import { Card } from "../../../design-system";
 
 type PanelProps = PropsWithChildren<{
   className?: string;
 }>;
 
+/** The design-system Card as a page section. */
 export function Panel({ children, className = "" }: PanelProps) {
   return (
-    <section
-      className={["shadow-panel rounded-2xl border border-white/80 bg-white/96 ring-1 ring-slate-900/4 backdrop-blur-sm dark:border-slate-700 dark:bg-[#121c31]/96 dark:ring-white/8", className].join(
-        " ",
-      )}
-    >
+    <Card as="section" className={className}>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -25,9 +23,9 @@ type PanelHeaderProps = {
 
 export function PanelHeader({ title, icon: Icon, right }: PanelHeaderProps) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-linear-to-r from-slate-50 to-white px-5 py-4 dark:border-slate-700 dark:from-[#172033] dark:to-[#121c31]">
-      <span className="text-(--tanaw-label) flex items-center gap-2.5 text-xs font-black tracking-widest uppercase dark:text-slate-100">
-        {Icon && <Icon size={15} className="text-tanaw-green dark:text-emerald-300" />}
+    <div className="flex shrink-0 items-center justify-between rounded-t-tanaw-lg border-b border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-5 py-4">
+      <span className="flex items-center gap-2.5 text-xs font-bold tracking-label text-(--tanaw-label) uppercase">
+        {Icon && <Icon size={15} className="text-(--tanaw-accent-ink)" />}
         {title}
       </span>
       {right}

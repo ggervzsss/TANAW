@@ -65,7 +65,7 @@ export function ReportPopover({ label, icon, className, trigger: triggerContent,
   }, [open, preferredWidth, close]);
   return (
     <div className={className}>
-      <button ref={trigger} type="button" aria-expanded={open} aria-controls={id} data-reports-popup-trigger onClick={() => setOpen((value) => !value)}>
+      <button ref={trigger} type="button" aria-expanded={open} aria-controls={id} data-exclusive-popup-trigger onClick={() => setOpen((value) => !value)}>
         {triggerContent ?? (
           <>
             {icon}

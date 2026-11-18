@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
+import { Card as DesignCard, cn } from "../design-system";
 
-type CardProps = {
-  children: ReactNode;
-  className?: string;
-};
-
-export function Card({ children, className = "" }: CardProps) {
-  return (
-    <div className={`tanaw-enterprise-card rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-(--enterprise-border-soft) dark:bg-(--enterprise-card-bg) ${className}`}>{children}</div>
-  );
+/** The design-system Card; tanaw-enterprise-card keeps this app's workspace-specific spacing rules. */
+export function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return <DesignCard className={cn("tanaw-enterprise-card", className)}>{children}</DesignCard>;
 }

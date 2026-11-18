@@ -390,7 +390,7 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
   await page.locator(".tanaw-map-enterprise-card").filter({ hasText: "Map Camera Test Enterprise" }).click();
   const detailsDialog = page.getByRole("dialog", { name: mapEnterprise.name });
   await expect(detailsDialog).toBeVisible();
-  await expect(detailsDialog.locator("[data-modal-top-accent='green-to-yellow']")).toHaveCount(1);
+  await expect(detailsDialog.locator("[data-dialog-accent='thread']")).toHaveCount(1);
   await expect(detailsDialog.locator("[data-details-modal-layout='balanced-enterprise']")).toHaveCount(1);
   const contactCard = detailsDialog.getByText("Contact", { exact: true }).locator("..").locator("..");
   const hoursCard = detailsDialog.getByText("Operating Hours", { exact: true }).locator("..").locator("..");

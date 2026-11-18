@@ -2,7 +2,7 @@ import { DetailField, ExpandableTableText, ModalFrame } from "@/shared/component
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode, TechnicalIssueUrgency } from "@/shared/types";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { Badge, type BadgeTone } from "../../../design-system";
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
   const { timeFormat } = useSystemDisplayPreferences();
@@ -27,48 +27,37 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
   );
 }
 
+const urgencyTones: Record<TechnicalIssueUrgency, BadgeTone> = { Normal: "info", Important: "warning", Urgent: "danger" };
+const severityTones: Record<AlertSeverity, BadgeTone> = { Info: "info", Warning: "warning", Critical: "danger" };
+const resolutionTones: Record<PriorityAlertResolutionMode, BadgeTone> = {
+  "On-site Visit Required": "danger",
+  "In-system Action": "success",
+  "Staff Follow-up": "warning",
+  "Remote Review": "info",
+  "Admin Monitoring": "purple",
+};
+const resolutionLabels: Record<PriorityAlertResolutionMode, string> = {
+  "On-site Visit Required": "Visit Enterprise",
+  "In-system Action": "Fix in TANAW",
+  "Staff Follow-up": "Staff Follow-up",
+  "Remote Review": "Check Remotely",
+  "Admin Monitoring": "Admin Monitoring",
+};
+const statusTones: Record<PriorityAlert["status"], BadgeTone> = { New: "danger", "In Review": "warning", Resolved: "success" };
+
 export function UrgencyBadge({ urgency }: { urgency: TechnicalIssueUrgency }) {
-  const classes: Record<TechnicalIssueUrgency, string> = {
-    Normal: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
-    Important: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
-    Urgent: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
-  };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[urgency]}`}>{urgency}</span>;
+  return <Badge tone={urgencyTones[urgency]}>{urgency}</Badge>;
 }
 
 export function SeverityBadge({ severity, label = severity }: { severity: AlertSeverity; label?: string }) {
-  const classes: Record<AlertSeverity, string> = {
-    Info: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
-    Warning: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
-    Critical: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
-  };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[severity]}`}>{toSentenceCase(label)}</span>;
+  return <Badge tone={severityTones[severity]}>{label}</Badge>;
 }
 
 export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode }) {
-  const classes: Record<PriorityAlertResolutionMode, string> = {
-    "On-site Visit Required": "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
-    "In-system Action": "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200",
-    "Staff Follow-up": "bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200",
-    "Remote Review": "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
-    "Admin Monitoring": "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200",
-  };
-  const labels: Record<PriorityAlertResolutionMode, string> = {
-    "On-site Visit Required": "Visit Enterprise",
-    "In-system Action": "Fix in TANAW",
-    "Staff Follow-up": "Staff Follow-up",
-    "Remote Review": "Check Remotely",
-    "Admin Monitoring": "Admin Monitoring",
-  };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap ${classes[mode]}`}>{toSentenceCase(labels[mode])}</span>;
+  return <Badge tone={resolutionTones[mode]}>{resolutionLabels[mode]}</Badge>;
 }
 
 export function AlertStatusBadge({ status, label }: { status: PriorityAlert["status"]; label?: string }) {
-  const classes: Record<PriorityAlert["status"], string> = {
-    New: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
-    "In Review": "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
-    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
-  };
   const resolvedLabel = label ?? (status === "New" ? "Needs Attention" : status === "In Review" ? "Working on It" : "Resolved");
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${classes[status]}`}>{toSentenceCase(resolvedLabel)}</span>;
+  return <Badge tone={statusTones[status]}>{resolvedLabel}</Badge>;
 }

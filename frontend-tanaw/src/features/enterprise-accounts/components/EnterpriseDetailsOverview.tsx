@@ -1,5 +1,6 @@
 import { Building2, KeyRound, Pencil, UserCheck, XCircle } from "lucide-react";
 import type { AccountSummary } from "@/shared/types";
+import { Badge } from "../../../design-system";
 
 type Props = {
   canChangeStatus: boolean;
@@ -25,11 +26,9 @@ export function EnterpriseDetailsOverview({ canChangeStatus, details, enterprise
               <p className="mt-1 text-sm font-medium text-slate-500">{enterprise.email}</p>
             </div>
           </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-black ${enterprise.status === "inactive" ? "bg-slate-100 text-slate-600" : enterprise.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-          >
+          <Badge tone={enterprise.status === "inactive" ? "neutral" : enterprise.isActivated ? "success" : "warning"}>
             {enterprise.status === "inactive" ? "Inactive" : enterprise.isActivated ? "Active" : "Pending activation"}
-          </span>
+          </Badge>
         </div>
       </section>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
