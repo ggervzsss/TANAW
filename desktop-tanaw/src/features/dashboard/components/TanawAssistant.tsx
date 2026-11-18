@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
-import { ArrowUpRight, BarChart3, Send, Sparkles, X } from "lucide-react";
+import { ArrowUpRight, Bot, Brain, Send, X } from "lucide-react";
 import { DEFAULT_ML_SERVICE_BASE_URL, getEstablishmentHourly, getEstablishmentLive, getEstablishmentSummary, getMlServiceStatus } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
@@ -181,13 +181,13 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ duration: reduceMotion ? 0 : 0.18 }}
         >
-          <BarChart3 size={44} />
+          <Bot size={48} />
         </motion.button>
       ) : null}
       {open ? (
         <AssistantPanel key="assistant-panel" reduceMotion={Boolean(reduceMotion)}>
           <header>
-            <BarChart3 size={40} />
+            <Bot size={43} />
             <div>
               <h2>TANAW Insights</h2>
               <p>Answers from your establishment's counts</p>
@@ -226,14 +226,14 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
             }}
           >
             <div className="assistant-message" lang={shownLanguage}>
-              <Sparkles />
+              <Brain />
               <div>
                 <strong>{copy.greeting}</strong>
                 <p>{copy.intro}</p>
               </div>
             </div>
             <div className="assistant-message" lang={shownLanguage}>
-              <Sparkles />
+              <Brain />
               <div>
                 <strong>{copy.prompt}</strong>
                 {suggestions(shownLanguage)}
@@ -249,7 +249,7 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
               >
                 <p className="assistant-question">{message.question}</p>
                 <div className="assistant-message" lang={message.reply?.language ?? shownLanguage}>
-                  <Sparkles />
+                  <Brain />
                   {message.reply ? <ReplyBody reply={message.reply} suggestions={suggestions} /> : <div className="assistant-pending">{copy.checking}</div>}
                 </div>
               </motion.div>
