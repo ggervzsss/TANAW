@@ -93,7 +93,7 @@ export function AdminEnterpriseMap() {
   };
 
   return (
-    <div className="tanaw-admin-map-workspace relative min-h-0 flex-1 overflow-hidden bg-(--tanaw-surface-inset)" data-insights-open={isInsightsOpen}>
+    <div className="tanaw-admin-map-workspace relative min-h-0 flex-1 overflow-clip bg-(--tanaw-surface-inset)" data-insights-open={isInsightsOpen}>
       <div className="absolute inset-0 z-0">
         <div id="admin-enterprise-map" className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
       </div>
