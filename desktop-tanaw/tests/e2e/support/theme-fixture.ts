@@ -40,6 +40,7 @@ export function themeServiceFixture() {
     model_ready: true,
     service_version: "theme-test",
     api_contract_version: 2,
+    live_stream_frames_only: true,
     tripwire_hot_update: true,
     active_camera_count: 0,
     max_configured_cameras: 6,
