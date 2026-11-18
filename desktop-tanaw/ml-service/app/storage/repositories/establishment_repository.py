@@ -8,13 +8,13 @@ a recognized visitor counts once per business day across all cameras.
 import hashlib
 import json
 from collections import Counter
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.analytics.establishment_movements import daily_movements
-from app.analytics.visitor_sex import daily_sex_counts, recent_female_share
+from app.analytics.visitor_sex import daily_sex_counts
 from app.storage.local_database import LocalDatabase
 
 TIMEZONE = ZoneInfo("Asia/Manila")
@@ -308,18 +308,7 @@ class EstablishmentRepository:
                         "additive": False,
                     }
                 )
-            earlier = [
-                json.loads(row["metrics_json"])
-                for row in db.execute(
-                    "select metrics_json from establishment_daily_summaries "
-                    "where business_date<? and business_date>=? order by business_date",
-                    (
-                        business_date,
-                        (date.fromisoformat(business_date) - timedelta(days=30)).isoformat(),
-                    ),
-                )
-            ]
-            sex = daily_sex_counts(rows, identities, recent_female_share(earlier))
+            sex = daily_sex_counts(rows, identities)
             metrics = {
                 **sex.as_metrics(),
                 "business_date": business_date,

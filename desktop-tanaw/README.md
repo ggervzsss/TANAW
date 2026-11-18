@@ -122,12 +122,13 @@ a plain box. The live estimate is never stored.
 - A small classifier (a "sex head") reads the appearance embedding TANAW
   already computes for re-identification. Every good view of a visitor, on any
   camera, adds evidence.
-- The day's female count is the sum of the visitors' probabilities, adjusted to
-  the day's own male/female mix. Visitors never seen clearly enough receive the
-  day's share, so there is no "unknown" group.
-- The day's mix starts from an even split worth 20 visitors, so a small day that
-  leans one way moves part of the way rather than being counted as all one sex;
-  a day of hundreds of visitors is set by its own evidence.
+- The day's female count is the sum of the visitors' probabilities. Each
+  visitor is judged only on their own appearance: one the head cannot tell
+  apart counts as half male and half female, and one never seen clearly enough
+  counts as exactly half of each, so there is no "unknown" group. The rest of
+  the day never pulls an unsure visitor toward the majority.
+- Because the head's mistakes are not corrected, a day far from an even mix is
+  reported a few points closer to half than it really was.
 - The fast head (82%) runs with Balanced and lower profiles and the quality head
   (86%) with High Accuracy (see Performance profile).
 - Estimates need people's bodies in view: mount cameras angled toward people,
