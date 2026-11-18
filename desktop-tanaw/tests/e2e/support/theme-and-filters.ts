@@ -63,11 +63,11 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   });
   await auditDarkContrast(page, info, "dashboard", ".overview-layout");
   await page.screenshot({ path: info.outputPath("dark-dashboard.png"), fullPage: true });
-  await page.getByRole("button", { name: "Open TANAW AI Assistant" }).click();
-  await expect(page.getByRole("complementary", { name: "TANAW AI Assistant" })).toBeVisible();
+  await page.getByRole("button", { name: "Open TANAW Insights" }).click();
+  await expect(page.getByRole("complementary", { name: "TANAW Insights" })).toBeVisible();
   await auditDarkContrast(page, info, "assistant", ".tanaw-assistant");
   await page.screenshot({ path: info.outputPath("dark-assistant.png"), fullPage: true });
-  await page.getByRole("button", { name: "Collapse TANAW AI Assistant" }).click();
+  await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
   for (let n = 0; n < 4; n++) await toggle(page).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await toggle(page).click();

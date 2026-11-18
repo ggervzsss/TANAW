@@ -9,6 +9,10 @@ Completed days are finalized immediately. Today holds only the visits up to the
 current time and is rewritten on each call, so it keeps pace with the clock. A
 day where a real camera records keeps only the camera's data, so sample visits
 never inflate real counts.
+
+Sample days also get confirmed visitor origins in the month's report draft, so
+past forms are ready to review. Today and the three days before it are left for
+the user to fill in, which keeps the daily entry workflow testable.
 """
 
 import json
@@ -25,6 +29,7 @@ from app.storage.repositories.establishment_repository import (
     day_bounds,
     timestamp,
 )
+from app.storage.repositories.report_draft_repository import ReportDraftRepository
 
 # Real camera IDs are small sequential numbers; this source never collides with one.
 SAMPLE_CAMERA_ID = 900_001
@@ -36,6 +41,16 @@ SAMPLE_SEX_LOGIT = 6.0
 SAMPLE_NAMESPACE = UUID("4d0f4b8e-6a51-4c1e-9b8e-3f2f63a0c5d1")
 OPEN_HOUR = 7
 CLOSE_HOUR = 20
+# Today and this many days before it keep no sample origins, so users can enter them.
+UNFILLED_RECENT_DAYS = 3
+# The renderer stores a reporting month's daily origins under this draft key.
+DRAFT_KEY_PREFIX = "period:"
+# Each origin's share of a day's visitors; This City keeps the rest.
+ORIGIN_SHARES = {
+    "otherCity": (0.10, 0.20),
+    "otherProvince": (0.08, 0.16),
+    "foreign": (0.01, 0.05),
+}
 
 
 def prepare_sample_period(
@@ -106,7 +121,65 @@ def prepare_sample_period(
                 (json.dumps(metrics, sort_keys=True), int(day < today), business_date),
             )
         prepared.append(business_date)
+    _fill_sample_origins(repository, report_id, period, today)
     return {"period": period, "prepared": bool(prepared), "days": len(prepared)}
+
+
+def _fill_sample_origins(
+    repository: EstablishmentRepository, report_id: str, period: str, today: date
+) -> None:
+    """Confirm origins for sample days older than the recent days left for the user.
+
+    Days already in the draft keep the user's entries, and days with camera data are
+    left for the user, so only sample-only days the draft lacks are added.
+    """
+    last_filled = today - timedelta(days=UNFILLED_RECENT_DAYS + 1)
+    begin, _ = period_bounds(period)
+    first_day = begin.date()
+    if last_filled < first_day:
+        return
+    with repository.database.connection() as db:
+        rows = db.execute(
+            "select business_date,metrics_json from establishment_daily_summaries "
+            "where business_date>=? and business_date<=?",
+            (first_day.isoformat(), last_filled.isoformat()),
+        ).fetchall()
+    unique_by_day = {
+        row["business_date"]: int(metrics.get("unique_count") or 0)
+        for row in rows
+        if (metrics := json.loads(row["metrics_json"])).get("sources") == [SAMPLE_CAMERA_ID]
+    }
+    drafts = ReportDraftRepository(repository.database)
+    draft_key = f"{DRAFT_KEY_PREFIX}{period}"
+    existing = drafts.get(draft_key)
+    payload = dict(existing["payload"]) if existing else {}
+    origins = dict(payload.get("origins") or {})
+    added = {
+        business_date: sample_day_origins(report_id, business_date, unique)
+        for business_date, unique in sorted(unique_by_day.items())
+        if unique > 0 and business_date not in origins
+    }
+    if not added:
+        return
+    drafts.save(
+        draft_key,
+        period,
+        {**payload, "origins": {**origins, **added}, "version": 2},
+        existing["report_id"] if existing else None,
+    )
+
+
+def sample_day_origins(
+    report_id: str, business_date: str, unique_visitors: int
+) -> dict[str, dict[str, int]]:
+    """A deterministic split of a day's visitors among the origins TANAW cannot detect."""
+    rng = random.Random(f"{report_id}:{business_date}:origins")
+    origins: dict[str, dict[str, int]] = {}
+    for origin, (low, high) in ORIGIN_SHARES.items():
+        visitors = int(round(unique_visitors * rng.uniform(low, high)))
+        female = int(round(visitors * rng.uniform(0.4, 0.6)))
+        origins[origin] = {"male": visitors - female, "female": female}
+    return origins
 
 
 def _observation_count(visits: list[dict[str, Any]]) -> int:
