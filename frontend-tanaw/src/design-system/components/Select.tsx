@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/components/Select.tsx instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: c4b1b73e6baad47c4ba9353e169f93d2b65c9d49e626c2b91552f4c0641fe2a8
+ * Source SHA-256: 9fa42fd28e5dd54caf3c9972026eda5779af4f5aac2057d6c3c898ee74c6c202
  */
 import { Check, ChevronDown, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -227,7 +227,7 @@ export function Select({
         onKeyDown={handleKeyDown}
         className={triggerClassName}
       >
-        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-placeholder)")}>
+        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-muted)")}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">

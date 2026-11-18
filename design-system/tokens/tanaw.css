@@ -94,7 +94,7 @@
 
   --tanaw-text: #10241b;
   --tanaw-text-secondary: #475569;
-  --tanaw-text-muted: #64748b;
+  --tanaw-text-muted: #5f6f84; /* 4.6:1 or better on every light surface */
   --tanaw-text-placeholder: #7b8492;
   --tanaw-label: #1b4332;
 

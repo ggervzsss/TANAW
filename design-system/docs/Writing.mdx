@@ -1,0 +1,17 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Foundations/Writing" />
+
+# Writing
+
+TANAW is read by city hall staff and site operators who are busy and not technical. Write the way the interface is designed: plain, exact and calm.
+
+- **Sentence case** for buttons, badges, filters, tabs, dialog titles and headings: "Open live map", "In review", "Reports history". Acronyms keep their capitals: "ML service ready", "Fix in TANAW".
+- **Uppercase labels** only name a figure, a column or a section: "UNIQUE VISITORS".
+- **Buttons say what happens:** "Submit report", "Delete camera". Not "OK" or "Yes".
+- **Empty states** have one bold line saying what is missing and one sentence saying what will appear or what to do.
+- **Errors** say what went wrong and how to fix it, next to the field: "Enter a valid email address."
+- **Confirmations** before anything that sends, deletes or cannot be undone say exactly what will happen.
+- **Name every figure:** "Unique visitors · Estimated today".
+
+`toSentenceCase` (`src/lib/sentence-case.ts`) converts fixed status values ("In Review", "running") for badges. Never apply it to names people typed.

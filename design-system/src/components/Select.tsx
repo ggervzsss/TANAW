@@ -222,7 +222,7 @@ export function Select({
         onKeyDown={handleKeyDown}
         className={triggerClassName}
       >
-        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-placeholder)")}>
+        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-muted)")}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">

@@ -1,0 +1,43 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Introduction" />
+
+# TANAW design system
+
+One design for both TANAW apps: the **desktop app** enterprises run at their sites and the **web portal** LGU Admin, IT and Staff use at city hall.
+
+**Creative north star: "The Town Hall Ledger".** TANAW is the record a city tourism office keeps of who visited its sites. It should feel like a well-kept municipal register: official, exact and calm. The counts are the content.
+
+## What is in this folder
+
+| Path | What it is |
+| --- | --- |
+| `DESIGN.md` | The specification: identity, normative tokens (YAML frontmatter), rules and component specs. |
+| `tokens/tanaw.css` | Tailwind v4 tokens for light and dark. The single source of truth for colour, type, shape, depth and motion. |
+| `src/components/` | Primitives: buttons, badges, cards, fields, selects, switches, tabs, dialogs, tables and more. |
+| `src/patterns/` | Composites: the metric strip, page header, password checklist and topbar glass indicator. |
+| `src/lib/` | Helpers the components share: class joining, sentence case, focus trapping, popup dismissal, motion presets. |
+| `src/styles/components.css` | Styles Tailwind classes cannot express (hover sweeps, scrollbars, reduced motion). |
+| `scripts/sync.mjs` | Copies tokens and `src/` into both apps. |
+| `docs/`, `*.stories.tsx` | This Storybook: documentation and a live preview of every component and state. |
+
+## How the apps use it
+
+The apps never import from this folder. Each app builds and deploys on its own: Vercel builds only `frontend-tanaw`, and electron-builder packages only `desktop-tanaw`. Instead, `node design-system/scripts/sync.mjs` copies the code into each app:
+
+- `tokens/tanaw.css` → `<app>/src/styles/tanaw-tokens.css`
+- `src/**` (not stories) → `<app>/src/design-system/**`
+
+Each copy starts with a header recording the SHA-256 of its source. A unit test in each app (`tests/unit/configuration/design-system.test.ts`) fails when a copy is edited by hand, is stale, or is left over after its source was removed. So the two apps always run the same code, and nobody can quietly change one of them.
+
+## Using this preview
+
+- **Theme:** the paintbrush menu in the toolbar switches Light and Dark. It toggles the same `.dark` class on `<html>` that both apps use.
+- **Accessibility:** the Accessibility panel runs axe checks on each story.
+- **Controls:** the Controls panel edits a story's props live; the Docs tab lists every prop with its description.
+
+Run it from the repository root:
+
+```bash
+cd design-system && npm install && npm run storybook
+```
