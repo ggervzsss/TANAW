@@ -106,7 +106,7 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/enterprise\/dashboard/);
     await page.evaluate(() => window.tanawCameraCredentials!.save(1, { username: "saved-user", password: "saved-camera-secret" }));
-    await page.goto("tanaw-app://desktop/index.html#/enterprise/cameras");
+    await page.getByRole("button", { name: "Camera Setup", exact: true }).click();
     await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
     await application.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows().find((value) => value.webContents.getURL().startsWith("tanaw-app://desktop"));

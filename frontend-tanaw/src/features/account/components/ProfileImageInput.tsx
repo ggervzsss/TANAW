@@ -16,7 +16,7 @@ export function ProfileImageInput({
   return (
     <label
       htmlFor={`profile-image-${role}`}
-      className="group hover:border-tanaw-green relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-slate-300 bg-slate-50 shadow-sm transition"
+      className="group hover:border-tanaw-green relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-(--tanaw-control-border) bg-(--tanaw-surface-inset) shadow-sm transition"
     >
       {displayImageDataUrl ? (
         <img src={displayImageDataUrl} alt="Profile preview" className="h-full w-full object-cover" />

@@ -4,6 +4,7 @@ import {
   applyDevicePerformanceProfile,
   getMlHealth,
   getMlServiceStatus,
+  getPreviewStreamUrl,
   getStreamUrl,
   replaceLocalCameras,
   startCameraProcessing,
@@ -13,6 +14,13 @@ import {
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("requests a clean, generation-specific stream only when the camera is ready", () => {
+    vi.stubGlobal("window", { tanawMlService: {} });
+    const base = "http://127.0.0.1:8765";
+    expect(getPreviewStreamUrl(base, camera(), 3, false, 7)).toBe("");
+    expect(getPreviewStreamUrl(base, camera(), 3, true, 7)).toMatch(/overlay=0&v=3&generation=7$/);
+  });
 
   it.each(["tenda", "dahua", "custom"] as const)("passes the %s endpoint unchanged to secure test and start requests", async (cameraBrand) => {
     const request = vi.fn().mockResolvedValue({ ok: true });

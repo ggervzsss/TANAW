@@ -204,11 +204,6 @@
   height: 18px;
   color: var(--tanaw-text-muted);
 }
-.camera-settings .settings-field input:focus-visible,
-.camera-add-dialog input:focus-visible {
-  outline: 2px solid var(--tanaw-focus-ring);
-  outline-offset: 3px;
-}
 .camera-settings .settings-field small {
   font-size: 12px;
 }
@@ -350,6 +345,10 @@
   background: rgb(38 91 54 / 23%);
   animation: camera-fade 200ms ease;
 }
+body:has(.camera-dialog) [aria-label="Current system issues"] {
+  /* Keep fixed notices behind the dialog so they never cover its actions. */
+  z-index: 1199;
+}
 .camera-dialog {
   width: min(1020px, 100%);
   max-height: calc(100dvh - 48px);
@@ -385,6 +384,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  /* Leave room for focus outlines at the edges of the scrolling content. */
+  padding: 5px;
+  margin: -5px;
 }
 .camera-dialog > footer {
   display: flex;
@@ -478,11 +480,41 @@
 .camera-area-dialog .counting-editor-preview > div:focus-within {
   outline: none;
 }
-.camera-area-dialog .counting-editor-preview svg circle {
+.camera-area-dialog .counting-editor-preview--zone {
+  padding: 13px;
+  margin-bottom: 0;
+}
+.open-space-edge {
   cursor: grab;
 }
-.camera-area-dialog .counting-editor-preview svg circle:active {
-  cursor: grabbing;
+.open-space-edge-mark {
+  pointer-events: none;
+  stroke: #67e8f9;
+  stroke-width: 3;
+  opacity: 0;
+}
+.open-space-edge:hover .open-space-edge-mark,
+.open-space-edge[data-active="true"] .open-space-edge-mark {
+  opacity: 1;
+}
+.open-space-point > [role="button"] {
+  cursor: grab;
+  outline: none;
+}
+.open-space-point-mark {
+  pointer-events: none;
+  fill: #fff;
+  stroke: #0e7490;
+  stroke-width: 2;
+}
+.open-space-point:hover .open-space-point-mark,
+.open-space-point:focus-within .open-space-point-mark {
+  fill: #a5f3fc;
+  stroke-width: 3;
+}
+.open-space-point[data-selected="true"] .open-space-point-mark {
+  fill: #fbbf24;
+  stroke: #10241b;
 }
 .camera-preview-state {
   position: absolute;

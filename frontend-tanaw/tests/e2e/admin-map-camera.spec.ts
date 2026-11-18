@@ -1,7 +1,8 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Page } from "@playwright/test";
+import type { MapEnterprise } from "../../src/shared/types";
 
-const transparentPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+const transparentPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==", "base64");
 
 const adminUser = {
   id: "admin-map-camera-test",
@@ -22,7 +23,7 @@ const adminUser = {
   displayImageDataUrl: null,
 };
 
-const mapEnterprise = {
+const mapEnterprise: MapEnterprise = {
   id: "enterprise-map-camera-test",
   name: "Map Camera Test Enterprise",
   barangay: "San Antonio",
@@ -77,15 +78,17 @@ type MapGeometry = {
   directoryRight: number;
   map: { bottom: number; height: number; left: number; right: number; top: number; width: number };
   marker: { centerX: number; centerY: number };
+  /** Every marker's center, keyed by its accessible name, so cameras compare the same establishment. */
+  markers: Record<string, { centerX: number; centerY: number }>;
 };
 
-async function configureAdminMapSession(page: Page, options: { theme?: "dark" | "light"; viewport?: { height: number; width: number } } = {}) {
+async function configureAdminMapSession(page: Page, options: { theme?: "dark" | "light"; viewport?: { height: number; width: number }; enterprises?: MapEnterprise[] } = {}) {
   let signedIn = false;
   const theme = options.theme ?? "light";
 
   await page.setViewportSize(options.viewport ?? { width: 1920, height: 1080 });
   await page.addInitScript((initialTheme) => {
-    window.localStorage.setItem("tanaw-web-theme", initialTheme);
+    if (!window.localStorage.getItem("tanaw-web-theme")) window.localStorage.setItem("tanaw-web-theme", initialTheme);
   }, theme);
   await page.route(/https:\/\/[abcd]\.basemaps\.cartocdn\.com\/.*/, (route) => {
     expect(new URL(route.request().url()).searchParams.get("key")).toBe("carto-e2e-test-key");
@@ -107,7 +110,7 @@ async function configureAdminMapSession(page: Page, options: { theme?: "dark" | 
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route("**/accounts/enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/operational/map-enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([mapEnterprise]) }));
+  await page.route("**/operational/map-enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(options.enterprises ?? [mapEnterprise]) }));
   await page.route("**/operational/visitor-insights**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(visitorInsights) }));
 
   await page.goto("/login");
@@ -125,6 +128,18 @@ async function waitForMapReady(page: Page) {
   await expect(page.locator("#admin-enterprise-map path.tanaw-boundary-path").first()).toBeVisible();
   await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon").first()).toBeVisible();
   await page.waitForTimeout(350);
+}
+
+/** Reads the map once the camera and markers have stopped moving, so an easing camera is never compared. */
+async function readSettledMapGeometry(page: Page): Promise<MapGeometry> {
+  let previous = await readMapGeometry(page);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.waitForTimeout(100);
+    const current = await readMapGeometry(page);
+    if (JSON.stringify(current) === JSON.stringify(previous)) return current;
+    previous = current;
+  }
+  return previous;
 }
 
 async function readMapGeometry(page: Page): Promise<MapGeometry> {
@@ -171,6 +186,12 @@ async function readMapGeometry(page: Page): Promise<MapGeometry> {
         centerX: markerRect.left + markerRect.width / 2,
         centerY: markerRect.top + markerRect.height / 2,
       },
+      markers: Object.fromEntries(
+        Array.from(document.querySelectorAll<HTMLElement>("#admin-enterprise-map .leaflet-marker-icon[aria-label]")).map((element) => {
+          const rect = element.getBoundingClientRect();
+          return [element.getAttribute("aria-label")!, { centerX: rect.left + rect.width / 2, centerY: rect.top + rect.height / 2 }];
+        }),
+      ),
     };
   });
 }
@@ -191,16 +212,158 @@ function expectSameCamera(actual: MapGeometry, expected: MapGeometry) {
   expect(actual.boundary.top).toBeCloseTo(expected.boundary.top, 0);
   expect(actual.boundary.width).toBeCloseTo(expected.boundary.width, 0);
   expect(actual.boundary.height).toBeCloseTo(expected.boundary.height, 0);
-  expect(actual.marker.centerX).toBeCloseTo(expected.marker.centerX, 0);
-  expect(actual.marker.centerY).toBeCloseTo(expected.marker.centerY, 0);
+  // Markers are re-added when filters change, so the first marker can be another establishment.
+  const shared = Object.keys(expected.markers).filter((label) => label in actual.markers);
+  expect(shared.length).toBeGreaterThan(0);
+  for (const label of shared) {
+    expect(actual.markers[label].centerX, label).toBeCloseTo(expected.markers[label].centerX, 0);
+    expect(actual.markers[label].centerY, label).toBeCloseTo(expected.markers[label].centerY, 0);
+  }
 }
 
-test("uses one canonical admin map camera for login, route return, refresh, and outside-click reset", async ({ page }) => {
+test("keeps the tile grid, boundary renderer, and pin together in every animated zoom frame", async ({ page }) => {
+  await configureAdminMapSession(page, { theme: "dark", viewport: { width: 1366, height: 768 } });
+  const map = page.locator("#admin-enterprise-map");
+  const base = map.locator(".tanaw-base-tiles--dark");
+  await expect(base.locator(".leaflet-tile-loaded").first()).toBeVisible();
+
+  for (const direction of ["in", "out"]) {
+    const frames = map.evaluate((container) => {
+      const renderer = container.querySelector<SVGSVGElement>(".leaflet-boundary-pane svg")!;
+      const pin = container.querySelector<HTMLElement>(".tanaw-map-pin")!;
+      const tiles = container.querySelector(".tanaw-base-tiles--dark")!;
+      const level = tiles.querySelector(".leaflet-tile-container:has(.leaflet-tile-loaded)")!;
+      const mapPane = container.querySelector(".leaflet-map-pane")!;
+      const matrix = (element: Element) => new DOMMatrixReadOnly(getComputedStyle(element).transform === "none" ? undefined : getComputedStyle(element).transform);
+      const svgScale = matrix(renderer).a;
+      const tileScale = matrix(level).a;
+      const pinRect = pin.getBoundingClientRect();
+      const origin = new DOMPoint(pinRect.x + 25, pinRect.y + 49).matrixTransform(renderer.getScreenCTM()!.inverse());
+      const levelCount = tiles.children.length;
+      return new Promise<{ scaleDifference: number; pinError: number; incomingLevel: boolean }[]>((resolve) => {
+        const samples: { scaleDifference: number; pinError: number; incomingLevel: boolean }[] = [];
+        // Sample the whole zoom animation, however long the click takes to start it.
+        const deadline = performance.now() + 5000;
+        let started = false;
+        const sample = () => {
+          const animating = mapPane.classList.contains("leaflet-zoom-anim");
+          if (animating) {
+            started = true;
+            const expectedPin = origin.matrixTransform(renderer.getScreenCTM()!);
+            const rect = pin.getBoundingClientRect();
+            samples.push({
+              scaleDifference: Math.abs(matrix(renderer).a / svgScale - matrix(level).a / tileScale),
+              pinError: Math.hypot(rect.x + 25 - expectedPin.x, rect.y + 49 - expectedPin.y),
+              incomingLevel: tiles.children.length > levelCount,
+            });
+          }
+          if ((started && !animating) || performance.now() >= deadline) resolve(samples);
+          else requestAnimationFrame(sample);
+        };
+        sample();
+      });
+    });
+    await map.locator(`.leaflet-control-zoom-${direction}`).click();
+    const samples = await frames;
+    // A 250 ms zoom can render as little as one frame in headless Chrome on a busy machine;
+    // every frame that does render is checked below.
+    expect(samples.length).toBeGreaterThan(0);
+    expect(Math.max(...samples.map((sample) => sample.scaleDifference))).toBeLessThan(0.025);
+    expect(Math.max(...samples.map((sample) => sample.pinError))).toBeLessThan(4);
+    expect(samples.some((sample) => sample.incomingLevel)).toBe(false);
+  }
+});
+
+test("switches between enterprise previews, reports missing telemetry, and keeps both panel controls responsive", async ({ page }, testInfo) => {
+  // Several previews, panel toggles and settled camera readings take longer than the default.
+  test.setTimeout(60_000);
+  const offlineEnterprise: MapEnterprise = {
+    ...mapEnterprise, id: "offline-enterprise", name: "Offline Enterprise", lng: mapEnterprise.lng + 0.006,
+    monitoringStatus: "Offline", occupancyStatus: "No Data", totalLiveOccupancy: null, cameraMonitoring: null,
+  };
+  await configureAdminMapSession(page, { theme: "dark", enterprises: [mapEnterprise, offlineEnterprise] });
+  const card = page.locator(".tanaw-map-enterprise-card").filter({ hasText: mapEnterprise.name });
+  const other = page.locator(".tanaw-map-enterprise-card").filter({ hasText: offlineEnterprise.name });
+  const marker = page.locator(".tanaw-map-pin").filter({ has: page.locator(".tanaw-enterprise-marker[data-tone='stopped']") });
+  const preview = page.getByRole("region", { name: "Enterprise preview" });
+  await card.click();
+  await expect(preview).toContainText(mapEnterprise.name);
+  const firstCamera = await readSettledMapGeometry(page);
+  await card.click();
+  expectSameCamera(await readSettledMapGeometry(page), firstCamera);
+  await other.click();
+  await expect(preview).toContainText(offlineEnterprise.name);
+  await expect(preview).toContainText("Offline");
+  await expect(preview.getByText("Unavailable", { exact: true })).toHaveCount(2);
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await expect(card).toHaveAttribute("aria-pressed", "false");
+  await expect(marker).toHaveClass(/is-selected/);
+  await expect(page.locator(".tanaw-enterprise-popup .leaflet-popup-content-wrapper")).toHaveCSS("background-color", "rgb(25, 41, 37)");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  const selectedCamera = await readSettledMapGeometry(page);
+  const insightsToggle = page.locator("#visitor-insights-launcher");
+  const directoryToggle = page.locator("#spatial-directory-toggle");
+  const left = (await directoryToggle.boundingBox())!;
+  const right = (await insightsToggle.boundingBox())!;
+  expect(left.y).toBeCloseTo(right.y, 0);
+  expect(left.width).toBe(right.width);
+  await insightsToggle.click();
+  await insightsToggle.click();
+  await insightsToggle.click();
+  await directoryToggle.click();
+  await directoryToggle.click();
+  await expect(insightsToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(directoryToggle).toHaveAttribute("aria-expanded", "true");
+  const insightsPanel = page.getByRole("complementary", { name: "Visitor insights" });
+  await expect(insightsPanel).toHaveCSS("opacity", "1");
+  const zoomButton = (await page.locator(".leaflet-control-zoom-in").boundingBox())!;
+  expect(zoomButton.x + zoomButton.width).toBeLessThan((await insightsPanel.boundingBox())!.x);
+  expectSameCamera(await readSettledMapGeometry(page), selectedCamera);
+  await page.screenshot({ path: testInfo.outputPath("enterprise-preview-dark.png") });
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator(".tanaw-enterprise-popup .leaflet-popup-content-wrapper")).toHaveCSS("background-color", "rgb(248, 252, 250)");
+  expectSameCamera(await readSettledMapGeometry(page), selectedCamera);
+});
+
+test("keeps a panned preview inside the viewport and respects reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await configureAdminMapSession(page, { viewport: { width: 820, height: 680 } });
+  const map = page.locator("#admin-enterprise-map");
+  const marker = map.locator(".tanaw-map-pin");
+  await marker.click();
+  const popup = map.locator(".tanaw-enterprise-popup");
+  await expect(popup).toBeVisible();
+  await expect(marker.locator(".tanaw-enterprise-marker__selection")).toHaveCSS("animation-name", "none");
+  await expect(page.locator("#visitor-insights-panel")).toHaveCSS("transition-property", "none");
+  const geometry = await readMapGeometry(page);
+
+  const start = { x: geometry.marker.centerX + 46, y: geometry.marker.centerY + 60 };
+  const offset = {
+    x: geometry.map.left + 45 - geometry.marker.centerX,
+    y: geometry.map.top + 54 - geometry.marker.centerY,
+  };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + offset.x, start.y + offset.y, { steps: 16 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await expect(popup).toHaveAttribute("data-placement", "below");
+  const previewBounds = (await popup.boundingBox())!;
+  expect(previewBounds.x).toBeGreaterThanOrEqual(geometry.map.left + 10);
+  expect(previewBounds.x + previewBounds.width).toBeLessThan(geometry.map.right);
+  expect(previewBounds.y + previewBounds.height).toBeLessThan(geometry.map.bottom);
+  await expect(popup.getByRole("button", { name: "View Details" })).toBeVisible();
+});
+
+test("fits the city on entry and keeps the camera when filters are cleared", async ({ page }) => {
   test.setTimeout(60_000);
   await configureAdminMapSession(page);
-  const initial = await readMapGeometry(page);
+  const initial = await readSettledMapGeometry(page);
   expectCanonicalCitywideFraming(initial);
-  await expect(page.getByRole("combobox", { name: "Select barangay" })).toContainText("All Barangays");
+  const allBarangays = page.getByRole("combobox", { name: "Select barangay" });
+  await expect(allBarangays).toContainText("All Barangays");
+  await expect(allBarangays.locator(".tanaw-directory-select-meta")).toHaveText("1");
   await expect(page.getByText("No Barangay Selected")).toHaveCount(0);
   await expect(page.getByText("All Enterprises", { exact: true })).toBeVisible();
   await expect(page.locator(".tanaw-map-directory__list").first()).toHaveCSS("scrollbar-width", "thin");
@@ -286,18 +449,18 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   await expect(mapViewLink).toHaveAttribute("aria-current", "page");
   await waitForMapReady(page);
   await expect(page.getByText("Loading TANAW workspace…")).toHaveCount(0);
-  expectSameCamera(await readMapGeometry(page), initial);
+  expectSameCamera(await readSettledMapGeometry(page), initial);
 
   await page.getByRole("link", { name: "Operations Center" }).click();
   await expect(page).toHaveURL(/\/admin\/operations$/);
   await page.getByRole("link", { name: "Map View" }).click();
   await expect(page).toHaveURL(/\/admin\/mapview$/);
   await waitForMapReady(page);
-  expectSameCamera(await readMapGeometry(page), initial);
+  expectSameCamera(await readSettledMapGeometry(page), initial);
 
   await page.reload();
   await waitForMapReady(page);
-  expectSameCamera(await readMapGeometry(page), initial);
+  expectSameCamera(await readSettledMapGeometry(page), initial);
 
   const barangaySelect = page.getByRole("combobox", { name: "Select barangay" });
   await barangaySelect.click();
@@ -307,24 +470,27 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   const backToDirectory = page.getByRole("button", { name: "Back to Barangay Directory" });
   await expect(backToDirectory).toContainText("All Barangays");
   await expect(page.getByRole("heading", { name: "Barangay San Antonio" })).toBeVisible();
+  const filteredCamera = await readSettledMapGeometry(page);
   await backToDirectory.click();
   await expect(barangaySelect).toContainText("All Barangays");
   await page.waitForTimeout(900);
-  expectSameCamera(await readMapGeometry(page), initial);
+  expectSameCamera(await readSettledMapGeometry(page), filteredCamera);
 
   await barangaySelect.click();
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
   await page.waitForTimeout(900);
+  const dropdownCamera = await readSettledMapGeometry(page);
   await barangaySelect.click();
   await page.getByRole("option", { name: /All Barangays/ }).click();
   await expect(barangaySelect).toContainText("All Barangays");
   await page.waitForTimeout(900);
-  expectSameCamera(await readMapGeometry(page), initial);
+  expectSameCamera(await readSettledMapGeometry(page), dropdownCamera);
 
   await barangaySelect.click();
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
   await expect(barangaySelect).toContainText("Barangay San Antonio");
   await page.waitForTimeout(900);
+  const outsideClickCamera = await readSettledMapGeometry(page);
 
   const map = page.locator("#admin-enterprise-map");
   const mapBox = await map.boundingBox();
@@ -356,19 +522,40 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   await expect(barangaySelect).toContainText("All Barangays");
   await expect(page.getByText("No Barangay Selected")).toHaveCount(0);
   await expect(page.getByText("All Enterprises", { exact: true })).toBeVisible();
-  const reset = await readMapGeometry(page);
-  expectSameCamera(reset, initial);
+  const reset = await readSettledMapGeometry(page);
+  expectSameCamera(reset, outsideClickCamera);
   expect(Math.min(...sampledWidths)).toBeGreaterThanOrEqual(reset.boundary.width * 0.98);
+  await expect(page.getByRole("button", { name: "Fit all barangays" })).toHaveCount(0);
+  await page.locator("#spatial-directory-panel").getByRole("button", { name: "Reset map view" }).click();
+  await expect.poll(async () => Math.abs((await readMapGeometry(page)).boundary.left - initial.boundary.left)).toBeLessThan(1);
 });
 
-test("keeps the canonical citywide framing at laptop size in dark mode", async ({ page }) => {
+test("keeps dark-mode boundaries legible and fits a selected barangay beside the directory", async ({ page }, testInfo) => {
   await configureAdminMapSession(page, {
     theme: "dark",
     viewport: { width: 1366, height: 768 },
   });
 
-  expectCanonicalCitywideFraming(await readMapGeometry(page));
+  const initial = await readSettledMapGeometry(page);
+  expectCanonicalCitywideFraming(initial);
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("heading", { name: "Spatial Directory" }).hover();
+  const map = page.locator("#admin-enterprise-map");
+  await expect(map.locator(".tanaw-base-tiles--dark")).toHaveCSS("filter", /contrast\(0\.68\)/);
+  await expect(map.locator('.tanaw-boundary-path[stroke="#96beaf"][stroke-width="2"][fill-opacity="0.22"]')).toHaveCount(28);
+  await page.screenshot({ path: testInfo.outputPath("admin-map-dark.png") });
+
+  await page.getByRole("combobox", { name: "Select barangay" }).click();
+  await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
+  const selectedBoundary = map.locator('.tanaw-boundary-path[stroke="#abe6c9"]');
+  await expect(selectedBoundary).toHaveAttribute("stroke-width", "3.25");
+  await expect.poll(async () => (await readMapGeometry(page)).boundary.width).toBeGreaterThan(initial.boundary.width);
+  await expect(map.locator(".leaflet-map-pane")).not.toHaveClass(/leaflet-zoom-anim/);
+  const bounds = (await selectedBoundary.boundingBox())!;
+  expect(bounds.x).toBeGreaterThan(initial.directoryRight + 30);
+  expect(bounds.x + bounds.width).toBeLessThan(initial.map.right - 30);
+  expect(bounds.y).toBeGreaterThan(initial.map.top + 30);
+  expect(bounds.y + bounds.height).toBeLessThan(initial.map.bottom - 30);
 });
 
 test("keeps the Spatial Directory readable, compact when retracted, and map-safe while balancing Enterprise Details", async ({ page }, testInfo) => {
@@ -381,20 +568,38 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
   const expandedDirectoryBox = await directory.boundingBox();
   const collapseBox = await collapse.boundingBox();
   const initialInsightsBox = await openInsights.boundingBox();
+  await expect(directory.locator(".tanaw-spatial-directory-shell")).toHaveCSS("backdrop-filter", "blur(9px) saturate(1.14)");
   expect(expandedDirectoryBox).not.toBeNull();
   expect(collapseBox).not.toBeNull();
   expect(initialInsightsBox).not.toBeNull();
-  expect(collapseBox!.y + collapseBox!.height / 2).toBeCloseTo(expandedDirectoryBox!.y + expandedDirectoryBox!.height / 2, 0);
+  expect(collapseBox!.y - expandedDirectoryBox!.y).toBeLessThan(32);
+  expect(collapseBox!.x - expandedDirectoryBox!.x).toBeLessThan(32);
   expect(initialInsightsBox!.x).toBeGreaterThan(1600);
+  expect(initialInsightsBox!.y).toBeCloseTo(collapseBox!.y, 0);
+  expect(initialInsightsBox!.width).toBe(collapseBox!.width);
 
-  await page.locator(".tanaw-map-enterprise-card").filter({ hasText: "Map Camera Test Enterprise" }).click();
+  const enterpriseCard = directory.locator(".tanaw-map-enterprise-card").filter({ hasText: mapEnterprise.name });
+  await expect(enterpriseCard).toContainText("Live Occupancy");
+  await expect(enterpriseCard).toContainText("1/1 cameras reporting");
+  await expect(enterpriseCard.getByText("Est. Unique", { exact: true })).toHaveCount(0);
+  await enterpriseCard.click();
   const detailsDialog = page.getByRole("dialog", { name: mapEnterprise.name });
+  const preview = page.getByRole("region", { name: "Enterprise preview" });
+  await expect(preview).toBeVisible();
+  await expect(detailsDialog).toHaveCount(0);
+  await expect(preview).toContainText("1/1 reporting");
+  const beforeDetails = await readSettledMapGeometry(page);
+  await preview.getByRole("button", { name: "View Details" }).click();
   await expect(detailsDialog).toBeVisible();
   await expect(detailsDialog.locator("[data-dialog-accent='thread']")).toHaveCount(1);
   await expect(detailsDialog.locator("[data-details-modal-layout='balanced-enterprise']")).toHaveCount(1);
   const contactCard = detailsDialog.getByText("Contact", { exact: true }).locator("..").locator("..");
   const hoursCard = detailsDialog.getByText("Operating Hours", { exact: true }).locator("..").locator("..");
   const addressCard = detailsDialog.getByText("Full Address", { exact: true }).locator("..").locator("..");
+  await expect.poll(async () => {
+    const [contact, hours] = await Promise.all([contactCard.boundingBox(), hoursCard.boundingBox()]);
+    return contact && hours ? Math.abs(contact.y - hours.y) : Infinity;
+  }).toBeLessThan(0.5);
   const [contactBox, hoursBox, addressBox] = await Promise.all([contactCard.boundingBox(), hoursCard.boundingBox(), addressCard.boundingBox()]);
   expect(contactBox).not.toBeNull();
   expect(hoursBox).not.toBeNull();
@@ -405,37 +610,43 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
   await expect(detailsDialog.getByText("Not specified", { exact: true })).toBeVisible();
   await expect(detailsDialog.getByRole("button", { name: "View visitor insights" })).toBeVisible();
   await detailsDialog.getByRole("button", { name: "Close modal" }).click();
+  await expect(detailsDialog).toHaveCount(0);
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "View Details" })).toBeFocused();
+  expectSameCamera(await readSettledMapGeometry(page), beforeDetails);
 
-  await collapse.click();
+  await collapse.press("Enter");
   await expect(directory).toHaveAttribute("data-directory-state", "collapsed");
   await expect(directory).toHaveCSS("width", "0px");
   await expect(directory.locator(".tanaw-spatial-directory-shell")).toHaveCSS("opacity", "0");
   const expand = page.getByRole("button", { name: "Expand spatial directory" });
   await expect(expand).toBeVisible();
+  await expect(expand).toBeFocused();
   await expect(openInsights).toBeVisible();
   await expect(expand).not.toContainText("Spatial Directory");
   await expect(openInsights).not.toContainText("Visitor Insights");
-  await expect(expand).toHaveAttribute("title", "Spatial Directory");
-  await expect(openInsights).toHaveAttribute("title", "Visitor Insights");
-  await expect(expand).toHaveCSS("width", "52px");
-  await expect(expand).toHaveCSS("height", "52px");
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+  await expect(openInsights).toHaveAttribute("aria-expanded", "false");
+  await expect(expand).toHaveCSS("width", "44px");
+  await expect(expand).toHaveCSS("height", "44px");
   const expandBox = await expand.boundingBox();
   const insightsBox = await openInsights.boundingBox();
   expect(expandBox).not.toBeNull();
   expect(insightsBox).not.toBeNull();
-  expect(expandBox!.x).toBeLessThan(80);
+  expect(expandBox!.x).toBeCloseTo(collapseBox!.x, 0);
+  expect(expandBox!.y).toBeCloseTo(collapseBox!.y, 0);
   expect(insightsBox!.x).toBeGreaterThan(1600);
-  expect(expandBox!.y).toBeCloseTo(insightsBox!.y, 0);
   expect(insightsBox!.x).toBeCloseTo(initialInsightsBox!.x, 0);
   expect(insightsBox!.y).toBeCloseTo(initialInsightsBox!.y, 0);
-  expect(expandBox!.width).toBeCloseTo(insightsBox!.width, 0);
   await expect(page.locator("#admin-enterprise-map .leaflet-tile-loaded").first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("collapsed-map-tool-rail.png"), fullPage: true });
 
   await expand.click();
   await expect(directory).toHaveAttribute("data-directory-state", "expanded");
-  await expect(page.getByRole("heading", { name: "Barangay San Antonio" })).toBeVisible();
-  await expect(directory).toHaveCSS("width", "408px");
+  await expect(collapse).toBeFocused();
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  await expect(enterpriseCard).toHaveAttribute("aria-pressed", "true");
+  await expect(directory).toHaveCSS("width", "384px");
   const restoredDirectoryBox = await directory.boundingBox();
   expect(restoredDirectoryBox!.width).toBeCloseTo(expandedDirectoryBox!.width, 0);
 });
@@ -443,10 +654,12 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
 test("presents Visitor Insights as an accessible analytical workspace and highlights directory markers without changing map selection", async ({ page }, testInfo) => {
   await configureAdminMapSession(page);
 
-  const marker = page.locator('#admin-enterprise-map .tanaw-map-pin[title="Map Camera Test Enterprise"]');
+  const marker = page.locator('#admin-enterprise-map .tanaw-map-pin[aria-label^="Map Camera Test Enterprise"]');
+  const markerBody = marker.locator(".tanaw-enterprise-marker__body");
   const card = page.locator(".tanaw-map-enterprise-card").filter({ hasText: "Map Camera Test Enterprise" });
   await expect(marker.locator('.tanaw-enterprise-marker[data-tone="running"]')).toBeVisible();
   await expect(marker.locator(".tanaw-enterprise-marker__body svg")).toBeVisible();
+  await expect(markerBody).toHaveCSS("width", "44px");
   await expect(card).toHaveAttribute("aria-pressed", "false");
 
   await card.hover();
@@ -455,17 +668,43 @@ test("presents Visitor Insights as an accessible analytical workspace and highli
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("heading", { name: "Spatial Directory" }).hover();
   await expect(marker).not.toHaveClass(/is-directory-hovered/);
+  await marker.hover();
+  await expect(markerBody).toHaveCSS("transform", /^matrix\(1\.08,/);
+  const tooltip = page.locator(".tanaw-enterprise-tooltip");
+  await expect(tooltip).toContainText(mapEnterprise.fullAddress);
+  await expect(tooltip).toContainText("Attraction · San Antonio");
+  await expect(tooltip).toContainText("1/1 reporting");
+  await expect(tooltip).toContainText("Live occupancy");
+  await expect(tooltip).toContainText("12");
+  const beforeMarkerClick = await readMapGeometry(page);
+  await marker.click();
+  const preview = page.getByRole("region", { name: "Enterprise preview" });
+  await expect(preview).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(marker).toHaveClass(/is-selected/);
+  await expect(card).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(async () => (await readMapGeometry(page)).boundary.width).toBeGreaterThan(beforeMarkerClick.boundary.width);
+  await expect(page.locator("#admin-enterprise-map .leaflet-map-pane")).not.toHaveClass(/leaflet-zoom-anim/);
+  const focusedCamera = await readSettledMapGeometry(page);
+  expect(Math.abs(focusedCamera.marker.centerX - (focusedCamera.directoryRight + focusedCamera.map.right) / 2)).toBeLessThan(40);
+  await page.getByRole("button", { name: "Close enterprise preview" }).click();
+  await expect(preview).toHaveCount(0);
+  expectSameCamera(await readSettledMapGeometry(page), focusedCamera);
 
   const openInsights = page.getByRole("button", { name: "Open visitor insights" });
   await expect(openInsights).not.toContainText("Visitor Insights");
   await openInsights.click();
   const insights = page.getByRole("complementary", { name: "Visitor insights" });
   await expect(insights).toBeVisible();
+  await expect(insights).toHaveCSS("backdrop-filter", "blur(9px) saturate(1.14)");
   await expect(insights.getByRole("heading", { name: "San Pedro" })).toBeVisible();
   await expect(insights.getByText("Visitors Right Now", { exact: true })).toBeVisible();
   await expect(insights.getByText("Learning", { exact: true })).toBeVisible();
   await expect(insights.getByText("Building a reliable comparison", { exact: true })).toBeVisible();
   await expect(insights.getByText("Activity Pattern", { exact: true })).toBeVisible();
+  const chartBar = insights.locator(".recharts-bar-rectangle path").first();
+  await expect(chartBar).toBeVisible();
+  await expect(chartBar).toHaveCSS("fill", "rgb(13, 151, 106)");
   await expect(insights.getByText("Busiest Right Now", { exact: true })).toBeVisible();
   await expect(insights.getByText("Busiest Period", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("visitor-insights-light.png"), fullPage: true });
@@ -479,8 +718,153 @@ test("presents Visitor Insights as an accessible analytical workspace and highli
   await selectedRange.focus();
   await page.keyboard.press("ArrowRight");
   await expect(insights.getByRole("tab", { name: "30 days" })).toHaveAttribute("aria-selected", "true");
-  await insights.getByRole("button", { name: "Close visitor insights" }).click();
+  const closeInsights = page.getByRole("button", { name: "Close visitor insights" });
+  const closeBox = (await closeInsights.boundingBox())!;
+  await closeInsights.click();
   await expect(openInsights).toBeVisible();
+  await expect(openInsights).toBeFocused();
+  expect((await openInsights.boundingBox())!.x).toBeCloseTo(closeBox.x, 0);
+  expectSameCamera(await readSettledMapGeometry(page), focusedCamera);
+});
+
+test("keeps a manually zoomed map through a staged theme switch, drag, and directory controls", async ({ page }) => {
+  // Zooming, dragging and a staged theme switch that waits for map tiles take longer than the default.
+  test.setTimeout(60_000);
+  await configureAdminMapSession(page);
+  const map = page.locator("#admin-enterprise-map");
+  const labels = page.locator("#spatial-directory-panel").getByRole("button", { name: "Show Map Labels" });
+  await expect(labels).toHaveText("Labels");
+  const initial = await readSettledMapGeometry(page);
+  const mapBox = (await map.boundingBox())!;
+  await page.mouse.move(mapBox.x + mapBox.width * 0.6, mapBox.y + mapBox.height * 0.45);
+  await page.mouse.wheel(0, -90);
+  await expect.poll(async () => (await readMapGeometry(page)).boundary.width).toBeGreaterThan(initial.boundary.width + 50);
+  await page.waitForTimeout(275);
+  const zoomed = await readMapGeometry(page);
+
+  await page.mouse.down();
+  await page.mouse.move(mapBox.x + mapBox.width * 0.6 + 85, mapBox.y + mapBox.height * 0.45 - 40, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => Math.abs((await readMapGeometry(page)).marker.centerX - zoomed.marker.centerX)).toBeGreaterThan(40);
+  await page.waitForTimeout(400);
+  const dragged = await readSettledMapGeometry(page);
+  expect(dragged.boundary.width).toBeCloseTo(zoomed.boundary.width, -1);
+
+  await page.getByRole("button", { name: "Collapse spatial directory" }).click();
+  await page.getByRole("button", { name: "Expand spatial directory" }).click();
+  await labels.click();
+  await expect(labels).toHaveAttribute("aria-pressed", "false");
+  await expect(map).toHaveAttribute("data-map-labels", "hidden");
+  await expect(page.locator(".tanaw-label-tiles--light")).toHaveCSS("visibility", "hidden");
+  expectSameCamera(await readSettledMapGeometry(page), dragged);
+
+  let releaseTiles: () => void = () => undefined;
+  const blockedTiles = new Promise<void>((resolve) => {
+    releaseTiles = resolve;
+  });
+  await page.route("**/dark_nolabels/**", async (route) => {
+    await blockedTiles;
+    await route.fulfill({ contentType: "image/png", body: transparentPng });
+  });
+  try {
+    const toggle = page.getByRole("button", { name: "Switch to dark mode" });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-busy", "true");
+    await expect(map.locator(".tanaw-base-tiles--dark")).toHaveCSS("opacity", "0");
+    await expect(map.locator(".tanaw-base-tiles--light")).toHaveCSS("opacity", "1");
+    await expect(page.locator("html")).toHaveClass(/\blight\b/);
+  } finally {
+    releaseTiles();
+  }
+  await expect(map).toHaveAttribute("data-map-tiles", "dark");
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await expect(page.locator("[data-topbar-theme]")).toHaveAttribute("data-topbar-theme", "dark");
+  await expect(labels).toHaveAttribute("aria-pressed", "false");
+  expectSameCamera(await readSettledMapGeometry(page), dragged);
+
+  await page.getByRole("link", { name: "Operations Center" }).click();
+  await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Live Map" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Map View" }).click();
+  await waitForMapReady(page);
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await page.reload();
+  await waitForMapReady(page);
+  await expect(labels).toHaveAttribute("aria-pressed", "false");
+  await expect(map).toHaveAttribute("data-map-tiles", "dark");
+  await labels.click();
+  await expect(map.locator(".tanaw-label-tiles--dark")).toHaveCSS("visibility", "visible");
+
+  let releaseLightTiles: () => void = () => undefined;
+  const slowTiles = new Promise<void>((resolve) => {
+    releaseLightTiles = resolve;
+  });
+  await page.route("**/rastertiles/voyager_nolabels/**", async (route) => {
+    await slowTiles;
+    await route.fulfill({ contentType: "image/png", body: transparentPng });
+  });
+  try {
+    await page.getByRole("button", { name: "Switch to light mode" }).click();
+    await expect(page.locator("html")).toHaveClass(/\blight\b/);
+    await expect(map).toHaveAttribute("data-map-tiles", "dark");
+    await expect(map.locator(".tanaw-base-tiles--dark")).toHaveCSS("opacity", "1");
+    await expect(map.locator(".tanaw-base-tiles--light")).toHaveCSS("opacity", "0");
+  } finally {
+    releaseLightTiles();
+  }
+  await expect(map).toHaveAttribute("data-map-tiles", "light");
+  await expect(labels).toHaveAttribute("aria-pressed", "true");
+});
+
+test("keeps map controls accessible on mobile and searches the Spatial Directory", async ({ page }, testInfo) => {
+  await configureAdminMapSession(page, { viewport: { width: 390, height: 844 } });
+  const labels = page.getByRole("button", { name: "Show Map Labels" });
+  await expect(labels).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand spatial directory" }).click();
+  await expect(labels).toBeVisible();
+  const search = page.getByRole("searchbox", { name: "Search enterprises" });
+  await search.fill("a name not in the registry");
+  await expect(page.getByText("No enterprises match your search.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(page.locator(".tanaw-map-enterprise-card").filter({ hasText: mapEnterprise.name })).toBeVisible();
+  await labels.click();
+  await expect(page.locator("#admin-enterprise-map")).toHaveAttribute("data-map-labels", "hidden");
+  await page.getByRole("combobox", { name: "Select barangay" }).click();
+  await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
+  await expect(page.locator("#spatial-directory-panel")).toHaveAttribute("data-directory-state", "collapsed");
+  await expect(labels).toHaveCount(0);
+  await expect(page.locator("#admin-enterprise-map .leaflet-map-pane")).not.toHaveClass(/leaflet-zoom-anim/);
+  const boundary = await page.locator('#admin-enterprise-map .tanaw-boundary-path[stroke="#167052"]').boundingBox();
+  expect(boundary!.x).toBeGreaterThan(24);
+  expect(boundary!.x + boundary!.width).toBeLessThan(390 - 24);
+
+  const insightsLauncher = page.getByRole("button", { name: "Open visitor insights" });
+  await insightsLauncher.click();
+  const insights = page.getByRole("complementary", { name: "Visitor insights" });
+  await expect(insights).toBeVisible();
+  await expect(insights.getByLabel("History metric")).toBeVisible();
+  await expect(insights.locator(".recharts-bar-rectangle path").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Expand spatial directory" })).toBeVisible();
+  await expect.poll(async () => (await insights.boundingBox())!.x).toBeCloseTo(16, 0);
+  const mobileDrawer = (await insights.boundingBox())!;
+  expect(mobileDrawer.x + mobileDrawer.width).toBeCloseTo(390 - 16, 0);
+  await page.screenshot({ path: testInfo.outputPath("visitor-insights-mobile.png") });
+  await page.getByRole("button", { name: "Close visitor insights" }).click();
+  await expect(page.getByRole("button", { name: "Expand spatial directory" })).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 520 });
+  await page.getByRole("button", { name: "Expand spatial directory" }).click();
+  const compactDirectory = page.locator("#spatial-directory-panel .tanaw-map-directory");
+  const title = compactDirectory.getByRole("heading", { name: "Spatial Directory" });
+  const titleTop = (await title.boundingBox())!.y;
+  expect(await compactDirectory.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return element.scrollTop;
+  })).toBeGreaterThan(0);
+  await expect.poll(async () => (await title.boundingBox())!.y).toBeCloseTo(titleTop, 0);
+  await expect(page.getByRole("button", { name: "Collapse spatial directory" })).toBeVisible();
+  const accountButton = (await page.getByRole("button", { name: "Open account menu" }).boundingBox())!;
+  expect(accountButton.x + accountButton.width).toBeLessThanOrEqual(320);
 });
 
 test("keeps the modernized Admin data workspaces semantic and keyboard operable", async ({ page }, testInfo) => {
@@ -625,8 +1009,46 @@ test("keeps Visitor Insights and Admin data workspaces intentionally layered in 
 
   await page.getByRole("link", { name: "Activity History" }).click();
   await expect(page.locator(".tanaw-audit-workspace")).toBeVisible();
-  await page.waitForTimeout(500);
+  for (const [filterName, initial, next] of [
+    ["Filter activity category", "All Activity", "Reports"],
+    ["Filter activity time range", "All Time", "Today"],
+  ]) {
+    const filter = page.getByRole("combobox", { name: filterName });
+    await expect(filter).toHaveCSS("background-color", "rgb(25, 38, 51)");
+    await filter.hover();
+    await expect(filter).toHaveCSS("background-color", "rgb(32, 46, 60)");
+    await filter.press("Enter");
+    await expect(filter).toHaveAttribute("aria-expanded", "true");
+    await expect(filter).toHaveCSS("border-top-color", "rgb(94, 234, 212)");
+    const menu = page.getByRole("listbox", { name: filterName });
+    await expect(menu.locator("..")).toHaveCSS("background-color", "rgb(25, 37, 49)");
+    await expect(menu.getByRole("option", { name: initial, exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(menu.getByRole("option", { name: next, exact: true })).toHaveAttribute("data-active", "true");
+    await page.keyboard.press("Enter");
+    await expect(filter).toContainText(next);
+    await expect(filter).toBeFocused();
+    await expect(filter).toHaveCSS("border-top-color", "rgb(94, 234, 212)");
+  }
   await page.screenshot({ path: testInfo.outputPath("activity-history-dark.png"), fullPage: true });
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).toHaveClass(/\blight\b/);
+  for (const [filterName, next] of [
+    ["Filter activity category", "Reports"],
+    ["Filter activity time range", "Today"],
+  ]) {
+    const filter = page.getByRole("combobox", { name: filterName });
+    await expect(filter).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await filter.click();
+    await expect(filter).toHaveCSS("border-top-color", "rgb(15, 118, 110)");
+    const menu = page.getByRole("listbox", { name: filterName });
+    await expect(menu.locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(menu.getByRole("option", { name: next, exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Escape");
+    await expect(filter).toHaveAttribute("aria-expanded", "false");
+  }
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
 
   await page.getByRole("link", { name: "Operations Center" }).click();
   await expect(page.locator(".tanaw-operations-workspace")).toBeVisible();

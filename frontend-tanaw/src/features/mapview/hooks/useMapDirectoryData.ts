@@ -24,12 +24,13 @@ export function useMapDirectoryData({
   const boundaryFeatureCount = useMemo(() => boundary?.features.filter(isBoundaryPolygonFeature).length ?? 0, [boundary]);
   const counts = useMemo(() => {
     const result = new Map<string, number>();
-    for (const enterprise of mapEnterprises) {
+    for (const enterprise of [...mapEnterprises, ...unpinnedEnterprises]) {
+      if (!enterprise.barangay) continue;
       const key = normalizeBarangayName(enterprise.barangay);
       result.set(key, (result.get(key) ?? 0) + 1);
     }
     return result;
-  }, [mapEnterprises]);
+  }, [mapEnterprises, unpinnedEnterprises]);
   const items = useMemo(
     () =>
       (boundary?.features ?? [])
@@ -49,10 +50,10 @@ export function useMapDirectoryData({
   );
   const barangayDropdownOptions = useMemo(
     () => [
-      { value: "", label: "All Barangays", meta: String(enterpriseAccounts.length) },
+      { value: "", label: "All Barangays", meta: String(mapEnterprises.length + unpinnedEnterprises.length) },
       ...items.map((item) => ({ value: item.label, label: `Barangay ${item.label}`, meta: String(item.enterpriseCount), searchText: item.subtitle })),
     ],
-    [enterpriseAccounts.length, items],
+    [items, mapEnterprises.length, unpinnedEnterprises.length],
   );
   const selectedBarangayEnterprises = useMemo(() => (selectedBarangayName ? getEnterprisesByBarangay(mapEnterprises, selectedBarangayName) : []), [mapEnterprises, selectedBarangayName]);
   const selectedBarangayUnpinnedEnterprises = useMemo(

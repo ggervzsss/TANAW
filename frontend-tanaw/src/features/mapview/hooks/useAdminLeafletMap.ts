@@ -1,8 +1,7 @@
 import L, { type GeoJSONOptions, type Layer } from "leaflet";
-import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch } from "react";
 import type { MapEnterprise } from "@/shared/types";
 import {
-  createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
   getActiveBoundaryStyle,
   getBarangayForPoint,
@@ -12,7 +11,6 @@ import {
   getDimmedBoundaryStyle,
   getHoverBoundaryStyle,
   MapMotionController,
-  mountLeafletThemeLayer,
   normalizeBarangayName,
   shouldClearBarangayFromMapClick,
   type GeoJsonFeatureCollection,
@@ -21,7 +19,10 @@ import {
   type MapInteractionAction,
   type MapInteractionState,
 } from "../utils";
+import { mountAdminLeafletLayers } from "../utils/leafletTheme";
+import { prefersReducedMapMotion } from "../utils/mapCamera";
 import { useEnterpriseMarkers } from "./useEnterpriseMarkers";
+import { useEnterprisePreview } from "./useEnterprisePreview";
 import { useMapCameraSync } from "./useMapCameraSync";
 
 type AdminLeafletMapOptions = {
@@ -30,8 +31,13 @@ type AdminLeafletMapOptions = {
   hoveredEnterpriseId: string | null;
   interactionState: MapInteractionState;
   isDirectoryCollapsed: boolean;
+  isInsightsOpen: boolean;
   mapEnterprises: MapEnterprise[];
+  selectedEnterprise: MapEnterprise | null;
+  onSelectLocation: (selection: "barangay" | "enterprise") => void;
+  onViewDetails: (enterpriseId: string) => void;
   showBoundaries: boolean;
+  showLabels: boolean;
   visibleEnterprises: MapEnterprise[];
 };
 
@@ -41,11 +47,17 @@ export function useAdminLeafletMap({
   hoveredEnterpriseId,
   interactionState,
   isDirectoryCollapsed,
+  isInsightsOpen,
   mapEnterprises,
+  selectedEnterprise,
+  onSelectLocation,
+  onViewDetails,
   showBoundaries,
+  showLabels,
   visibleEnterprises,
 }: AdminLeafletMapOptions) {
-  const { cameraTarget, selectedBarangayName, selectedEnterpriseId } = interactionState;
+  const { cameraTarget, selectedBarangayName } = interactionState;
+  const highlightedBarangay = selectedBarangayName ?? (cameraTarget.type === "enterprise" ? cameraTarget.barangayName : null);
   const mapRef = useRef<L.Map | null>(null);
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
   const activeBoundaryRef = useRef<L.Path | null>(null);
@@ -55,7 +67,8 @@ export function useAdminLeafletMap({
   const markersRef = useRef<Record<string, L.Marker>>({});
   const selectedBarangayNameRef = useRef<string | null>(null);
   const initializedMapInstanceRef = useRef<L.Map | null>(null);
-  const lastCameraCommandKeyRef = useRef<string | null>(null);
+  const lastCameraTargetRef = useRef<MapInteractionState["cameraTarget"] | null>(null);
+  const tileLayersRef = useRef<ReturnType<typeof mountAdminLeafletLayers> | null>(null);
   const [isInitialCameraReady, setIsInitialCameraReady] = useState(false);
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
 
@@ -64,12 +77,11 @@ export function useAdminLeafletMap({
       const selectedKey = barangayName ? normalizeBarangayName(barangayName) : "";
       activeBoundaryRef.current = null;
 
-      boundaryLayerRef.current?.getLayers().forEach((layer) => {
+      const boundaryLayer = boundaryLayerRef.current;
+      boundaryLayer?.getLayers().forEach((layer) => {
         if (!(layer instanceof L.Path)) return;
-        if (!barangayName) {
-          boundaryLayerRef.current?.resetStyle(layer);
-          return;
-        }
+        boundaryLayer.resetStyle(layer);
+        if (!barangayName) return;
 
         const featureItem = "feature" in layer ? (layer.feature as GeoJSON.Feature | undefined) : undefined;
         if (normalizeBarangayName(getBarangayLabel(featureItem)) === selectedKey) {
@@ -99,26 +111,25 @@ export function useAdminLeafletMap({
   const selectBarangay = useCallback(
     (barangayName: string, layer?: L.Path) => {
       const targetLayer = layer ?? findBoundaryLayerByName(barangayName);
+      onSelectLocation("barangay");
       closeBoundaryTooltips();
       selectedBarangayNameRef.current = barangayName;
       dispatchMapInteraction({ type: "select-barangay", barangayName });
       applyBoundarySelection(barangayName);
-      mapRef.current?.closePopup();
       targetLayer?.openTooltip();
     },
-    [applyBoundarySelection, closeBoundaryTooltips, dispatchMapInteraction, findBoundaryLayerByName],
+    [applyBoundarySelection, closeBoundaryTooltips, dispatchMapInteraction, findBoundaryLayerByName, onSelectLocation],
   );
 
   const selectEnterprise = useCallback(
     (enterprise: MapEnterprise) => {
-      const targetLayer = findBoundaryLayerByName(enterprise.barangay);
+      onSelectLocation("enterprise");
       closeBoundaryTooltips();
       selectedBarangayNameRef.current = enterprise.barangay;
       dispatchMapInteraction({ type: "select-enterprise", barangayName: enterprise.barangay, enterpriseId: enterprise.id });
       applyBoundarySelection(enterprise.barangay);
-      targetLayer?.openTooltip();
     },
-    [applyBoundarySelection, closeBoundaryTooltips, dispatchMapInteraction, findBoundaryLayerByName],
+    [applyBoundarySelection, closeBoundaryTooltips, dispatchMapInteraction, onSelectLocation],
   );
 
   const clearBarangaySelection = useCallback(
@@ -127,14 +138,13 @@ export function useAdminLeafletMap({
       selectedBarangayNameRef.current = null;
       dispatchMapInteraction({ type: "clear-barangay", reason });
       applyBoundarySelection(null);
-      mapRef.current?.closePopup();
     },
     [applyBoundarySelection, closeBoundaryTooltips, dispatchMapInteraction],
   );
 
-  const closeEnterpriseDetails = useCallback(() => {
-    dispatchMapInteraction({ type: "close-enterprise" });
-    mapRef.current?.closePopup();
+  const dismissEnterprisePreview = useCallback((enterpriseId: string) => {
+    dispatchMapInteraction({ type: "close-enterprise", enterpriseId });
+    markersRef.current[enterpriseId]?.getElement()?.focus({ preventScroll: true });
   }, [dispatchMapInteraction]);
 
   const mapThemeRef = useRef(mapTheme);
@@ -142,31 +152,41 @@ export function useAdminLeafletMap({
   const applyBoundarySelectionRef = useRef(applyBoundarySelection);
   const selectBarangayRef = useRef(selectBarangay);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     mapThemeRef.current = mapTheme;
     showBoundariesRef.current = showBoundaries;
     applyBoundarySelectionRef.current = applyBoundarySelection;
     selectBarangayRef.current = selectBarangay;
   }, [applyBoundarySelection, mapTheme, selectBarangay, showBoundaries]);
 
-  useEffect(() => {
-    selectedBarangayNameRef.current = selectedBarangayName;
-    applyBoundarySelection(selectedBarangayName);
-  }, [applyBoundarySelection, selectedBarangayName]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!boundary || mapRef.current) return undefined;
-    const map = L.map("admin-enterprise-map", { maxBoundsViscosity: 0.35, maxZoom: 18, minZoom: 11.2, zoomControl: false });
+    const reducedMotion = prefersReducedMapMotion();
+    const map = L.map("admin-enterprise-map", {
+      maxBoundsViscosity: 0.35,
+      maxZoom: 18,
+      minZoom: 11.2,
+      zoomControl: false,
+      zoomSnap: 0.25,
+      zoomDelta: 0.75,
+      wheelPxPerZoomLevel: 90,
+      zoomAnimation: !reducedMotion,
+      markerZoomAnimation: !reducedMotion,
+      // Completed tile sets crossfade with the portal instead of fading in tile by tile.
+      fadeAnimation: false,
+    });
     mapRef.current = map;
     mapMotionControllerRef.current = new MapMotionController(map);
     map.createPane("boundaryPane");
     const boundaryPane = map.getPane("boundaryPane");
     if (boundaryPane) boundaryPane.style.zIndex = "410";
-    const cleanupTileLayer = mountLeafletThemeLayer(map, setMapTheme);
+    const tileLayers = mountAdminLeafletLayers(map, setMapTheme);
+    tileLayersRef.current = tileLayers;
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     return () => {
-      cleanupTileLayer();
+      tileLayers.dispose();
+      tileLayersRef.current = null;
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
       activeBoundaryRef.current = null;
@@ -176,11 +196,15 @@ export function useAdminLeafletMap({
       mapMotionControllerRef.current?.dispose();
       mapMotionControllerRef.current = null;
       initializedMapInstanceRef.current = null;
-      lastCameraCommandKeyRef.current = null;
+      lastCameraTargetRef.current = null;
       map.remove();
       mapRef.current = null;
     };
   }, [boundary]);
+
+  useLayoutEffect(() => {
+    tileLayersRef.current?.setLabelsVisible(showLabels);
+  }, [boundary, showLabels]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -203,8 +227,7 @@ export function useAdminLeafletMap({
     const boundaryStyle: GeoJSONOptions["style"] = (feature) => getBaseBoundaryStyle(getBarangayLabel(feature), mapThemeRef.current, "boundaryPane", "admin");
     const onEachFeature: GeoJSONOptions["onEachFeature"] = (feature, layer: Layer) => {
       const name = getBarangayLabel(feature);
-      layer.bindTooltip(createBoundaryTooltipHtml(name), { sticky: true, direction: "auto", opacity: 0.95 });
-      layer.bindPopup(createBoundaryPopupHtml(feature), { closeButton: false });
+      layer.bindTooltip(createBoundaryTooltipHtml(name), { sticky: true, direction: "auto", opacity: 0.95, className: "tanaw-barangay-tooltip" });
       layer.on({
         mouseover: (event) => {
           const target = event.target as L.Path;
@@ -213,8 +236,14 @@ export function useAdminLeafletMap({
         },
         mouseout: (event) => {
           const target = event.target as L.Path;
-          if (activeBoundaryRef.current === target) target.setStyle(getActiveBoundaryStyle(mapThemeRef.current));
-          else applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
+          const theme = mapThemeRef.current;
+          if (activeBoundaryRef.current === target) {
+            target.setStyle(getActiveBoundaryStyle(theme));
+          } else {
+            boundaryLayerRef.current?.resetStyle(target);
+            if (selectedBarangayNameRef.current) target.setStyle(getDimmedBoundaryStyle(theme));
+            activeBoundaryRef.current?.bringToFront();
+          }
         },
         click: (event: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(event.originalEvent);
@@ -254,12 +283,10 @@ export function useAdminLeafletMap({
     } else if (map.hasLayer(boundaryLayer)) boundaryLayer.remove();
   }, [boundary, showBoundaries]);
 
-  useEffect(() => {
-    const boundaryLayer = boundaryLayerRef.current;
-    if (!boundaryLayer) return;
-    if (selectedBarangayName) applyBoundarySelection(selectedBarangayName);
-    else boundaryLayer.setStyle((feature) => getBaseBoundaryStyle(getBarangayLabel(feature), mapTheme, "boundaryPane", "admin"));
-  }, [applyBoundarySelection, boundary, mapTheme, selectedBarangayName]);
+  useLayoutEffect(() => {
+    selectedBarangayNameRef.current = highlightedBarangay;
+    applyBoundarySelection(highlightedBarangay);
+  }, [applyBoundarySelection, highlightedBarangay]);
 
   const handleInitialCameraReady = useCallback(() => setIsInitialCameraReady(true), []);
   useMapCameraSync({
@@ -271,13 +298,34 @@ export function useAdminLeafletMap({
     findBoundaryLayerByName,
     initializedMapInstanceRef,
     isDirectoryCollapsed,
-    lastCameraCommandKeyRef,
+    isInsightsOpen,
+    lastCameraTargetRef,
     mapEnterprises,
     mapMotionControllerRef,
     mapRef,
     onReady: handleInitialCameraReady,
   });
-  useEnterpriseMarkers({ hoveredEnterpriseId, mapRef, markersRef, mapTheme, onSelect: selectEnterprise, selectedEnterpriseId, visibleEnterprises });
+  useEnterpriseMarkers({
+    focusedEnterpriseId: cameraTarget.type === "enterprise" ? cameraTarget.enterpriseId : null,
+    hoveredEnterpriseId,
+    mapRef,
+    markersRef,
+    onSelect: selectEnterprise,
+    visibleEnterprises,
+  });
+  useEnterprisePreview({
+    enterprise: selectedEnterprise,
+    mapRef,
+    motionRef: mapMotionControllerRef,
+    directoryCollapsed: isDirectoryCollapsed,
+    insightsOpen: isInsightsOpen,
+    onDismiss: dismissEnterprisePreview,
+    onViewDetails,
+  });
 
-  return { clearBarangaySelection, closeEnterpriseDetails, isInitialCameraReady, selectBarangay, selectEnterprise };
+  const fitCitywide = () => {
+    const bounds = citywideBoundsRef.current;
+    if (bounds) mapMotionControllerRef.current?.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
+  };
+  return { clearBarangaySelection, fitCitywide, isInitialCameraReady, selectBarangay, selectEnterprise };
 }

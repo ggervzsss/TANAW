@@ -113,7 +113,7 @@ test("unifies Admin summary metrics without changing the surrounding pages", asy
 
   await page.goto("/admin/operations");
   await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Needs Attention", "Busy Establishments", "Escalated Support", "Account Requests"]);
-  await expect(page.getByRole("link", { name: "Open Live Map" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Live Map" })).toHaveCount(0);
 });
 
 test("unifies IT summary metrics in dark mode and preserves responsive overflow", async ({ page }) => {

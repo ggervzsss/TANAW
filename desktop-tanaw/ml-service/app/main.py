@@ -320,7 +320,9 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
 
 
 @router.get("/camera/{camera_id}/stream")
-async def stream(camera_id: int, request: Request, overlay: bool = True) -> StreamingResponse:
+async def stream(
+    camera_id: int, request: Request, overlay: bool = True, generation: int | None = None
+) -> StreamingResponse:
     try:
         pipeline = _registry(request).require_pipeline(camera_id)
     except KeyError as exc:
@@ -329,18 +331,28 @@ async def stream(camera_id: int, request: Request, overlay: bool = True) -> Stre
         ) from exc
 
     async def frames():
-        last_frame_id = 0
-        while True:
-            frame, last_frame_id = await asyncio.to_thread(
-                pipeline.wait_for_stream_frame, last_frame_id, 1.0, overlay
+        cursor = (-1, 0)
+        while generation is None or pipeline.is_stream_generation_current(generation):
+            frame, cursor = await asyncio.to_thread(
+                pipeline.wait_for_stream_frame, cursor, 1.0, overlay
             )
+            if frame is None:
+                continue
+            if not pipeline.is_stream_generation_current(cursor[0]) or (
+                generation is not None and cursor[0] != generation
+            ):
+                continue
             yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache\r\n\r\n"
+                f"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {len(frame)}\r\n\r\n".encode()
                 + frame
                 + b"\r\n"
             )
 
-    return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(
+        frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store", "X-TANAW-Stream-Frames": "live-only"},
+    )
 
 
 async def wait_for_camera_websocket_client(websocket: WebSocket, timeout_seconds: float) -> bool:
@@ -362,6 +374,7 @@ def build_health_payload(registry: CameraPipelineRegistry) -> dict[str, Any]:
             **registry.service_health(),
             "service_version": SERVICE_VERSION,
             "api_contract_version": API_CONTRACT_VERSION,
+            "live_stream_frames_only": True,
             "tripwire_hot_update": True,
         }
     ).model_dump(mode="json")

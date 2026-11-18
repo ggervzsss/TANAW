@@ -26,11 +26,11 @@ type PortalTopbarProps = {
 export function PortalBrand({ role }: { role: UserRole }) {
   return (
     <div className="flex shrink-0 items-center gap-4">
-      <Link to={getRoleDashboardPath(role)} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
-        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
-        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
+      <Link to={getRoleDashboardPath(role)} aria-label="Open TANAW dashboard" className="flex items-center gap-4 max-sm:min-h-11 max-sm:gap-2 max-[360px]:gap-1.5">
+        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-10 max-[360px]:size-8" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg max-[360px]:text-sm">TANAW</span>
       </Link>
-      <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />
+      <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />
       <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
         {rolePortalLabel[role]}
       </span>
@@ -48,7 +48,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const { resolvedTheme, toggleTheme } = usePortalThemePreference();
+  const { resolvedTheme, toggleTheme, isSwitchingTheme } = usePortalThemePreference(role === "admin");
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
@@ -220,16 +220,16 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         />
         <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${isDarkTopbar ? "bg-emerald-100/10" : "bg-white/18"}`} />
 
-        <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
+        <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2">
           <PortalBrand role={role} />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
-          <div ref={navMenuRef}>
+          <div ref={navMenuRef} className="hidden xl:block">
             <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} />
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-1">
             <button
               type="button"
               aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
@@ -242,6 +242,8 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
             <button
               type="button"
               aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-busy={isSwitchingTheme || undefined}
+              aria-disabled={isSwitchingTheme || undefined}
               title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => {
                 setShowProfileMenu(false);
@@ -281,7 +283,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   setShowProfileMenu((current) => !current);
                   setShowNotifications(false);
                 }}
-                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${accountButtonTheme}`}
+                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:size-11 max-sm:max-w-none max-sm:justify-center max-sm:p-0 ${accountButtonTheme}`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -290,7 +292,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{profile.name}</p>
                   <p className="mt-0.5 text-[11px] leading-tight text-emerald-50/78">{roleAccessLabel[role]}</p>
                 </div>
-                <ChevronDown size={15} className={`ml-auto shrink-0 text-emerald-50/75 transition-transform duration-200 ${showProfileMenu ? "rotate-180" : ""}`} />
+                <ChevronDown size={15} className={`ml-auto shrink-0 text-emerald-50/75 transition-transform duration-200 max-sm:hidden ${showProfileMenu ? "rotate-180" : ""}`} />
               </button>
 
               <AnimatePresence>

@@ -112,6 +112,7 @@ try {
   }
   assert.ok(health, "The installed Python service must start automatically.");
   assert.equal(health.api_contract_version, 2);
+  assert.equal(health.live_stream_frames_only, true);
   assert.equal(health.runtime_capabilities.openvino_available, true);
   assert.equal(health.runtime_capabilities.onnxruntime_available, true);
   assert.equal(health.runtime_capabilities.cuda_available, false);

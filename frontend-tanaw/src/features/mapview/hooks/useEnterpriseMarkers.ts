@@ -1,88 +1,98 @@
 import L from "leaflet";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MapEnterprise } from "@/shared/types";
-import { createPopupHtml, createTooltipHtml, getMonitoringStatusPresentation, getOccupancyRingColor, type LeafletMapTheme } from "../utils";
+import { createTooltipHtml, getMonitoringStatusPresentation, getOccupancyRingColor } from "../utils";
 
 type MutableRef<T> = { current: T };
 
 export function useEnterpriseMarkers({
+  focusedEnterpriseId,
   hoveredEnterpriseId,
   mapRef,
   markersRef,
-  mapTheme,
   onSelect,
-  selectedEnterpriseId,
   visibleEnterprises,
 }: {
+  focusedEnterpriseId: string | null;
   hoveredEnterpriseId: string | null;
   mapRef: MutableRef<L.Map | null>;
   markersRef: MutableRef<Record<string, L.Marker>>;
-  mapTheme: LeafletMapTheme;
   onSelect: (enterprise: MapEnterprise) => void;
-  selectedEnterpriseId: string | null;
   visibleEnterprises: MapEnterprise[];
 }) {
-  const previousStatusesRef = useRef<Record<string, MapEnterprise["monitoringStatus"]>>({});
+  const previous = useRef(new Map<string, MapEnterprise>());
+  const onSelectRef = useRef(onSelect);
+  useLayoutEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    Object.values(markersRef.current).forEach((marker) => marker.remove());
-    markersRef.current = {};
+    const visibleIds = new Set(visibleEnterprises.map(({ id }) => id));
+    Object.entries(markersRef.current).forEach(([id, marker]) => {
+      if (visibleIds.has(id)) return;
+      marker.remove();
+      delete markersRef.current[id];
+      previous.current.delete(id);
+    });
 
     visibleEnterprises.forEach((enterprise) => {
       const statusPresentation = getMonitoringStatusPresentation(enterprise.monitoringStatus);
-      const color = statusPresentation.color;
       const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
-      const previousStatus = previousStatusesRef.current[enterprise.id];
-      const didStatusChange = previousStatus !== undefined && previousStatus !== enterprise.monitoringStatus;
-      const marker = L.marker([enterprise.lat, enterprise.lng], {
-        icon: L.divIcon({
-          className: `tanaw-map-pin${didStatusChange ? " is-status-changing" : ""}`,
-          iconAnchor: [18, 38],
-          iconSize: [36, 42],
-          popupAnchor: [0, -34],
-          html: createEnterpriseMarkerHtml(statusPresentation.tone, color, occupancyRingColor, enterprise.occupancyStatus !== "Normal"),
-        }),
-        alt: `${enterprise.name}, ${enterprise.monitoringStatus}`,
-        riseOnHover: true,
-        title: enterprise.name,
-      }).addTo(map);
-      marker.bindTooltip(createTooltipHtml(enterprise, color), { direction: "top", offset: [0, -32], opacity: 0.95 });
-      marker.bindPopup(createPopupHtml(enterprise, color), { closeButton: false });
-      marker.on("click", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stopPropagation(event.originalEvent);
-        onSelect(enterprise);
-      });
-      markersRef.current[enterprise.id] = marker;
-      previousStatusesRef.current[enterprise.id] = enterprise.monitoringStatus;
-    });
+      const before = previous.current.get(enterprise.id);
+      const statusChanged = Boolean(before && before.monitoringStatus !== enterprise.monitoringStatus);
+      const makeIcon = () =>
+        L.divIcon({
+          className: `tanaw-map-pin${statusChanged ? " is-status-changing" : ""}`,
+          iconAnchor: [25, 49],
+          iconSize: [50, 54],
+          popupAnchor: [0, -53],
+          tooltipAnchor: [0, -53],
+          html: createEnterpriseMarkerHtml(statusPresentation.tone, statusPresentation.color, occupancyRingColor, occupancyRingColor !== "transparent"),
+        });
+      const tooltip = createTooltipHtml(enterprise);
+      let marker = markersRef.current[enterprise.id];
 
-    const visibleIds = new Set(visibleEnterprises.map((enterprise) => enterprise.id));
-    Object.keys(previousStatusesRef.current).forEach((enterpriseId) => {
-      if (!visibleIds.has(enterpriseId)) delete previousStatusesRef.current[enterpriseId];
+      if (!marker) {
+        marker = L.marker([enterprise.lat, enterprise.lng], { icon: makeIcon(), autoPanOnFocus: false, riseOnHover: true }).addTo(map);
+        marker.bindTooltip(tooltip, { direction: "top", opacity: 1, className: "tanaw-enterprise-tooltip" });
+        marker.on("tooltipopen", () => {
+          if (marker.getElement()?.classList.contains("is-selected")) marker.closeTooltip();
+        });
+        marker.on("click", (event: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(event.originalEvent);
+          const current = previous.current.get(enterprise.id);
+          if (current) onSelectRef.current(current);
+        });
+        markersRef.current[enterprise.id] = marker;
+      } else {
+        if (before?.lat !== enterprise.lat || before?.lng !== enterprise.lng) marker.setLatLng([enterprise.lat, enterprise.lng]);
+        if (statusChanged || before?.occupancyStatus !== enterprise.occupancyStatus) marker.setIcon(makeIcon());
+        if (marker.getTooltip()?.getContent() !== tooltip) marker.setTooltipContent(tooltip);
+      }
+      marker.getElement()?.setAttribute("aria-label", [enterprise.name, enterprise.barangay, enterprise.monitoringStatus].filter(Boolean).join(", "));
+      previous.current.set(enterprise.id, enterprise);
     });
-  }, [mapRef, mapTheme, markersRef, onSelect, visibleEnterprises]);
+  }, [mapRef, markersRef, visibleEnterprises]);
 
   useEffect(() => {
     Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
       const isHovered = enterpriseId === hoveredEnterpriseId;
-      const isSelected = enterpriseId === selectedEnterpriseId;
+      const isSelected = enterpriseId === focusedEnterpriseId;
       const element = marker.getElement();
       element?.classList.toggle("is-directory-hovered", isHovered);
       element?.classList.toggle("is-selected", isSelected);
+      if (isSelected) marker.closeTooltip();
       marker.setZIndexOffset(isHovered ? 2000 : isSelected ? 1200 : 0);
     });
-  }, [hoveredEnterpriseId, markersRef, selectedEnterpriseId, visibleEnterprises]);
+  }, [focusedEnterpriseId, hoveredEnterpriseId, markersRef, visibleEnterprises]);
 
-  useEffect(() => {
-    if (!selectedEnterpriseId || !mapRef.current || !markersRef.current[selectedEnterpriseId]) return;
-    markersRef.current[selectedEnterpriseId].openPopup();
-  }, [mapRef, markersRef, selectedEnterpriseId, visibleEnterprises]);
 }
 
 function createEnterpriseMarkerHtml(tone: string, statusColor: string, occupancyRingColor: string, hasOccupancyAlert: boolean) {
   return `<span class="tanaw-enterprise-marker${hasOccupancyAlert ? " has-occupancy-alert" : ""}" data-tone="${tone}" style="--tanaw-marker-color:${statusColor};--tanaw-marker-alert:${occupancyRingColor};">
+    <span class="tanaw-enterprise-marker__selection" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__halo" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__body" aria-hidden="true">
       <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">

@@ -1,7 +1,14 @@
 from dataclasses import dataclass
 from html import escape
+from urllib.parse import urljoin
 
 from app.features.accounts.models import Account, AccountRole
+
+# Serve the portal's official eagle independently of the activation link's deployment.
+_ACTIVATION_LOGO_URL = (
+    "https://cdn.jsdelivr.net/gh/ggervzsss/TANAW@0bce8584a387f61c7410222ce3a2a90c8d2bcb32"
+    "/frontend-tanaw/public/apple-touch-icon.png"
+)
 
 
 @dataclass(frozen=True)
@@ -22,14 +29,19 @@ class EmailRecipient:
 def account_activation_email(
     account: EmailRecipient, activation_url: str, expires_label: str
 ) -> EmailContent:
+    sign_in_hint = ""
+    sign_in_fields: tuple[tuple[str, str], ...]
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
-        login_lines = (
-            f"Enterprise ID: {account.enterprise_id}\n"
-            f"Contact email: {account.email}\n"
-            "You may sign in with either your Enterprise ID or contact email."
+        sign_in_fields = (
+            ("Enterprise ID", account.enterprise_id),
+            ("Contact email", account.email),
         )
+        sign_in_hint = "You may sign in with either your Enterprise ID or contact email."
     else:
-        login_lines = f"Username: {account.email}"
+        sign_in_fields = (("Username", account.email),)
+    login_lines = "\n".join(f"{label}: {value}" for label, value in sign_in_fields)
+    if sign_in_hint:
+        login_lines = f"{login_lines}\n{sign_in_hint}"
     text = (
         f"Hello {account.display_name},\n\n"
         "Your TANAW account has been created.\n"
@@ -39,19 +51,127 @@ def account_activation_email(
         f"This single-use link expires at {expires_label}.\n"
         "If you did not expect this account, use Contact Support on the TANAW sign-in page."
     )
-    html = _layout(
-        "Activate your TANAW account",
-        f"""
-        <p>Hello {escape(account.display_name)},</p>
-        <p>Your TANAW account has been created.</p>
-        <div class="card"><pre>{escape(login_lines)}</pre></div>
-        <p>Choose your password and activate your account:</p>
-        <p><a class="button" href="{escape(activation_url, quote=True)}">Activate account</a></p>
-        <p>This single-use link expires at <strong>{escape(expires_label)}</strong>.</p>
-        <p class="muted">If you did not expect this account, use Contact Support on the TANAW sign-in page.</p>
-        """,
+    html = _account_activation_html(
+        account.display_name, activation_url, expires_label, sign_in_fields, sign_in_hint
     )
     return EmailContent(subject="Activate your TANAW account", text=text, html=html)
+
+
+def _account_activation_html(
+    display_name: str,
+    activation_url: str,
+    expires_label: str,
+    sign_in_fields: tuple[tuple[str, str], ...],
+    sign_in_hint: str,
+) -> str:
+    sign_in_url = escape(urljoin(activation_url, "login"))
+    details = "".join(
+        f"""<tr><td style="padding:8px 0 0;">
+          <p class="secondary" style="margin:0;color:#475569;font-size:13px;font-weight:700;line-height:20px;">{escape(label)}</p>
+          <p class="ink" style="margin:0;color:#10241b;font-size:15px;line-height:22px;word-wrap:break-word;overflow-wrap:anywhere;">{escape(value).replace("@", "<wbr>@", 1)}</p>
+        </td></tr>"""
+        for label, value in sign_in_fields
+    )
+    hint = (
+        f'<p class="secondary" style="margin:12px 0 0;color:#475569;font-size:13px;line-height:20px;">'
+        f"{escape(sign_in_hint)}</p>"
+        if sign_in_hint
+        else ""
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Activate your TANAW account</title>
+  <style>
+    :root {{ color-scheme:light dark; supported-color-schemes:light dark; }}
+    .masthead {{ background-image:linear-gradient(90deg,#043817 0%,#075526 44%,#0c6a32 100%); }}
+    @media screen and (max-width:480px) {{
+      .frame {{ padding:16px 10px !important; }}
+      .inset {{ padding-left:20px !important; padding-right:20px !important; }}
+      .heading {{ font-size:25px !important; line-height:32px !important; }}
+      .action {{ width:100% !important; }}
+    }}
+    @media (prefers-color-scheme:dark) {{
+      .canvas {{ background-color:#101923 !important; }}
+      .sheet {{ background-color:#151f2b !important; }}
+      .line {{ border-color:#334252 !important; }}
+      .tint {{ background-color:#17302b !important; }}
+      .footer {{ background-color:#111b25 !important; }}
+      .ink {{ color:#f1f5f4 !important; }}
+      .secondary {{ color:#b8c2cb !important; }}
+      .brand {{ color:#6ee7b7 !important; }}
+    }}
+  </style>
+  <style>
+    /* Gmail iOS can recolor the brand text while leaving the gradient intact. */
+    u + .email-body .gmail-screen {{ background:#000000; mix-blend-mode:screen; }}
+    u + .email-body .gmail-difference {{ background:#000000; mix-blend-mode:difference; }}
+  </style>
+</head>
+<body class="email-body canvas" style="margin:0;padding:0;background-color:#f0f5f1;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f5f1" class="canvas">
+    <tr><td class="frame" align="center" style="padding:32px 16px;">
+      <!--[if mso]><table role="presentation" width="580" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+        class="card" style="max-width:580px;table-layout:fixed;font-family:Arial,Helvetica,sans-serif;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+        <tr><td bgcolor="#075526" class="masthead inset" style="padding:17px 32px;background-color:#075526;border-radius:16px 16px 0 0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td width="54" valign="middle" style="padding-right:14px;">
+                <img src="{_ACTIVATION_LOGO_URL}" width="54" height="54" alt="TANAW eagle logo"
+                  style="display:block;border:0;color:#ffffff;font:11px Arial,Helvetica,sans-serif;">
+              </td>
+              <td valign="middle" style="font-family:Arial,Helvetica,sans-serif;">
+                <div class="gmail-screen"><div class="gmail-difference" style="color:#ffffff;">
+                  <p style="margin:0;color:#ffffff;font-size:25px;font-weight:700;line-height:28px;">TANAW</p>
+                  <p style="margin:2px 0 0;color:#ffffff;font-size:10px;font-weight:700;letter-spacing:3px;line-height:14px;">PORTAL</p>
+                </div></div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td height="4" bgcolor="#5a8c46" class="thread" style="height:4px;background-color:#5a8c46;
+          background-image:linear-gradient(90deg,#1b4332 0%,#c5a047 50%,#5a8c46 100%);
+          font-size:1px;line-height:4px;mso-line-height-rule:exactly;">&nbsp;</td></tr>
+        <tr><td bgcolor="#ffffff" class="sheet inset line" style="padding:28px 32px;border:1px solid #d6e2d9;border-top:0;border-bottom:0;">
+          <h1 class="heading ink" style="margin:0 0 14px;color:#10241b;font-size:29px;line-height:36px;">Activate your TANAW account</h1>
+          <p class="ink" style="margin:0 0 6px;color:#10241b;font-size:16px;line-height:24px;word-wrap:break-word;overflow-wrap:anywhere;">Hello <strong>{escape(display_name)}</strong>,</p>
+          <p class="secondary" style="margin:0 0 20px;color:#475569;font-size:15px;line-height:23px;">Your TANAW account is ready. Choose a password to finish setting it up.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+            <tr><td bgcolor="#eef7f1" class="tint line" style="padding:15px 17px;border:1px solid #c6d6cb;border-radius:10px;">
+              <h2 class="brand" style="margin:0 0 4px;color:#065f46;font-size:15px;line-height:22px;">Your sign-in details</h2>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+                {details}
+              </table>
+              {hint}
+            </td></tr>
+          </table>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="224" class="action" style="width:224px;">
+            <tr><td height="22" style="font-size:1px;line-height:22px;mso-line-height-rule:exactly;">&nbsp;</td></tr>
+            <tr><td align="center" bgcolor="#055b25" style="background-color:#055b25;border-radius:8px;mso-padding-alt:14px 16px;">
+              <a href="{escape(activation_url)}" style="display:block;padding:14px 16px;mso-padding-alt:0;
+                color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:16px;line-height:20px;
+                text-decoration:none;">Activate Account</a>
+            </td></tr>
+          </table>
+          <p class="secondary" style="margin:12px 0 0;color:#475569;font-size:13px;line-height:20px;">
+            This single-use link expires on <strong class="ink" style="color:#10241b;">{escape(expires_label)}</strong>.
+          </p>
+        </td></tr>
+        <tr><td bgcolor="#f8faf9" class="footer inset line" style="padding:17px 32px 20px;border:1px solid #d6e2d9;border-radius:0 0 16px 16px;">
+          <p class="brand" style="margin:0 0 5px;color:#065f46;font-size:13px;font-weight:700;line-height:20px;">TANAW Portal</p>
+          <p class="secondary" style="margin:0;color:#475569;font-size:13px;line-height:20px;">If you weren’t expecting this account, use Contact Support on the <a href="{sign_in_url}" class="brand" style="color:#065f46;text-decoration:underline;">TANAW sign-in page</a>.</p>
+        </td></tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 def password_reset_code_email(

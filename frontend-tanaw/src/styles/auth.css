@@ -144,8 +144,14 @@ html.dark .tanaw-login-edge-blur {
   max-width: min(36.25rem, 100%);
 }
 
-.tanaw-activation-card .tanaw-password-requirements {
-  margin-bottom: clamp(0.9rem, 2svh, 1rem);
+.tanaw-activation-card .tanaw-password-requirements__header {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.tanaw-activation-card .tanaw-password-requirements__count {
+  color: var(--tanaw-text-muted);
+  white-space: nowrap;
 }
 
 html.dark .tanaw-auth-card {

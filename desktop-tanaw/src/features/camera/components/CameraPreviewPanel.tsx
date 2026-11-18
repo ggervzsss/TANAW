@@ -9,7 +9,6 @@ import { CameraReadOnlyDetails } from "./CameraReadOnlyDetails";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { NoCameraSelected } from "./NoCameraSelected";
-import { OpenSpaceZoneControls } from "./OpenSpaceZoneControls";
 import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
 export type CameraPreviewPanelProps = {
@@ -170,13 +169,6 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
               streamUrl={streamUrl}
             />
           </div>
-          {isEditMode && editForm?.analysisMode === "open_space" && (
-            <OpenSpaceZoneControls
-              value={editForm.openSpace}
-              previewReady={isProcessing && previewState === "live" && (detections.frame_width ?? 0) > 0 && (detections.frame_height ?? 0) > 0}
-              onChange={(openSpace) => onEditFormChange((current) => (current?.analysisMode === "open_space" ? { ...current, openSpace } : current))}
-            />
-          )}
         </div>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 max-[1180px]:mt-3 max-[1180px]:overflow-visible max-[1180px]:pr-0">

@@ -1,6 +1,6 @@
-import { Activity, BarChart3, Building2, CalendarDays, ChevronRight, Clock3, RefreshCw, TrendingDown, TrendingUp, Users, X } from "lucide-react";
-import { motion } from "motion/react";
-import { useState, type KeyboardEvent } from "react";
+import { Activity, BarChart3, Building2, CalendarDays, ChevronDown, ChevronRight, Clock3, RefreshCw, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { useReducedMotion } from "motion/react";
+import { useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useVisitorInsights } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -8,12 +8,12 @@ import type { VisitorInsightRange } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type VisitorInsightsDrawerProps = {
+  isOpen: boolean;
   range: VisitorInsightRange;
   enterpriseId?: string;
   barangay?: string;
   onRangeChange: (range: VisitorInsightRange) => void;
   onShowArea: () => void;
-  onClose: () => void;
 };
 
 const rangeOptions: { value: VisitorInsightRange; label: string }[] = [
@@ -22,47 +22,45 @@ const rangeOptions: { value: VisitorInsightRange; label: string }[] = [
   { value: "30d", label: "30 days" },
 ];
 
-export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeChange, onShowArea, onClose }: VisitorInsightsDrawerProps) {
+export function VisitorInsightsDrawer({ isOpen, range, enterpriseId, barangay, onRangeChange, onShowArea }: VisitorInsightsDrawerProps) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const insightsQuery = useVisitorInsights({ range, enterpriseId, barangay });
+  const insightsQuery = useVisitorInsights({ range, enterpriseId, barangay }, isOpen);
   const insights = insightsQuery.data;
   const [historyMetric, setHistoryMetric] = useState<"averageVisitors" | "estimatedUniqueCount">("averageVisitors");
   const showsUnique = historyMetric === "estimatedUniqueCount";
   const comparisonTone = comparisonToneFor(insights?.differencePercent ?? null);
+  const reduceMotion = useReducedMotion();
+  const rangeIndex = rangeOptions.findIndex((option) => option.value === range);
 
   return (
-    <motion.aside
-      initial={{ opacity: 0, x: 28 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 28 }}
-      transition={{ duration: 0.22, ease: "easeOut" }}
-      className="tanaw-visitor-insights absolute top-4 right-4 bottom-4 z-430 flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden"
+    <aside
+      id="visitor-insights-panel"
+      data-panel-state={isOpen ? "open" : "closed"}
+      aria-hidden={!isOpen}
+      inert={!isOpen}
+      className="tanaw-map-panel tanaw-visitor-insights absolute top-4 right-4 bottom-4 z-430 flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden"
       aria-label="Visitor insights"
     >
-      <header className="tanaw-visitor-insights__header flex shrink-0 items-start justify-between gap-4 px-5 py-5">
+      <header className="tanaw-visitor-insights__header flex shrink-0 items-start justify-between gap-3 px-4 py-4">
         <div className="flex min-w-0 items-start gap-3">
           <span className="tanaw-visitor-insights__title-icon grid size-10 shrink-0 place-items-center rounded-xl" aria-hidden="true">
             <BarChart3 size={19} />
           </span>
           <div className="min-w-0 pt-0.5">
             <p className="tanaw-visitor-insights__eyebrow text-[11px] leading-tight font-bold tracking-[0.12em] uppercase">Visitor Insights</p>
-            <h2 className="tanaw-visitor-insights__title mt-1 text-lg leading-tight font-black">{insights?.scopeName ?? "Loading visitor activity"}</h2>
-            <p className="tanaw-visitor-insights__description mt-1.5 text-xs leading-relaxed font-semibold">Live levels compared with similar days and times</p>
+            <h2 className="tanaw-visitor-insights__title mt-1 text-xl leading-tight font-bold">{insights?.scopeName ?? "Loading visitor activity"}</h2>
+            <p className="tanaw-visitor-insights__description mt-1 text-xs leading-relaxed font-medium">Live levels compared with similar days and times</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close visitor insights"
-          title="Close visitor insights"
-          className="tanaw-visitor-insights__close grid size-10 shrink-0 place-items-center rounded-xl"
-        >
-          <X size={16} />
-        </button>
       </header>
 
       <div className="tanaw-visitor-insights__scroll flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-        <div className="tanaw-visitor-insights__segments grid grid-cols-3 gap-1.5 rounded-2xl p-1.5" role="tablist" aria-label="Visitor insight time range">
+        <div
+          className="tanaw-visitor-insights__segments relative grid grid-cols-3 rounded-2xl p-1"
+          style={{ "--tanaw-insights-range": rangeIndex } as CSSProperties}
+          role="tablist"
+          aria-label="Visitor insight time range"
+        >
           {rangeOptions.map((option) => (
             <button
               key={option.value}
@@ -72,7 +70,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
               tabIndex={range === option.value ? 0 : -1}
               onClick={() => onRangeChange(option.value)}
               onKeyDown={(event) => handleRangeKeyDown(event, option.value, onRangeChange)}
-              className="tanaw-visitor-insights__segment min-h-10 rounded-xl px-2 py-2 text-[11px] font-black"
+              className="tanaw-visitor-insights__segment relative min-h-10 rounded-xl px-2 py-2 text-xs font-semibold"
             >
               {option.label}
             </button>
@@ -121,7 +119,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
             </section>
 
             <section className="tanaw-visitor-insights__section mt-4 rounded-2xl border p-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="tanaw-visitor-insights__section-title flex items-center gap-2 text-[11px] font-black tracking-[0.08em] uppercase">
                     <CalendarDays size={15} /> Activity Pattern
@@ -134,15 +132,22 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                   <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black">Peak: {insights.busiestPeriodLabel}</span>
                 )}
               </div>
-              <label className="tanaw-visitor-insights__muted mt-3 flex items-center gap-2 text-xs font-semibold">
+              <label className="tanaw-visitor-insights__muted mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
                 History metric
-                <select className="tanaw-visitor-insights__segment rounded-lg border px-2 py-1" value={historyMetric} onChange={(event) => setHistoryMetric(event.target.value === "estimatedUniqueCount" ? "estimatedUniqueCount" : "averageVisitors")}>
-                  <option value="averageVisitors">Occupancy</option>
-                  <option value="estimatedUniqueCount">Estimated Unique</option>
-                </select>
+                <span className="relative inline-flex min-w-0 items-center">
+                  <select
+                    className="tanaw-visitor-insights__metric-select min-h-9 w-full appearance-none rounded-lg border py-1.5 pr-7 pl-2.5"
+                    value={historyMetric}
+                    onChange={(event) => setHistoryMetric(event.target.value === "estimatedUniqueCount" ? "estimatedUniqueCount" : "averageVisitors")}
+                  >
+                    <option value="averageVisitors">Occupancy</option>
+                    <option value="estimatedUniqueCount">Estimated Unique</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2" size={14} aria-hidden="true" />
+                </span>
               </label>
               {insights.series.some((point) => point[historyMetric] != null) ? (
-                <div className="mt-4 h-44 w-full">
+                <div className="tanaw-visitor-insights__chart mt-3 h-44 w-full rounded-xl border pt-2 pr-2 pb-1">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={insights.series} margin={{ top: 4, right: 2, left: -24, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="var(--tanaw-insights-grid)" />
@@ -153,7 +158,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                         contentStyle={{ borderRadius: 12, border: "1px solid var(--tanaw-border-subtle)", background: "var(--tanaw-insights-tooltip)", color: "var(--tanaw-text)", fontSize: 12 }}
                         formatter={(value) => [Number(value).toLocaleString(), showsUnique ? "Estimated unique visitors" : "Average occupancy"]}
                       />
-                      <Bar dataKey={historyMetric} fill="#34d399" radius={[5, 5, 0, 0]} />
+                      <Bar dataKey={historyMetric} fill="var(--tanaw-insights-bar)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={!reduceMotion} animationDuration={220} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -162,7 +167,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
               )}
             </section>
 
-            <section className="mt-4 grid gap-3 sm:grid-cols-2">
+            <section className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
               <InsightDetail
                 icon={<Building2 size={14} />}
                 label="Busiest Right Now"
@@ -199,18 +204,18 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
           </>
         )}
       </div>
-    </motion.aside>
+    </aside>
   );
 }
 
 function InsightMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="tanaw-visitor-insights__metric rounded-2xl border p-4">
-      <div className="tanaw-visitor-insights__metric-label flex items-center gap-2">
+      <div className="tanaw-visitor-insights__metric-label flex items-start gap-2 [&>svg]:mt-0.5 [&>svg]:shrink-0">
         {icon}
-        <p className="text-[10px] font-black tracking-[0.08em] uppercase">{label}</p>
+        <p className="text-[11px] leading-snug font-bold">{label}</p>
       </div>
-      <p className="tanaw-visitor-insights__value mt-2 text-2xl font-black">{value}</p>
+      <p className="tanaw-visitor-insights__value mt-2 text-2xl leading-tight font-bold tabular-nums wrap-break-word">{value}</p>
     </div>
   );
 }

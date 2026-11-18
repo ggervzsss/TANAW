@@ -58,6 +58,7 @@ class ApiContractTest(unittest.TestCase):
         self.assertEqual(health["api_contract_version"], API_CONTRACT_VERSION)
         self.assertEqual(API_CONTRACT_VERSION, 2)
         self.assertTrue(health["tripwire_hot_update"])
+        self.assertTrue(health["live_stream_frames_only"])
         self.assertEqual(health["max_configured_cameras"], 6)
         self.assertEqual(health["max_concurrent_cameras"], 6)
 

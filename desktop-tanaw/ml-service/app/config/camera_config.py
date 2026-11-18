@@ -229,6 +229,7 @@ class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.1.0"
     api_contract_version: int = 2
+    live_stream_frames_only: bool = True
     analysis_modes: list[str] = Field(default_factory=lambda: ["entrance_exit", "open_space"])
     tripwire_hot_update: bool = True
     running: bool
@@ -290,6 +291,7 @@ class HealthResponse(BaseModel):
     raw_frame_id: int = 0
     processed_frame_id: int = 0
     stream_frame_id: int = 0
+    stream_generation: int | None = None
     raw_frame_stale_ms: float | None = None
     processed_frame_stale_ms: float | None = None
     stream_frame_stale_ms: float | None = None

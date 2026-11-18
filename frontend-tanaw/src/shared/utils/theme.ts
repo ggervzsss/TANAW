@@ -37,8 +37,8 @@ export function applyThemePreference(theme: ThemePreference): ResolvedTheme {
   if (typeof document === "undefined") return resolvedTheme;
 
   const root = document.documentElement;
-  root.classList.remove("light", "dark");
-  root.classList.add(resolvedTheme);
+  root.classList.replace(resolvedTheme === "dark" ? "light" : "dark", resolvedTheme);
+  if (!root.classList.contains(resolvedTheme)) root.classList.add(resolvedTheme);
   root.dataset.themePreference = theme;
 
   return resolvedTheme;

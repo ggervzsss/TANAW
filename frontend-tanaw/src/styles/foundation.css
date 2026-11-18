@@ -150,6 +150,34 @@ html.dark {
   color-scheme: dark;
 }
 
+/* A single crossfade covers the entire Admin workspace, including portalled controls. */
+html[data-portal-theme-transition="snapshot"] *:not(#admin-enterprise-map .leaflet-zoom-animated, .tanaw-map-panel),
+html[data-portal-theme-transition="snapshot"] *::before,
+html[data-portal-theme-transition="snapshot"] *::after {
+  transition: none !important;
+}
+
+html[data-portal-theme-transition="snapshot"]::view-transition {
+  pointer-events: none;
+}
+
+html[data-portal-theme-transition="snapshot"]::view-transition-group(root) {
+  animation-duration: 220ms;
+  animation-timing-function: ease-in-out;
+}
+
+html[data-portal-theme-transition="fallback"] *:not(#admin-enterprise-map .leaflet-zoom-animated, .tanaw-map-panel),
+html[data-portal-theme-transition="fallback"] *::before,
+html[data-portal-theme-transition="fallback"] *::after {
+  transition:
+    background-color 220ms ease-in-out,
+    color 220ms ease-in-out,
+    border-color 220ms ease-in-out,
+    fill 220ms ease-in-out,
+    stroke 220ms ease-in-out,
+    box-shadow 220ms ease-in-out !important;
+}
+
 @layer base {
   html,
   body,

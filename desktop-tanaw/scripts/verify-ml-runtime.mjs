@@ -44,7 +44,7 @@ try {
       });
       if (response.ok) {
         const payload = await response.json();
-        if (payload.api_contract_version !== 2) {
+        if (payload.api_contract_version !== 2 || payload.live_stream_frames_only !== true) {
           throw new Error("The bundled ML runtime exposes an incompatible API contract.");
         }
         const capabilities = payload.runtime_capabilities;

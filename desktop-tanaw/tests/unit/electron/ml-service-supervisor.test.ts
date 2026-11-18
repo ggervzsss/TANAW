@@ -40,7 +40,7 @@ describe("ML service startup recovery", () => {
         return new Response(
           JSON.stringify(
             String(url).endsWith("/health")
-              ? { api_contract_version: 2, tripwire_hot_update: true, max_configured_cameras: 6, max_concurrent_cameras: 2 }
+              ? { api_contract_version: 2, live_stream_frames_only: true, tripwire_hot_update: true, max_configured_cameras: 6, max_concurrent_cameras: 2 }
               : { cameras: [], pending_camera_ids: [], enterprise_occupancy: 0 },
           ),
         );
@@ -97,5 +97,17 @@ describe("ML service startup recovery", () => {
     await vi.advanceTimersByTimeAsync(1000);
     await starting;
     expect(await service.getMlServiceStatusPayload()).toMatchObject({ running: false, error: expect.stringContaining("0xc0000135") });
+  });
+
+  it("blocks an old stream before any placeholder bytes reach the renderer", async () => {
+    const { service } = await setup(0);
+    const request = new Request("tanaw-ml://service/camera/1/stream?overlay=0");
+    const legacy = new Response("legacy JPEG payload");
+    vi.mocked(fetch).mockResolvedValueOnce(legacy);
+    expect((await service.proxyMlServiceStream(request)).status).toBe(502);
+    expect(legacy.bodyUsed).toBe(true);
+
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("camera JPEG payload", { headers: { "X-TANAW-Stream-Frames": "live-only" } }));
+    expect(await (await service.proxyMlServiceStream(request)).text()).toBe("camera JPEG payload");
   });
 });

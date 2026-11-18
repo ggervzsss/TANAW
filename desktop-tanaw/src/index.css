@@ -57,6 +57,11 @@ body {
   outline-offset: 3px;
 }
 
+/* Text controls can sit flush against a scrolling form's clipping boundary. */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"]), select, textarea):focus-visible {
+  outline-offset: -2px;
+}
+
 input,
 textarea,
 [contenteditable="true"] {

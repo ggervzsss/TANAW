@@ -72,6 +72,7 @@ export type MlHealth = {
   raw_frame_id: number;
   processed_frame_id: number;
   stream_frame_id: number;
+  stream_generation?: number | null;
   raw_frame_stale_ms: number | null;
   processed_frame_stale_ms: number | null;
   stream_frame_stale_ms: number | null;

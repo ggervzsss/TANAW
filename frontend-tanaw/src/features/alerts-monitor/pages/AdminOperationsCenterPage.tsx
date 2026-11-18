@@ -1,10 +1,9 @@
-import { Bell, Building2, MapPinned, Search, TicketCheck, UserRoundCog } from "lucide-react";
+import { Bell, Building2, Search, TicketCheck, UserRoundCog } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { routes } from "@/app/routers/routes";
+import { useSearchParams } from "react-router-dom";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { TicketDetailsModal } from "@/features/support-tickets";
@@ -92,15 +91,6 @@ export function AdminOperationsCenterPage() {
       <PageHeader
         title="Operations Center"
         description="Review situations that need an Admin decision, important support requests, and pending account changes."
-        action={
-          <Link
-            to={routes.admin.mapview}
-            className="inline-flex min-h-10.5 items-center justify-center gap-2 rounded-xl bg-tanaw-civic px-4 text-sm font-bold text-white shadow-sm transition hover:bg-tanaw-civic-deep"
-          >
-            <MapPinned size={15} />
-            Open Live Map
-          </Link>
-        }
       />
 
       <UnifiedMetricsHeader

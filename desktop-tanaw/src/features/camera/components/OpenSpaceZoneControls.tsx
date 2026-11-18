@@ -1,39 +1,47 @@
-import type { OpenSpaceSettings } from "../../../types/enterprise";
-import { validateOpenSpace } from "../utils/open-space";
+import { MAX_ZONE_POINTS } from "../utils/open-space-editor";
 
-export function OpenSpaceZoneControls({ value, previewReady, onChange }: { value: OpenSpaceSettings | null | undefined; previewReady: boolean; onChange: (next: OpenSpaceSettings) => void }) {
-  const points = value?.polygon ?? [];
-  const error = value ? validateOpenSpace(value) : "Draw a zone with at least three points.";
-  const update = (polygon: OpenSpaceSettings["polygon"]) => onChange({ zone_id: "main", zone_name: "Monitored area", ...value, polygon });
+type Props = {
+  pointCount: number;
+  previewReady: boolean;
+  selectedPoint: number | null;
+  canDelete: boolean;
+  error: string | null;
+  onDelete: () => void;
+  onClear: () => void;
+  onReset: () => void;
+};
+
+export function OpenSpaceZoneControls({ pointCount, previewReady, selectedPoint, canDelete, error, onDelete, onClear, onReset }: Props) {
   const buttonClass =
-    "rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/4 dark:text-slate-200 dark:hover:bg-white/8";
+    "rounded-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) px-3 py-1.5 font-semibold text-(--tanaw-text) hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-40";
+  const status = !previewReady
+    ? "Waiting for a live preview to place points."
+    : pointCount === 0
+      ? "Click the video to place three points, or reset to a centered box."
+      : (error ?? "Use this Area, then Save Changes to apply.");
 
   return (
-    <section
-      aria-label="Monitored area editing tools"
-      className="shrink-0 space-y-2 rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 dark:border-white/8 dark:bg-[#142130] dark:text-slate-300"
-    >
+    <section aria-label="Monitored area editing tools" className="grid gap-2 rounded-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-3 text-xs text-(--tanaw-text-secondary)">
+      <p className="leading-relaxed">Drag inside to move the area. Drag a corner or edge to resize it. Click an edge to add a point. Select a point and press Delete or Backspace to remove it.</p>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p role={previewReady && error ? "alert" : "status"} className={previewReady && error ? "text-amber-700 dark:text-amber-200" : "font-semibold"}>
-          {previewReady ? (error ?? "Zone ready. Use this Area, then Save Changes to apply.") : "Waiting for a live preview to place points."}
+        <p role="status" className="font-semibold">
+          {selectedPoint === null ? status : canDelete ? `Point ${selectedPoint + 1} selected.` : "Deleting this point would leave an invalid area."}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] tabular-nums">{points.length} / 12 points</span>
-          <button type="button" className={buttonClass} disabled={points.length === 0} onClick={() => update(points.slice(0, -1))}>
-            Undo point
+          <span className="tabular-nums">
+            {pointCount} / {MAX_ZONE_POINTS} points
+          </span>
+          <button type="button" className={buttonClass} disabled={!canDelete} onClick={onDelete}>
+            Delete Point
           </button>
-          <button type="button" className={buttonClass} disabled={points.length === 0} onClick={() => update([])}>
+          <button type="button" className={buttonClass} disabled={pointCount === 0} onClick={onClear}>
             Clear zone
+          </button>
+          <button type="button" className={buttonClass} onClick={onReset}>
+            Reset box
           </button>
         </div>
       </div>
-      <details>
-        <summary className="w-fit cursor-pointer text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">Drawing help</summary>
-        <p className="mt-2 leading-relaxed">
-          Click the image to add points. Drag a point or focus it and use the arrow keys to move it; Delete removes it. Leave visible space outside the zone. Saving zone changes ends active
-          observations as incomplete.
-        </p>
-      </details>
     </section>
   );
 }

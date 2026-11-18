@@ -79,14 +79,14 @@ export function AccountField({
       aria-readonly={isReadOnly}
       tabIndex={isProfileReadOnly ? -1 : undefined}
       className={`focus:ring-tanaw-green/20 w-full rounded-lg border p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 dark:text-slate-100 ${
-        isProfileReadOnly ? "cursor-default border-slate-200 bg-slate-50" : "border-tanaw-green bg-white shadow-sm dark:bg-(--tanaw-control-bg)"
+        isProfileReadOnly ? "cursor-default border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)" : "border-tanaw-green bg-(--tanaw-control-bg) shadow-sm"
       } ${isPassword || canEdit ? "pr-12" : ""} ${isPassword ? "tanaw-sensitive-input" : ""} ${error ? "border-red-400" : ""}`}
     />
   );
 
   return (
     <div data-field-name={name} className="block">
-      <label htmlFor={inputId} className="mb-2 block text-xs font-bold tracking-wide text-slate-500 uppercase">
+      <label htmlFor={inputId} className="mb-2 block text-xs font-bold tracking-wide text-(--tanaw-text-muted) uppercase">
         {label}
       </label>
       <span className="relative block">

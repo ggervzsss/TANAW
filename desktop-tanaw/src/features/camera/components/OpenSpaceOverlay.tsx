@@ -1,102 +1,200 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { OpenSpaceSettings } from "../../../types/enterprise";
+import { validateOpenSpace } from "../utils/open-space";
+import { clamp, insertZonePoint, MAX_ZONE_POINTS, moveZone, withZonePolygon, type ZonePoint, type ZoneTarget } from "../utils/open-space-editor";
 
-export function OpenSpaceOverlay({
-  value,
-  editable,
-  onChange,
-  onEditCheckpoint,
-}: {
+type Polygon = OpenSpaceSettings["polygon"];
+type Gesture = {
+  pointerId: number;
+  start: ZonePoint;
+  original: Polygon;
+  latest: Polygon;
+  target: ZoneTarget;
+  moved: boolean;
+};
+
+type Props = {
   value: OpenSpaceSettings | null | undefined;
   editable: boolean;
   onChange: (next: OpenSpaceSettings) => void;
   onEditCheckpoint?: () => void;
-}) {
-  const [dragging, setDragging] = useState<number | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  selectedPoint?: number | null;
+  onSelectPoint?: (index: number | null) => void;
+};
+
+export function OpenSpaceOverlay({ value, editable, onChange, onEditCheckpoint, selectedPoint, onSelectPoint }: Props) {
   const svg = useRef<SVGSVGElement>(null);
-  const [aspect, setAspect] = useState(1);
+  const gesture = useRef<Gesture | null>(null);
+  const [draft, setDraft] = useState<Polygon | null>(null);
+  const [activeEdge, setActiveEdge] = useState<number | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const points = draft ?? value?.polygon ?? [];
+
   useEffect(() => {
     const element = svg.current;
-    if (!element) return;
-    const updateSize = () => {
-      const bounds = element.getBoundingClientRect();
-      if (bounds.height > 0) setAspect(bounds.width / bounds.height);
+    if (!element || !editable) return;
+    const measure = () => {
+      const { width, height } = element.getBoundingClientRect();
+      if (width > 0 && height > 0) setSize({ width, height });
     };
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
-  const points = value?.polygon ?? [];
-  const update = (polygon: OpenSpaceSettings["polygon"]) => onChange({ zone_id: "main", zone_name: "Monitored area", ...value, polygon });
-  const coordinate = (event: PointerEvent<SVGSVGElement>) => {
-    const r = event.currentTarget.getBoundingClientRect();
-    return { x: Math.max(0, Math.min(1, (event.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (event.clientY - r.top) / r.height)) };
+  }, [editable]);
+
+  const valid = (next: Polygon) => {
+    if (next.length === 2) return Math.hypot(next[0].x - next[1].x, next[0].y - next[1].y) >= 0.005;
+    return next.length < 2 || !validateOpenSpace(withZonePolygon(value, next));
   };
-  return (
-    <div className="absolute inset-0">
-      <svg
-        ref={svg}
-        role="img"
-        aria-label="Monitored area polygon"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        className={`absolute inset-0 h-full w-full ${editable ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
-        onPointerDown={(event) => {
-          if (editable && dragging === null && points.length < 12) {
-            onEditCheckpoint?.();
-            update([...points, coordinate(event)]);
+  const commit = (next: Polygon, original: Polygon) => {
+    if (next.length === original.length && next.every((p, i) => p.x === original[i].x && p.y === original[i].y)) return;
+    onEditCheckpoint?.();
+    onChange(withZonePolygon(value, next));
+  };
+
+  const begin = (event: PointerEvent<SVGElement>, target: ZoneTarget) => {
+    if (!editable || event.button !== 0 || gesture.current || !svg.current) return;
+    event.preventDefault();
+    if (target.type === "point") {
+      // Expanded hit targets can overlap. Select the visible handle closest to the pointer.
+      const rect = svg.current.getBoundingClientRect();
+      const distance = (p: ZonePoint) => Math.hypot(rect.left + p.x * rect.width - event.clientX, rect.top + p.y * rect.height - event.clientY);
+      const index = points.reduce((closest, p, i) => (distance(p) < distance(points[closest]) ? i : closest), target.index);
+      target = { type: "point", index };
+      svg.current.querySelector<SVGElement>(`[data-zone-point="${index}"]`)?.focus({ preventScroll: true });
+      onSelectPoint?.(index);
+    } else {
+      svg.current.focus({ preventScroll: true });
+      onSelectPoint?.(null);
+    }
+    setActiveEdge(target.type === "edge" ? target.index : null);
+    gesture.current = {
+      pointerId: event.pointerId,
+      start: { x: event.clientX, y: event.clientY },
+      original: points,
+      latest: points,
+      target,
+      moved: false,
+    };
+    svg.current.setPointerCapture(event.pointerId);
+  };
+
+  const updateDrag = (event: PointerEvent<SVGSVGElement>, current: Gesture) => {
+    const { width, height } = event.currentTarget.getBoundingClientRect();
+    const dx = event.clientX - current.start.x;
+    const dy = event.clientY - current.start.y;
+    if (Math.hypot(dx, dy) >= 4) current.moved = true;
+    if (!editable || !current.moved || current.target.type === "background" || width === 0 || height === 0) return;
+    const next = moveZone(current.original, current.target, { x: dx / width, y: dy / height });
+    if (valid(next)) current.latest = next;
+    setDraft(current.latest);
+  };
+
+  const finish = (event: PointerEvent<SVGSVGElement>, cancelled = false) => {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (editable && !cancelled) {
+      updateDrag(event, current);
+      if (current.moved) {
+        commit(current.latest, current.original);
+      } else if (current.original.length < MAX_ZONE_POINTS) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const at = { x: clamp((event.clientX - rect.left) / rect.width), y: clamp((event.clientY - rect.top) / rect.height) };
+        if (current.target.type === "edge") {
+          const next = insertZonePoint(current.original, current.target.index, at, rect.width, rect.height);
+          if (next !== current.original && valid(next)) {
+            commit(next, current.original);
+            onSelectPoint?.(current.target.index + 1);
           }
-        }}
-        onPointerMove={(event) => {
-          if (editable && dragging !== null) update(points.map((p, i) => (i === dragging ? coordinate(event) : p)));
-        }}
-        onPointerUp={() => setDragging(null)}
-        onPointerCancel={() => setDragging(null)}
-      >
-        <polygon points={points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")} fill="rgba(34,211,238,0.12)" stroke="#22d3ee" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        {editable &&
-          points.map((p, i) => (
-            <circle
-              key={i}
+        } else if (current.target.type === "background" && current.original.length < 3) {
+          const next = [...current.original, at];
+          if (valid(next)) {
+            commit(next, current.original);
+            onSelectPoint?.(next.length - 1);
+          }
+        }
+      }
+    }
+    gesture.current = null;
+    setDraft(null);
+    setActiveEdge(null);
+  };
+
+  const pointsAttribute = points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
+  const edges = points.slice(0, points.length === 2 ? 1 : points.length < 2 ? 0 : points.length);
+
+  return (
+    <svg
+      ref={svg}
+      role={editable ? "group" : "img"}
+      aria-label="Monitored area polygon"
+      tabIndex={editable ? -1 : undefined}
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className={`absolute inset-0 h-full w-full ${editable ? "touch-none overflow-visible outline-none" : "pointer-events-none"}`}
+      onPointerMove={(event) => {
+        const current = gesture.current;
+        if (current?.pointerId === event.pointerId) updateDrag(event, current);
+      }}
+      onPointerUp={(event) => finish(event)}
+      onPointerCancel={(event) => finish(event, true)}
+      onLostPointerCapture={(event) => finish(event, true)}
+    >
+      {editable && <rect width="100" height="100" fill="transparent" className={points.length < 3 ? "cursor-crosshair" : ""} onPointerDown={(event) => begin(event, { type: "background" })} />}
+      {points.length >= 3 ? (
+        <polygon
+          points={pointsAttribute}
+          fill="rgba(34,211,238,0.13)"
+          stroke="#22d3ee"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+          className={editable ? "cursor-move hover:fill-cyan-400/20 active:cursor-grabbing" : undefined}
+          onPointerDown={(event) => begin(event, { type: "area" })}
+        />
+      ) : (
+        <polyline points={pointsAttribute} fill="none" stroke="#22d3ee" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      )}
+      {editable &&
+        edges.map((start, i) => {
+          const end = points[(i + 1) % points.length];
+          const coordinates = { x1: start.x * 100, y1: start.y * 100, x2: end.x * 100, y2: end.y * 100 };
+          return (
+            <g key={i} className="open-space-edge" data-active={activeEdge === i}>
+              <line {...coordinates} stroke="transparent" strokeWidth="18" vectorEffect="non-scaling-stroke" onPointerDown={(event) => begin(event, { type: "edge", index: i })} />
+              <line {...coordinates} className="open-space-edge-mark" vectorEffect="non-scaling-stroke" />
+            </g>
+          );
+        })}
+      {editable &&
+        size &&
+        points.map((p, i) => (
+          <g key={i} className="open-space-point" data-selected={selectedPoint === i}>
+            <ellipse
               cx={p.x * 100}
               cy={p.y * 100}
-              r="1.1"
-              style={{ transformBox: "fill-box", transformOrigin: "center", transform: `scaleY(${aspect})` }}
-              fill={selected === i ? "#fbbf24" : "#fff"}
-              stroke="#0891b2"
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-              tabIndex={0}
+              rx={(12 / size.width) * 100}
+              ry={(12 / size.height) * 100}
+              fill="transparent"
+              data-zone-point={i}
               role="button"
               aria-label={`Zone vertex ${i + 1}`}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                onEditCheckpoint?.();
-                setSelected(i);
-                setDragging(i);
-                event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
-              }}
+              aria-pressed={selectedPoint === i}
+              tabIndex={0}
+              onFocus={() => onSelectPoint?.(i)}
+              onPointerDown={(event) => begin(event, { type: "point", index: i })}
               onKeyDown={(event) => {
-                if (!editable) return;
-                if (event.key === "Delete" || event.key === "Backspace") {
-                  event.preventDefault();
-                  onEditCheckpoint?.();
-                  update(points.filter((_, j) => i !== j));
-                  return;
-                }
                 const dx = event.key === "ArrowLeft" ? -0.005 : event.key === "ArrowRight" ? 0.005 : 0;
                 const dy = event.key === "ArrowUp" ? -0.005 : event.key === "ArrowDown" ? 0.005 : 0;
-                if (dx || dy) {
-                  event.preventDefault();
-                  onEditCheckpoint?.();
-                  update(points.map((q, j) => (j === i ? { x: Math.max(0, Math.min(1, q.x + dx)), y: Math.max(0, Math.min(1, q.y + dy)) } : q)));
-                }
+                if (!dx && !dy) return;
+                event.preventDefault();
+                const next = moveZone(points, { type: "point", index: i }, { x: dx, y: dy });
+                if (valid(next)) commit(next, points);
               }}
             />
-          ))}
-      </svg>
-    </div>
+            <ellipse cx={p.x * 100} cy={p.y * 100} rx={(5 / size.width) * 100} ry={(5 / size.height) * 100} vectorEffect="non-scaling-stroke" className="open-space-point-mark" />
+          </g>
+        ))}
+    </svg>
   );
 }

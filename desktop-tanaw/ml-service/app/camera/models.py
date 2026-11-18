@@ -31,6 +31,7 @@ DisplayFrameSnapshot = tuple[
     int,
     int,
     int,
+    int,
 ]
 
 

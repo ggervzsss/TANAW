@@ -28,7 +28,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Enterprise Overview</p>
               </div>
-              <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
+              <p className="mt-1 text-sm leading-relaxed font-semibold text-(--tanaw-text-secondary)">
                 {enterprise.category} - Barangay {enterprise.barangay}
               </p>
             </div>
