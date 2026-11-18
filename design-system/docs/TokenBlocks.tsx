@@ -1,3 +1,4 @@
+import { Unstyled } from "@storybook/addon-docs/blocks";
 import { useEffect, useRef, useState } from "react";
 
 /** Reads a CSS custom property as the browser resolves it, so the docs always show the live token. */
@@ -25,40 +26,59 @@ function toHex(rgb: string) {
   return match[4] && match[4] !== "1" ? `${hex} / ${match[4]}` : hex;
 }
 
-export function Swatch({ token, name, use }: { token: string; name: string; use: string }) {
+function Chip({ token, dark }: { token: string; dark: boolean }) {
   const { ref, value } = useResolved();
   return (
-    <div className="flex items-center gap-3 rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-3">
-      <span ref={ref} style={{ color: `var(${token})`, background: `var(${token})` }} className="h-11 w-11 shrink-0 rounded-tanaw-sm border border-(--tanaw-border-soft)" />
-      <div className="min-w-0 text-sm">
-        <p className="font-bold text-(--tanaw-text)">{name}</p>
-        <p className="font-mono text-xs text-(--tanaw-text-muted)">
-          {token} · {toHex(value)}
-        </p>
-        <p className="mt-0.5 text-xs text-(--tanaw-text-secondary)">{use}</p>
+    <span className={dark ? "dark flex items-center gap-2" : "flex items-center gap-2"}>
+      <span ref={ref} style={{ color: `var(${token})`, background: `var(${token})` }} className="h-9 w-9 shrink-0 rounded-tanaw-sm border border-(--tanaw-border-soft)" />
+      <span className="font-mono text-[11px] leading-4 text-(--tanaw-text-muted)">
+        {dark ? "Dark" : "Light"}
+        <br />
+        {toHex(value)}
+      </span>
+    </span>
+  );
+}
+
+/** One token with its light and dark values; the .dark wrapper rescopes the tokens. */
+export function Swatch({ token, name, use }: { token: string; name: string; use: string }) {
+  return (
+    <div className="rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-3 text-sm">
+      <p className="font-bold text-(--tanaw-text)">{name}</p>
+      <p className="font-mono text-xs text-(--tanaw-text-muted)">{token}</p>
+      <div className="my-2.5 flex gap-4">
+        <Chip token={token} dark={false} />
+        <span className="dark rounded-tanaw-sm bg-(--tanaw-page) px-1.5 py-1">
+          <Chip token={token} dark />
+        </span>
       </div>
+      <p className="text-xs leading-5 text-(--tanaw-text-secondary)">{use}</p>
     </div>
   );
 }
 
 export function SwatchGrid({ items }: { items: ReadonlyArray<{ token: string; name: string; use: string }> }) {
   return (
-    <div className="my-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => (
-        <Swatch key={item.token} {...item} />
-      ))}
-    </div>
+    <Unstyled>
+      <div className="my-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item) => (
+          <Swatch key={item.token} {...item} />
+        ))}
+      </div>
+    </Unstyled>
   );
 }
 
 export function TypeSample({ label, className, spec, children }: { label: string; className: string; spec: string; children: string }) {
   return (
+    <Unstyled>
     <div className="border-b border-(--tanaw-border-soft) py-4">
       <p className="mb-1 font-mono text-xs text-(--tanaw-text-muted)">
         {label} · {spec}
       </p>
       <p className={className}>{children}</p>
     </div>
+    </Unstyled>
   );
 }
 
