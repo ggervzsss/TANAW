@@ -15,8 +15,6 @@ from typing import Any
 
 import numpy as np
 
-from app.analytics.visitor_sex import adjust_to_day_mix
-
 # Acceptance gates a head must meet on held-out data; train_sex_head reports each one.
 GATES = {
     "balanced_accuracy": 0.85,
@@ -108,8 +106,8 @@ def negative_log_likelihood(
 def fit_temperature(raw_logits: np.ndarray, labels: np.ndarray) -> float:
     """Temperature minimising class-balanced held-out negative log-likelihood.
 
-    Balancing keeps the calibrated probabilities tied to an even male/female mix
-    (``HEAD_FEMALE_PRIOR``), which the daily mix adjustment relies on.
+    Balancing keeps the calibrated probabilities tied to an even male/female mix, so a
+    visitor the head cannot tell apart counts as half male and half female in daily totals.
     """
     low, high = math.log(0.05), math.log(20.0)
     ratio = (math.sqrt(5) - 1) / 2
@@ -170,13 +168,12 @@ def simulated_share_error(
     seed: int = 13,
     min_visitors: int = 20,
     max_visitors: int = 500,
-    adjust: bool = True,
 ) -> dict[str, float]:
     """How far the summed female estimate lands from the truth on realistic days.
 
     Each simulated day draws a female share between 20% and 80% and a visitor count, samples
-    identities to match, and compares the estimate with the true female count. With ``adjust``
-    (as at runtime) probabilities are re-weighted to the day's estimated mix before summing.
+    identities to match, and compares the summed probabilities (as at runtime) with the true
+    female count.
     """
     rng = np.random.default_rng(seed)
     female = np.flatnonzero(identity_labels == 1)
@@ -197,10 +194,7 @@ def simulated_share_error(
                 ),
             ]
         )
-        day = [float(value) for value in probabilities[chosen]]
-        if adjust:
-            day, _ = adjust_to_day_mix(day)
-        estimate = round(sum(day))
+        estimate = round(float(probabilities[chosen].sum()))
         errors.append(abs(estimate - female_visitors) / visitors)
     values = np.array(errors)
     return {

@@ -97,15 +97,13 @@ def test_temperature_scaling_repairs_overconfident_logits() -> None:
     assert after < 0.02 < before
 
 
-def test_simulated_share_error_is_small_for_calibrated_identities() -> None:
-    rng = np.random.default_rng(6)
-    logits = rng.normal(0, 3, 5000)
-    labels = (rng.random(5000) < 1 / (1 + np.exp(-logits))).astype(int)
-    result = simulated_share_error(logits, labels, days=200)
-    assert result["simulated_share_mae"] < 0.035
-    # Without the daily mix adjustment, days far from an even mix are pulled toward half.
-    unadjusted = simulated_share_error(logits, labels, days=200, adjust=False)
-    assert unadjusted["simulated_share_mae"] > 1.5 * result["simulated_share_mae"]
+def test_simulated_share_error_is_zero_when_certain_and_grows_with_doubt() -> None:
+    labels = np.array([1] * 500 + [0] * 500)
+    certain = np.where(labels == 1, 12.0, -12.0)
+    assert simulated_share_error(certain, labels, days=100)["simulated_share_mae"] < 0.005
+    # Unsure identities count close to half each, so uneven days are pulled toward half.
+    doubtful = np.where(labels == 1, 0.5, -0.5)
+    assert simulated_share_error(doubtful, labels, days=100)["simulated_share_mae"] > 0.05
 
 
 def test_gates_report_pass_fail_and_unmeasured() -> None:

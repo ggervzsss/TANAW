@@ -10,12 +10,8 @@ import numpy as np
 import pytest
 
 from app.analytics.visitor_sex import (
-    DEFAULT_FEMALE_SHARE,
-    MIN_VISITORS_FOR_SHARE,
-    adjust_to_day_mix,
+    UNSEEN_FEMALE_PROBABILITY,
     daily_sex_counts,
-    recent_female_share,
-    reweight_to_share,
     sigmoid,
     visitor_female_probabilities,
 )
@@ -55,7 +51,7 @@ def test_visitor_probability_combines_every_observation_by_weight() -> None:
     assert models == {MODEL}
 
 
-def test_every_visitor_is_male_or_female_and_unseen_visitors_take_the_day_share() -> None:
+def test_every_visitor_is_male_or_female_and_unseen_visitors_count_as_half() -> None:
     visitors = {f"v{index}" for index in range(10)}
     # Five clearly female, three clearly male, two never seen well.
     rows = [row(f"v{index}", 12.0) for index in range(5)]
@@ -65,19 +61,27 @@ def test_every_visitor_is_male_or_female_and_unseen_visitors_take_the_day_share(
     assert counts.state == "estimated"
     assert counts.male_count is not None and counts.female_count is not None
     assert counts.male_count + counts.female_count == 10
-    # Day share (5 + 20 × 0.5) / (8 + 20) ≈ 0.536; 5 seen female + 2 unseen × 0.536 ≈ 6.07
+    # 5 seen female + 2 unseen × 0.5 = 6
     assert counts.female_count == 6
     assert counts.evidence_share == pytest.approx(0.8)
     assert counts.models == (MODEL,)
 
 
-def test_small_days_use_the_recent_share_then_an_even_split() -> None:
+def test_unsure_visitors_split_evenly_whatever_the_rest_of_the_day_looks_like() -> None:
+    """The day's majority never pulls an unsure or unseen visitor toward its own sex."""
+    assert UNSEEN_FEMALE_PROBABILITY == 0.5
+    unsure = [row("u0", 0.0), row("u1", None), row("u2", 0.0), row("u3", None)]
+    unsure_ids = {"u0", "u1", "u2", "u3"}
+    for logit, expected_female in ((12.0, 42), (-12.0, 2)):
+        rows = [row(f"v{index}", logit) for index in range(40)] + unsure
+        counts = daily_sex_counts(rows, {f"v{index}" for index in range(40)} | unsure_ids)
+        assert counts.female_count == expected_female
+        assert counts.male_count == 44 - expected_female
+
+
+def test_small_days_split_unseen_visitors_evenly() -> None:
     visitors = {"a", "b", "c", "d"}
     rows = [row("a", 12.0), row("b", None), row("c", None), row("d", None)]
-    assert len(visitors) < MIN_VISITORS_FOR_SHARE + 1
-    assert daily_sex_counts(rows, visitors, prior_share=0.0).female_count == 1
-    assert daily_sex_counts(rows, visitors, prior_share=1.0).female_count == 4
-    assert DEFAULT_FEMALE_SHARE == 0.5
     # 1 + 3 × 0.5 = 2.5 → 2 (half to even)
     assert daily_sex_counts(rows, visitors).female_count == 2
 
@@ -98,86 +102,30 @@ def test_counts_always_sum_to_unique_visitors_for_random_days() -> None:
             for _ in range(rng.randint(1, 3)):
                 seen = rng.random() < 0.8
                 rows.append(row(visitor, rng.uniform(-8, 8) if seen else None, rng.random()))
-        prior = rng.choice([None, rng.random()])
-        counts = daily_sex_counts(rows, visitors, prior)
+        counts = daily_sex_counts(rows, visitors)
         assert counts.male_count is not None and counts.female_count is not None
         assert counts.male_count >= 0 and counts.female_count >= 0
         assert counts.male_count + counts.female_count == len(visitors)
-        assert counts == daily_sex_counts(list(reversed(rows)), visitors, prior)
+        assert counts == daily_sex_counts(list(reversed(rows)), visitors)
 
 
-def test_days_far_from_an_even_mix_are_counted_close_to_the_truth() -> None:
-    """Calibrated heads assume an even mix; the daily adjustment recovers uneven days."""
+def test_day_count_is_the_sum_of_each_visitors_own_probability() -> None:
     rng = np.random.default_rng(3)
-    logits = rng.normal(0, 3, 20000)
-    labels = rng.random(20000) < 1 / (1 + np.exp(-logits))
-    female, male = np.flatnonzero(labels), np.flatnonzero(~labels)
-    for share in (0.2, 0.5, 0.8):
-        females = int(400 * share)
-        chosen = np.concatenate([rng.choice(female, females), rng.choice(male, 400 - females)])
-        rows = [row(f"v{index}", float(logits[item])) for index, item in enumerate(chosen)]
-        counts = daily_sex_counts(rows, {f"v{index}" for index in range(400)})
-        assert counts.female_count is not None
-        assert abs(counts.female_count - females) / 400 < 0.05
-        naive = sum(1 / (1 + np.exp(-logits[chosen])))
-        if share != 0.5:
-            assert abs(counts.female_count - females) < abs(naive - females)
+    logits = rng.normal(0, 3, 400)
+    rows = [row(f"v{index}", float(value)) for index, value in enumerate(logits)]
+    counts = daily_sex_counts(rows, {f"v{index}" for index in range(400)})
+    assert counts.female_count == round(sum(sigmoid(float(value)) for value in logits))
 
 
-def test_mix_adjustment_finds_the_day_share() -> None:
-    probabilities = [0.9] * 70 + [0.1] * 30
-    adjusted, share = adjust_to_day_mix(probabilities, prior_strength=0)
-    assert 0.7 < share < 0.8
-    assert sum(adjusted) == pytest.approx(share * 100)
-    _, shrunk = adjust_to_day_mix(probabilities)
-    assert 0.5 < shrunk < share
-    assert reweight_to_share([0.5], 0.8) == pytest.approx([0.8])
-    assert adjust_to_day_mix([]) == ([], 0.5)
-
-
-# Female probabilities of the ten visitors on a real Open Space test day; plain EM drove the
-# day's share to 1.0 and reported all ten as female.
+# Female probabilities of the ten visitors on a real Open Space test day.
 LEANING_DAY = [0.391, 0.468, 0.472, 0.505, 0.532, 0.654, 0.707, 0.793, 0.815, 0.818]
 
 
 def test_a_day_leaning_one_way_is_not_counted_as_all_one_sex() -> None:
-    _, runaway = adjust_to_day_mix(LEANING_DAY, prior_strength=0)
-    assert runaway > 0.99
-    adjusted, share = adjust_to_day_mix(LEANING_DAY)
-    assert 0.5 < share < 0.65
-    assert 5 <= round(sum(adjusted)) <= 7
     rows = [row(f"v{index}", math.log(p / (1 - p))) for index, p in enumerate(LEANING_DAY)]
     counts = daily_sex_counts(rows, {f"v{index}" for index in range(10)})
-    assert counts.female_count is not None and 5 <= counts.female_count <= 7
-    assert counts.male_count is not None and counts.male_count >= 3
-
-
-@pytest.mark.parametrize("lean", [0.3, 0.45, 0.55, 0.7])
-def test_identical_leaning_visitors_never_collapse_to_one_sex(lean: float) -> None:
-    for visitors in (5, 10, 30):
-        _, share = adjust_to_day_mix([lean] * visitors)
-        assert 0.1 < share < 0.9
-
-
-def test_recent_share_uses_only_estimated_days_with_evidence() -> None:
-    days: list[dict[str, Any]] = [
-        {
-            "sex_estimation_state": "estimated",
-            "sex_evidence_share": 0.9,
-            "male_count": 3,
-            "female_count": 7,
-        },
-        {
-            "sex_estimation_state": "estimated",
-            "sex_evidence_share": 0.0,
-            "male_count": 9,
-            "female_count": 1,
-        },
-        {"sex_estimation_state": "unavailable", "male_count": None, "female_count": None},
-        {"unique_count": 5},
-    ]
-    assert recent_female_share(days) == pytest.approx(0.7)
-    assert recent_female_share(days[1:]) is None
+    # 0.391 + … + 0.818 = 6.155
+    assert (counts.female_count, counts.male_count) == (6, 4)
 
 
 NOW = datetime(2026, 11, 10, 2, tzinfo=UTC)
