@@ -59,7 +59,7 @@ export function StaffFinalReportsAuditPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search artifact, period, or prepared by"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+              className="focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
           <FilterSelect
@@ -94,7 +94,7 @@ export function StaffFinalReportsAuditPage() {
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredReports.map((report) => (
                 <tr key={report.id} onClick={() => setSelectedReport(report)} className="tanaw-interactive-row group cursor-pointer">
-                  <td className="group-hover:text-tgreen-dark px-6 py-4 text-gray-600 transition-colors">
+                  <td className="group-hover:text-tanaw-ledger px-6 py-4 text-gray-600 transition-colors">
                     <ExpandableTableText primary={report.id} ariaLabel="artifact ID" className="font-mono text-xs font-bold" />
                   </td>
                   <td className="px-6 py-4">

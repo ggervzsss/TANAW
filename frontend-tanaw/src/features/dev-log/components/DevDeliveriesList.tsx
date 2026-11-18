@@ -5,7 +5,7 @@ import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import type { DevDelivery } from "../services";
 import { splitDevLogMessage } from "../utils/devLogMessage";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { Badge } from "../../../design-system";
 
 export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliveries: DevDelivery[]; isLoading: boolean; timeFormat: SystemTimeFormat }) {
   if (deliveries.length === 0)
@@ -21,14 +21,14 @@ export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliv
       {deliveries.map((delivery) => (
         <article key={delivery.id} className="grid gap-4 p-5 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="space-y-2">
-            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700">
+            <Badge tone="success">
               <Mail size={13} /> Email
-            </span>
+            </Badge>
             <div>
               <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
               <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
             </div>
-            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600">{toSentenceCase(delivery.status)}</span>
+            <Badge>{delivery.status}</Badge>
           </aside>
           <section className="min-w-0">
             <h2 className="mb-2 text-sm font-black text-slate-900">{delivery.subject}</h2>
@@ -48,13 +48,13 @@ function DevLogMessage({ body }: { body: string }) {
           segment.value
         ) : (
           <span key={`${segment.value}-${index}`} className="inline-flex max-w-full items-center gap-1 align-middle">
-            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tgreen-dark break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
+            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tanaw-ledger break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
               {segment.value}
             </a>
             <button
               type="button"
               onClick={() => void copyLink(segment.value)}
-              className="text-tgreen-dark inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              className="text-tanaw-ledger inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
               aria-label="Copy link"
               title="Copy link"
             >

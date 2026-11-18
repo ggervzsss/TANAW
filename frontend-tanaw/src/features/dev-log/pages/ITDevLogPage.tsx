@@ -21,7 +21,7 @@ export function ITDevLogPage() {
               value={deliveries.query}
               onChange={(event) => deliveries.setQuery(event.target.value)}
               placeholder="Search recipient or message"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-slate-300 bg-white py-2 pr-4 pl-9 text-sm text-slate-900 transition outline-none focus:ring-1"
+              className="focus:ring-tanaw-ledger w-full rounded-lg border border-slate-300 bg-white py-2 pr-4 pl-9 text-sm text-slate-900 transition outline-none focus:ring-1"
             />
           </div>
         </div>

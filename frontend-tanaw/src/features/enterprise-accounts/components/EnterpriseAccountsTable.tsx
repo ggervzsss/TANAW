@@ -49,7 +49,7 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
             >
               <td className="px-4 py-4">
                 <div className="flex w-full min-w-0 items-center gap-3 text-left">
-                  <span className="bg-tgreen-dark/10 text-tgreen-dark flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
+                  <span className="bg-tanaw-ledger/10 text-tanaw-ledger flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
                     <Building2 size={18} />
                   </span>
                   <div className="min-w-0 flex-1">

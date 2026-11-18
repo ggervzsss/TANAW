@@ -1,0 +1,22 @@
+/*
+ * GENERATED FILE. Do not edit; change design-system/src/lib/sentence-case.ts instead.
+ * Update with: node design-system/scripts/sync.mjs
+ * Source SHA-256: 7eb9743d6966bcc8c1cbed34ed40cee6c656d828cc51d4630f5e2971c26eb9bc
+ */
+const ACRONYM_OR_MIXED_CASE = /[A-Z].*[A-Z]|[a-z].*[A-Z]/;
+
+/**
+ * Turns a status label into sentence case for badges: "In Review" becomes
+ * "In review" and "running" becomes "Running". Acronyms and mixed-case words
+ * ("ML", "LGU", "TANAW", "iOS") keep their capitals, and underscores in machine
+ * values become spaces. Use it only on fixed labels, never on names people typed.
+ */
+export function toSentenceCase(label: string): string {
+  const words = label.replace(/_/g, " ").trim().split(/(\s+)/);
+  return words
+    .map((word, index) => {
+      if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1);
+      return ACRONYM_OR_MIXED_CASE.test(word) ? word : word.toLowerCase();
+    })
+    .join("");
+}

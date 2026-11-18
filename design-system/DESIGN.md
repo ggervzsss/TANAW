@@ -23,7 +23,7 @@ colors:
   control-hover: "#edf4ef"
   ink: "#10241b"
   ink-secondary: "#475569"
-  ink-muted: "#64748b"
+  ink-muted: "#5f6f84"
   border-soft: "#d6e2d9"
   border: "#c6d6cb"
   control-border: "#cbd5d1"
@@ -212,7 +212,7 @@ white for records.
 - **Inset** (#f0f5f1): table headers, status panels, wells inside cards.
 - **Control Hover** (#edf4ef): hover fill for secondary buttons and list rows.
 - **Ink** (#10241b): body text and figures; a green-black, never pure black.
-- **Ink Secondary** (#475569) and **Ink Muted** (#64748b): supporting text and captions.
+- **Ink Secondary** (#475569) and **Ink Muted** (#5f6f84): supporting text and captions. Ink Muted keeps at least 4.5:1 on every light surface, including the inset and page wash.
 - **Border Soft** (#d6e2d9), **Border** (#c6d6cb), **Control Border** (#cbd5d1):
   card edges, dividers, input outlines, in that order of strength.
 
@@ -347,6 +347,27 @@ panel uses 18px. Borders are thin (1px) and green-grey, never black.
 
 ## Components
 
+Every spec below is implemented once in `src/` and synced into both apps (see
+[README.md](README.md)); Storybook shows each one with its states in light and dark.
+
+| Spec section | Implementation |
+| --- | --- |
+| Buttons | `Button`, `IconButton` |
+| Badges | `Badge`, `StatusDot` |
+| Cards / Containers | `Card`, `CardHeader`, `CardFooter`, `SectionLabel` |
+| Inputs / Fields | `Field`, `Input`, `Textarea`, `Checkbox` |
+| Segmented Filters | `SegmentedControl` (and `Tabs` for switching views) |
+| Search Fields | `SearchField` |
+| Selects and Switches | `Select`, `Switch` |
+| Navigation | `TopbarLiquidGlass`, `TopbarActiveUnderline`, `Avatar` |
+| Metric Strip | `MetricStrip` |
+| Tables | `Table`, `TableHead`, `TableBody`, `TableRow`, `TableHeaderCell`, `TableCell` |
+| Empty States | `EmptyState` |
+| Dialogs | `Dialog`, `ConfirmDialog`, `DetailField`, `DetailList`, `ModalPortal` |
+| Banners and progress | `Alert`, `ProgressBar`, `Spinner`, `Skeleton`, `Tooltip`, `ExpandableText` |
+| Page tops | `PageHeader` |
+| Password fields | `PasswordRequirements`, `PasswordMatchIndicator` |
+
 ### Buttons
 
 Confident and plain.
@@ -447,6 +468,22 @@ LGU accounts") and one muted sentence saying what will appear or what to do next
 Raised white panel, 16px corners, a Bai Jamjuree title, content, and actions at the
 bottom right (secondary before primary). Detail dialogs show fields as label and value
 pairs.
+
+- **Header:** an optional Gold Ink eyebrow (a record number), the title, an optional
+  one-line description, and a round close button.
+- **Accent:** detail dialogs may carry the metric thread as a 4px line across the top;
+  destructive confirmations carry Record Red instead.
+- **Behaviour:** focus moves into the dialog and stays there; Escape, the close button and
+  a backdrop click close it; focus returns to what opened it; the page behind does not
+  scroll.
+- **Confirmations** (`ConfirmDialog`) say exactly what will happen, offer Cancel first,
+  and show a spinner on the confirm button while the action runs.
+
+### Tabs
+
+Underlined tabs switch between views of one page ("Create reports", "Reports history").
+The selected tab has a 2px Civic Green underline and Ledger Green text; arrow keys move
+between tabs.
 
 ### Login (signature, web)
 

@@ -78,21 +78,10 @@ async function expectSameRow(left: Locator, right: Locator) {
   expect(difference).toBeLessThan(2);
 }
 
-async function expectTitleSizedAccent(dialog: Locator, title: string) {
+/** Detail dialogs show their title and the design system's metric-thread accent. */
+async function expectTitledDetailDialog(dialog: Locator, title: string) {
   await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
-  const boxes = await dialog.locator("[data-modal-title-accent]").evaluate((accent) => {
-    const titleWrapper = accent.parentElement;
-    if (!titleWrapper) throw new Error("Modal title wrapper is missing.");
-    const accentBox = accent.getBoundingClientRect();
-    const titleWrapperBox = titleWrapper.getBoundingClientRect();
-    return {
-      accent: { width: accentBox.width, x: accentBox.x },
-      titleWrapper: { width: titleWrapperBox.width, x: titleWrapperBox.x },
-    };
-  });
-  expect(boxes.accent.x).toBeCloseTo(boxes.titleWrapper.x, 0);
-  expect(boxes.accent.width).toBeCloseTo(boxes.titleWrapper.width, 0);
-  return boxes.accent.width;
+  await expect(dialog.locator("[data-dialog-accent='thread']")).toHaveCount(1);
 }
 
 test("balances Admin log and alert details with accessible long-text disclosures", async ({ page }) => {
@@ -104,7 +93,7 @@ test("balances Admin log and alert details with accessible long-text disclosures
   const logDialog = page.getByRole("dialog", { name: "Activity Details" });
   await expect(logDialog).toBeVisible();
   await expect(logDialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  const activityAccentWidth = await expectTitleSizedAccent(logDialog, "Activity Details");
+  await expectTitledDetailDialog(logDialog, "Activity Details");
   await expectSameRow(logDialog.getByText("Affected Item", { exact: true }).locator(".."), logDialog.getByText("Details", { exact: true }).locator(".."));
 
   const actorDisclosure = logDialog.getByText("Performed By", { exact: true }).locator("..").getByRole("button");
@@ -123,8 +112,7 @@ test("balances Admin log and alert details with accessible long-text disclosures
   await page.getByRole("button", { name: "View situation details" }).click();
   const alertDialog = page.getByRole("dialog", { name: "Maintenance Request" });
   await expect(alertDialog).toBeVisible();
-  const alertAccentWidth = await expectTitleSizedAccent(alertDialog, "Maintenance Request");
-  expect(alertAccentWidth).toBeGreaterThan(activityAccentWidth);
+  await expectTitledDetailDialog(alertDialog, "Maintenance Request");
   await expectSameRow(alertDialog.getByText("What Happened", { exact: true }).locator(".."), alertDialog.getByText("Suggested Response", { exact: true }).locator(".."));
   await expect(alertDialog.getByText(longSummary, { exact: true })).toBeVisible();
 

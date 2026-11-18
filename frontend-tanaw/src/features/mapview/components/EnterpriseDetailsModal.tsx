@@ -5,7 +5,7 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import type { GatewayStatus, MonitoringStatus, OccupancyStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { Badge, type BadgeTone } from "../../../design-system";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
@@ -98,46 +98,33 @@ function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: Rea
   );
 }
 
-function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
-  const classes: Record<MonitoringStatus, string> = {
-    "Fully Monitoring": "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
-    "Partially Monitoring": "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
-    "Updates Delayed": "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
-    Fault: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
-    Stopped: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-    Offline: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-    "Not Configured": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-  };
+const monitoringTones: Record<MonitoringStatus, BadgeTone> = {
+  "Fully Monitoring": "success",
+  "Partially Monitoring": "warning",
+  "Updates Delayed": "warning",
+  Fault: "danger",
+  Stopped: "neutral",
+  Offline: "neutral",
+  "Not Configured": "neutral",
+};
+const occupancyTones: Record<OccupancyStatus, BadgeTone> = { Normal: "info", Warning: "warning", "High Occupancy": "danger", "No Data": "neutral" };
+const gatewayTones: Record<GatewayStatus, BadgeTone> = { Connected: "success", "Sync Delayed": "warning", Offline: "neutral", "Not Linked": "neutral", Closed: "neutral" };
+const gatewayLabels: Record<GatewayStatus, string> = {
+  Connected: "Online",
+  "Sync Delayed": "Updates Delayed",
+  Offline: "Offline",
+  "Not Linked": "No Desktop App Linked",
+  Closed: "Closed",
+};
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(status)}</span>;
+function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
+  return <Badge tone={monitoringTones[status]}>{status}</Badge>;
 }
 
 function OccupancyStatusBadge({ status }: { status: OccupancyStatus }) {
-  const classes: Record<OccupancyStatus, string> = {
-    Normal: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-300/30 dark:bg-sky-500/15 dark:text-sky-200",
-    Warning: "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
-    "High Occupancy": "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
-    "No Data": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-  };
-
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(status)}</span>;
+  return <Badge tone={occupancyTones[status]}>{status}</Badge>;
 }
 
 function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
-  const classes: Record<GatewayStatus, string> = {
-    Connected: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
-    "Sync Delayed": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
-    Offline: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-    "Not Linked": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-    Closed: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-  };
-  const label: Record<GatewayStatus, string> = {
-    Connected: "Online",
-    "Sync Delayed": "Updates Delayed",
-    Offline: "Offline",
-    "Not Linked": "No Desktop App Linked",
-    Closed: "Closed",
-  };
-
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black ${classes[status]}`}>{toSentenceCase(label[status])}</span>;
+  return <Badge tone={gatewayTones[status]}>{gatewayLabels[status]}</Badge>;
 }

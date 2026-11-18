@@ -44,7 +44,7 @@ html.dark :is(input, textarea)::placeholder {
   color: var(--theme-muted);
 }
 html.dark
-  :is(.enterprise-shell, .camera-dialog, .design-modal, .tanaw-var1-modal, .tanaw-dropdown-menu, .report-floating-layer)
+  :is(.enterprise-shell, .camera-dialog, .tanaw-var1-modal, .tanaw-dropdown-menu, .report-floating-layer)
   :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
   outline-color: var(--theme-focus);
 }
@@ -325,17 +325,6 @@ html.dark .camera-settings-success {
 html.dark .camera-diagnostics {
   border-color: var(--theme-divider);
 }
-html.dark .design-switch {
-  background: var(--theme-outline);
-  border-color: var(--theme-outline);
-}
-html.dark .design-switch[aria-checked="true"] {
-  background: var(--theme-action);
-  border-color: var(--theme-focus);
-}
-html.dark .design-switch span {
-  background: var(--theme-on-action);
-}
 html.dark .camera-preview-state {
   background: radial-gradient(ellipse at 50% 45%, var(--theme-accent-tint), var(--theme-canvas));
 }
@@ -554,7 +543,7 @@ html.dark .enterprise-shell .tanaw-reports-workspace .report-origin-locked {
   background: var(--theme-raised);
   border-color: transparent;
 }
-html.dark :is(.camera-dialog, .design-modal, .tanaw-var1-modal) {
+html.dark :is(.camera-dialog, .tanaw-var1-modal) {
   background: var(--theme-raised);
   color: var(--theme-text);
   border-color: var(--theme-border-soft);
@@ -587,11 +576,11 @@ html.dark .tanaw-var1-modal .reports-primary {
   color: var(--theme-on-action);
 }
 /* The official .var1-document remains white and is excluded from color remapping. */
-html:not(.dark) :is(.camera-dialog-backdrop, .design-modal-backdrop, .tanaw-var1-viewer) {
+html:not(.dark) :is(.camera-dialog-backdrop, .tanaw-var1-viewer) {
   background: rgb(244 248 246 / 56%);
   backdrop-filter: blur(2.5px);
 }
-html.dark :is(.camera-dialog-backdrop, .design-modal-backdrop, .tanaw-var1-viewer) {
+html.dark :is(.camera-dialog-backdrop, .tanaw-var1-viewer) {
   background: var(--theme-scrim);
   backdrop-filter: blur(2.5px);
 }

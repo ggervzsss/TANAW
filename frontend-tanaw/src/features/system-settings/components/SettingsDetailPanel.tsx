@@ -110,7 +110,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
           return (
             <section key={section.id} className="p-6 sm:p-7">
               <div className="mb-5 flex items-start gap-3">
-                <div className="bg-tgreen-dark/10 text-tgreen-dark rounded-xl p-3 dark:bg-emerald-300/10 dark:text-emerald-300"><Icon className="h-5 w-5" /></div>
+                <div className="bg-tanaw-ledger/10 text-tanaw-ledger rounded-xl p-3 dark:bg-emerald-300/10 dark:text-emerald-300"><Icon className="h-5 w-5" /></div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-950 dark:text-white">{section.title}</h2>
                   <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-300">{section.description}</p>
@@ -125,7 +125,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
               {!isImmediateSection && (
                 <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
                   {isDirty && <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">Unsaved section changes</span>}
-                  <button type="button" disabled={!isDirty || isSaving} onClick={() => (section.id === "security" ? setConfirmSecurity(true) : saveSection(section))} className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="button" disabled={!isDirty || isSaving} onClick={() => (section.id === "security" ? setConfirmSecurity(true) : saveSection(section))} className="bg-tanaw-civic hover:bg-tanaw-civic-deep inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
                     <Save size={15} /> {isSaving ? "Applying…" : "Apply section"}
                   </button>
                 </div>
@@ -141,7 +141,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
             <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100"><ShieldAlert className="mt-0.5 shrink-0" size={20} /><p className="text-sm leading-6">These values change when accounts are temporarily locked after failed sign-in attempts. The change applies to all TANAW accounts and can be changed again later.</p></div>
             <div className="flex justify-end gap-3 border-t border-slate-100 pt-5 dark:border-white/10">
               <button type="button" onClick={() => setConfirmSecurity(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 dark:border-white/15 dark:text-slate-100">Cancel</button>
-              <button type="button" onClick={() => { const section = sections.find((candidate) => candidate.id === "security"); if (section) saveSection(section); setConfirmSecurity(false); }} className="bg-tgreen-dark rounded-xl px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">Apply to all accounts</button>
+              <button type="button" onClick={() => { const section = sections.find((candidate) => candidate.id === "security"); if (section) saveSection(section); setConfirmSecurity(false); }} className="bg-tanaw-ledger rounded-xl px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">Apply to all accounts</button>
             </div>
           </div>
         </ModalFrame>

@@ -18,6 +18,13 @@ Run the fast checks for each area the change touches:
 - backend-tanaw: `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run mypy .`, `uv run pyright`, `uv run pytest`
 - desktop-tanaw/ml-service: the same Python commands from that directory
+- design-system: `node design-system/scripts/sync.mjs` (then the fast checks
+  of both apps, which type-check, lint and drift-test the copies), and
+  `npm run type` from `design-system/`. When a component or token changes,
+  also run `npm run a11y` there with Storybook running.
+
+Never edit `src/design-system/` or `src/styles/tanaw-tokens.css` in an app:
+they are generated from `design-system/`.
 
 Put logic checks in unit tests (Vitest or pytest), not in Playwright.
 

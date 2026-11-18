@@ -45,7 +45,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = ["text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl", centeredTitleClassName].filter(Boolean).join(" ");
   const sectionClassName = [
-    "text-charcoal-800 flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100",
+    "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100",
     isMapView ? "" : "max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible",
   ]
     .filter(Boolean)

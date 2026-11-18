@@ -53,23 +53,23 @@ html.dark .tanaw-document-preview .tanaw-official-report-table :where(tbody th, 
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table thead :where(th) {
-  background-color: #19263a;
+  background-color: var(--tanaw-surface-raised);
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-total-cell {
-  background-color: #202f43;
+  background-color: var(--tanaw-control-hover);
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-final-total-cell {
-  background-color: #2a3d55;
+  background-color: var(--tanaw-control-hover);
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > * {
-  background-color: #24344a;
+  background-color: var(--tanaw-control-hover);
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
-  background-color: #2a3d55;
+  background-color: var(--tanaw-control-hover);
 }
 
 html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {

@@ -21,7 +21,7 @@ export function LguAccountsToolbar({ query, role, status, onQueryChange, onRoleC
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search name or email"
-          className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+          className="focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect
@@ -46,7 +46,7 @@ export function LguAccountsToolbar({ query, role, status, onQueryChange, onRoleC
           ] as const
         }
       />
-      <button onClick={onCreate} className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition">
+      <button onClick={onCreate} className="bg-tanaw-civic hover:bg-tanaw-civic-deep inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition">
         <UserPlus size={16} /> Create LGU Account
       </button>
     </div>

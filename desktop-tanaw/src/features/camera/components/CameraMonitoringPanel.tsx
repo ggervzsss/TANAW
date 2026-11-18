@@ -5,7 +5,7 @@ import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import type { MlAreaState, MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
 import type { CameraPreviewState } from "./CameraVideoPreview";
-import { toSentenceCase } from "../../../utils/sentence-case";
+import { Badge } from "../../../design-system";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
@@ -85,9 +85,9 @@ export function CameraMonitoringPanel({
       <section className="camera-live-metrics rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Live Metrics</h4>
-          <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[9px] font-bold text-gray-500 dark:border-white/9 dark:bg-white/4 dark:text-slate-400">
-            {toSentenceCase(counts.status)}
-          </span>
+          <Badge size="sm" tone={counts.running ? "success" : "neutral"} dot={counts.running ? "pulse" : false}>
+            {counts.status}
+          </Badge>
         </div>
         {activeCam.analysisMode === "open_space" ? (
           <div className="space-y-3">
