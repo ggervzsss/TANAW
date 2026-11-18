@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/components/Select.tsx instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: 9fa42fd28e5dd54caf3c9972026eda5779af4f5aac2057d6c3c898ee74c6c202
+ * Source SHA-256: 39e154f072189c72d15494a84a4c481eaa79cf409dccb68c60e2a042a5dea411
  */
 import { Check, ChevronDown, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -92,7 +92,9 @@ export function Select({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const activeOptionRef = useRef<HTMLButtonElement | null>(null);
   const listboxId = useId();
-  const errorId = useId();
+  const generatedErrorId = useId();
+  // Forms address a named field's message as `${name}-description`.
+  const errorId = name ? `${name}-description` : generatedErrorId;
   const normalizedOptions = useMemo(() => options.map(normalizeOption), [options]);
   const searchEnabled = shouldShowDropdownSearch(searchable, normalizedOptions.length, searchMinOptions);
   const filteredOptions = useMemo(() => {

@@ -105,7 +105,7 @@ test("keeps the enterprise review queue compact and reveals the first invalid cu
 
   await page.getByRole("button", { name: "Register Enterprise" }).click();
   const dialog = page.getByRole("dialog", { name: "Register Enterprise" });
-  const modalBody = dialog.locator("[data-modal-scroll-container]");
+  const modalBody = dialog.locator("[data-dialog-body]");
   await dialog.getByLabel("Enterprise Name").fill("New Refinement Enterprise");
   await dialog.getByLabel("Contact First Name").fill("David");
   await dialog.getByLabel("Contact Last Name").fill("Vallejera");

@@ -87,7 +87,9 @@ export function Select({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const activeOptionRef = useRef<HTMLButtonElement | null>(null);
   const listboxId = useId();
-  const errorId = useId();
+  const generatedErrorId = useId();
+  // Forms address a named field's message as `${name}-description`.
+  const errorId = name ? `${name}-description` : generatedErrorId;
   const normalizedOptions = useMemo(() => options.map(normalizeOption), [options]);
   const searchEnabled = shouldShowDropdownSearch(searchable, normalizedOptions.length, searchMinOptions);
   const filteredOptions = useMemo(() => {

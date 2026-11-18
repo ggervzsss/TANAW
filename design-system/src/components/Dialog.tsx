@@ -92,7 +92,7 @@ export function Dialog({
             className,
           )}
         >
-          {accent !== "none" && <div aria-hidden="true" className={cn("h-1 shrink-0", accent === "thread" ? "bg-(image:--tanaw-metric-thread)" : "bg-(--tanaw-danger)")} />}
+          {accent !== "none" && <div aria-hidden="true" data-dialog-accent={accent} className={cn("h-1 shrink-0", accent === "thread" ? "bg-(image:--tanaw-metric-thread)" : "bg-(--tanaw-danger)")} />}
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 py-4 max-sm:px-5">
             <div className="min-w-0">
               {eyebrow && <p className="mb-1 text-xs font-bold tracking-label text-(--tanaw-gold-ink) uppercase">{eyebrow}</p>}
