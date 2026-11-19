@@ -7,7 +7,7 @@ import { FakeMlSidecar } from "./support/fake-ml-sidecar";
 test("renders the Figma Create Reports arrangement in the actual desktop renderer", async ({ playwright }, testInfo) => {
   test.setTimeout(90_000);
   const directory = await mkdtemp(path.join(tmpdir(), "tanaw-reports-ui-"));
-  const fixture = JSON.parse(await readFile(new URL("../../../..//test-fixtures/mixed-establishment-report.json", import.meta.url), "utf8"));
+  const fixture = JSON.parse(await readFile(new URL("../../../ml-service/tests/fixtures/reports/mixed-establishment-report.json", import.meta.url), "utf8"));
   const makeCounting = (period: string, unique = 617) => {
     const date = new Date(`${period} 1 00:00:00 GMT+0800`);
     const year = date.getUTCFullYear();

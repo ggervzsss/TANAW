@@ -1,8 +1,8 @@
-﻿import { readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import type { Camera } from "../../../src/types/enterprise";
 
 export const themeUser = { id: "theme-operator", email: "theme@example.test", role: "enterprise", name: "Theme Operator", enterpriseId: "enterprise-1", enterpriseName: "TANAW Theme Review" };
-const source = JSON.parse(readFileSync(new URL("../../../../test-fixtures/mixed-establishment-report.json", import.meta.url), "utf8"));
+const source = JSON.parse(readFileSync(new URL("../../../ml-service/tests/fixtures/reports/mixed-establishment-report.json", import.meta.url), "utf8"));
 const camera: Camera = {
   id: 1,
   name: "Park Camera",

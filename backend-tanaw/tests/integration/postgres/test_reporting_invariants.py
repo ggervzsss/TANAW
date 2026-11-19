@@ -51,7 +51,7 @@ from app.features.reporting.schemas import (
     IntakeReportSummary,
     ReportStatusUpdate,
 )
-from tests.support.counting import counting_snapshot
+from tests.support.counting import REPORT_FIXTURES, counting_snapshot
 from tests.support.postgres import PostgresRuntime, postgres_test_database_url
 
 TEST_EMAIL_PATTERN = "tanaw-reporting-pg-%@example.com"
@@ -1091,12 +1091,8 @@ async def test_final_report_listing_query_count_is_bounded(
 async def test_unified_open_space_report_round_trip_and_single_staff_consolidation(
     postgres_runtime: PostgresRuntime,
 ) -> None:
-    from pathlib import Path
-
     enterprise = await _create_enterprise(postgres_runtime, label="open-space")
-    fixture_path = (
-        Path(__file__).resolve().parents[4] / "test-fixtures/open-space-establishment-report.json"
-    )
+    fixture_path = REPORT_FIXTURES / "open-space-establishment-report.json"
     saved = json.loads(fixture_path.read_text())
     async with postgres_runtime.sessions() as db:
         account = await db.get(Account, enterprise.id)

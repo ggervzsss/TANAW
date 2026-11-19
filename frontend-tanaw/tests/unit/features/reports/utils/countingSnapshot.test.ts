@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { FinalReport, IntakeReport } from "@/shared/types";
 import { createFinalReportPdf, createIntakeReportPdf } from "../../../../../src/features/reports/utils/pdf";
 
-const saved = JSON.parse(readFileSync(new URL("../../../../../../test-fixtures/open-space-establishment-report.json", import.meta.url), "utf8"));
+const saved = JSON.parse(readFileSync(new URL("../../../../../../desktop-tanaw/ml-service/tests/fixtures/reports/open-space-establishment-report.json", import.meta.url), "utf8"));
 const intake: IntakeReport = {
   id: "frozen-source",
   enterpriseId: "park-fixture",

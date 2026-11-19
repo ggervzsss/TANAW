@@ -6,7 +6,7 @@ test.describe.configure({ timeout: 60_000 });
 const fixtures = Object.fromEntries(
   ["open-space", "entrance-exit", "mixed", "corrected-open-space"].map((mode) => [
     mode,
-    JSON.parse(readFileSync(new URL(`../../../../test-fixtures/${mode}-establishment-report.json`, import.meta.url), "utf8")),
+    JSON.parse(readFileSync(new URL(`../../../ml-service/tests/fixtures/reports/${mode}-establishment-report.json`, import.meta.url), "utf8")),
   ]),
 );
 const user = { id: "report-operator", email: "reports@example.test", role: "enterprise", name: "Park Operator", enterpriseId: "park-fixture", enterpriseName: "Park" };

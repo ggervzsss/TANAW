@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 test("Staff reviews and consolidates the frozen Open Space establishment report once", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
-  const saved = JSON.parse(readFileSync(new URL("../../../test-fixtures/open-space-establishment-report.json", import.meta.url), "utf8"));
+  const saved = JSON.parse(readFileSync(new URL("../../../desktop-tanaw/ml-service/tests/fixtures/reports/open-space-establishment-report.json", import.meta.url), "utf8"));
   const user = { id: "staff-review", email: "staff@example.test", displayName: "Staff Reviewer", role: "staff", title: "LGU Staff" };
   let intake = {
     id: "source-one",

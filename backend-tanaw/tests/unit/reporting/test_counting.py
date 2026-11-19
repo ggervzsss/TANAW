@@ -1,7 +1,6 @@
 """The same frozen desktop fixture is accepted and retained by Staff reporting."""
 
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -10,8 +9,9 @@ from app.features.reporting.counting import complete_sum, snapshot_digest
 from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import DesktopReportSubmissionIngest
+from tests.support.counting import REPORT_FIXTURES
 
-FIXTURE = Path(__file__).resolve().parents[4] / "test-fixtures/open-space-establishment-report.json"
+FIXTURE = REPORT_FIXTURES / "open-space-establishment-report.json"
 
 
 def submission():
