@@ -12,6 +12,7 @@ from app.features.mail.templates import (
     EmailRecipient,
     account_activation_email,
     account_email_change_verification_email,
+    password_reset_code_email,
     support_ticket_reply_email,
 )
 
@@ -115,8 +116,32 @@ def test_transactional_email_html_escapes_user_controlled_values() -> None:
         expires_label=malicious_value,
     )
 
-    for content in (activation, support, email_change):
+    reset = password_reset_code_email(recipient, malicious_value, malicious_value)
+
+    for content in (activation, support, email_change, reset):
         assert malicious_name not in content.html
         assert "<script>" not in content.html
         assert "&lt;" in content.html
         assert "&gt;" in content.html
+
+
+def test_password_reset_shares_activation_branding_and_keeps_the_code_copyable() -> None:
+    recipient = EmailRecipient(
+        display_name="Portal User", email="recipient@example.com", role=AccountRole.ENTERPRISE
+    )
+    expires = "Nov 19, 2026 at 4:00 PM Philippine Time"
+    activation = account_activation_email(
+        recipient, "https://tanaw.example/activate-account#token=example", expires
+    )
+    reset = password_reset_code_email(recipient, "001234", expires)
+
+    for content in (activation, reset):
+        assert 'class="masthead inset"' in content.html
+        assert 'alt="TANAW eagle logo"' in content.html
+        assert 'class="footer inset line"' in content.html
+        assert "@media (prefers-color-scheme:dark)" in content.html
+    assert activation.html.split("<img src=", 1)[1].split('"', 2)[1] in reset.html
+    assert ">001234</p>" in reset.html
+    assert "Verification code: 001234" in reset.text
+    assert "Keep this code private." in reset.html and "Keep this code private." in reset.text
+    assert expires in reset.html and expires in reset.text
