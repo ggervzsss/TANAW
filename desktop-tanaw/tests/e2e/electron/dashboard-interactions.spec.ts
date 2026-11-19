@@ -156,7 +156,7 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
         for (const mark of [0, 2, 5]) {
           await clickMark(mark);
           await assertCleanClick();
-          await expect(chart.getByRole("tooltip")).toBeVisible();
+          await expect(chart.getByRole("tooltip"), `${theme} chart ${index} tooltip after clicking mark ${mark}`).toBeVisible();
         }
         if (index === 1) {
           const point = await chart.locator(".recharts-area-curve").evaluate((element) => {

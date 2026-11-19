@@ -25,10 +25,12 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable }:
       {unavailable ? "History unavailable. Check the local camera service." : "No observations available for this period."}
     </div>
   );
-  const axes = (
+  // Points on a line chart sit on the plot edges unless the x-axis is padded; a point there is
+  // half outside the hover area, so pointing at it shows no tooltip.
+  const axes = (xPadding?: { left: number; right: number }) => (
     <>
       <CartesianGrid vertical={false} stroke="var(--enterprise-chart-grid)" strokeDasharray="3 5" />
-      <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: "var(--dashboard-chart-baseline)" }} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
+      <XAxis dataKey="label" padding={xPadding} tickLine={false} axisLine={{ stroke: "var(--dashboard-chart-baseline)" }} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
       <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={42} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)" }} />
     </>
   );
@@ -55,7 +57,7 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable }:
                     <stop offset="100%" stopColor="var(--dashboard-exit-base)" />
                   </linearGradient>
                 </defs>
-                {axes}
+                {axes()}
                 <Tooltip
                   content={<DashboardChartTooltip />}
                   cursor={{ fill: "var(--dashboard-chart-hover)", stroke: "none" }}
@@ -116,7 +118,7 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable }:
                     <stop offset="100%" stopColor="var(--design-green)" stopOpacity={0.025} />
                   </linearGradient>
                 </defs>
-                {axes}
+                {axes({ left: 12, right: 12 })}
                 <Tooltip
                   content={<DashboardChartTooltip />}
                   cursor={{ stroke: "var(--design-green)", strokeOpacity: 0.3, strokeDasharray: "3 3" }}
