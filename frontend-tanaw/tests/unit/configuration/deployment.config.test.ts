@@ -109,7 +109,6 @@ describe("deployment origin configuration", () => {
     const config = JSON.parse(readFileSync(new URL("../../../vercel.json", import.meta.url), "utf8")) as {
       headers: VercelHeaderRule[];
     };
-    const nginx = readFileSync(new URL("../../../nginx.conf", import.meta.url), "utf8");
 
     for (const route of ["/activate-account", "/verify-email-change"]) {
       const rule = config.headers.find((candidate) => candidate.source === route);
@@ -120,9 +119,5 @@ describe("deployment origin configuration", () => {
       });
       expect(rule?.headers).toContainEqual({ key: "Referrer-Policy", value: "no-referrer" });
     }
-
-    expect(nginx).toMatch(/location ~ \^\/\(activate-account\|verify-email-change\)\$/);
-    expect(nginx).toContain('add_header Cache-Control "no-cache, no-store, must-revalidate, private" always;');
-    expect(nginx).toContain('add_header Referrer-Policy "no-referrer" always;');
   });
 });

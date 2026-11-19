@@ -20,6 +20,7 @@ EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --reload --no-server-header"]
 
+# Render builds the final stage (render.yaml sets no target), so keep this last.
 FROM base AS production
 
 COPY pyproject.toml uv.lock ./

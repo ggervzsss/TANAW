@@ -33,7 +33,6 @@ services:
   frontend:
     build:
       context: ./frontend-tanaw
-      target: development
     env_file:
       - .env
     environment:
