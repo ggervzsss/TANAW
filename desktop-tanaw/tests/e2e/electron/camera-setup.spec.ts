@@ -2,6 +2,7 @@ import { expect, test, type ElectronApplication } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { FakeMlSidecar } from "./support/fake-ml-sidecar";
 
 test("Camera Setup works in Electron and draft connection tests never overwrite saved credentials", async ({ playwright }, info) => {
@@ -83,7 +84,9 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
   try {
     const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[0] !== "ELECTRON_RUN_AS_NODE"));
     Object.assign(env, { APPDATA: directory, LOCALAPPDATA: directory, TANAW_ML_SERVICE_PORT: String(sidecar.port) });
-    application = await playwright._electron.launch({ args: [".", `--user-data-dir=${path.join(directory, "profile")}`], env });
+    // Camera passwords need the operating-system keyring, which Playwright disables by default.
+    const passwordStore = fileURLToPath(new URL("./support/system-password-store.cjs", import.meta.url));
+    application = await playwright._electron.launch({ args: ["-r", passwordStore, ".", `--user-data-dir=${path.join(directory, "profile")}`], env });
     const context = application.context();
     const user = { id: "camera-ui-electron", email: "camera@example.test", role: "enterprise", name: "Camera Operator", enterpriseId: "enterprise-1", enterpriseName: "Camera Workspace" };
     await context.route("http://localhost:8000/**", (route) => {
