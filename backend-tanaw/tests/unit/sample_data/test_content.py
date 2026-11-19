@@ -31,6 +31,7 @@ from app.features.sample_data.definitions import (
 )
 from app.features.sample_data.helpers import (
     build_demographic_breakdown,
+    sample_submitted_at,
     seeded_review_status,
     should_skip_target_report,
 )
@@ -162,6 +163,22 @@ def test_target_enterprise_is_missing_for_four_completed_months_and_current_mont
         for month in pending_months
     )
     assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
+
+
+def test_sample_submissions_are_never_dated_after_generation() -> None:
+    generated_at = datetime(2026, 11, 19, 1, 18, tzinfo=UTC)
+    current_month = datetime(2026, 11, 1, tzinfo=UTC)
+    completed_month = datetime(2026, 10, 1, tzinfo=UTC)
+
+    current = [sample_submitted_at(current_month, index, generated_at) for index in range(6)]
+
+    assert all(current_month <= value < generated_at for value in current)
+    assert sample_submitted_at(completed_month, 5, generated_at) == datetime(
+        2026, 10, 23, 14, 15, tzinfo=UTC
+    )
+    assert sample_submitted_at(current_month, 0, datetime(2026, 11, 1, 0, 30, tzinfo=UTC)) == (
+        current_month
+    )
 
 
 def test_prepared_counts_cover_four_completed_months_and_current_month() -> None:

@@ -32,6 +32,7 @@ from app.features.sample_data.helpers import (
     latest_capture_time,
     month_starts,
     period_label,
+    sample_submitted_at,
     sample_uuid,
     seeded_review_status,
     should_skip_target_report,
@@ -71,9 +72,7 @@ async def create_operational_history(
             unique_count = max(1, int(base_entries * rng.uniform(0.62, 0.82)))
             peak = max(8, rng.randint(24, 96))
             current_occupancy = max(0, base_entries - exits)
-            submitted_at = month_start.replace(
-                day=min(18 + enterprise_index, 24), hour=9 + enterprise_index, minute=15
-            )
+            submitted_at = sample_submitted_at(month_start, enterprise_index, range_end)
             should_skip = should_skip_target_report(
                 month_start, current_month, enterprise.id, target.id
             )

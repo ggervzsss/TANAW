@@ -80,6 +80,17 @@ def latest_capture_time(month_start: datetime, range_end: datetime) -> datetime:
     return add_months(month_start, 1) - timedelta(hours=12)
 
 
+def sample_submitted_at(
+    month_start: datetime, enterprise_index: int, range_end: datetime
+) -> datetime:
+    """Reports go in late in their month, but never after the moment the data is generated."""
+    planned = month_start.replace(
+        day=min(18 + enterprise_index, 24), hour=9 + enterprise_index, minute=15
+    )
+    latest = max(month_start, range_end - timedelta(hours=enterprise_index + 1))
+    return min(planned, latest)
+
+
 def category_label(value: str | None) -> str:
     return {"events venue": "Events Venue", "tourism": "Tourism", "business": "Business"}.get(
         value or "", "Uncategorized"

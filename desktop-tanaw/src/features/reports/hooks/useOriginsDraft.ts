@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DailyOrigins, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalReportDraft, getMlServiceStatus } from "../../camera/services/ml-service";
-import { originsFromPayload } from "../model/daily-origins";
+import { DESKTOP_SAMPLE_PREPARED_EVENT } from "../../sync/services/cloud-sync";
+import { mergeMissingOriginDays, originsFromPayload } from "../model/daily-origins";
 import { clearLegacyBrowserDemographicDrafts, persistOriginsDraft } from "../services/report-workspace";
 
 const DRAFT_RETRY_DELAY_MS = 2000;
@@ -24,6 +25,8 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
   const [origins, setOrigins] = useState<DailyOrigins>({});
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   const reportsHistoryRef = useRef(reportsHistory);
+  // The origins as loaded; saving them back unchanged could delete a draft written meanwhile.
+  const loadedOriginsRef = useRef<DailyOrigins | null>(null);
 
   useEffect(() => {
     reportsHistoryRef.current = reportsHistory;
@@ -52,7 +55,9 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
       }
       if (cancelled) return;
       const report = activeReportId ? reportsHistoryRef.current.find((item) => item.id === activeReportId) : undefined;
-      setOrigins(stored ?? report?.origins ?? {});
+      const loaded = stored ?? report?.origins ?? {};
+      loadedOriginsRef.current = loaded;
+      setOrigins(loaded);
       setHydratedKey(draftKey);
     };
 
@@ -63,8 +68,32 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
     };
   }, [activeReportId, draftKey, isReadOnly]);
 
+  // Sample preparation confirms origins in the local draft, possibly after this report loaded.
+  // Days it added are merged in; days already here keep what is shown.
   useEffect(() => {
     if (isReadOnly || hydratedKey !== draftKey) return;
+    let cancelled = false;
+    const mergeStoredDays = async () => {
+      try {
+        const status = await getMlServiceStatus();
+        const draft = await getLocalReportDraft(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, draftKey);
+        const stored = draft ? originsFromPayload(draft.payload.origins) : undefined;
+        if (cancelled || !stored) return;
+        setOrigins((current) => mergeMissingOriginDays(current, stored));
+      } catch {
+        // The next preparation run retries.
+      }
+    };
+    const handlePrepared = () => void mergeStoredDays();
+    window.addEventListener(DESKTOP_SAMPLE_PREPARED_EVENT, handlePrepared);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(DESKTOP_SAMPLE_PREPARED_EVENT, handlePrepared);
+    };
+  }, [draftKey, hydratedKey, isReadOnly]);
+
+  useEffect(() => {
+    if (isReadOnly || hydratedKey !== draftKey || origins === loadedOriginsRef.current) return;
     const timeoutId = window.setTimeout(() => void persistOriginsDraft(draftKey, period, activeReportId, origins), DRAFT_SAVE_DELAY_MS);
     return () => window.clearTimeout(timeoutId);
   }, [activeReportId, origins, draftKey, hydratedKey, isReadOnly, period]);
