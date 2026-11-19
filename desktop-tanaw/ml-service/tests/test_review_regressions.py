@@ -5,6 +5,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import monotonic
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import cv2
@@ -41,12 +42,15 @@ def test_multiple_deferred_entries_are_durable_and_identity_does_not_recount(
     session = _session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
     manager._session_store.enterprise_occupancy()
-    manager._tracker = _FakeTracker(
-        [
-            [_track(1, (50, 20, 90, 80)), _track(2, (50, 110, 90, 180))],
-            [_track(1, (96, 20, 136, 80)), _track(2, (96, 110, 136, 180))],
-        ]
-    )  # type: ignore[assignment]
+    manager._tracker = cast(
+        Any,
+        _FakeTracker(
+            [
+                [_track(1, (50, 20, 90, 80)), _track(2, (50, 110, 90, 180))],
+                [_track(1, (96, 20, 136, 80)), _track(2, (96, 110, 136, 180))],
+            ]
+        ),
+    )
     try:
         with patch.object(manager, "_schedule_track_embedding"):
             for _ in range(2):
@@ -73,13 +77,16 @@ def test_exit_cannot_overtake_an_entry_waiting_for_reid(tmp_path: Path) -> None:
     manager._session_store.enterprise_occupancy()
     session = _session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
-    manager._tracker = _FakeTracker(
-        [
-            [_track(1, (70, 20, 110, 80))],
-            [_track(1, (92, 20, 132, 80))],
-            [_track(1, (70, 20, 110, 80))],
-        ]
-    )  # type: ignore[assignment]
+    manager._tracker = cast(
+        Any,
+        _FakeTracker(
+            [
+                [_track(1, (70, 20, 110, 80))],
+                [_track(1, (92, 20, 132, 80))],
+                [_track(1, (70, 20, 110, 80))],
+            ]
+        ),
+    )
     try:
         with (
             patch.object(manager, "_schedule_track_embedding"),
@@ -120,7 +127,7 @@ def test_report_snapshot_does_not_consume_a_concurrent_crossing(tmp_path: Path) 
 
         futures = []
 
-        def interleaved_summary(*args, **kwargs) -> dict:
+        def interleaved_summary(*args: Any, **kwargs: Any) -> dict[str, Any]:
             result = summary(*args, **kwargs)
             futures.append(pool.submit(append_later))
             assert started.wait(2)
@@ -199,7 +206,9 @@ def test_fresh_manager_restores_counts_before_publishing_startup(tmp_path: Path)
                 )
             )
         assert manager._counter.counts.entry == 5
-        assert store.load_session()["counts"]["entry"] == 5
+        saved = store.load_session()
+        assert saved is not None
+        assert saved["counts"]["entry"] == 5
     finally:
         manager.close()
 
@@ -326,7 +335,7 @@ def test_capture_open_exception_uses_reconnect_policy() -> None:
     session = _session(1, camera_id=1)
     notifications = []
 
-    def reconnect(*args) -> None:
+    def reconnect(*args: object) -> None:
         notifications.append(args)
         session.stop_event.set()
 
@@ -393,7 +402,7 @@ def test_report_failure_rolls_back_events_and_pending_identity(tmp_path: Path) -
     )
     original = store._record_report_submission
 
-    def fail_after_writing(*args, **kwargs) -> None:
+    def fail_after_writing(*args: Any, **kwargs: Any) -> None:
         original(*args, **kwargs)
         raise RuntimeError("simulated transaction failure")
 
@@ -411,12 +420,15 @@ def test_delayed_identity_cannot_reorder_occupancy_across_cameras(tmp_path: Path
     manager._session_store.enterprise_occupancy()
     session = _session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
-    manager._tracker = _FakeTracker(
-        [
-            [_track(1, (70, 20, 110, 80))],
-            [_track(1, (92, 20, 132, 80))],
-        ]
-    )  # type: ignore[assignment]
+    manager._tracker = cast(
+        Any,
+        _FakeTracker(
+            [
+                [_track(1, (70, 20, 110, 80))],
+                [_track(1, (92, 20, 132, 80))],
+            ]
+        ),
+    )
     try:
         with patch.object(manager, "_schedule_track_embedding"):
             for _ in range(2):

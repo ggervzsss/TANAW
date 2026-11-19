@@ -9,7 +9,9 @@ from app.camera.pipeline_manager import CameraPipelineRegistry
 from app.main import create_app
 
 
-def test_summary_api_supports_months_and_validates_local_calendar_boundaries(tmp_path: Path):
+def test_summary_api_supports_months_and_validates_local_calendar_boundaries(
+    tmp_path: Path,
+) -> None:
     pipelines = CameraPipelineRegistry(str(tmp_path))
     pipelines.bind_enterprise("park")
     client = TestClient(create_app(pipelines))
@@ -63,7 +65,7 @@ def test_summary_api_supports_months_and_validates_local_calendar_boundaries(tmp
         pipelines.close()
 
 
-def test_summary_api_uses_only_the_bound_enterprises_shared_ledger(tmp_path: Path):
+def test_summary_api_uses_only_the_bound_enterprises_shared_ledger(tmp_path: Path) -> None:
     pipelines = CameraPipelineRegistry(str(tmp_path))
     pipelines.bind_enterprise("park")
     service = pipelines._establishment_registry
@@ -90,7 +92,9 @@ def test_summary_api_uses_only_the_bound_enterprises_shared_ledger(tmp_path: Pat
         pipelines.close()
 
 
-def test_summaries_are_checkpointed_without_dashboard_requests_and_worker_closes(tmp_path: Path):
+def test_summaries_are_checkpointed_without_dashboard_requests_and_worker_closes(
+    tmp_path: Path,
+) -> None:
     pipelines = CameraPipelineRegistry(str(tmp_path))
     pipelines.bind_enterprise("park")
     checkpointed = Event()
@@ -120,7 +124,9 @@ def test_summaries_are_checkpointed_without_dashboard_requests_and_worker_closes
     assert not pipelines._summary_thread.is_alive()
 
 
-def test_normal_report_api_freezes_open_space_counts_and_replays_one_submission(tmp_path: Path):
+def test_normal_report_api_freezes_open_space_counts_and_replays_one_submission(
+    tmp_path: Path,
+) -> None:
     import numpy as np
 
     pipelines = CameraPipelineRegistry(str(tmp_path))

@@ -124,7 +124,8 @@ class EstablishmentReportRepository:
                     raise ValueError(
                         "This submission operation was already used for different report data."
                     )
-                return json.loads(retried["response_json"])
+                response: dict[str, Any] = json.loads(retried["response_json"])
+                return response
             existing = db.execute(
                 "select * from report_submissions where report_id=?", (report_id,)
             ).fetchone()

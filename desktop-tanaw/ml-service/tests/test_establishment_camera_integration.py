@@ -14,7 +14,7 @@ from app.storage.repositories.establishment_repository import day_bounds
 from app.tracking import ResolvedTrack
 
 
-def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_path: Path):
+def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     door = CameraProcessingManager(str(tmp_path), camera_id=1)
     area = CameraProcessingManager(str(tmp_path), camera_id=2)

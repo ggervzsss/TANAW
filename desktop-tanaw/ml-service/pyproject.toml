@@ -75,7 +75,7 @@ ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = "."
+mypy_path = [".", "tests"]
 exclude = "^(build|dist)/"
 explicit_package_bases = true
 check_untyped_defs = true
