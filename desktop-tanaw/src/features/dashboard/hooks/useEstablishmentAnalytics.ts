@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import type { Camera } from "../../../types/enterprise";
-import { getEstablishmentLive, getEstablishmentSummary, getMlServiceStatus, DEFAULT_ML_SERVICE_BASE_URL, type EstablishmentLive, type EstablishmentSummary } from "../../camera/services/ml-service";
+import {
+  getEstablishmentHourly,
+  getEstablishmentLive,
+  getEstablishmentSummary,
+  getMlServiceStatus,
+  DEFAULT_ML_SERVICE_BASE_URL,
+  type EstablishmentHourly,
+  type EstablishmentLive,
+  type EstablishmentSummary,
+} from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import type { TrendFilter } from "../types/dashboard";
 import { establishmentRange } from "../utils/establishment";
 
-type Snapshot = { key: string; summary: EstablishmentSummary; live: EstablishmentLive };
+type Snapshot = { key: string; summary: EstablishmentSummary; live: EstablishmentLive; hourly: EstablishmentHourly | null };
 
 export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter) {
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
@@ -26,12 +35,17 @@ export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter
       try {
         const status = await getMlServiceStatus();
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-        const [summary, live] = await Promise.all([getEstablishmentSummary(baseUrl, selectedRange), getEstablishmentLive(baseUrl)]);
+        const [summary, live, hourly] = await Promise.all([
+          getEstablishmentSummary(baseUrl, selectedRange),
+          getEstablishmentLive(baseUrl),
+          // Hourly activity only adds detail; the dashboard still shows daily figures without it.
+          getEstablishmentHourly(baseUrl, selectedRange).catch(() => null),
+        ]);
         if (expectedEnterprise && (summary.enterprise_id !== expectedEnterprise || live.enterprise_id !== expectedEnterprise)) {
           throw new Error("Camera data belongs to a different establishment. Reconnect the local service.");
         }
         if (!disposed) {
-          setSnapshot({ key, summary, live });
+          setSnapshot({ key, summary, live, hourly });
           setError(null);
         }
       } catch (issue) {
@@ -52,5 +66,5 @@ export function useEstablishmentAnalytics(cameras: Camera[], filter: TrendFilter
   }, [key]);
 
   const current = snapshot?.key === key ? snapshot : null;
-  return { summary: current?.summary ?? null, live: current?.live ?? null, range, error, loading: !current && !error };
+  return { summary: current?.summary ?? null, live: current?.live ?? null, hourly: current?.hourly ?? null, range, error, loading: !current && !error };
 }
