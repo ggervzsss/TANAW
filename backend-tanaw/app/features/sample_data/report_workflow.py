@@ -17,6 +17,7 @@ from app.features.reporting.models import (
     EnterpriseReportSubmission,
     FinalReport,
 )
+from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import (
     SAMPLE_CAMERA_PREFIX,
     SAMPLE_FINAL_REPORT_PREFIX,
@@ -27,8 +28,8 @@ from app.features.sample_data.definitions import (
     REPORTING_STAFF_NAME,
 )
 from app.features.sample_data.helpers import (
-    build_demographic_breakdown,
     category_label,
+    last_reported_day,
     latest_capture_time,
     month_starts,
     period_label,
@@ -87,7 +88,6 @@ async def create_operational_history(
                     }
                 )
 
-            demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
             snapshot_captured_at = latest_capture_time(month_start, range_end)
             if month_start == current_month:
                 snapshot_captured_at = range_end - timedelta(minutes=5)
@@ -137,6 +137,17 @@ async def create_operational_history(
                 continue
 
             review_status = seeded_review_status(month_start, current_month)
+            details = sample_report_details(
+                seed=f"{profile.account_id}:{period}",
+                enterprise_id=profile.enterprise_id,
+                camera_name=f"{profile.enterprise_name} Main Entrance",
+                month=month_start.date(),
+                last_day=last_reported_day(month_start, range_end),
+                entries=base_entries,
+                exits=exits,
+                unique_count=unique_count,
+                peak=peak,
+            )
 
             report = EnterpriseReportSubmission(
                 id=sample_uuid(
@@ -165,13 +176,14 @@ async def create_operational_history(
                 sync_status="synced",
                 payload_json=json.dumps(
                     {
-                        "demo": demographics,
+                        **details,
                         "metrics": {
                             "entries": base_entries,
                             "exits": exits,
                             "peak": peak,
                             "unique": unique_count,
                         },
+                        "notes": "Monthly visitor count submitted for LGU review.",
                         "period": period,
                         "source": "desktop-reporting",
                         "status": "Submitted",

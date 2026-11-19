@@ -1,7 +1,8 @@
 import json
 import random
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -20,9 +21,10 @@ from app.features.notifications.service import (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
 )
 from app.features.reporting.models import EnterpriseReportSubmission
+from app.features.reporting.schemas import DesktopReportSubmissionIngest
+from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import prepared_counts
 from app.features.sample_data.definitions import (
-    DEMOGRAPHIC_FIELDS,
     ENTERPRISES,
     LGU_ACCOUNTS,
     REPORTING_STAFF_NAME,
@@ -30,7 +32,7 @@ from app.features.sample_data.definitions import (
     AdminVisitorScenario,
 )
 from app.features.sample_data.helpers import (
-    build_demographic_breakdown,
+    last_reported_day,
     sample_submitted_at,
     seeded_review_status,
     should_skip_target_report,
@@ -242,13 +244,77 @@ async def test_sample_final_reports_require_every_participating_enterprise() -> 
     assert final_reports[0].total_unique == 160
 
 
-def test_seeded_demographics_match_unique_visitor_count() -> None:
-    unique_count = 537
-    demographics = build_demographic_breakdown(unique_count, enterprise_index=2, month_index=3)
+def _details(month: date, last_day: date) -> dict:
+    return sample_report_details(
+        seed="enterprise:October 2026",
+        enterprise_id="park_001@tanaw.sanpedro",
+        camera_name="Park Main Entrance",
+        month=month,
+        last_day=last_day,
+        entries=1214,
+        exits=1189,
+        unique_count=862,
+        peak=59,
+    )
 
-    assert set(demographics) == set(DEMOGRAPHIC_FIELDS)
-    assert all(value.isdigit() for value in demographics.values())
-    assert sum(int(value) for value in demographics.values()) == unique_count
+
+def test_sample_report_payload_passes_desktop_submission_validation() -> None:
+    details = _details(date(2026, 10, 1), date(2026, 10, 31))
+
+    accepted = DesktopReportSubmissionIngest(
+        submissionId=UUID("8f0c8d55-8a3e-4a55-9a49-8d7c1f2ad7f1"),
+        reportId="SAMPLE-REP-261001",
+        period="October 2026",
+        submittedAt=datetime(2026, 11, 2, 1, tzinfo=UTC),
+        entries=1214,
+        exits=1189,
+        peakOccupancy=59,
+        uniqueCount=862,
+        payload={**details, "metrics": {"entries": 1214, "exits": 1189, "peak": 59, "unique": 862}},
+    )
+
+    assert accepted.uniqueCount == 862
+
+
+def test_sample_report_fills_every_day_with_visitors_and_origins() -> None:
+    details = _details(date(2026, 10, 1), date(2026, 10, 31))
+    days = details["counting"]["days"]
+
+    assert [day["business_date"] for day in days] == [f"2026-10-{day:02d}" for day in range(1, 32)]
+    assert sorted(details["origins"]) == [day["business_date"] for day in days]
+    assert sum(day["unique_count"] for day in days) == 862
+    assert sum(day["entries"] for day in days) == 1214
+    assert sum(day["exits"] for day in days) == 1189
+    assert max(day["peak_occupancy"] for day in days) == 59
+    for day in days:
+        origins = details["origins"][day["business_date"]]
+        assert day["male_count"] + day["female_count"] == day["unique_count"]
+        assert sum(origins[origin]["male"] for origin in origins) <= day["male_count"]
+        assert sum(origins[origin]["female"] for origin in origins) <= day["female_count"]
+        assert day["exits"] <= day["entries"]
+    assert (
+        sum(
+            int(value)
+            for key, value in details["demo"].items()
+            if key.startswith(("thisProv", "otherProv", "foreign"))
+        )
+        == 862
+    )
+    assert details["var1"]["thisCityMale"] == details["demo"]["thisCityMale"]
+
+
+def test_report_for_the_month_in_progress_covers_only_elapsed_days() -> None:
+    generated_at = datetime(2026, 11, 19, 1, 18, tzinfo=UTC)
+    month_start = datetime(2026, 11, 1, tzinfo=UTC)
+    last_day = last_reported_day(month_start, generated_at)
+    details = _details(date(2026, 11, 1), last_day)
+
+    assert last_day == date(2026, 11, 18)
+    assert details["counting"]["days"][-1]["business_date"] == "2026-11-18"
+    assert details["counting"]["from_at"] == "2026-11-01T00:00:00+08:00"
+    assert details["counting"]["to_at"] == "2026-12-01T00:00:00+08:00"
+    assert last_reported_day(datetime(2026, 10, 1, tzinfo=UTC), generated_at) == date(2026, 10, 31)
+    assert last_reported_day(month_start, datetime(2026, 11, 1, 1, tzinfo=UTC)) == date(2026, 11, 1)
 
 
 def test_staff_notification_reports_include_current_submission_and_resubmission() -> None:

@@ -318,3 +318,26 @@ def test_months_where_recent_days_reach_back_get_no_origins_for_those_days(tmp_p
     origins = sample_origins(service, "November 2026")
     assert max(origins) == "2026-11-28"
     assert ReportDraftRepository(service.database).get("period:December 2026") is None
+
+
+def test_each_month_holds_only_its_own_days(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    drafts = ReportDraftRepository(service.database)
+    entered = {
+        "otherCity": {"male": 1, "female": 0},
+        "otherProvince": {"male": 0, "female": 0},
+        "foreign": {"male": 0, "female": 0},
+    }
+    # A draft written before the fill was limited to its month.
+    drafts.save(
+        "period:October 2026",
+        "October 2026",
+        {"origins": {"2026-10-02": entered, "2026-11-02": entered}, "version": 2},
+    )
+    prepare(service, "November 2026", "SAMPLE-REP-NOV")
+    prepare(service, "October 2026", "SAMPLE-REP-OCT")
+
+    october = sample_origins(service, "October 2026")
+    assert sorted(october) == [f"2026-10-{day:02d}" for day in range(1, 32)]
+    assert october["2026-10-02"] == entered
+    assert max(sample_origins(service, "November 2026")) == "2026-11-12"
