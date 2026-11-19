@@ -50,8 +50,9 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
     if (initializedMapInstanceRef.current !== map) {
       const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
       if (!bounds.isValid()) return;
-      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, immediate: true });
+      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen, immediate: true });
       initializedMapInstanceRef.current = map;
+      lastCameraTargetRef.current = cameraTarget.type === "citywide" ? cameraTarget : null;
       onReady();
     }
     if (lastCameraTargetRef.current === cameraTarget) return;
@@ -66,6 +67,10 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
       const enterprise = mapEnterprises.find((item) => item.id === cameraTarget.enterpriseId);
       if (!enterprise) return;
       motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng] }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
+    } else if (cameraTarget.fit) {
+      const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
+      if (!bounds.isValid()) return;
+      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
     } else {
       motionController.clearPendingSelection();
     }

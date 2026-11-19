@@ -345,7 +345,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         </div>
       </div>
 
-      <AnimatePresence>{showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} role={role} onNavigate={() => setShowMobileNav(false)} />}</AnimatePresence>
+      <AnimatePresence>{showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} onNavigate={() => setShowMobileNav(false)} />}</AnimatePresence>
     </div>
   );
 }

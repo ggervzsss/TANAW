@@ -4,7 +4,7 @@ import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getEstablishmentSu
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
-import { notifyError } from "../../toasts/services/toast-service";
+import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
 import {
@@ -102,7 +102,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     const reportDemo = report.demo ?? emptyDemo();
     const error = validateDemographicAllocation(metrics, reportDemo);
     if (error) {
-      notifyError(error);
+      notifyWarning(error);
       handlePreviewReport(report);
       return;
     }
@@ -141,12 +141,12 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     if (submitting.current || isReadOnly) return;
     const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, days, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
     if (error) {
-      notifyError(error);
+      notifyWarning(error);
       return;
     }
     const counting = displayedMetrics.counting;
     if (!counting) {
-      notifyError("Refresh the period to load its reconciled snapshot.");
+      notifyWarning("Refresh the period to load its reconciled counts before submitting.");
       return;
     }
     submitting.current = true;
@@ -155,7 +155,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     if (counting.enterprise_id !== enterpriseId) {
       submitting.current = false;
       setIsSubmitting(false);
-      notifyError("Reconnect this establishment before submitting.");
+      notifyWarning("Reconnect this establishment before submitting.");
       return;
     }
     const statusLabel = activeReportId ? "Resubmitted" : "Submitted";
@@ -171,6 +171,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         ],
       };
     const { reportId, requestId, auditTrail } = pendingOperation.current;
+    const toastId = `report-submission:${reportId}`;
     try {
       const serviceStatus = await getMlServiceStatus();
       const base = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
@@ -195,15 +196,21 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       });
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       pendingOperation.current = null;
-      // Reflect the saved server snapshot immediately, including when upload fails.
-      let report = reportFromLocalSubmission({ ...submission, notes, sync_status: submission.sync_status, synced_at: null, camera_breakdown: submission.camera_breakdown }, timeFormat);
+      // Keep the durable local record available even if the online submission fails.
+      const report = reportFromLocalSubmission({ ...submission, notes, synced_at: null }, timeFormat);
       setReportsHistory((current) => upsertReport(current, report));
-      const cloudError = await syncSubmittedReportToCloud(reportId);
-      if (!cloudError) {
-        report = { ...report, syncStatus: "synced" };
-        setReportsHistory((current) => upsertReport(current, report));
+      const cloudResult = await syncSubmittedReportToCloud(submission.report_id, submission.submission_id);
+      if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      const reference = submission.report_id;
+      if (cloudResult === "confirmed") {
+        setReportsHistory((current) => upsertReport(current, { ...report, syncStatus: "synced" }));
+        notifySuccess(`Report ${activeReportId ? "resubmitted" : "submitted"} successfully. Reference ${reference}.`, toastId);
       } else {
-        notifyError(`Report saved on this device and waiting to upload: ${cloudError}`);
+        if (cloudResult === "rejected") {
+          notifyError(`TANAW could not upload report ${reference}. A copy is saved on this device. Check Reports History for its upload status.`, toastId);
+        } else {
+          notifyWarning(`Report ${reference} was saved on this device. TANAW will retry the upload.`, toastId);
+        }
         window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
       }
       try {
@@ -212,12 +219,13 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         /* The submission is already durable. */
       }
       setShowConfirm(false);
-      setActiveReportId(reportId);
+      setActiveReportId(reference);
       setRevisionMetrics(null);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
-    } catch (issue) {
-      notifyError(issue instanceof Error ? issue.message : "Unable to save the report.");
+    } catch {
+      if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      notifyError("Report submission failed. Please try again.", toastId);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
     } finally {

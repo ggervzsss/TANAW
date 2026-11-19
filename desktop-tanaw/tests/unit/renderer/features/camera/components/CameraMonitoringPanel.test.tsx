@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../../../../src/types/enterprise";
 import { EMPTY_ML_COUNTS, type MlAreaState, type MlHealth, type MlServiceStatus } from "../../../../../../src/features/camera/services/ml-service";
 import { CameraMonitoringPanel } from "../../../../../../src/features/camera/components/CameraMonitoringPanel";
+import { CameraLiveMetrics } from "../../../../../../src/features/camera/components/CameraLiveMetrics";
 import type { CameraPreviewState } from "../../../../../../src/features/camera/components/CameraVideoPreview";
 
-describe("CameraMonitoringPanel", () => {
+describe("CameraLiveMetrics", () => {
   it("does not fabricate a zero visitor estimate when health has not supplied one", () => {
-    const markup = renderPanel({ health: null, counts: { ...EMPTY_ML_COUNTS, entry: null, exit: null, occupancy: null } });
+    const counts = { ...EMPTY_ML_COUNTS, entry: null, exit: null, occupancy: null };
+    const markup = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={counts} health={null} />);
     expect(markup).not.toContain(">0</div>");
+    expect(markup).toContain("Unavailable");
   });
   it("uses the zone visitor estimate and keeps tracking gaps internal", () => {
     const area: MlAreaState = {
@@ -23,43 +26,63 @@ describe("CameraMonitoringPanel", () => {
       unique_visitors_available: true,
     };
     const activeCam: Camera = { ...camera, analysisMode: "open_space", openSpace: null };
-    const markup = renderPanel({ activeCam, area, health: { estimated_unique_count: 99 } as MlHealth });
+    const markup = renderToStaticMarkup(<CameraLiveMetrics activeCam={activeCam} area={area} runtimeReady counts={EMPTY_ML_COUNTS} health={{ estimated_unique_count: 99 } as MlHealth} />);
     expect(markup).toContain("Unique Visitors");
     expect(markup).toContain(">7</div>");
     expect(markup).not.toContain(">99</div>");
     expect(markup).not.toContain("Tracking gaps");
     expect(markup).toContain("today in this zone");
-    const unavailable = renderPanel({ activeCam, area: { ...area, unique_visitors: null, unique_visitors_available: false } });
+    const unavailable = renderToStaticMarkup(<CameraLiveMetrics activeCam={activeCam} area={{ ...area, unique_visitors: null, unique_visitors_available: false }} runtimeReady counts={EMPTY_ML_COUNTS} health={null} />);
     expect(unavailable).toContain("Identification unavailable");
     expect(unavailable).not.toContain(">0</div>");
   });
-  it("labels the status and control block below Live Metrics", () => {
-    const markup = renderToStaticMarkup(
-      <CameraMonitoringPanel
-        activeCam={camera}
-        counts={EMPTY_ML_COUNTS}
-        health={null}
-        serviceStatus={null}
-        serviceError={null}
-        error={null}
-        isRestartingService={false}
-        isStarting={false}
-        isStopping={false}
-        isTesting={false}
-        previewState="connecting"
-        onRestartService={() => undefined}
-        onStartProcessing={() => undefined}
-        onStopProcessing={() => undefined}
-        onTestConnection={() => undefined}
-      />,
+  it.each([
+    { occupancy: 0, entry: 500, exit: 500, visitors: 400, tone: "calm" },
+    { occupancy: 3, entry: 20, exit: 20, visitors: 30, tone: "moderate" },
+    { occupancy: 3, entry: 0, exit: 20, visitors: 30, tone: "calm" },
+    { occupancy: 3, entry: 20, exit: 0, visitors: 30, tone: "calm" },
+    { occupancy: 3, entry: 20, exit: 20, visitors: 0, tone: "calm" },
+    { occupancy: 14, entry: 20, exit: 20, visitors: 0, tone: "high" },
+    { occupancy: null, entry: 20, exit: 20, visitors: 30, tone: "muted" },
+  ])("combines occupancy $occupancy, crossings $entry/$exit, and visitors $visitors into $tone", ({ occupancy, entry, exit, visitors, tone }) => {
+    const counts = { ...EMPTY_ML_COUNTS, occupancy, entry, exit, running: true, status: "running" };
+    const health = { estimated_unique_count: visitors } as MlHealth;
+    const markup = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={counts} health={health} />);
+
+    expect(markup).toContain(`data-ambience-tone="${tone}"`);
+  });
+  it("uses muted, calm, and attention tones for unavailable, paused, and reconnecting readings", () => {
+    const counts = { ...EMPTY_ML_COUNTS, occupancy: 25 };
+    const unavailable = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady={false} counts={counts} health={null} />);
+    const paused = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={counts} health={null} />);
+    const reconnecting = renderToStaticMarkup(
+      <CameraLiveMetrics activeCam={camera} runtimeReady counts={{ ...counts, running: true, status: "reconnecting" }} health={null} />,
     );
 
+    expect(unavailable).toContain('data-ambience-tone="muted"');
+    expect(paused).toContain('data-ambience-tone="calm"');
+    expect(reconnecting).toContain('data-ambience-tone="attention"');
+  });
+  it("keeps an observed zero and suppresses cached values when runtime is unavailable", () => {
+    const counts = { ...EMPTY_ML_COUNTS, occupancy: 0, entry: 3, exit: 3 };
+    const live = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={counts} health={null} />);
+    const unavailable = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady={false} counts={counts} health={null} />);
+
+    expect(live).toContain(">0</div>");
+    expect(unavailable).not.toContain(">0</div>");
+    expect(unavailable).not.toContain(">3</div>");
+  });
+});
+
+describe("CameraMonitoringPanel", () => {
+  it("keeps service diagnostics available in camera settings", () => {
+    const markup = renderPanel({});
+
     expect(markup).toContain("SYSTEM STATUS &amp; CONTROLS");
-    expect(markup.indexOf("Live Metrics")).toBeLessThan(markup.indexOf("SYSTEM STATUS &amp; CONTROLS"));
+    expect(markup).not.toContain("Live Metrics");
     expect(markup.indexOf("SYSTEM STATUS &amp; CONTROLS")).toBeLessThan(markup.indexOf("ML Service Offline"));
     expect(markup).not.toMatch(/> Service<\/button>/);
     expect(markup).toContain("Test");
-    expect(markup).toContain("Start");
     expect(markup).not.toContain("Profile pending");
     expect(markup).not.toContain("FPS adaptive");
     expect(markup).not.toContain("Frame Telemetry Idle");
@@ -72,7 +95,6 @@ describe("CameraMonitoringPanel", () => {
     });
     expect(failedMarkup).toMatch(/> Service<\/button>/);
     expect(failedMarkup).toMatch(/> Test<\/button>/);
-    expect(failedMarkup).toMatch(/> Start<\/button>/);
 
     const recoveredMarkup = renderPanel({
       health: { status: "ok", running: false } as MlHealth,
@@ -80,7 +102,6 @@ describe("CameraMonitoringPanel", () => {
     });
     expect(recoveredMarkup).not.toMatch(/> Service<\/button>/);
     expect(recoveredMarkup).toMatch(/> Test<\/button>/);
-    expect(recoveredMarkup).toMatch(/> Start<\/button>/);
 
     const uncheckedStoppedMarkup = renderPanel({
       serviceStatus: baseServiceStatus,
@@ -114,9 +135,6 @@ describe("CameraMonitoringPanel", () => {
     });
 
     expect(markup).toContain("Camera Starting");
-    expect(markup).toContain("Starting...");
-    expect(markup).toContain("disabled");
-    expect(markup).not.toContain(">Start<");
   });
 
   it("reports model warmup as starting instead of processing", () => {
@@ -162,7 +180,6 @@ describe("CameraMonitoringPanel", () => {
 
 function renderPanel({
   activeCam = camera,
-  area = null,
   counts = EMPTY_ML_COUNTS,
   error = null,
   health = null,
@@ -172,7 +189,6 @@ function renderPanel({
   serviceStatus = null,
 }: {
   activeCam?: Camera;
-  area?: MlAreaState | null;
   counts?: typeof EMPTY_ML_COUNTS;
   error?: string | null;
   health?: MlHealth | null;
@@ -184,7 +200,6 @@ function renderPanel({
   return renderToStaticMarkup(
     <CameraMonitoringPanel
       activeCam={activeCam}
-      area={area}
       counts={counts}
       health={health}
       serviceStatus={serviceStatus}
@@ -192,12 +207,9 @@ function renderPanel({
       error={error}
       isRestartingService={false}
       isStarting={isStarting}
-      isStopping={false}
       isTesting={false}
       previewState={previewState}
       onRestartService={() => undefined}
-      onStartProcessing={() => undefined}
-      onStopProcessing={() => undefined}
       onTestConnection={() => undefined}
     />,
   );

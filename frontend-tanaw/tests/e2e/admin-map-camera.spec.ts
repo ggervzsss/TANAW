@@ -356,7 +356,7 @@ test("keeps a panned preview inside the viewport and respects reduced motion", a
   await expect(popup.getByRole("button", { name: "View Details" })).toBeVisible();
 });
 
-test("fits the city on entry and keeps the camera when filters are cleared", async ({ page }) => {
+test("fits the city on entry and on both All Barangays actions", async ({ page }) => {
   test.setTimeout(60_000);
   await configureAdminMapSession(page);
   const initial = await readSettledMapGeometry(page);
@@ -372,71 +372,27 @@ test("fits the city on entry and keeps the camera when filters are cleared", asy
   const operationsLink = page.getByRole("link", { name: "Operations Center" });
   const mapViewLink = page.getByRole("link", { name: "Map View" });
   const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
-  const activeUnderline = mapViewLink.locator("[data-topbar-active-underline='true']");
-  await expect(activeUnderline).toHaveCount(1);
-  await expect(glassIndicator).toHaveCount(1);
-  expect(await glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
-  await expect(glassIndicator).toHaveCSS("opacity", "0");
-  await expect(page.locator("[data-topbar-active-surface], [data-topbar-liquid-layer], [data-topbar-liquid-bridge]")).toHaveCount(0);
-  await mapViewLink.hover();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "mapview");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-origin", "droplet-center");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "raf-spring");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-geometry", "continuous-capsule");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-shape", "continuous-waterdrop");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
-  const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
-  await expect(refractiveEdge).toHaveCount(1);
-  const refractionTrack = page.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
-  await expect(refractionTrack).toHaveCSS("filter", /tanaw-topbar-lens/);
-  await expect(glassIndicator).toHaveCSS("border-top-width", "1px");
-  await expect(glassIndicator).toHaveCSS("clip-path", "none");
-  await expect(activeUnderline).toHaveCount(1);
-  await page.waitForTimeout(480);
-  const mapViewBox = await mapViewLink.boundingBox();
-  const activityHistoryBox = await activityHistoryLink.boundingBox();
-  expect(mapViewBox).not.toBeNull();
-  expect(activityHistoryBox).not.toBeNull();
-  await activityHistoryLink.hover();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "activity-history");
-  await page.waitForTimeout(260);
-  const stretchedGlassBox = await glassIndicator.boundingBox();
-  expect(stretchedGlassBox).not.toBeNull();
-  const mapViewCenter = mapViewBox!.x + mapViewBox!.width / 2;
-  const activityHistoryCenter = activityHistoryBox!.x + activityHistoryBox!.width / 2;
-  const glidingCenter = stretchedGlassBox!.x + stretchedGlassBox!.width / 2;
-  const fullUnionWidth = activityHistoryBox!.x + activityHistoryBox!.width - mapViewBox!.x;
-  expect(glidingCenter).toBeGreaterThan(mapViewCenter);
-  expect(glidingCenter).toBeLessThan(activityHistoryCenter);
-  expect(stretchedGlassBox!.width).toBeLessThan(fullUnionWidth * 0.85);
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
-  await page.mouse.move((mapViewBox!.x + mapViewBox!.width + activityHistoryBox!.x) / 2, activityHistoryBox!.y + activityHistoryBox!.height / 2);
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "gap");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "gap:mapview:activity-history");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-deformation", "1.000");
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
+  const hoverIndicator = page.locator("[data-topbar-glass-hover]");
+  await expect(mapViewLink).toHaveAttribute("aria-current", "page");
+  await expect(glassIndicator).toBeVisible();
+  await expect(page.locator("[data-topbar-active-underline]")).toHaveCount(0);
+
+  const selectedBox = await glassIndicator.boundingBox();
+  expect(selectedBox).not.toBeNull();
   await operationsLink.hover();
-  const operationsGlass = glassIndicator;
-  await expect(operationsGlass).toHaveAttribute("data-topbar-glass-target", "operations");
-  await page.waitForTimeout(720);
-  const operationsBox = await operationsLink.boundingBox();
-  const operationsGlassBox = await operationsGlass.boundingBox();
-  expect(operationsGlassBox!.x + operationsGlassBox!.width / 2).toBeCloseTo(operationsBox!.x + operationsBox!.width / 2, 0);
-  await expect(operationsLink).not.toHaveCSS("transform", /matrix/);
-  expect(Number.parseFloat(await operationsLink.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThan(14);
+  await expect(hoverIndicator).toHaveCSS("opacity", "1");
+  expect(await glassIndicator.boundingBox()).toEqual(selectedBox);
+  await expect(operationsLink).toHaveCSS("transform", "none");
+
   await page.mouse.move(20, 180);
-  await expect.poll(() => glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
-  await expect(glassIndicator).toHaveCSS("opacity", "0");
-  await expect(activeUnderline).toHaveCount(1);
-  await activityHistoryLink.focus();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "activity-history");
+  await expect(hoverIndicator).toHaveCSS("opacity", "0");
+  await mapViewLink.focus();
   await page.keyboard.press("Tab");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "operations");
-  await activityHistoryLink.hover();
+  await expect(activityHistoryLink).toBeFocused();
+  await expect(activityHistoryLink).toHaveCSS("outline-style", "solid");
+  await page.keyboard.press("Tab");
+  await expect(operationsLink).toBeFocused();
+  await expect(mapViewLink).toHaveAttribute("aria-current", "page");
   await activityHistoryLink.click();
   await expect(page).toHaveURL(/\/admin\/activity-history$/);
   await expect(activityHistoryLink).toHaveAttribute("aria-current", "page");
@@ -474,7 +430,9 @@ test("fits the city on entry and keeps the camera when filters are cleared", asy
   await backToDirectory.click();
   await expect(barangaySelect).toContainText("All Barangays");
   await page.waitForTimeout(900);
-  expectSameCamera(await readSettledMapGeometry(page), filteredCamera);
+  const backCamera = await readSettledMapGeometry(page);
+  expect(backCamera.boundary.width).toBeLessThan(filteredCamera.boundary.width);
+  expectSameCamera(backCamera, initial);
 
   await barangaySelect.click();
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
@@ -484,7 +442,9 @@ test("fits the city on entry and keeps the camera when filters are cleared", asy
   await page.getByRole("option", { name: /All Barangays/ }).click();
   await expect(barangaySelect).toContainText("All Barangays");
   await page.waitForTimeout(900);
-  expectSameCamera(await readSettledMapGeometry(page), dropdownCamera);
+  const dropdownReset = await readSettledMapGeometry(page);
+  expect(dropdownReset.boundary.width).toBeLessThan(dropdownCamera.boundary.width);
+  expectSameCamera(dropdownReset, backCamera);
 
   await barangaySelect.click();
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
@@ -528,6 +488,24 @@ test("fits the city on entry and keeps the camera when filters are cleared", asy
   await expect(page.getByRole("button", { name: "Fit all barangays" })).toHaveCount(0);
   await page.locator("#spatial-directory-panel").getByRole("button", { name: "Reset map view" }).click();
   await expect.poll(async () => Math.abs((await readMapGeometry(page)).boundary.left - initial.boundary.left)).toBeLessThan(1);
+
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.getByRole("button", { name: "Open visitor insights" }).click();
+  const insights = page.locator(".tanaw-visitor-insights");
+  await expect(insights).toHaveAttribute("data-panel-state", "open");
+  await barangaySelect.click();
+  await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
+  await readSettledMapGeometry(page);
+  await backToDirectory.click();
+  const availableRight = (await insights.boundingBox())!.x - 12;
+  await expect.poll(async () => {
+    const { boundary, directoryRight, map } = await readMapGeometry(page);
+    return Math.max(directoryRight + 20 - boundary.left, boundary.right - availableRight, map.top + 26 - boundary.top, boundary.bottom - (map.bottom - 26));
+  }).toBeLessThan(0);
+  const withPanels = await readSettledMapGeometry(page);
+  await expect(map.locator("path.tanaw-boundary-path")).toHaveCount(28);
+  await page.getByRole("button", { name: "Close visitor insights" }).click();
+  expectSameCamera(await readSettledMapGeometry(page), withPanels);
 });
 
 test("keeps dark-mode boundaries legible and fits a selected barangay beside the directory", async ({ page }, testInfo) => {

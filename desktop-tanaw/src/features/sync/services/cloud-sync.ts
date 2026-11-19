@@ -150,18 +150,30 @@ export async function syncDesktopReportSubmissions(limit = 100) {
   return syncedCount;
 }
 
-export async function syncDesktopReportSubmission(reportId: string) {
+export async function syncDesktopReportSubmission(reportId: string, submissionId: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.sync_status !== "synced");
-  if (!submission) return 0;
+  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.submission_id === submissionId);
+  if (!submission) return false;
+  if (submission.sync_status === "synced") return true;
 
   await syncReportSubmission(baseUrl, submission);
   await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
-  return 1;
+  return true;
 }
 
-async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+const reportUploads = new Map<string, Promise<void>>();
+
+function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+  const key = submission.submission_id;
+  const existing = reportUploads.get(key);
+  if (existing) return existing;
+  const upload = uploadReportSubmission(baseUrl, submission).finally(() => reportUploads.delete(key));
+  reportUploads.set(key, upload);
+  return upload;
+}
+
+async function uploadReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
   const metrics = reportMetricsFromSubmission(submission);
   const payload = {
     submissionId: submission.submission_id,

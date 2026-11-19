@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
 import { useAuthStore } from "../../login/stores/auth-store";
+import { notifyError, notifyInfo, notifySuccess } from "../../toasts/services/toast-service";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   getMlCameraStates,
@@ -127,6 +128,12 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
         if (isStartAction(action) && deadline !== undefined && now >= deadline && !isAcceptedCameraStartSettled(payload, cameraId)) {
           expiredStartIds.add(cameraId);
           delete cameraStartDeadlinesRef.current[cameraId];
+          notifyError("Camera did not start in time. Check its connection and try again.", `camera-start:${cameraId}`);
+        } else if (action === "starting" && deadline !== undefined && isAcceptedCameraStartSettled(payload, cameraId)) {
+          delete cameraStartDeadlinesRef.current[cameraId];
+          const state = nextStates.find((item) => item.camera_id === cameraId);
+          if (isCameraPreviewReady(state)) notifySuccess("Camera counting started.", `camera-start:${cameraId}`);
+          else notifyError("Camera could not start. Check Camera Setup for details.", `camera-start:${cameraId}`);
         }
       }
 
@@ -253,6 +260,8 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
       const result = await testCameraConnection(mlBaseUrl, activeCam, storageKey);
       updateCameraStatus(activeCam.id, result.ok ? "online" : "offline");
       setCameraError(activeCam.id, result.ok ? null : result.message);
+      if (result.ok) notifySuccess("Camera connection verified.", `camera-connection:${activeCam.id}`);
+      else notifyError("Camera connection failed. Check the address and credentials.", `camera-connection:${activeCam.id}`);
       const chosen = result.ok ? result.stream_url : null;
       // Keep the stream address that answered, so the next start uses it directly.
       if (chosen && chosen !== activeCam.rtsp) {
@@ -261,6 +270,7 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
     } catch (error) {
       updateCameraStatus(activeCam.id, "error");
       setCameraError(activeCam.id, toErrorMessage(error));
+      notifyError("The camera connection test failed. Check Camera Setup and try again.", `camera-connection:${activeCam.id}`);
     } finally {
       setCameraAction(activeCam.id);
     }
@@ -272,11 +282,17 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
     try {
       await startCameraProcessing(mlBaseUrl, activeCam, storageKey);
       setCameraAction(activeCam.id, "starting");
+      notifyInfo("Start requested. Waiting for the camera to connect.", `camera-start:${activeCam.id}`);
       void refreshCameraStates().catch(() => undefined);
       return true;
     } catch (error) {
       const pending = handleCameraStartFailure(activeCam.id, error);
-      if (pending) void refreshCameraStates().catch(() => undefined);
+      if (pending) {
+        notifyInfo("TANAW is checking whether the camera started.", `camera-start:${activeCam.id}`);
+        void refreshCameraStates().catch(() => undefined);
+      } else {
+        notifyError("Camera could not start. Check Camera Setup for details.", `camera-start:${activeCam.id}`);
+      }
       return pending;
     }
   }, [activeCam, beginCameraStart, handleCameraStartFailure, mlBaseUrl, refreshCameraStates, setCameraAction, storageKey]);
@@ -290,10 +306,12 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
       await stopCameraProcessing(mlBaseUrl, activeCam.id);
       updateCameraStatus(activeCam.id, "stopped");
       bumpStreamVersion(activeCam.id);
-      await refreshCameraStates();
+      notifySuccess("Camera counting stopped.", `camera-start:${activeCam.id}`);
+      await refreshCameraStates().catch(() => undefined);
       return true;
     } catch (error) {
       setCameraError(activeCam.id, toErrorMessage(error));
+      notifyError("Camera could not stop. Check Camera Setup and try again.", `camera-start:${activeCam.id}`);
       return false;
     } finally {
       setCameraAction(activeCam.id);
@@ -305,11 +323,14 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
     setServiceError(null);
     try {
       const nextStatus = await restartMlService();
+      if (!nextStatus.running) throw new Error(nextStatus.error ?? "The camera service did not restart.");
       adoptServiceStatus(nextStatus);
       resetRuntimeState(false);
       setCameras((current) => updateCamerasWhenChanged(current, (camera) => (isRuntimeStatus(camera.status) ? { ...camera, status: "stopped" } : camera)));
+      notifySuccess("Camera service restarted.");
     } catch (error) {
       setServiceError(toErrorMessage(error));
+      notifyError("Camera service could not restart. Check the service status and try again.");
     } finally {
       setIsRestartingService(false);
     }

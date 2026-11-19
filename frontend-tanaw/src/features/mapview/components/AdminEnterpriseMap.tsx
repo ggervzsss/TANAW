@@ -107,7 +107,10 @@ export function AdminEnterpriseMap() {
         isEnterpriseLoading={enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading}
         isMapReady={isInitialCameraReady}
         mapEnterprises={mapEnterprises}
-        onClearBarangay={clearBarangaySelection}
+        onClearBarangay={(reason) => {
+          revealMapSelection("barangay");
+          clearBarangaySelection(reason);
+        }}
         onCollapseChange={changeDirectoryState}
         onResetView={fitCitywide}
         onRetry={() => {

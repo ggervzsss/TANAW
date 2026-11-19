@@ -2,8 +2,9 @@ import { Check, Code2, Gauge } from "lucide-react";
 import { useState } from "react";
 import { Card } from "../../components/Card";
 import { DesignSwitch } from "../../components/DesignSwitch";
-import { DEVICE_PERFORMANCE_OPTIONS, devicePerformanceLabel, useDevicePerformanceProfile, type DevicePerformanceProfile } from "../camera/model/device-performance";
+import { DEVICE_PERFORMANCE_OPTIONS, devicePerformanceLabel, readDevicePerformanceProfile, useDevicePerformanceProfile, type DevicePerformanceProfile } from "../camera/model/device-performance";
 import { applyDevicePerformanceProfile, DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus } from "../camera/services/ml-service";
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../toasts/services/toast-service";
 import { updateDeveloperSettings, useDeveloperSettings } from "./developer-settings";
 
 type ApplyState = { kind: "idle" } | { kind: "applying" } | { kind: "done"; message: string } | { kind: "error"; message: string };
@@ -27,11 +28,16 @@ export function DeveloperSettingsView() {
             ? `Using ${label}. Cameras use it when they start.`
             : `Using ${label}. Restarting ${restarted === 1 ? "1 running camera" : `${restarted} running cameras`} with it.`,
       });
-    } catch (error) {
-      setApplyState({
-        kind: "error",
-        message: `Saved ${label} for this computer, but running cameras could not be restarted (${error instanceof Error ? error.message : "camera service unavailable"}). Restart them from Camera Setup to use it.`,
-      });
+      if (restarted > 0) notifyInfo(`${label} selected. The camera service is restarting running cameras.`, "performance-profile");
+      else notifySuccess(`Performance profile applied. Using ${label}.`, "performance-profile");
+    } catch {
+      const selected = readDevicePerformanceProfile() === next;
+      const message = selected
+        ? `${label} selected. Running cameras could not restart. Restart them from Camera Setup to apply the change.`
+        : "Performance profile could not be changed. Check the camera service and try again.";
+      setApplyState({ kind: "error", message });
+      if (selected) notifyWarning(message, "performance-profile");
+      else notifyError(message, "performance-profile");
     }
   };
 

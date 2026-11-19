@@ -109,7 +109,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="dashboard" />
+                <EnterpriseShell activeView="dashboard" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -119,7 +119,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="dashboard" />
+                <EnterpriseShell activeView="dashboard" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -129,7 +129,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="cameras" />
+                <EnterpriseShell activeView="cameras" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -139,7 +139,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="reports" />
+                <EnterpriseShell activeView="reports" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -149,7 +149,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="profile" />
+                <EnterpriseShell activeView="profile" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -159,7 +159,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="security" />
+                <EnterpriseShell activeView="security" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -169,7 +169,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="notifications" />
+                <EnterpriseShell activeView="notifications" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -179,7 +179,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="tickets" />
+                <EnterpriseShell activeView="tickets" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -189,7 +189,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="display-preferences" />
+                <EnterpriseShell activeView="display-preferences" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -199,7 +199,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="developer-settings" />
+                <EnterpriseShell activeView="developer-settings" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
@@ -209,7 +209,7 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell initialView="help" />
+                <EnterpriseShell activeView="help" />
               </RendererReadyBoundary>
             </RequireAuth>
           }

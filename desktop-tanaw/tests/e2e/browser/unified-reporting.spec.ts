@@ -36,6 +36,8 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   const uploads: Record<string, unknown>[] = [];
   const drafts = new Map<string, unknown>();
   let uploadAvailable = false;
+  let uploadWait = Promise.resolve();
+  let localSaveAvailable = true;
   let sampleRequests = 0;
   await page.clock.install({ time: new Date("2026-11-02T02:00:00Z") });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -45,10 +47,11 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   });
   await page.route("**/auth/session", (route) => route.fulfill({ status: signedIn ? 200 : 401, json: signedIn ? { token: "report-token", user } : { detail: "Sign in" } }));
   await page.route("**/auth/me", (route) => route.fulfill({ json: user }));
-  await page.route("**/operational/**", (route) => {
+  await page.route("**/operational/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/desktop/report-submissions")) {
       uploads.push(route.request().postDataJSON());
+      await uploadWait;
       return route.fulfill({ status: uploadAvailable ? 202 : 503, json: uploadAvailable ? {} : { detail: "Offline test" } });
     }
     if (revision && path.endsWith("/reports/intake"))
@@ -112,6 +115,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
     if (path === "/reports/local-submit") {
       const body = JSON.parse(request.body!);
       submissions.push(body);
+      if (!localSaveAvailable) return reply({ detail: "Local save unavailable" }, 503);
       expect(body.expected_snapshot_version).toBe(counting.snapshot_version);
       expect(body.metrics).toEqual(metrics);
       const reportPayload = { ...body.payload, counting, metrics: payloadMetrics };
@@ -142,6 +146,8 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
     enableUpload: () => {
       uploadAvailable = true;
     },
+    setLocalSaveAvailable: (available: boolean) => { localSaveAvailable = available; },
+    holdUpload: (until: Promise<void>) => { uploadWait = until; },
   };
 }
 
@@ -176,6 +182,8 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect.poll(() => state.submissions.length).toBe(1);
     await expect.poll(() => state.getSaved()?.sync_status).toBe("pending_cloud_sync");
     await expect(page.getByRole("button", { name: "Yes, Submit", exact: true })).toHaveCount(0);
+    await expect(page.locator(".tanaw-toast--warning")).toContainText("was saved on this device");
+    await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" })).toHaveCount(0);
     expect(state.uploads.length).toBeGreaterThan(0);
     expect(state.uploads[0].payload).toMatchObject({
       counting: { snapshot_version: state.counting.snapshot_version },
@@ -234,6 +242,62 @@ test("returned reports keep the old snapshot until counts are explicitly refresh
   expect(state.submissions[0].metrics).toMatchObject({ unique_count: 3 });
   expect(state.submissions[0].expected_snapshot_version).toBe(fixtures["corrected-open-space"].counting.snapshot_version);
   expect(state.getSaved()?.unique_count).toBe(3);
+});
+
+test("reports validation, failed saving and confirmed upload without duplicate feedback", async ({ page }) => {
+  const state = await setup(page, "open_space");
+  await page.setViewportSize({ width: 1050, height: 760 });
+  await switchTheme(page, "dark");
+  await page.locator("tbody tr").filter({ hasText: "October 2026" }).click();
+  await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+  const submit = page.getByRole("button", { name: "Submit Report", exact: true });
+  const success = page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" });
+  const warning = page.locator(".tanaw-toast--warning");
+  const failure = page.locator(".tanaw-toast--error").filter({ hasText: "Report submission failed" });
+  await expect(submit).toHaveAttribute("aria-disabled", "true");
+  await submit.press("Enter");
+  await submit.press("Enter");
+  await expect(warning).toHaveCount(1);
+  await expect(warning.getByRole("status")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Confirm Submission" })).toHaveCount(0);
+  expect(state.submissions).toHaveLength(0);
+  await warning.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(warning).toHaveCount(0);
+
+  await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
+  state.setLocalSaveAvailable(false);
+  await submit.click();
+  const confirm = page.getByRole("button", { name: "Yes, Submit", exact: true });
+  await confirm.click();
+  await expect(failure.getByRole("alert")).toHaveText("Report submission failed. Please try again.");
+  await expect(success).toHaveCount(0);
+  expect(state.uploads).toHaveLength(0);
+  expect(state.submissions).toHaveLength(1);
+
+  state.setLocalSaveAvailable(true);
+  state.enableUpload();
+  let releaseUpload!: () => void;
+  state.holdUpload(new Promise<void>((resolve) => { releaseUpload = resolve; }));
+  try {
+    await confirm.evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
+    await expect.poll(() => state.uploads.length).toBe(1);
+    await expect(success).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Submitting…" })).toBeDisabled();
+  } finally {
+    releaseUpload();
+  }
+  await expect(success.getByRole("status")).toHaveText(`Report submitted successfully. Reference ${state.getSaved()!.report_id}.`);
+  await expect(success).toHaveCount(1);
+  expect(state.submissions).toHaveLength(2);
+  expect(state.submissions[0].request_id).toBe(state.submissions[1].request_id);
+  await expect(success).toHaveCSS("pointer-events", "none");
+  await switchTheme(page, "light");
+  await expect(success.getByRole("button", { name: "Dismiss notification" })).toBeEnabled();
 });
 
 test("report filters, preview and responsive workspace retain the existing layout", async ({ page }, testInfo) => {

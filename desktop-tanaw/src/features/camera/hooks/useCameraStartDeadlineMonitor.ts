@@ -1,5 +1,6 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Camera } from "../../../types/enterprise";
+import { notifyError } from "../../toasts/services/toast-service";
 import { type CameraAction, updateCamerasWhenChanged } from "../model/camera-management";
 
 export const CAMERA_START_SETTLE_TIMEOUT_MS = 90_000;
@@ -23,7 +24,10 @@ export function useCameraStartDeadlineMonitor({ cameraActionsRef, cameraStartDea
       if (expiredIds.length === 0) return;
 
       const expiredSet = new Set(expiredIds);
-      for (const cameraId of expiredIds) delete cameraStartDeadlinesRef.current[cameraId];
+      for (const cameraId of expiredIds) {
+        delete cameraStartDeadlinesRef.current[cameraId];
+        notifyError("Camera did not start in time. Check its connection and try again.", `camera-start:${cameraId}`);
+      }
       setCameraActions((current) => {
         const next = { ...current };
         for (const cameraId of expiredIds) delete next[cameraId];

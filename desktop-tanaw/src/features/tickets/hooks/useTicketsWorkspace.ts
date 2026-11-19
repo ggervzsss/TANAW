@@ -2,7 +2,7 @@ import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffec
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { useRealtimeEvent } from "../../realtime/realtime-context";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field";
 import { useScopedPageState } from "../../../hooks/useScopedPageState";
 import { createSupportTicket, getSupportTicket, listSupportTickets, sortSupportTickets, type SupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
@@ -116,7 +116,7 @@ export function useTicketsWorkspace() {
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setError("");
-      notifyError("Please correct the highlighted ticket fields.");
+      notifyWarning("Please correct the highlighted ticket fields.");
       window.requestAnimationFrame(() =>
         focusFirstInvalidField(
           formElement,
@@ -190,7 +190,7 @@ export function useTicketsWorkspace() {
   function showPhotoError(message: string) {
     setPhotoError(message);
     setError("");
-    notifyError(message);
+    notifyWarning(message);
     const formElement = formRef.current;
     if (formElement) window.requestAnimationFrame(() => focusFirstInvalidField(formElement, ["attachments"]));
   }

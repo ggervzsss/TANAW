@@ -66,6 +66,7 @@ export function CameraVideoPreview({
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const [connectionState, setConnectionState] = useState<Exclude<CameraPreviewState, "live">>("connecting");
   const [decodedStreamUrl, setDecodedStreamUrl] = useState<string | null>(null);
+  const [decodedAspectRatio, setDecodedAspectRatio] = useState<number | null>(null);
   const streamIsAvailable = Boolean(isProcessing && streamUrl);
   const effectiveStreamUrl = useMemo(() => withPreviewRetryVersion(streamUrl, previewAttempt), [previewAttempt, streamUrl]);
   const previewState = streamIsAvailable && decodedStreamUrl === effectiveStreamUrl ? "live" : connectionState;
@@ -102,10 +103,10 @@ export function CameraVideoPreview({
   const shouldShowConfigOverlay = isEditMode || displayPreferences.area;
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
+  const imageAspectRatio = decodedAspectRatio ?? (frameWidth > 0 && frameHeight > 0 ? frameWidth / frameHeight : null);
   const visibleTracks = detections.tracks.filter((track) => track.confidence >= activeCam.confidence);
   const developer = useDeveloperSettings();
   const showsTrackLabels = developer.detectionLabels || developer.demographics;
-  const fpsLabel = health?.analytics_fps ? `${health.analytics_fps.toFixed(1)} AI FPS` : "AI FPS Adaptive";
 
   const clearPreviewTimers = useCallback(() => {
     if (connectWatchdogRef.current !== null) {
@@ -139,6 +140,7 @@ export function CameraVideoPreview({
     clearPreviewTimers();
     setPreviewAttempt(0);
     setDecodedStreamUrl(null);
+    setDecodedAspectRatio(null);
     setConnectionState("connecting");
   }, [activeCam.id, clearPreviewTimers, streamUrl]);
 
@@ -157,6 +159,7 @@ export function CameraVideoPreview({
       const image = previewImageRef.current;
       if (image && hasRenderablePreviewFrame(image.naturalWidth, image.naturalHeight)) {
         connectWatchdogRef.current = null;
+        setDecodedAspectRatio(image.naturalWidth / image.naturalHeight);
         setDecodedStreamUrl(effectiveStreamUrl);
         return;
       }
@@ -173,7 +176,7 @@ export function CameraVideoPreview({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || frameWidth <= 0 || frameHeight <= 0) {
+    if (!container || imageAspectRatio === null) {
       setContentRect(null);
       return;
     }
@@ -181,16 +184,15 @@ export function CameraVideoPreview({
     const updateContentRect = () => {
       // The image fills the padding box, so the overlay must exclude the preview border too.
       const bounds = { width: container.clientWidth, height: container.clientHeight };
-      const frameAspect = frameWidth / frameHeight;
       const containerAspect = bounds.width / bounds.height;
 
-      if (containerAspect > frameAspect) {
-        const width = bounds.height * frameAspect;
+      if (containerAspect > imageAspectRatio) {
+        const width = bounds.height * imageAspectRatio;
         setContentRect({ height: bounds.height, left: (bounds.width - width) / 2, top: 0, width });
         return;
       }
 
-      const height = bounds.width / frameAspect;
+      const height = bounds.width / imageAspectRatio;
       setContentRect({ height, left: 0, top: (bounds.height - height) / 2, width: bounds.width });
     };
 
@@ -200,12 +202,12 @@ export function CameraVideoPreview({
     resizeObserver.observe(container);
 
     return () => resizeObserver.disconnect();
-  }, [frameHeight, frameWidth]);
+  }, [imageAspectRatio]);
 
   return (
     <div
       ref={containerRef}
-      className={`relative h-full min-h-72 w-full rounded-tanaw-xl border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isZoneEditor ? "" : "overflow-hidden"} ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
+      className={`camera-video-preview relative h-full min-h-72 w-full rounded-tanaw-xl border border-slate-800/90 bg-[#07110d] shadow-[0_22px_48px_rgba(2,8,18,0.32)] ${isZoneEditor ? "" : "overflow-hidden"} ${isEditMode ? "ring-2 ring-[#0b8b68] ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#0d1724]" : ""}`}
     >
       {streamIsAvailable ? (
         <img
@@ -230,6 +232,7 @@ export function CameraVideoPreview({
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
             }
+            setDecodedAspectRatio(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight);
             setDecodedStreamUrl(effectiveStreamUrl);
           }}
         />
@@ -252,7 +255,7 @@ export function CameraVideoPreview({
               <span />
             </div>
           )}
-          {!loading && (
+          {!loading && onRetry && (
             <button
               type="button"
               className="camera-preview-retry"
@@ -267,7 +270,6 @@ export function CameraVideoPreview({
                 setPreviewAttempt((attempt) => (attempt === 0 ? 1 : 0));
                 setConnectionState("connecting");
               }}
-              disabled={!onRetry && !streamIsAvailable}
             >
               <RefreshCw size={16} />
               {presentation === "offline" ? "Start camera" : "Retry connection"}
@@ -280,8 +282,8 @@ export function CameraVideoPreview({
         </div>
       </div>
 
-      {shouldShowConfigOverlay && isActuallyLive && (
-        <div className={`absolute ${isZoneEditor ? "z-20" : ""}`} style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
+      {shouldShowConfigOverlay && isActuallyLive && contentRect && (
+        <div className={`absolute ${isZoneEditor ? "z-20" : ""}`} style={{ height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width }}>
           {(isEditMode && editForm ? editForm : activeCam).analysisMode === "open_space" ? (
             <OpenSpaceOverlay
               value={(isEditMode && editForm ? editForm : activeCam).openSpace}
@@ -360,27 +362,6 @@ export function CameraVideoPreview({
           })}
         </div>
       )}
-
-      <div className={`camera-preview-badges pointer-events-none absolute top-3 right-3 left-3 flex items-start justify-between gap-3 ${!isActuallyLive ? "invisible" : ""}`}>
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          <PreviewBadge label="● Live" tone="ok" />
-          <PreviewBadge label={`People in area: ${activeCam.analysisMode === "open_space" ? (area?.available ? (area.presence ?? "—") : "—") : (counts.occupancy ?? "—")}`} tone="neutral" />
-          <PreviewBadge label={health?.model_ready ? "Model ready" : health?.model_loading ? "Model loading" : "Model standby"} tone={health?.model_ready ? "ok" : "neutral"} />
-        </div>
-        {streamIsAvailable && (
-          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-            <span
-              className={`flex items-center gap-1 rounded-full border bg-black/60 px-2 py-1 text-[10px] font-bold shadow-sm backdrop-blur-sm ${
-                previewState === "live" ? "border-green-500/50 text-green-400" : previewState === "failed" ? "border-red-400/50 text-red-200" : "border-amber-400/50 text-amber-200"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${previewState === "live" ? "bg-green-400" : "bg-amber-300"}`}></span>
-              {previewState === "live" ? "LIVE" : previewState === "failed" ? "PREVIEW FAILED" : "RECOVERING"}
-            </span>
-            <span className="rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">{fpsLabel}</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -417,15 +398,4 @@ function getTrackTone(isOutsideRoi: boolean, isCrossing: boolean) {
     labelClass: "border-emerald-200/35 bg-slate-950/82 text-emerald-100 ring-1 ring-emerald-300/20",
     triggerClass: "border-slate-950/75 bg-cyan-300 ring-1 ring-white/45",
   };
-}
-
-type PreviewBadgeProps = {
-  label: string;
-  tone: "ok" | "neutral";
-};
-
-function PreviewBadge({ label, tone }: PreviewBadgeProps) {
-  const toneClass = tone === "ok" ? "border-emerald-400/40 bg-emerald-950/55 text-emerald-100" : "border-white/15 bg-black/45 text-white/80";
-
-  return <span className={`rounded-full border px-2 py-1 text-[10px] font-bold shadow-sm backdrop-blur-sm ${toneClass}`}>{label}</span>;
 }

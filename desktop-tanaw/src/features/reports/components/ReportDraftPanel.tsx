@@ -59,10 +59,11 @@ export function ReportDraftPanel({
   const category = useAuthStore((state) => state.user?.category);
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
+  const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
   const steps = [
     { label: "Complete Visitor Details", done: complete },
     { label: "Review Report Form", done: submitted || (reviewed && complete) },
-    { label: "Submit Report", done: submitted },
+    { label: "Submit Report", done: submitted && !waitingForUpload },
   ];
   return (
     <section className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
@@ -147,13 +148,14 @@ export function ReportDraftPanel({
             <ReportDraftActions
               activeReport={activeReport}
               isReadOnly={isReadOnly}
-              metricsError={isPeriodChanging ? "Loading report data…" : metricsError}
+              isPeriodChanging={isPeriodChanging}
+              metricsError={metricsError}
               validationError={validationError}
               onSubmitPrompt={onSubmitPrompt}
             />
             {isReadOnly && (
               <p className="report-workflow-status">
-                {activeReport?.status} · {activeReportId}
+                {waitingForUpload ? "Saved on this device · Upload pending" : activeReport?.status} · {activeReportId}
               </p>
             )}
             {!isReadOnly && (metricsError || validationError) && (

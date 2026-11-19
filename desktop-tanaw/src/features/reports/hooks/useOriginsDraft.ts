@@ -3,6 +3,7 @@ import type { DailyOrigins, ReportRecord, SystemLogPeriod } from "../../../types
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalReportDraft, getMlServiceStatus } from "../../camera/services/ml-service";
 import { originsFromPayload } from "../model/daily-origins";
 import { clearLegacyBrowserDemographicDrafts, persistOriginsDraft } from "../services/report-workspace";
+import { notifyWarning } from "../../toasts/services/toast-service";
 
 const DRAFT_RETRY_DELAY_MS = 2000;
 const DRAFT_SAVE_DELAY_MS = 300;
@@ -24,6 +25,8 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
   const [origins, setOrigins] = useState<DailyOrigins>({});
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   const reportsHistoryRef = useRef(reportsHistory);
+  const hydratedOrigins = useRef<DailyOrigins | null>(null);
+  const failedDraftKey = useRef<string | null>(null);
 
   useEffect(() => {
     reportsHistoryRef.current = reportsHistory;
@@ -52,7 +55,9 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
       }
       if (cancelled) return;
       const report = activeReportId ? reportsHistoryRef.current.find((item) => item.id === activeReportId) : undefined;
-      setOrigins(stored ?? report?.origins ?? {});
+      const loadedOrigins = stored ?? report?.origins ?? {};
+      hydratedOrigins.current = loadedOrigins;
+      setOrigins(loadedOrigins);
       setHydratedKey(draftKey);
     };
 
@@ -65,8 +70,22 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
 
   useEffect(() => {
     if (isReadOnly || hydratedKey !== draftKey) return;
-    const timeoutId = window.setTimeout(() => void persistOriginsDraft(draftKey, period, activeReportId, origins), DRAFT_SAVE_DELAY_MS);
-    return () => window.clearTimeout(timeoutId);
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void persistOriginsDraft(draftKey, period, activeReportId, origins).then((saved) => {
+        if (cancelled) return;
+        if (saved) {
+          if (failedDraftKey.current === draftKey) failedDraftKey.current = null;
+        } else if (origins !== hydratedOrigins.current && failedDraftKey.current !== draftKey) {
+          failedDraftKey.current = draftKey;
+          notifyWarning("The latest visitor details could not be saved. Keep this report open and try editing again.");
+        }
+      });
+    }, DRAFT_SAVE_DELAY_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [activeReportId, origins, draftKey, hydratedKey, isReadOnly, period]);
 
   return { origins, setOrigins, isHydrating: !isReadOnly && hydratedKey !== draftKey };

@@ -249,6 +249,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
     await expect.poll(() => uploads.some((item) => item.reportId === submissions[0].report_id)).toBe(true);
+    await expect(page.locator(".tanaw-toast--success").getByRole("status").filter({ hasText: "Report submitted successfully" })).toContainText(`Reference ${submissions[0].report_id}.`);
     expect(submissions[0].payload).toMatchObject({
       demo: { thisProvMale: "300", thisProvFemale: "317", thisProvUnspecified: "0" },
       var1: { thisCityMale: "295", thisCityFemale: "317", thisCityUnspecified: "0" },

@@ -69,10 +69,7 @@ function resolveBoundsCameraPosition(
   boundsPadding: number,
   maxZoom: number,
 ): ResolvedMapCameraPosition {
-  const { left, right } = getMapPanelInsets(map.getSize().x, directoryCollapsed, insightsOpen);
-  const paddingTopLeft: [number, number] = [left || 42, left ? 52 : 42];
-  const edgePadding = target.type === "citywide" ? 48 : 56;
-  const paddingBottomRight: [number, number] = [right || edgePadding, edgePadding];
+  const { paddingTopLeft, paddingBottomRight } = getBoundsPadding(map.getSize().x, directoryCollapsed, insightsOpen, target.type === "citywide" ? 48 : 56);
   const paddedBounds = target.bounds.pad(boundsPadding);
   const totalPadding = [paddingTopLeft[0] + paddingBottomRight[0], paddingTopLeft[1] + paddingBottomRight[1]] as unknown as Point;
   const zoom = clamp(map.getBoundsZoom(paddedBounds, false, totalPadding), map.getMinZoom(), Math.min(map.getMaxZoom(), maxZoom));
@@ -82,6 +79,13 @@ function resolveBoundsCameraPosition(
     type: target.type,
     zoom,
   };
+}
+
+function getBoundsPadding(width: number, directoryCollapsed: boolean, insightsOpen: boolean, edgePadding: number) {
+  const { left, right } = getMapPanelInsets(width, directoryCollapsed, insightsOpen);
+  const paddingTopLeft: [number, number] = [left || 42, left ? 52 : 42];
+  const paddingBottomRight: [number, number] = [right || edgePadding, edgePadding];
+  return { paddingTopLeft, paddingBottomRight };
 }
 
 export function getMapPanelInsets(width: number, directoryCollapsed: boolean, insightsOpen: boolean) {
@@ -153,6 +157,7 @@ export class MapMotionController {
   private move(target: ResolvedMapCameraTarget, options: MapCameraTransitionOptions) {
     if (target.type === "citywide" && target.bounds.isValid()) {
       this.configureCitywideConstraints(target.bounds);
+      this.allowCitywideFit(target.bounds, options.directoryCollapsed, options.insightsOpen ?? false);
     }
 
     const targetPosition = resolveMapCameraPosition(this.map, target, options.directoryCollapsed, options.insightsOpen);
@@ -219,6 +224,25 @@ export class MapMotionController {
     this.map.setMaxBounds(interactionBounds);
     this.map.setMinZoom(Math.max(11.2, this.map.getBoundsZoom(minZoomReferenceBounds, true) - 0.72));
     this.constraintsKey = key;
+  }
+
+  private allowCitywideFit(bounds: LatLngBounds, directoryCollapsed: boolean, insightsOpen: boolean) {
+    const { x: width, y: height } = this.map.getSize();
+    const { paddingTopLeft, paddingBottomRight } = getBoundsPadding(width, directoryCollapsed, insightsOpen, 48);
+    const zoomFloor = this.map.getMinZoom();
+    const padded = bounds.pad(DEFAULT_CITYWIDE_BOUNDS_PADDING);
+    const southWest = this.map.project(padded.getSouthWest(), zoomFloor);
+    const northEast = this.map.project(padded.getNorthEast(), zoomFloor);
+    const usableWidth = Math.max(1, width - paddingTopLeft[0] - paddingBottomRight[0]);
+    const usableHeight = Math.max(1, height - paddingTopLeft[1] - paddingBottomRight[1]);
+    const fitScale = Math.min(usableWidth / Math.abs(northEast.x - southWest.x), usableHeight / Math.abs(northEast.y - southWest.y));
+    if (fitScale >= 1) return;
+
+    // getBoundsZoom is clamped by Leaflet's minZoom. Allow enough room for a fit
+    // between the panels without raising the floor and moving a manually panned map.
+    const fitZoom = this.map.getScaleZoom(fitScale, zoomFloor);
+    const snap = this.map.options.zoomSnap ?? 1;
+    this.map.setMinZoom(snap ? Math.floor(fitZoom / snap) * snap : fitZoom);
   }
 }
 

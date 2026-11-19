@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import type { DailyOrigins } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, saveLocalReportDraft } from "../../camera/services/ml-service";
 import { syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
@@ -10,15 +11,16 @@ export async function persistOriginsDraft(draftKey: string, period: string, repo
     const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
     if (Object.keys(origins).length === 0) {
       await deleteLocalReportDraft(baseUrl, draftKey);
-      return;
+      return true;
     }
     await saveLocalReportDraft(baseUrl, draftKey, {
       period,
       reportId,
       reportPayload: { origins, version: 2 },
     });
+    return true;
   } catch {
-    // Local draft persistence is best-effort and must not block report editing.
+    return false;
   }
 }
 
@@ -35,11 +37,11 @@ export function clearLegacyBrowserDemographicDrafts() {
   }
 }
 
-export async function syncSubmittedReportToCloud(reportId: string) {
+export async function syncSubmittedReportToCloud(reportId: string, submissionId: string): Promise<"confirmed" | "pending" | "rejected"> {
   try {
-    await syncDesktopReportSubmission(reportId);
-    return null;
+    return (await syncDesktopReportSubmission(reportId, submissionId)) ? "confirmed" : "pending";
   } catch (error) {
-    return error instanceof Error ? error.message : "The backend could not be reached.";
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    return status && status >= 400 && status < 500 && status !== 408 && status !== 429 ? "rejected" : "pending";
   }
 }

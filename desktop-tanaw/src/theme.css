@@ -185,7 +185,7 @@ html.dark :is(.camera-management, .camera-settings, .camera-dialog) {
   --enterprise-text: var(--theme-text);
   --enterprise-muted: var(--theme-secondary);
 }
-html.dark .enterprise-shell :is(.camera-list, .camera-preview-card, .camera-settings),
+html.dark .enterprise-shell .camera-settings,
 html.dark .camera-dialog {
   background: var(--theme-surface-low);
   color: var(--theme-text);
@@ -195,31 +195,8 @@ html.dark .camera-dialog {
 html.dark .enterprise-shell .camera-settings {
   border-color: transparent;
 }
-html.dark .enterprise-shell :is(.camera-list > div:first-child, .camera-settings-identity, .camera-settings-footer, .camera-settings-body > nav, .camera-preview-card > div:first-child) {
+html.dark .enterprise-shell :is(.camera-settings-identity, .camera-settings-footer, .camera-settings-body > nav) {
   border-color: var(--theme-divider);
-}
-html.dark .enterprise-shell .camera-list > div:last-child > button {
-  border-color: transparent;
-  background: var(--theme-surface);
-  box-shadow: none;
-}
-html.dark .enterprise-shell .camera-list > div:last-child > button[aria-pressed="true"] {
-  background: var(--theme-accent-tint);
-  border-color: transparent;
-  box-shadow: inset 3px 0 var(--theme-accent);
-}
-html.dark .enterprise-shell .camera-list > .camera-add-button {
-  background: var(--theme-accent-tint);
-  border-color: transparent;
-  color: var(--theme-accent-strong);
-}
-html.dark .enterprise-shell .camera-preview-layout {
-  background: var(--theme-surface-low);
-}
-html.dark .enterprise-shell .camera-preview-layout > aside section {
-  background: var(--theme-surface);
-  border-color: transparent;
-  box-shadow: var(--theme-shadow);
 }
 html.dark .enterprise-shell :is(.camera-settings-identity, .camera-settings-footer) {
   background: var(--theme-surface);
@@ -345,26 +322,6 @@ html.dark .camera-diagnostics {
 }
 html.dark .camera-preview-state {
   background: radial-gradient(ellipse at 50% 45%, var(--theme-accent-tint), var(--theme-canvas));
-}
-
-html.dark .enterprise-shell .camera-metric {
-  border-color: transparent !important;
-}
-html.dark .enterprise-shell .camera-metric[data-tone="entry"] {
-  background: var(--theme-success-bg) !important;
-  color: var(--theme-success-text) !important;
-}
-html.dark .enterprise-shell .camera-metric[data-tone="exit"] {
-  background: var(--theme-danger-bg) !important;
-  color: var(--theme-danger-text) !important;
-}
-html.dark .enterprise-shell .camera-metric[data-tone="occupancy"] {
-  background: var(--theme-info-bg) !important;
-  color: var(--theme-info-text) !important;
-}
-html.dark .enterprise-shell .camera-metric[data-tone="unique"] {
-  background: var(--theme-warning-bg) !important;
-  color: var(--theme-warning-text) !important;
 }
 
 /* Reports: nested tonal surfaces, quiet table rules and paired state colors. */

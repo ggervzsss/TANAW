@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { AlertTriangle, CircleCheck, CircleX, Info, X } from "lucide-react";
 import type { CSSProperties, PropsWithChildren } from "react";
-import { Toaster, type DefaultToastOptions } from "react-hot-toast";
+import toast, { ToastBar, Toaster } from "react-hot-toast";
 import { HashRouter, useLocation } from "react-router-dom";
 import { queryClient } from "../../lib/queryClient";
 import { routePaths } from "../router/routePaths";
@@ -8,8 +9,6 @@ import { AuthSessionManager } from "../../features/login/components/AuthSessionM
 import { SystemDisplayPreferencesProvider } from "../../features/preferences/SystemDisplayPreferencesProvider";
 import { RealtimeProvider } from "../../features/realtime/RealtimeProvider";
 import { PersistentIssueProvider } from "../../features/toasts/components/PersistentIssueProvider";
-
-const TOAST_DURATION_MS = 3200;
 
 const portalToastContainerStyle: CSSProperties = {
   top: "calc(var(--tanaw-topbar-height) + clamp(12px, 2svh, 16px))",
@@ -22,25 +21,6 @@ const authToastContainerStyle: CSSProperties = {
   left: "max(16px, env(safe-area-inset-left))",
   right: "max(16px, env(safe-area-inset-right))",
 };
-
-const tanawToastOptions = {
-  duration: TOAST_DURATION_MS,
-  className: "tanaw-toast",
-  success: {
-    className: "tanaw-toast tanaw-toast--success",
-    iconTheme: {
-      primary: "#16a34a",
-      secondary: "#ffffff",
-    },
-  },
-  error: {
-    className: "tanaw-toast tanaw-toast--error",
-    iconTheme: {
-      primary: "#a40e0e",
-      secondary: "#ffffff",
-    },
-  },
-} satisfies DefaultToastOptions;
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -71,7 +51,23 @@ function TanawToaster() {
       gutter={10}
       containerClassName={containerClassName}
       containerStyle={hasEnterpriseTopbar ? portalToastContainerStyle : authToastContainerStyle}
-      toastOptions={tanawToastOptions}
-    />
+    >
+      {(item) => {
+        const Icon = item.type === "success" ? CircleCheck : item.type === "error" ? CircleX : item.className?.includes("tanaw-toast--warning") ? AlertTriangle : Info;
+        return (
+          <ToastBar toast={item}>
+            {({ message }) => (
+              <>
+                <Icon className="tanaw-toast__icon" size={20} aria-hidden="true" />
+                {message}
+                <button type="button" className="tanaw-toast__dismiss" aria-label="Dismiss notification" disabled={!item.visible} onClick={() => toast.dismiss(item.id)}>
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </ToastBar>
+        );
+      }}
+    </Toaster>
   );
 }

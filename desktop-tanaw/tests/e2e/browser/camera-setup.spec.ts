@@ -35,6 +35,7 @@ async function setup(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let profiles = [camera(1), camera(2)];
   let status = "running";
+  let presence = 1;
   let streamGeneration = 1;
   let failTest = false;
   let failWrite = false;
@@ -131,7 +132,14 @@ async function setup(page: Page) {
           counts: { entry: null, exit: null, occupancy: null, running: status !== "stopped" && status !== "failed", status, error: status === "failed" ? "Camera unreachable" : null },
           detections: { running: true, status, frame_width: 640, frame_height: 360, tracks: [{ track_id: 5, source_track_id: 5, confidence: 0.95, bbox: [280, 70, 360, 190], centroid: [320, 130] }] },
           health,
-          area: { available: status === "running", presence: 1, unique_visitors_available: true, unique_visitors: 8, active_visits: [{ track_generation: 5 }], zone_name: value.openSpace?.zone_name },
+          area: {
+            available: status === "running",
+            presence: status === "running" ? presence : null,
+            unique_visitors_available: status !== "failed",
+            unique_visitors: status === "failed" ? null : 8,
+            active_visits: [{ track_generation: 5 }],
+            zone_name: value.openSpace?.zone_name,
+          },
           session: {},
         })),
       });
@@ -174,6 +182,9 @@ async function setup(page: Page) {
     setStatus: (next: string) => {
       status = next;
     },
+    setPresence: (next: number) => {
+      presence = next;
+    },
     advanceStream: () => ++streamGeneration,
     setFailTest: (value: boolean) => {
       failTest = value;
@@ -188,6 +199,56 @@ async function openSettings(page: Page) {
   await page.getByRole("button", { name: "Edit configuration" }).click();
   await expect(settings(page)).toBeVisible();
 }
+
+test("Camera Settings keeps its actions visible while the active tab scrolls", async ({ page }) => {
+  await setup(page);
+  await openSettings(page);
+  const cameraSettings = settings(page);
+  const cancel = cameraSettings.getByRole("button", { name: "Cancel", exact: true });
+  const save = cameraSettings.getByRole("button", { name: "Save Changes", exact: true });
+  const panel = cameraSettings.getByRole("tabpanel");
+
+  await expect(page.getByRole("region", { name: "My Cameras" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toHaveCount(0);
+  await expect(cameraSettings.getByRole("heading", { name: "Tapo Camera" })).toBeVisible();
+
+  for (const size of [{ width: 1920, height: 960 }, { width: 800, height: 500 }, { width: 640, height: 400 }]) {
+    await page.setViewportSize(size);
+    const tabs = [
+      ["Information", panel.getByRole("combobox", { name: "Camera Mode" })],
+      ["Connection", panel.getByRole("button", { name: "Test Camera Connection" })],
+      ["Counting Area", panel.getByRole("button", { name: "Edit Counting Area" })],
+      ["Display", panel.getByRole("switch", { name: "Show Counting Area" })],
+      ["Maintenance", panel.getByRole("button", { name: "Remove Camera" })],
+    ] as const;
+    for (const [name, lastControl] of tabs) {
+      await cameraSettings.getByRole("tab", { name, exact: true }).click();
+      await expect(cameraSettings).toBeInViewport({ ratio: 1 });
+      await expect(cancel).toBeInViewport({ ratio: 1 });
+      await expect(save).toBeInViewport({ ratio: 1 });
+      await panel.press("End");
+      const scrollContainer = size.height <= 450 ? cameraSettings : panel;
+      await expect.poll(() => scrollContainer.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+      if (name === "Maintenance" && size.height <= 500) {
+        await expect.poll(() => scrollContainer.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      }
+      await lastControl.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
+      await expect(lastControl).toBeInViewport({ ratio: 1 });
+      await expect.poll(async () => {
+        const control = (await lastControl.boundingBox())!;
+        const action = (await cancel.boundingBox())!;
+        return control.y + control.height <= action.y;
+      }).toBe(true);
+      await expect(cancel).toBeInViewport({ ratio: 1 });
+      await expect(save).toBeInViewport({ ratio: 1 });
+    }
+  }
+
+  await cancel.click();
+  await expect(cameraSettings).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "My Cameras" }).getByRole("button", { name: /Tapo Camera/, pressed: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
+});
 
 test("all settings tabs keep drafts, test real bridge requests and save only the selected camera", async ({ page }, info) => {
   const state = await setup(page);
@@ -217,7 +278,7 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   await page.getByRole("tab", { name: "Display", exact: true }).click();
   await expect(page.getByRole("switch", { name: "Show Detected People", exact: true })).not.toBeChecked();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: /Dahua Camera.*Zone:/ }).click();
+  await page.getByRole("region", { name: "My Cameras" }).getByRole("button", { name: /Dahua Camera/ }).click();
   await openSettings(page);
   await page.getByRole("tab", { name: "Display", exact: true }).click();
   await expect(page.getByRole("switch", { name: "Show Detected People", exact: true })).toBeChecked();
@@ -347,6 +408,34 @@ test("Add Camera keeps the reference form and verifies connection before persist
   expect(JSON.stringify(state.profiles())).not.toContain("camera-secret");
 });
 
+test("Add Camera text and actions fit in a compact window in both themes", async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 800, height: 500 });
+  await page.getByRole("button", { name: "Add Camera", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "Camera Information" });
+  const input = modal.getByLabel("Camera Name");
+  const mode = modal.getByRole("combobox", { name: "Camera Mode" });
+  const label = modal.locator("label[for='camera-name']");
+  const hint = modal.getByText("Example: Main Gate, Lobby, or Park");
+  for (const dark of [false, true]) {
+    await page.locator("html").evaluate((element, dark) => element.classList.toggle("dark", dark), dark);
+    await expect(label).toHaveCSS("font-size", "15px");
+    await expect(input).toHaveCSS("font-size", "16px");
+    await expect(mode).toHaveCSS("font-size", "16px");
+    await expect(hint).toHaveCSS("font-size", "14px");
+    await mode.click();
+    await expect(page.getByRole("option", { name: "Open Space", exact: true })).toHaveCSS("font-size", "16px");
+    await mode.press("Escape");
+    await expect(modal.getByRole("button", { name: "Cancel" })).toBeInViewport({ ratio: 1 });
+    await expect(modal.getByRole("button", { name: "Add Camera" })).toBeInViewport({ ratio: 1 });
+  }
+  await input.fill("Gate Camera");
+  await modal.getByRole("button", { name: "Add Camera" }).click();
+  const connection = page.getByRole("dialog", { name: "Camera Connection" });
+  await expect(connection.getByLabel("Camera IP Address")).toHaveCSS("font-size", "16px");
+  await expect(connection.getByRole("button", { name: "Test & Add Camera" })).toBeInViewport({ ratio: 1 });
+});
+
 test("camera startup and reconnect do not attach a stream until the service reports real video", async ({ page }, info) => {
   const state = await setup(page);
   const overlay = page.locator(".camera-preview-state");
@@ -366,10 +455,14 @@ test("camera startup and reconnect do not attach a stream until the service repo
     if (status === "starting" || status === "reconnecting") await expect(overlay.getByLabel("Connecting")).toBeVisible();
   }
   await page.screenshot({ path: info.outputPath("camera-offline.png"), fullPage: true });
-  await page.getByRole("button", { name: "Start camera", exact: true }).click();
+  await page.getByRole("button", { name: "Start Camera", exact: true }).click();
   await expect(overlay).toHaveClass(/is-hidden/, { timeout: 12000 });
   await expect(video).toBeVisible();
-  await expect(page.getByText("People in area: 1", { exact: true })).toBeVisible();
+  await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Camera counting started." })).toHaveCount(1);
+  const preview = page.getByRole("region", { name: "Camera Preview", exact: true });
+  await expect(preview.getByText(/^● Live$|^People in area:|^Model (ready|loading|standby)$|AI FPS/)).toHaveCount(0);
+  await expect(preview.getByRole("img", { name: "Monitored area polygon" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Live Metrics" }).getByText("1", { exact: true })).toBeVisible();
 
   let releaseFrame!: () => void;
   const firstFrame = new Promise<void>((resolve) => { releaseFrame = resolve; });
@@ -386,6 +479,214 @@ test("camera startup and reconnect do not attach a stream until the service repo
     releaseFrame();
   }
   await expect(video).toBeVisible();
+});
+
+test("uses the preview toolbar and keeps the selected stream aligned while resizing", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1920, height: 940 });
+  const state = await setup(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const selected = page.getByRole("region", { name: "Selected camera" });
+  const toolbar = page.getByRole("group", { name: "Camera preview controls" });
+  const preview = page.getByRole("region", { name: "Camera Preview" });
+  const video = preview.getByRole("img", { name: "Tapo Camera live camera stream" });
+  const metrics = page.getByRole("region", { name: "Live Metrics" });
+  const overlay = preview.getByRole("img", { name: "Monitored area polygon" });
+  const originalProfile = state.profiles()[0];
+
+  await expect(selected.getByRole("heading", { name: "Tapo Camera", exact: true })).toBeVisible();
+  await expect(metrics.getByText("8", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /monitoring status|system status|camera connection/i })).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Start Camera" })).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Stop Camera" })).toBeVisible();
+  await video.evaluate((element) => element.setAttribute("data-test-original-frame", "true"));
+  const assertAligned = async () => {
+    await expect.poll(async () => {
+      const image = await video.boundingBox();
+      const polygonBox = await overlay.boundingBox();
+      if (!image || !polygonBox) return Number.POSITIVE_INFINITY;
+      const fittedWidth = Math.min(image.width, image.height * 16 / 9);
+      const fittedHeight = Math.min(image.height, image.width * 9 / 16);
+      return Math.max(
+        Math.abs(polygonBox.width - fittedWidth),
+        Math.abs(polygonBox.height - fittedHeight),
+        Math.abs(polygonBox.x - (image.x + (image.width - fittedWidth) / 2)),
+        Math.abs(polygonBox.y - (image.y + (image.height - fittedHeight) / 2)),
+      );
+    }).toBeLessThan(2);
+  };
+  const assertToolbarEdge = async () => {
+    await expect.poll(() => preview.evaluate((element) => {
+      const stage = element.querySelector(".camera-video-preview")!.getBoundingClientRect();
+      const actions = element.querySelector(".camera-preview-actions")!.getBoundingClientRect();
+      return Math.abs(stage.right - actions.right);
+    })).toBeLessThan(2);
+  };
+  const assertWidePanelLayout = async () => {
+    await expect.poll(() => selected.evaluate((element) => {
+      const layout = element.querySelector(".camera-preview-layout")!;
+      const previewBox = layout.querySelector(".camera-preview-surface")!.getBoundingClientRect();
+      const metricsBox = layout.querySelector(".camera-live-metrics")!.getBoundingClientRect();
+      return Math.max(
+        Math.abs(previewBox.top - metricsBox.top),
+        Math.abs(previewBox.bottom - metricsBox.bottom),
+        layout.scrollWidth - layout.clientWidth,
+        layout.scrollHeight - layout.clientHeight,
+      );
+    })).toBeLessThan(2);
+  };
+  await assertAligned();
+  await assertToolbarEdge();
+  await assertWidePanelLayout();
+  await page.screenshot({ path: info.outputPath("monitor-expanded.png") });
+  const width = (await preview.boundingBox())!.width;
+  const collapse = page.getByRole("button", { name: "Collapse configured cameras" });
+  await collapse.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Collapse configured cameras");
+  await collapse.click();
+  await expect(page.getByRole("img", { name: "2 configured cameras" })).toBeVisible();
+  await expect.poll(async () => (await preview.boundingBox())!.width).toBeGreaterThan(width + 100);
+  const sidebar = page.getByRole("region", { name: "My Cameras" });
+  await expect(sidebar.getByRole("button", { name: /Dahua Camera/, pressed: false })).toBeVisible();
+  await expect.poll(async () => (await sidebar.boundingBox())!.height).toBeLessThan(290);
+  await expect(video).toHaveAttribute("data-test-original-frame", "true");
+  await assertAligned();
+  await assertToolbarEdge();
+  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
+  await page.screenshot({ path: info.outputPath("monitor-compact.png") });
+  await page.getByRole("button", { name: "Expand configured cameras" }).click();
+  await expect(page.getByRole("button", { name: /Tapo Camera/, pressed: true })).toBeVisible();
+
+  await toolbar.getByRole("button", { name: "Fullscreen", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("camera-preview-surface"))).toBe(true);
+  const ambience = metrics.locator(".camera-metrics-ambience");
+  await expect(ambience).not.toHaveAttribute("data-ambient-active");
+  await expect(video).toHaveAttribute("data-test-original-frame", "true");
+  await assertAligned();
+  await assertToolbarEdge();
+  await toolbar.getByRole("button", { name: "Exit Fullscreen", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  await expect(ambience).toHaveAttribute("data-ambient-active", "");
+
+  await toolbar.getByRole("button", { name: "Refresh Preview", exact: true }).click();
+  await expect(video).toHaveAttribute("src", /[?&]refresh=1(?:&|$)/);
+  await expect(video).toBeVisible();
+  expect(state.requests).toEqual([]);
+  expect(state.profiles()[0]).toEqual(originalProfile);
+
+  await toolbar.getByRole("button", { name: "Stop Camera", exact: true }).click();
+  await expect(video).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Refresh Preview", exact: true })).toHaveCount(0);
+  await expect(metrics.getByText("Live observations unavailable")).toBeVisible();
+  await expect(preview.getByRole("heading", { name: "Camera preview is paused" })).toBeVisible();
+  await sidebar.getByRole("button", { name: "Collapse configured cameras" }).click();
+  await assertToolbarEdge();
+  await assertWidePanelLayout();
+  await page.screenshot({ path: info.outputPath("monitor-stopped.png") });
+  await toolbar.getByRole("button", { name: "Start Camera", exact: true }).click();
+  await expect(video).toBeVisible();
+  expect(state.requests.map(({ path }) => path)).toEqual(["/camera/1/stop", "/camera/start"]);
+  expect(state.profiles()[0]).toEqual(originalProfile);
+
+  await sidebar.getByRole("button", { name: "Expand configured cameras" }).click();
+  await page.setViewportSize({ width: 800, height: 620 });
+  await metrics.scrollIntoViewIfNeeded();
+  await expect(metrics).toBeVisible();
+  await expect(metrics.locator(".camera-metrics-ambience")).toBeHidden();
+  expect((await metrics.boundingBox())!.y).toBeGreaterThan((await preview.boundingBox())!.y);
+  await assertAligned();
+
+  await sidebar.getByRole("button", { name: "Collapse configured cameras" }).click();
+  await sidebar.getByRole("button", { name: /Dahua Camera/ }).press("Enter");
+  await expect(selected.getByRole("heading", { name: "Dahua Camera", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: /Dahua Camera/, pressed: true })).toBeFocused();
+  state.setStatus("failed");
+  await expect(preview.getByRole("heading", { name: "Camera needs attention" })).toBeVisible();
+  await expect(preview.getByRole("alert")).toContainText("Camera unreachable");
+  await expect(metrics.getByText("Live observations unavailable")).toBeVisible();
+  await expect(metrics.getByText("Identification unavailable")).toBeVisible();
+  await expect(metrics.getByText("—", { exact: true })).toHaveCount(2);
+  await page.setViewportSize({ width: 1920, height: 940 });
+  await page.getByRole("button", { name: "Switch to light mode", exact: true }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
+  await assertWidePanelLayout();
+  await page.screenshot({ path: info.outputPath("monitor-disconnected.png") });
+  await openSettings(page);
+  await settings(page).getByRole("tab", { name: "Connection" }).click();
+  await expect(settings(page).getByRole("tab", { name: "Connection", selected: true })).toBeVisible();
+});
+
+test("Live Metrics aims its lines at the pointer and pauses ambient motion when hidden", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const state = await setup(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const metrics = page.getByRole("region", { name: "Live Metrics" });
+  const ambience = metrics.locator(".camera-metrics-ambience");
+  const lines = ambience.locator("canvas.camera-metrics-lines");
+  await expect(ambience).toHaveAttribute("data-ambience-tone", "calm");
+  await expect(ambience).toHaveAttribute("data-ambient-active", "");
+  await expect(ambience).toHaveCSS("mask-image", /^linear-gradient/);
+  const picture = () => lines.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  const rest = await picture();
+  const palette = () => ambience.evaluate((element) =>
+    ["::before", "::after"].map((layer) => {
+      const style = getComputedStyle(element, layer);
+      return [style.backgroundColor, style.opacity];
+    }),
+  );
+  const drift = () => ambience.evaluate((element) => getComputedStyle(element, "::before").transform);
+  const calmPalette = await palette();
+  const initialDrift = await drift();
+  await expect.poll(drift).not.toBe(initialDrift);
+  const hoverAt = async (x: number) => {
+    const bounds = (await ambience.boundingBox())!;
+    await ambience.hover({ position: { x: bounds.width * x, y: bounds.height * 0.65 } });
+  };
+  await hoverAt(0.8);
+  await expect.poll(picture).not.toBe(rest);
+  const right = await picture();
+  expect(await palette()).toEqual(calmPalette);
+  await hoverAt(0.2);
+  await expect.poll(picture).not.toBe(right);
+  await expect.poll(picture).not.toBe(rest);
+  await page.getByRole("heading", { name: "Live Metrics", exact: true }).hover();
+  await expect.poll(picture).toBe(rest);
+
+  state.setPresence(7);
+  await expect(metrics.getByText("7", { exact: true })).toBeVisible();
+  await expect(ambience).toHaveAttribute("data-ambience-tone", "moderate");
+  await expect.poll(palette).not.toEqual(calmPalette);
+  await page.screenshot({ path: info.outputPath("metrics-lines-light.png") });
+
+  await page.setViewportSize({ width: 800, height: 620 });
+  await expect(ambience).toBeHidden();
+  await expect(ambience).not.toHaveAttribute("data-ambient-active");
+  await expect.poll(() => ambience.evaluate((element) => getComputedStyle(element, "::before").animationPlayState)).toBe("paused");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(ambience).toHaveAttribute("data-ambient-active", "");
+
+  state.setPresence(18);
+  await expect(metrics.getByText("18", { exact: true })).toBeVisible();
+  await expect(ambience).toHaveAttribute("data-ambience-tone", "high");
+  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
+  const darkRest = await picture();
+  await hoverAt(0.8);
+  await expect.poll(picture).not.toBe(darkRest);
+  await page.screenshot({ path: info.outputPath("metrics-lines-dark.png") });
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(ambience).not.toHaveAttribute("data-ambient-active");
+  await expect.poll(picture).toBe(darkRest);
+  await hoverAt(0.2);
+  await expect.poll(picture).toBe(darkRest);
+  await expect.poll(() => ambience.evaluate((element) => getComputedStyle(element, "::before").animationName)).toBe("none");
+  await expect.poll(() => ambience.evaluate((element) => getComputedStyle(element, "::after").transitionDuration)).toBe("0s");
+  state.setStatus("failed");
+  await expect(ambience).toHaveAttribute("data-ambience-tone", "attention");
+  await expect(metrics.getByText("Live observations unavailable")).toBeVisible();
 });
 
 test("switching counting methods preserves calibration and stages counting until Save", async ({ page }) => {

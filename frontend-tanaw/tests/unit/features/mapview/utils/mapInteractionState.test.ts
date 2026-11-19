@@ -36,7 +36,7 @@ describe("map interaction state", () => {
     expect(second.cameraTarget).toEqual({ type: "barangay", barangayName: "Landayan" });
   });
 
-  it.each<MapDeselectReason>(["map-background", "back", "all-barangays"])("uses the same complete reset for %s deselection", (reason) => {
+  it.each<MapDeselectReason>(["map-background", "back", "all-barangays"])("clears selection on %s and fits the city only on request", (reason) => {
     const selectedEnterprise = mapInteractionReducer(initialMapInteractionState, {
       type: "select-enterprise",
       barangayName: "San Antonio",
@@ -47,7 +47,10 @@ describe("map interaction state", () => {
       enterpriseId: "enterprise-1",
     });
 
-    expect(mapInteractionReducer(withInsights, { type: "clear-barangay", reason })).toEqual(initialMapInteractionState);
+    expect(mapInteractionReducer(withInsights, { type: "clear-barangay", reason })).toEqual({
+      ...initialMapInteractionState,
+      cameraTarget: reason === "map-background" ? { type: "citywide" } : { type: "citywide", fit: true },
+    });
   });
 
   it("keeps enterprise selection, barangay selection, and the camera target coordinated", () => {

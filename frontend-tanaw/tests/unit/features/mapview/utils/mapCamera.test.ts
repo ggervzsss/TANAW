@@ -26,6 +26,7 @@ function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoo
   let minZoom = 11.2;
 
   const implementation = {
+    options: { zoomSnap: 0.25 },
     on: vi.fn(),
     off: vi.fn(),
     fitBounds: vi.fn(),
@@ -39,6 +40,7 @@ function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoo
     getMaxZoom: vi.fn(() => 18),
     getMinZoom: vi.fn(() => minZoom),
     getSize: vi.fn(() => toPoint(1200, 800)),
+    getScaleZoom: vi.fn((scale: number, fromZoom: number) => fromZoom + Math.log2(scale)),
     getZoom: vi.fn(() => zoom),
     panTo: vi.fn((nextCenter: LatLngExpression) => {
       center = toLatLng(nextCenter);
@@ -326,6 +328,18 @@ describe("native Leaflet camera controller", () => {
 
     expect(map.setMaxBounds).toHaveBeenCalledTimes(1);
     expect(map.setMinZoom).toHaveBeenCalledTimes(1);
+  });
+
+  it("lowers the zoom floor when both panels leave too little room for the whole city", () => {
+    const map = createMap();
+    const controller = new MapMotionController(map);
+    const target = { type: "citywide", bounds: citywideBounds } as const;
+    controller.setTarget(target, { directoryCollapsed: false, insightsOpen: true, immediate: true });
+    expect(map.getMinZoom()).toBeLessThan(11.2);
+
+    const fittedFloor = map.getMinZoom();
+    controller.setTarget(target, { directoryCollapsed: true, immediate: true });
+    expect(map.getMinZoom()).toBe(fittedFloor);
   });
 });
 

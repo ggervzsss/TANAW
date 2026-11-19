@@ -1,14 +1,12 @@
 import { BookOpen, Camera, ChevronDown, Code2, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useMotionValue } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { TopbarGlassNavigation } from "../../design-system/patterns/TopbarGlassIndicator";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
 import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
 import { SAN_PEDRO_SEAL_IMAGE } from "../../lib/assets";
-import { TopbarActiveUnderline, TopbarLiquidGlass } from "./TopbarGlassIndicator";
-import type { TopbarGlassTarget } from "./TopbarGlassIndicator";
-import { useTopbarGlassPointer } from "./useTopbarGlassPointer";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -74,8 +72,6 @@ export function EnterpriseTopbar({
 }: EnterpriseTopbarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const glassTarget = useMotionValue<TopbarGlassTarget | null>(null);
-  const { onPointerDown: handleGlassPointerDown, onPointerLeave: handleGlassPointerLeave, onPointerMove: handleGlassPointerMove, setNavigationElement } = useTopbarGlassPointer(glassTarget);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
 
@@ -125,27 +121,10 @@ export function EnterpriseTopbar({
   const accountSubtitle = user?.role === "enterprise" ? "Enterprise Account" : "TANAW Account";
   const displayImageDataUrl = user?.displayImageDataUrl ?? null;
   const navItemBase =
-    "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/65 focus-visible:outline-none max-2xl:px-3.5";
+    "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 max-2xl:px-3.5";
   const navItemActive = "text-white";
   const navItemInactive = isDarkTopbar ? "text-white/72 hover:text-white" : "text-white/84 hover:text-white";
-  const showGlass = (id: EnterpriseView, element: HTMLElement) => {
-    const currentTarget = glassTarget.get();
-    if (currentTarget?.mode === "drag" || currentTarget?.mode === "pull" || currentTarget?.mode === "recoil") return;
-    const navigation = element.closest<HTMLElement>("[data-liquid-glass-navigation]");
-    if (!navigation) return;
-    const navigationRect = navigation.getBoundingClientRect();
-    const itemRect = element.getBoundingClientRect();
-    glassTarget.set({
-      deformation: 0,
-      height: itemRect.height,
-      id,
-      left: itemRect.left - navigationRect.left - 4,
-      mode: "item",
-      top: itemRect.top - navigationRect.top,
-      width: itemRect.width + 8,
-    });
-  };
-  const hideGlass = () => glassTarget.set(null);
+  const activeTab = enterpriseNavigation.find((item) => item.id === activeView)?.id ?? null;
   const navButtons = enterpriseNavigation.map((item) => {
     const Icon = item.icon;
     const isActive = activeView === item.id;
@@ -156,26 +135,15 @@ export function EnterpriseTopbar({
         data-topbar-navigation={item.id}
         aria-current={isActive ? "page" : undefined}
         onClick={() => onNavigate(item.id)}
-        onBlur={hideGlass}
-        onFocus={(event) => {
-          showGlass(item.id, event.currentTarget);
-          onNavigateIntent(item.id);
-        }}
-        onPointerEnter={(event) => {
-          showGlass(item.id, event.currentTarget);
-          onNavigateIntent(item.id);
-        }}
-        onTouchStart={(event) => {
-          showGlass(item.id, event.currentTarget);
-          onNavigateIntent(item.id);
-        }}
+        onFocus={() => onNavigateIntent(item.id)}
+        onPointerEnter={() => onNavigateIntent(item.id)}
+        onTouchStart={() => onNavigateIntent(item.id)}
         className={[navItemBase, isActive ? navItemActive : navItemInactive].join(" ")}
       >
-        <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
+        <span className="relative z-10 flex items-center gap-2">
           <Icon size={16} className="shrink-0" />
           {item.label}
         </span>
-        {isActive && <TopbarActiveUnderline isDark={isDarkTopbar} />}
       </button>
     );
   });
@@ -193,19 +161,15 @@ export function EnterpriseTopbar({
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
-          <nav
-            ref={setNavigationElement}
-            data-liquid-glass-navigation="true"
+          <TopbarGlassNavigation
+            activeId={activeTab}
+            isDark={isDarkTopbar}
             className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
             aria-label="Enterprise navigation"
             onDragStart={(event) => event.preventDefault()}
-            onPointerDown={handleGlassPointerDown}
-            onPointerLeave={handleGlassPointerLeave}
-            onPointerMove={handleGlassPointerMove}
           >
-            <TopbarLiquidGlass isDark={isDarkTopbar} target={glassTarget} />
             {navButtons}
-          </nav>
+          </TopbarGlassNavigation>
 
           <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
             <button
@@ -344,7 +308,7 @@ export function EnterpriseTopbar({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
           >
-            <nav className="grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
+            <TopbarGlassNavigation activeId={activeTab} isDark={isDarkTopbar} data-topbar-glass-layout="stacked" className="relative isolate grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
               {enterpriseNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
@@ -352,6 +316,8 @@ export function EnterpriseTopbar({
                   <button
                     key={item.id}
                     type="button"
+                    data-topbar-navigation={item.id}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => {
                       onNavigate(item.id);
                       setShowMobileNav(false);
@@ -359,14 +325,14 @@ export function EnterpriseTopbar({
                     onFocus={() => onNavigateIntent(item.id)}
                     onPointerEnter={() => onNavigateIntent(item.id)}
                     onTouchStart={() => onNavigateIntent(item.id)}
-                    className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color] ${isActive ? "text-white after:absolute after:bottom-1 after:left-4 after:h-0.5 after:w-4 after:rounded-full after:bg-emerald-300" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                    className={`relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80 hover:text-white"}`}
                   >
                     <Icon size={16} className="shrink-0" />
                     {item.label}
                   </button>
                 );
               })}
-            </nav>
+            </TopbarGlassNavigation>
           </motion.div>
         )}
       </AnimatePresence>

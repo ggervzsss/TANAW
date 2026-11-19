@@ -171,6 +171,7 @@ export function useAdminLeafletMap({
       zoomDelta: 0.75,
       wheelPxPerZoomLevel: 90,
       zoomAnimation: !reducedMotion,
+      zoomAnimationThreshold: 7,
       markerZoomAnimation: !reducedMotion,
       // Completed tile sets crossfade with the portal instead of fading in tile by tile.
       fadeAnimation: false,

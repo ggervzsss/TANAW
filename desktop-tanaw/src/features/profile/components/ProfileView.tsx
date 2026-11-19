@@ -12,7 +12,7 @@ import {
   updateLeadAdminName,
   updateProfileImage,
 } from "../../login/api/login";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifyInfo, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
 import { PHILIPPINE_MOBILE_ERROR, type PersonNameParts, formatPersonName, normalizeEmail, normalizeMiddleInitial, parsePersonName, toPhilippineLocalDigits } from "../../../utils/form-validation";
 
@@ -93,7 +93,6 @@ export function ProfileView() {
       const upload = await readProfileImageFile(file);
       setDisplayImageDataUrl(upload.dataUrl);
       setDisplayImageFileName(upload.fileName);
-      notifySuccess("Logo ready to save.");
     } catch (error) {
       notifyError(error instanceof Error ? error.message : "Unable to load image.");
     } finally {
@@ -302,7 +301,7 @@ export function ProfileView() {
 
   async function handleModalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeModal) return;
+    if (!activeModal || isModalSaving) return;
 
     if (activeModal === "managerName") {
       const nameErrors = validateStructuredName(modalName);
@@ -325,13 +324,13 @@ export function ProfileView() {
         notifySuccess("Lead admin name updated.");
       } else if (activeModal === "email") {
         const response = await requestBusinessEmailChange(normalizeEmail(modalValue));
-        setPendingEmailChange(await getBusinessEmailChangeStatus());
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifySuccess("Email ownership verification queued.");
+        notifyInfo("Business email change requested. Follow the verification instructions.");
+        void getBusinessEmailChangeStatus().then(setPendingEmailChange).catch(() => undefined);
       } else if (activeModal === "phone") {
         const response = await requestContactNumberChange(`+63${modalPhoneLocal}`);
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifySuccess("Contact number change request recorded.");
+        notifyInfo("Contact number change request recorded.");
       } else {
         const updated = await updateBuildingCapacity(Number(modalValue));
         updateUser(updated);
@@ -341,7 +340,9 @@ export function ProfileView() {
       closeEditModal();
     } catch (error) {
       setIsModalSaving(false);
-      setModalError(getRequestErrorMessage(error, "Unable to save this change."));
+      const message = getRequestErrorMessage(error, "Unable to save this change. Please try again.");
+      setModalError(message);
+      notifyError(message);
     }
   }
 

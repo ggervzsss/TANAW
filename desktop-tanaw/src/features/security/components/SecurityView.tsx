@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { normalizePassword, validatePasswordPolicy } from "../../../utils/password-policy";
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { CredentialControl, type PasswordChangeValues } from "./CredentialControl";
 
 export function SecurityView() {
@@ -14,16 +14,16 @@ export function SecurityView() {
 
   const handlePasswordUpdate = async ({ confirmPassword, currentPassword, newPassword }: PasswordChangeValues) => {
     if (!currentPassword) {
-      notifyError("Enter your current password.");
+      notifyWarning("Enter your current password.");
       return false;
     }
     if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
-      notifyError("New passwords do not match.");
+      notifyWarning("New passwords do not match.");
       return false;
     }
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) {
-      notifyError(policyError);
+      notifyWarning(policyError);
       return false;
     }
 

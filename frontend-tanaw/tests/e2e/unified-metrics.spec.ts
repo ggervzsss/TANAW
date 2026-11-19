@@ -83,24 +83,13 @@ async function expectUnifiedHeader(header: Locator, titles: string[], dividerCou
   expect(afterHover?.height).toBeCloseTo(beforeHover?.height ?? 0, 1);
 }
 
-async function readTopbarGlassFrame(page: Page) {
-  return page.evaluate(() => {
-    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
-    if (!material || !optics) throw new Error("Liquid glass layers are missing");
-    const rect = material.getBoundingClientRect();
-    return {
-      center: rect.left + rect.width / 2,
-      materialOpacity: Number(getComputedStyle(material).opacity),
-      opticsOpacity: Number(getComputedStyle(optics).opacity),
-    };
-  });
-}
-
-async function expectSettledTopbarGlass(page: Page, targetCenter: number) {
-  await expect.poll(async () => Math.abs((await readTopbarGlassFrame(page)).center - targetCenter), { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThan(1);
-  await expect.poll(async () => (await readTopbarGlassFrame(page)).materialOpacity, { timeout: 1_500 }).toBeGreaterThan(0.95);
-  await expect.poll(async () => (await readTopbarGlassFrame(page)).opticsOpacity, { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThanOrEqual(0.01);
+async function expectGlassUnder(indicator: Locator, tab: Locator) {
+  await expect(indicator).toBeVisible();
+  const target = (await tab.boundingBox())!;
+  await expect.poll(async () => {
+    const glass = (await indicator.boundingBox())!;
+    return Math.abs(glass.x + glass.width / 2 - target.x - target.width / 2) + Math.abs(glass.y - target.y);
+  }).toBeLessThan(2);
 }
 
 test("unifies Admin summary metrics without changing the surrounding pages", async ({ page }) => {
@@ -170,7 +159,7 @@ test("unifies IT summary metrics in dark mode and preserves responsive overflow"
   await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeVisible();
 });
 
-test("keeps IT dropdown navigation local, keyboard-accessible, and reduced-motion safe", async ({ page }) => {
+test("keeps IT dropdown navigation keyboard-accessible and reduced-motion safe", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockPortal(page, "it", "dark");
@@ -179,260 +168,66 @@ test("keeps IT dropdown navigation local, keyboard-accessible, and reduced-motio
   const overview = page.getByRole("link", { name: "Overview" });
   const workCenter = page.getByRole("link", { name: "Work Center" });
   const accounts = page.getByRole("button", { name: "Accounts" });
-  await expect(overview.locator("[data-topbar-active-underline='true']")).toHaveCount(1);
-  const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
-  const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
-  await expect(glassIndicator).toHaveCount(1);
-  expect(await glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
-  await expect(glassIndicator).toHaveCSS("opacity", "0");
+  const glass = page.locator("[data-topbar-glass-indicator]");
+  await expectGlassUnder(glass, overview);
+  await expect(glass.locator(".tanaw-topbar-glass__light")).toBeHidden();
 
   await workCenter.focus();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "work-center");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "reduced");
-  await accounts.focus();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-origin", "droplet-center");
-  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
-  await expect(foregroundOptics).toHaveCSS("opacity", "0");
+  await expect(workCenter).toHaveCSS("outline-style", "solid");
+  await page.keyboard.press("Tab");
+  await expect(accounts).toBeFocused();
   await accounts.press("Enter");
   await expect(accounts).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("link", { name: "LGU Personnel" })).toBeVisible();
+  const personnel = page.getByRole("link", { name: "LGU Personnel" });
+  await expect(personnel).toBeVisible();
   await expect(page.getByRole("link", { name: "Enterprises", exact: true })).toBeVisible();
-  const accountsReplicaChevron = page.locator("[data-topbar-refraction-copy='true']").filter({ hasText: "Accounts" }).locator("svg").last();
-  await expect(accountsReplicaChevron).toHaveClass(/rotate-180/);
-  await accounts.press("Enter");
-  await expect(accounts).toHaveAttribute("aria-expanded", "false");
-  await expect(accountsReplicaChevron).not.toHaveClass(/rotate-180/);
+  await expectGlassUnder(glass, overview);
 
-  await accounts.hover();
-  await accounts.click();
-  const lguPersonnel = page.getByRole("link", { name: "LGU Personnel" });
-  await expect(lguPersonnel).toBeVisible();
-  await page.evaluate(() => {
-    const testWindow = window as typeof window & { __tanawGlassTargets?: (string | null)[]; __tanawGlassObserver?: MutationObserver };
-    const indicator = document.querySelector("[data-topbar-glass-indicator='true']");
-    testWindow.__tanawGlassTargets = [];
-    testWindow.__tanawGlassObserver?.disconnect();
-    if (!indicator) return;
-    testWindow.__tanawGlassObserver = new MutationObserver(() => {
-      testWindow.__tanawGlassTargets?.push(indicator.getAttribute("data-topbar-glass-target"));
-    });
-    testWindow.__tanawGlassObserver.observe(indicator, { attributes: true, attributeFilter: ["data-topbar-glass-target"] });
-  });
-  await lguPersonnel.hover({ position: { x: 210, y: 16 } });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
-  await lguPersonnel.click({ position: { x: 210, y: 16 } });
+  await page.keyboard.press("Tab");
+  await expect(personnel).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/it\/lgu-accounts$/);
-  const dropdownTransitions = await page.evaluate(() => {
-    const testWindow = window as typeof window & { __tanawGlassTargets?: (string | null)[]; __tanawGlassObserver?: MutationObserver };
-    testWindow.__tanawGlassObserver?.disconnect();
-    return testWindow.__tanawGlassTargets ?? [];
-  });
-  expect(dropdownTransitions.every((target) => target === null || target === "accounts")).toBe(true);
-  expect(await glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
+  await expect(accounts).toHaveAttribute("aria-current", "true");
+  await expectGlassUnder(glass, accounts);
 });
 
-test("glides one neutral refractive IT glass capsule through navigation gaps", async ({ page }) => {
-  test.setTimeout(60_000);
+test("keeps the IT glass selection through hover, history, reload and mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockPortal(page, "it", "dark");
   await page.goto("/it/dashboard");
 
-  const overview = page.getByRole("link", { name: "Overview" });
-  const workCenter = page.getByRole("link", { name: "Work Center" });
-  const accounts = page.getByRole("button", { name: "Accounts" });
-  const system = page.getByRole("button", { name: "System" });
-  const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
-
-  await overview.hover();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
-  const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
-  await expect(refractiveEdge).toHaveCount(1);
-  const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
-  await expect(foregroundOptics).toHaveCount(1);
-  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-edge-zone", "feathered");
-  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
-  await expect(foregroundOptics.locator("[data-topbar-glass-edge-side]")).toHaveCount(0);
-  await expect(glassIndicator.locator("[data-topbar-glass-lobe], [data-topbar-glass-neck]")).toHaveCount(0);
-  const refractionTrack = foregroundOptics.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
-  await expect(refractionTrack).toHaveCSS("filter", /tanaw-topbar-lens/);
-  await expect(refractionTrack).toHaveAttribute("data-topbar-lens-magnification", "1.10x1.06");
-  await expect(refractionTrack.locator("[data-topbar-refraction-copy='true']")).toHaveCount(4);
-  await expect(refractionTrack).toContainText("Overview");
-  const opticalFilter = page.locator("filter[id^='tanaw-topbar-lens-']");
-  await expect(opticalFilter.locator("feDisplacementMap")).toHaveAttribute("scale", "22");
-  await expect(opticalFilter.locator("[data-topbar-glass-smear='neutral']")).toHaveAttribute("stdDeviation", "2.4 0.32");
-  await expect(opticalFilter.locator("[data-topbar-glass-smear-output='true']")).toHaveAttribute("in", "neutralSmear");
-  await expect(opticalFilter.locator("[data-topbar-glass-core='attenuated']")).toHaveAttribute("result", "warpedCore");
-  await expect(opticalFilter.locator("[data-topbar-chromatic-channel]")).toHaveCount(2);
-  await expect(foregroundOptics).toHaveCSS("backdrop-filter", /blur/);
-  await expect(foregroundOptics).toHaveCSS("z-index", "20");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-response", "filtered-foreground-replica");
-  await expect(glassIndicator).toHaveCSS("border-top-width", "1px");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "raf-spring");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-renderer", "motion-value-raf");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-surface", "transparent");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-chromatic", "split-fringe");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-shape", "continuous-waterdrop");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-stretch", "integrated-endcap");
-  await expect(glassIndicator).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
-  await expect(glassIndicator).toHaveCSS("clip-path", "none");
-  const neutralStops = await glassIndicator.evaluate((element) =>
-    Array.from(getComputedStyle(element).backgroundImage.matchAll(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g), (match) => [Number(match[1]), Number(match[2]), Number(match[3])]),
-  );
-  expect(neutralStops.length).toBeGreaterThanOrEqual(3);
-  expect(neutralStops.every(([red, green, blue]) => red === green && green === blue)).toBe(true);
-  const surfaceAlphas = await glassIndicator.evaluate((element) => Array.from(getComputedStyle(element).backgroundImage.matchAll(/rgba\([^)]*,\s*([\d.]+)\)/g), (match) => Number(match[1])));
-  expect(surfaceAlphas.length).toBeGreaterThanOrEqual(3);
-  expect(Math.max(...surfaceAlphas)).toBeLessThanOrEqual(0.2);
-  await page.waitForTimeout(480);
-
-  const overviewBox = await overview.boundingBox();
-  const workCenterBox = await workCenter.boundingBox();
-  expect(overviewBox).not.toBeNull();
-  expect(workCenterBox).not.toBeNull();
-  const overviewCenter = overviewBox!.x + overviewBox!.width / 2;
-  await expectSettledTopbarGlass(page, overviewCenter);
-  await page.mouse.move((overviewBox!.x + overviewBox!.width + workCenterBox!.x) / 2, workCenterBox!.y + workCenterBox!.height / 2);
-  await expect
-    .poll(
-      async () => {
-        const frame = await readTopbarGlassFrame(page);
-        return Math.abs(frame.center - overviewCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
-      },
-      { timeout: 900, intervals: [16, 16, 24, 32] },
-    )
-    .toBe(true);
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "gap");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "gap:dashboard:work-center");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-deformation", "1.000");
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
-  await page.waitForTimeout(220);
-  const gapBox = await glassIndicator.boundingBox();
-  expect(gapBox).not.toBeNull();
-  const gapCenter = gapBox!.x + gapBox!.width / 2;
-  const midpointBetweenItems = (overviewBox!.x + overviewBox!.width / 2 + workCenterBox!.x + workCenterBox!.width / 2) / 2;
-  expect(Math.abs(gapCenter - midpointBetweenItems)).toBeLessThan(4);
-  await page.mouse.down();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "drag");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "drag:dashboard:work-center");
-  await page.mouse.up();
+  const navigation = page.locator("nav[data-liquid-glass-navigation]:visible");
+  const overview = navigation.getByRole("link", { name: "Overview" });
+  const workCenter = navigation.getByRole("link", { name: "Work Center" });
+  const system = navigation.getByRole("button", { name: "System", exact: true });
+  const glass = navigation.locator("[data-topbar-glass-indicator]");
+  const hover = navigation.locator("[data-topbar-glass-hover]");
+  await expectGlassUnder(glass, overview);
   await workCenter.hover();
-  await page.waitForTimeout(240);
+  await expect(hover).toHaveCSS("opacity", "1");
+  await expectGlassUnder(hover, workCenter);
+  await expectGlassUnder(glass, overview);
 
-  const glidingBox = await glassIndicator.boundingBox();
-  expect(glidingBox).not.toBeNull();
-  const workCenterCenter = workCenterBox!.x + workCenterBox!.width / 2;
-  const glidingCenter = glidingBox!.x + glidingBox!.width / 2;
-  const fullUnionWidth = workCenterBox!.x + workCenterBox!.width - overviewBox!.x;
-  expect(glidingCenter).toBeGreaterThan(overviewCenter);
-  expect(glidingCenter).toBeLessThan(workCenterCenter);
-  expect(glidingBox!.width).toBeLessThan(fullUnionWidth * 0.85);
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
+  await system.click();
+  const settings = page.getByRole("link", { name: "System Settings" });
+  await settings.hover();
+  await expect(hover).toHaveCSS("opacity", "0");
+  await settings.click();
+  await expect(page).toHaveURL(/\/it\/system-settings$/);
+  await expect(system).toHaveAttribute("aria-current", "true");
+  await expectGlassUnder(glass, system);
 
-  await accounts.hover();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
-  await page.waitForTimeout(620);
-  const accountsBox = await accounts.boundingBox();
-  const settledBox = await glassIndicator.boundingBox();
-  expect(settledBox!.x + settledBox!.width / 2).toBeCloseTo(accountsBox!.x + accountsBox!.width / 2, 0);
+  await page.goBack();
+  await expectGlassUnder(glass, overview);
+  await page.goForward();
+  await expectGlassUnder(glass, system);
+  await page.reload();
+  await expectGlassUnder(glass, system);
 
-  const systemBox = await system.boundingBox();
-  expect(systemBox).not.toBeNull();
-  await page.mouse.move(overviewBox!.x + overviewBox!.width / 2, overviewBox!.y + overviewBox!.height / 2);
-  await page.waitForTimeout(360);
-  await page.mouse.down();
-  const dragStart = overviewBox!.x + overviewBox!.width / 2;
-  const dragEnd = systemBox!.x + systemBox!.width / 2;
-  const dragSamples: number[] = [];
-  for (let step = 1; step <= 14; step += 1) {
-    await page.mouse.move(dragStart + ((dragEnd - dragStart) * step) / 14, systemBox!.y + systemBox!.height / 2);
-    await page.waitForTimeout(18);
-    const renderedBox = await glassIndicator.boundingBox();
-    expect(renderedBox).not.toBeNull();
-    dragSamples.push(renderedBox!.x + renderedBox!.width / 2);
-  }
-  const activeSamples = dragSamples.filter((center) => center > dragStart + 3 && center < dragEnd - 3);
-  const activeCenterDeltas = activeSamples.slice(1).map((center, index) => center - activeSamples[index]);
-  expect(new Set(activeSamples.map((center) => Math.round(center))).size).toBeGreaterThanOrEqual(10);
-  expect(activeCenterDeltas.filter((delta) => delta > 0.15).length / activeCenterDeltas.length).toBeGreaterThan(0.72);
-  expect(Math.max(...activeCenterDeltas)).toBeLessThan((dragEnd - dragStart) * 0.22);
-
-  await page.mouse.move(systemBox!.x + systemBox!.width + 38, systemBox!.y + systemBox!.height / 2, { steps: 6 });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "pull");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "pull:system:right");
-  const pullAmount = Number(await glassIndicator.getAttribute("data-topbar-glass-pull"));
-  expect(pullAmount).toBeGreaterThan(0.4);
-  await expect.poll(async () => (await glassIndicator.boundingBox())?.width ?? 0).toBeGreaterThan(systemBox!.width + 24);
-  const pulledBox = await glassIndicator.boundingBox();
-  expect(pulledBox).not.toBeNull();
-  expect(pulledBox!.width).toBeGreaterThan(systemBox!.width + 24);
-  expect(pulledBox!.width).toBeLessThan(systemBox!.width + 38);
-  expect(Math.abs(pulledBox!.x - (systemBox!.x - 4))).toBeLessThan(2.5);
-  expect(pulledBox!.x + pulledBox!.width - (systemBox!.x + systemBox!.width)).toBeGreaterThan(18);
-  const pulledLayerWidths = await page.evaluate(() => {
-    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
-    return { material: material?.getBoundingClientRect().width ?? null, optics: optics?.getBoundingClientRect().width ?? null };
-  });
-  expect(pulledLayerWidths.material).not.toBeNull();
-  expect(pulledLayerWidths.optics).not.toBeNull();
-  expect(Math.abs(pulledLayerWidths.optics! - pulledLayerWidths.material!)).toBeLessThan(1.5);
-  const pulledRadii = await page.evaluate(() => {
-    const material = document.querySelector("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector("[data-topbar-glass-optics='foreground-endcaps']");
-    return { material: material ? getComputedStyle(material).borderRadius : null, optics: optics ? getComputedStyle(optics).borderRadius : null };
-  });
-  expect(pulledRadii.optics).toBe(pulledRadii.material);
-  await page.mouse.move(systemBox!.x + systemBox!.width + 82, systemBox!.y + systemBox!.height / 2, { steps: 5 });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "recoil");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "recoil:system:right");
-  await page.waitForTimeout(260);
-  const recoiledRightBox = await glassIndicator.boundingBox();
-  expect(recoiledRightBox!.width).toBeCloseTo(systemBox!.width + 8, 0);
-  await page.mouse.up();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "system");
-  await page.waitForTimeout(260);
-  const releasedBox = await glassIndicator.boundingBox();
-  expect(releasedBox!.width).toBeCloseTo(systemBox!.width + 8, 0);
-  const systemCenter = systemBox!.x + systemBox!.width / 2;
-  await expectSettledTopbarGlass(page, systemCenter);
-
-  await system.blur();
-  await overview.hover();
-  await expect
-    .poll(
-      async () => {
-        const frame = await readTopbarGlassFrame(page);
-        return Math.abs(frame.center - systemCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
-      },
-      { timeout: 900, intervals: [16, 16, 24, 32] },
-    )
-    .toBe(true);
-  await page.waitForTimeout(360);
-  await expectSettledTopbarGlass(page, overviewCenter);
-  const overviewGlassBox = await glassIndicator.boundingBox();
-  await page.mouse.down();
-  await page.mouse.move(overviewBox!.x - 38, overviewBox!.y + overviewBox!.height / 2, { steps: 6 });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "pull");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "pull:dashboard:left");
-  expect(Number(await glassIndicator.getAttribute("data-topbar-glass-pull"))).toBeLessThan(-0.4);
-  await page.waitForTimeout(120);
-  const pulledLeftBox = await glassIndicator.boundingBox();
-  expect(pulledLeftBox!.width).toBeGreaterThan(overviewGlassBox!.width + 16);
-  expect(Math.abs(pulledLeftBox!.x + pulledLeftBox!.width - (overviewGlassBox!.x + overviewGlassBox!.width))).toBeLessThan(2.5);
-  expect(overviewBox!.x - pulledLeftBox!.x).toBeGreaterThan(18);
-  await page.mouse.move(overviewBox!.x - 82, overviewBox!.y + overviewBox!.height / 2, { steps: 5 });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "recoil");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "recoil:dashboard:left");
-  await page.waitForTimeout(260);
-  const recoiledLeftBox = await glassIndicator.boundingBox();
-  expect(recoiledLeftBox!.width).toBeCloseTo(overviewBox!.width + 8, 0);
-  await page.mouse.up();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(settings).toHaveAttribute("aria-current", "page");
+  await expectGlassUnder(glass, settings);
 });
 
 test("keeps Staff Reporting Period as a real control beside unified metrics", async ({ page }) => {

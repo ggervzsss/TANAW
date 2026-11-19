@@ -1,6 +1,6 @@
 export type MapDeselectReason = "all-barangays" | "back" | "map-background";
 
-export type MapCameraTarget = { type: "citywide" } | { type: "barangay"; barangayName: string } | { type: "enterprise"; barangayName: string; enterpriseId: string };
+export type MapCameraTarget = { type: "citywide"; fit?: true } | { type: "barangay"; barangayName: string } | { type: "enterprise"; barangayName: string; enterpriseId: string };
 
 export type MapInteractionState = {
   cameraTarget: MapCameraTarget;
@@ -55,6 +55,9 @@ export function mapInteractionReducer(state: MapInteractionState, action: MapInt
         selectedEnterpriseId: action.enterpriseId,
       };
     case "clear-barangay": {
+      if (action.reason !== "map-background") {
+        return { ...initialMapInteractionState, cameraTarget: { type: "citywide", fit: true } };
+      }
       if (state.selectedBarangayName === null && state.selectedEnterpriseId === null && state.insightEnterpriseId === null && state.cameraTarget.type === "citywide") {
         return state;
       }

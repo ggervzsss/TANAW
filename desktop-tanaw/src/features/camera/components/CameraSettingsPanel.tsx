@@ -17,6 +17,7 @@ import { CameraDialog } from "./CameraDialog";
 import { getMlCameraStates, getMlHealth, getMlServiceStatus, testCameraConnection } from "../services/ml-service";
 import type { CameraPreviewPanelProps } from "./CameraPreviewPanel";
 import type { Camera, OpenSpaceSettings } from "../../../types/enterprise";
+import { notifyError, notifyWarning } from "../../toasts/services/toast-service";
 
 const tabs = [
   { id: "information", label: "Information", icon: CircleDot },
@@ -236,22 +237,28 @@ export function CameraSettingsPanel(props: Props) {
     }
     setValidation(null);
     setSaving(true);
-    const previousDisplay = localStorage.getItem(displayKey);
+    let previousDisplay: string | null = null;
+    let displayWritten = false;
+    let configurationSaved = false;
     try {
       // Verify preference storage before committing the backend configuration.
+      previousDisplay = localStorage.getItem(displayKey);
       localStorage.setItem(displayKey, JSON.stringify(display));
-      const saved = await onSave(countingEnabled);
-      if (saved === true) {
-        onCancelEdit();
-        return;
-      }
-      if (previousDisplay === null) localStorage.removeItem(displayKey);
-      else localStorage.setItem(displayKey, previousDisplay);
+      displayWritten = true;
+      configurationSaved = (await onSave(countingEnabled)) === true;
+      if (configurationSaved) onCancelEdit();
     } catch (issue) {
-      if (previousDisplay === null) localStorage.removeItem(displayKey);
-      else localStorage.setItem(displayKey, previousDisplay);
       setValidation(messageOf(issue));
+      notifyError("Camera settings could not be saved. Please try again.");
     } finally {
+      if (displayWritten && !configurationSaved) {
+        try {
+          if (previousDisplay === null) localStorage.removeItem(displayKey);
+          else localStorage.setItem(displayKey, previousDisplay);
+        } catch {
+          notifyWarning("Previous camera display settings could not be restored. Check them before leaving Camera Setup.");
+        }
+      }
       setSaving(false);
     }
   };

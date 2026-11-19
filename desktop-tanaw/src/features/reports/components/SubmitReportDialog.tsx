@@ -93,7 +93,7 @@ export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: Submit
               onClick={onConfirm}
               className="flex items-center gap-2 rounded-xl bg-tanaw-ledger px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
             >
-              <Check size={16} /> {isSubmitting ? "Saving Locally..." : "Yes, Submit"}
+              <Check size={16} /> {isSubmitting ? "Submitting…" : "Yes, Submit"}
             </button>
           </div>
         </div>

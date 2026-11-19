@@ -695,18 +695,18 @@
   border-color: var(--tanaw-action);
   color: white;
 }
-.reports-button:hover:not(:disabled) {
+.reports-button:hover:not(:disabled, [aria-disabled="true"]) {
   box-shadow: 0 3px 8px rgb(21 61 42 / 14%);
   border-color: var(--reports-focus, #236b48);
 }
-.reports-primary:hover:not(:disabled) {
+.reports-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--tanaw-action-hover);
   background-image: linear-gradient(180deg, rgb(255 255 255 / 7%), transparent);
 }
-.reports-button:active:not(:disabled) {
+.reports-button:active:not(:disabled, [aria-disabled="true"]) {
   transform: scale(0.985);
 }
-.reports-button:disabled {
+.reports-button:is(:disabled, [aria-disabled="true"]) {
   background: var(--tanaw-control-disabled);
   border-color: var(--tanaw-control-disabled);
   color: var(--tanaw-text-placeholder);

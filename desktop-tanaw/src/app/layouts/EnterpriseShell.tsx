@@ -10,7 +10,7 @@ import { getCurrentUser, logout as logoutRequest } from "../../features/login/ap
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
-import { notifySuccess } from "../../features/toasts/services/toast-service";
+import { notifySuccess, notifyWarning } from "../../features/toasts/services/toast-service";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -35,7 +35,7 @@ import {
 } from "../router/enterprise-view-modules";
 
 type EnterpriseShellProps = {
-  initialView?: EnterpriseView;
+  activeView: EnterpriseView;
 };
 
 const viewRouteById: Record<EnterpriseView, string> = {
@@ -51,7 +51,7 @@ const viewRouteById: Record<EnterpriseView, string> = {
   help: routePaths.enterpriseHelp,
 };
 
-export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
+export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const logout = useAuthStore((state) => state.logout);
@@ -60,7 +60,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const updateUser = useAuthStore((state) => state.updateUser);
   const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
   const activeViewRef = useRef(activeView);
   activeViewRef.current = activeView;
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -68,7 +67,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [cameras, setCameras] = useState<EnterpriseCamera[]>(EMPTY_CAMERAS);
   const notificationStorageKey = `tanaw-enterprise-notifications-read:${user?.id ?? "anonymous"}`;
   const [readNotificationIds, setReadNotificationIds] = useState<Set<number>>(() => readStoredNotificationIds(notificationStorageKey));
-  const [toasts, setToasts] = useState<EnterpriseNotification[]>([]);
+  const [dismissedCriticalIds, setDismissedCriticalIds] = useState<ReadonlySet<number>>(() => new Set());
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
   const [mlContextAttempt, setMlContextAttempt] = useState(0);
@@ -98,6 +97,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
   useEffect(() => {
     setReadNotificationIds(readStoredNotificationIds(notificationStorageKey));
+    setDismissedCriticalIds(new Set());
   }, [notificationStorageKey]);
 
   useEffect(() => {
@@ -106,10 +106,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       navigate(routePaths.login, { replace: true });
     }
   }, [currentUserQuery.error, currentUserQuery.isError, logout, navigate]);
-
-  useEffect(() => {
-    setActiveView(initialView);
-  }, [initialView]);
 
   useEffect(() => scheduleEnterpriseViewPreload(activeView), [activeView]);
 
@@ -206,16 +202,17 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const handleLogout = async () => {
     try {
       await logoutRequest();
+      notifySuccess("Signed out of TANAW.");
+    } catch {
+      notifyWarning("Signed out on this device. TANAW could not confirm sign-out with the server.");
     } finally {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       logout();
-      notifySuccess("Logout complete");
       navigate(routePaths.login, { replace: true });
     }
   };
 
   const navigateToView = (view: EnterpriseView) => {
-    setActiveView(view);
     setIsNotificationsOpen(false);
     void preloadEnterpriseView(view);
     navigate(viewRouteById[view]);
@@ -227,16 +224,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
-  useEffect(() => {
-    const unreadCriticalNotifications = notifications.filter((notification) => notification.type === "critical" && !notification.read);
-    if (unreadCriticalNotifications.length === 0) return;
-
-    setToasts((currentToasts) => {
-      const currentIds = new Set(currentToasts.map((toast) => toast.id));
-      const nextToasts = [...currentToasts, ...unreadCriticalNotifications.filter((notification) => !currentIds.has(notification.id))];
-      return nextToasts.length === currentToasts.length ? currentToasts : nextToasts;
-    });
-  }, [notifications]);
+  const criticalToasts = notifications.filter((notification) => notification.type === "critical" && !notification.read && !dismissedCriticalIds.has(notification.id));
 
   const markNotificationsRead = (notificationsToMark: EnterpriseNotification[]) => {
     notificationsToMark.forEach((notification) => {
@@ -328,13 +316,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       </main>
 
       <CriticalAlertToasts
-        toasts={toasts}
+        toasts={criticalToasts}
         onReview={(toast) => {
           navigateToView(toast.target);
-          setToasts(toasts.filter((current) => current.id !== toast.id));
           markNotificationsRead([toast]);
         }}
-        onDismiss={(toastId) => setToasts(toasts.filter((toast) => toast.id !== toastId))}
+        onDismiss={(toastId) => setDismissedCriticalIds((current) => new Set([...current, toastId]))}
       />
     </div>
   );
