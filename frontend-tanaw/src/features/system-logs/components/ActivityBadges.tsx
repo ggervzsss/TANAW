@@ -1,8 +1,8 @@
 import type { SystemLogCategory } from "@/shared/types";
 import { Badge } from "../../../design-system";
-import { activityGroupTones, systemLogTypeTones, type ActivityGroup } from "../model";
+import { activityGroupTones, systemLogTypeTones, type ActivityCategory } from "../model";
 
-export function ActivityGroupBadge({ group }: { group: Exclude<ActivityGroup, "All Activity"> }) {
+export function ActivityGroupBadge({ group }: { group: ActivityCategory }) {
   return <Badge tone={activityGroupTones[group]}>{group}</Badge>;
 }
 

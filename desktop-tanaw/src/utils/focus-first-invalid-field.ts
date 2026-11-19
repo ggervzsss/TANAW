@@ -9,7 +9,7 @@ export function focusFirstInvalidField(form: HTMLFormElement, invalidFieldNames:
 
   const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   const scrollContainer = target.scrollTarget.closest<HTMLElement>("[data-form-scroll-container]");
-  if (scrollContainer) {
+  if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
     scrollWithinContainer(scrollContainer, target.scrollTarget, behavior);
   } else {
     target.scrollTarget.scrollIntoView({ behavior, block: "center", inline: "nearest" });

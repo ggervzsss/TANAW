@@ -1,36 +1,29 @@
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
+import { isRoleSettingsPath } from "@/app/routers/roleRoutes";
 import { scheduleAuthorizedRoutePreload } from "@/app/routers/routeModules";
 import { useAuthStore } from "@/app/store/authStore";
-import { useHeaderStore } from "@/app/store/headerStore";
+import { PageHeaderProvider } from "@/shared/components/layout";
 import { currentUserQueryKey, getCurrentUser } from "@/shared/services/accountService";
 import type { UserRole } from "@/shared/types/role.types";
 import { createPageStateKey, readPageState, writePageState } from "@/shared/utils/pageState";
 import { PortalTopbar } from "./PortalTopbar";
+import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
 
 type AccountLayoutProps = {
   role: UserRole;
 };
 
 const centeredTitleClassByPath = new Map<string, string>([
-  [routes.it.profile, "mx-auto w-full max-w-5xl"],
-  [routes.it.security, "mx-auto w-full max-w-5xl"],
-  [routes.admin.profile, "mx-auto w-full max-w-5xl"],
-  [routes.admin.security, "mx-auto w-full max-w-5xl"],
-  [routes.staff.profile, "mx-auto w-full max-w-5xl"],
-  [routes.staff.security, "mx-auto w-full max-w-5xl"],
-  [routes.it.systemSettings, "mx-auto w-full max-w-6xl"],
-  [routes.it.displayPreferences, "mx-auto w-full max-w-5xl"],
-  [routes.admin.displayPreferences, "mx-auto w-full max-w-5xl"],
-  [routes.staff.displayPreferences, "mx-auto w-full max-w-5xl"],
   [routes.it.help, "mx-auto w-full max-w-6xl"],
   [routes.admin.help, "mx-auto w-full max-w-6xl"],
   [routes.staff.help, "mx-auto w-full max-w-6xl"],
 ]);
 
 export function AccountLayout({ role }: AccountLayoutProps) {
+  const theme = usePortalThemePreference();
   const mainRef = useRef<HTMLElement>(null);
   const typedBufferRef = useRef("");
   const { pathname } = useLocation();
@@ -39,9 +32,19 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const updateUser = useAuthStore((state) => state.updateUser);
-  const title = useHeaderStore((state) => state.title);
+  const [pageHeader, setPageHeader] = useState<{ pathname: string; title: string } | null>(null);
+  const registerPageHeader = useCallback(
+    (title: string) => {
+      const header = { pathname, title };
+      setPageHeader(header);
+      return () => setPageHeader((current) => (current === header ? null : current));
+    },
+    [pathname],
+  );
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
   const isMapView = pathname === routes.admin.mapview;
+  const isSettings = isRoleSettingsPath(role, pathname);
+  const title = pageHeader?.pathname === pathname ? pageHeader.title : undefined;
   const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = ["text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl", centeredTitleClassName].filter(Boolean).join(" ");
   const sectionClassName = [
@@ -131,21 +134,29 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     return () => window.removeEventListener("keydown", handleDevLogShortcut);
   }, [navigate, role]);
 
+  const outlet = (
+    <Suspense fallback={<DestinationShellFallback />}>
+      <Outlet context={theme} />
+    </Suspense>
+  );
+
   return (
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <PortalTopbar role={role} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} data-density-adjustable={!isMapView} className={mainClassName}>
-          <div className={mainContentClassName}>
-            {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
-            {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (
-              <Navigate to={routes.it.dashboard} replace />
-            ) : (
-              <Suspense fallback={<DestinationShellFallback />}>
-                <Outlet />
-              </Suspense>
-            )}
-          </div>
+        <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
+        <main ref={mainRef} data-density-adjustable={!isMapView && !isSettings} className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
+          {isSettings ? (
+            outlet
+          ) : (
+            <div className={mainContentClassName}>
+              {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
+              {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (
+                <Navigate to={routes.it.dashboard} replace />
+              ) : (
+                <PageHeaderProvider setHeader={registerPageHeader}>{outlet}</PageHeaderProvider>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </section>

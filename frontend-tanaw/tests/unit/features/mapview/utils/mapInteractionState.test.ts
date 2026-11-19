@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { initialMapInteractionState, mapInteractionReducer, shouldClearBarangayFromMapClick, type MapDeselectReason } from "../../../../../src/features/mapview/utils/mapInteractionState";
 
 describe("map interaction state", () => {
-  it("selects a barangay once for the polygon, dropdown, directory, and camera", () => {
+  it("refits an already-selected barangay after a click", () => {
     const selected = mapInteractionReducer(initialMapInteractionState, {
       type: "select-barangay",
       barangayName: "San Antonio",
@@ -11,15 +11,14 @@ describe("map interaction state", () => {
     expect(selected).toMatchObject({
       selectedBarangayName: "San Antonio",
       selectedEnterpriseId: null,
-      insightEnterpriseId: null,
       cameraTarget: { type: "barangay", barangayName: "San Antonio" },
     });
-    expect(
-      mapInteractionReducer(selected, {
-        type: "select-barangay",
-        barangayName: "San Antonio",
-      }),
-    ).toBe(selected);
+    const refitted = mapInteractionReducer(selected, {
+      type: "select-barangay",
+      barangayName: "San Antonio",
+    });
+    expect(refitted).toEqual(selected);
+    expect(refitted.cameraTarget).not.toBe(selected.cameraTarget);
   });
 
   it("switches directly between barangays without a citywide intermediate state", () => {
@@ -36,18 +35,13 @@ describe("map interaction state", () => {
     expect(second.cameraTarget).toEqual({ type: "barangay", barangayName: "Landayan" });
   });
 
-  it.each<MapDeselectReason>(["map-background", "back", "all-barangays"])("clears selection on %s and fits the city only on request", (reason) => {
+  it.each<MapDeselectReason>(["map-background", "back", "all-barangays", "inactive"])("clears selection on %s and fits the city only on request", (reason) => {
     const selectedEnterprise = mapInteractionReducer(initialMapInteractionState, {
       type: "select-enterprise",
       barangayName: "San Antonio",
       enterpriseId: "enterprise-1",
     });
-    const withInsights = mapInteractionReducer(selectedEnterprise, {
-      type: "show-enterprise-insights",
-      enterpriseId: "enterprise-1",
-    });
-
-    expect(mapInteractionReducer(withInsights, { type: "clear-barangay", reason })).toEqual({
+    expect(mapInteractionReducer(selectedEnterprise, { type: "clear-barangay", reason })).toEqual({
       ...initialMapInteractionState,
       cameraTarget: reason === "map-background" ? { type: "citywide" } : { type: "citywide", fit: true },
     });

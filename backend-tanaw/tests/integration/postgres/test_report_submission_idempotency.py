@@ -182,6 +182,7 @@ async def _create_accounts(runtime: PostgresRuntime, *, label: str) -> tuple[Cre
             )
             or 0
         )
+    assert enterprise.enterprise_profile is not None
     return CreatedAccount(
         id=enterprise.id,
         email=enterprise.email,
@@ -256,7 +257,10 @@ async def _post_submission(
     payload: dict[str, object],
 ) -> Response:
     payload = copy.deepcopy(payload)
-    snapshot = payload["payload"]["counting"]
+    report_payload = payload["payload"]
+    assert isinstance(report_payload, dict)
+    snapshot = report_payload["counting"]
+    assert isinstance(snapshot, dict)
     snapshot["enterprise_id"] = enterprise.enterprise_key
     snapshot["snapshot_version"] = snapshot_digest(snapshot)
     return await client.post(

@@ -15,6 +15,9 @@ ActivityLogSeverity = Literal["Info", "Warning", "Critical", "Success"]
 ActivityLogActorRole = Literal["Admin", "IT Personnel", "LGU Staff", "Enterprise Account", "System"]
 
 
+ActivityResolutionStatus = Literal["Unresolved", "Resolved"]
+
+
 class ActivityLogSummary(BaseModel):
     id: str
     timestamp: datetime
@@ -26,6 +29,7 @@ class ActivityLogSummary(BaseModel):
     target: str
     summary: str
     sourceId: str | None = None
+    resolutionStatus: ActivityResolutionStatus | None = None
     metadata: dict[str, str | int | float | bool | None] | None = None
 
 

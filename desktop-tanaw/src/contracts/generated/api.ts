@@ -1339,6 +1339,8 @@ export interface components {
             metadata?: {
                 [key: string]: string | number | boolean | null;
             } | null;
+            /** Resolutionstatus */
+            resolutionStatus?: ("Unresolved" | "Resolved") | null;
             /**
              * Severity
              * @enum {string}

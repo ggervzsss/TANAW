@@ -120,38 +120,32 @@ const langgamBounds = createBounds(14.27, 121.0, 14.31, 121.04);
 const citywideBounds = createBounds(14.29, 120.98, 14.4, 121.13);
 
 describe("map camera target resolution", () => {
-  it("fits a barangay using the space beside the directory", () => {
+  it("fits and centers a barangay within the actual map viewport", () => {
     const map = createMap();
-    const expanded = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, false);
-    const collapsed = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, true);
-
-    expect(expanded).not.toBeNull();
-    expect(collapsed).not.toBeNull();
-    expect(expanded!.zoom).toBe(14.2);
-    expect(collapsed!.zoom).toBe(14.2);
-    expect(expanded!.center.lng).toBeLessThan(collapsed!.center.lng);
-    expect(map.getBoundsZoom).toHaveBeenNthCalledWith(1, expect.anything(), false, [494, 108]);
-    expect(map.getBoundsZoom).toHaveBeenNthCalledWith(2, expect.anything(), false, [98, 98]);
+    const position = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds });
+    expect(position?.zoom).toBe(14.2);
+    expect(position?.center.lng).toBeCloseTo(pacitaBounds.getCenter().lng, 8);
+    expect(map.getBoundsZoom).toHaveBeenCalledWith(expect.anything(), false, [72, 72]);
   });
 
   it("does not mutate the original geographic bounds while resolving a target", () => {
     const map = createMap();
     const before = pacitaBounds.toBBoxString();
 
-    resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, false);
+    resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds });
 
     expect(pacitaBounds.toBBoxString()).toBe(before);
   });
 
-  it("uses one closer directory-aware camera definition for every citywide target", () => {
+  it("uses one closer camera definition for every citywide target", () => {
     const map = createMap();
-    const canonical = getDefaultCitywideCamera(map, citywideBounds, false);
-    const resolved = resolveMapCameraPosition(map, { type: "citywide", bounds: citywideBounds }, false);
+    const canonical = getDefaultCitywideCamera(map, citywideBounds);
+    const resolved = resolveMapCameraPosition(map, { type: "citywide", bounds: citywideBounds });
     const paddedBounds = (map.getBoundsZoom as Mock).mock.calls.at(-1)?.[0] as LatLngBounds;
 
     expect(canonical).toEqual(resolved);
     expect(canonical).not.toBeNull();
-    expect(canonical!.center.lng).toBeLessThan(citywideBounds.getCenter().lng);
+    expect(canonical!.center.lng).toBeCloseTo(citywideBounds.getCenter().lng, 8);
     expect(paddedBounds.getNorth() - paddedBounds.getSouth()).toBeCloseTo((citywideBounds.getNorth() - citywideBounds.getSouth()) * 1.08, 8);
   });
 
@@ -160,7 +154,7 @@ describe("map camera target resolution", () => {
     const controller = new MapMotionController(map);
     const invalidBounds = { isValid: () => false } as LatLngBounds;
 
-    controller.setTarget({ type: "barangay", bounds: invalidBounds }, { directoryCollapsed: false, reducedMotion: false });
+    controller.setTarget({ type: "barangay", bounds: invalidBounds }, { reducedMotion: false });
 
     expect(controller.getSnapshot().target).toBeNull();
     expect(map.flyTo).not.toHaveBeenCalled();
@@ -191,11 +185,11 @@ describe("adaptive native transition timing", () => {
 describe("native Leaflet camera controller", () => {
   it("leaves the viewport alone when an enterprise is already centered at a suitable zoom", () => {
     const enterprise = { type: "enterprise", center: [14.35, 121.05] as [number, number] } as const;
-    const focused = resolveMapCameraPosition(createMap([14.35, 121.05], 16), enterprise, true)!;
+    const focused = resolveMapCameraPosition(createMap([14.35, 121.05], 16), enterprise)!;
     const map = createMap(focused.center, 16);
     const controller = new MapMotionController(map);
 
-    controller.setTarget(enterprise, { directoryCollapsed: true });
+    controller.setTarget(enterprise, { });
 
     expect(map.panTo).not.toHaveBeenCalled();
     expect(map.setView).not.toHaveBeenCalled();
@@ -204,20 +198,20 @@ describe("native Leaflet camera controller", () => {
 
   it.each([[12, 15.75], [16, 16], [18, 17.25]])("focuses an enterprise from zoom %s at zoom %s", (startZoom, expectedZoom) => {
     const map = createMap([14.35, 121.05], startZoom);
-    const target = resolveMapCameraPosition(map, { type: "enterprise", center: [14.36, 121.07] }, false)!;
+    const target = resolveMapCameraPosition(map, { type: "enterprise", center: [14.36, 121.07] })!;
 
     expect(target.zoom).toBe(expectedZoom);
     expect(target.center.lat).toBeLessThan(14.36);
-    expect(target.center.lng).toBeLessThan(121.07);
+    expect(target.center.lng).toBeCloseTo(121.07, 8);
   });
 
   it("issues exactly one native camera command for one barangay action", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "barangay", bounds: pacitaBounds } as const;
-    const resolved = resolveMapCameraPosition(map, target, false)!;
+    const resolved = resolveMapCameraPosition(map, target)!;
 
-    controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
+    controller.setTarget(target, { reducedMotion: false });
 
     expect(map.panTo).not.toHaveBeenCalled();
     expect(map.setView).toHaveBeenCalledTimes(1);
@@ -240,13 +234,13 @@ describe("native Leaflet camera controller", () => {
     const controller = new MapMotionController(map);
     const sanRoque = { type: "barangay", bounds: sanRoqueBounds } as const;
     const langgam = { type: "barangay", bounds: langgamBounds } as const;
-    const langgamPosition = resolveMapCameraPosition(map, langgam, false)!;
+    const langgamPosition = resolveMapCameraPosition(map, langgam)!;
     const listeners = Object.fromEntries((map.on as Mock).mock.calls);
 
-    controller.setTarget(sanRoque, { directoryCollapsed: false, reducedMotion: false });
+    controller.setTarget(sanRoque, { reducedMotion: false });
     listeners.zoomstart();
-    controller.setTarget({ type: "barangay", bounds: landayanBounds }, { directoryCollapsed: false });
-    controller.setTarget(langgam, { directoryCollapsed: false, reducedMotion: false });
+    controller.setTarget({ type: "barangay", bounds: landayanBounds }, { });
+    controller.setTarget(langgam, { reducedMotion: false });
 
     expect(map.setView).toHaveBeenCalledTimes(1);
     expect(map.panTo).not.toHaveBeenCalled();
@@ -269,7 +263,7 @@ describe("native Leaflet camera controller", () => {
       { type: "barangay", bounds: pacitaBounds },
     ];
 
-    sequence.forEach((target) => controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false }));
+    sequence.forEach((target) => controller.setTarget(target, { reducedMotion: false }));
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 5, target: { type: "barangay" } });
     expect(map.setView).toHaveBeenCalledTimes(3);
@@ -283,8 +277,8 @@ describe("native Leaflet camera controller", () => {
     const map = createMap([14.34, 121.04], 14);
     const controller = new MapMotionController(map);
 
-    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { directoryCollapsed: false, reducedMotion: false });
-    controller.setTarget({ type: "barangay", bounds: pacitaBounds }, { directoryCollapsed: false, reducedMotion: false });
+    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { reducedMotion: false });
+    controller.setTarget({ type: "barangay", bounds: pacitaBounds }, { reducedMotion: false });
 
     expect(controller.getSnapshot().revision).toBe(2);
     expect(map.setView).toHaveBeenCalledTimes(2);
@@ -296,9 +290,9 @@ describe("native Leaflet camera controller", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "citywide", bounds: citywideBounds } as const;
-    const resolved = getDefaultCitywideCamera(map, citywideBounds, false)!;
+    const resolved = getDefaultCitywideCamera(map, citywideBounds)!;
 
-    controller.setTarget(target, { directoryCollapsed: false, immediate: true });
+    controller.setTarget(target, { immediate: true });
 
     expect(controller.getSnapshot()).toMatchObject({ durationMs: 0, revision: 1, target: resolved });
     expect(map.setView).toHaveBeenCalledTimes(1);
@@ -310,9 +304,9 @@ describe("native Leaflet camera controller", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "barangay", bounds: pacitaBounds } as const;
-    const resolved = resolveMapCameraPosition(map, target, false)!;
+    const resolved = resolveMapCameraPosition(map, target)!;
 
-    controller.setTarget(target, { directoryCollapsed: false, reducedMotion: true });
+    controller.setTarget(target, { reducedMotion: true });
 
     expect(map.setView).toHaveBeenCalledTimes(1);
     expect(map.setView).toHaveBeenCalledWith(resolved.center, resolved.zoom, { animate: false });
@@ -323,22 +317,23 @@ describe("native Leaflet camera controller", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
 
-    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { directoryCollapsed: false, reducedMotion: false });
-    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { directoryCollapsed: true, reducedMotion: false });
+    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { reducedMotion: false });
+    controller.setTarget({ type: "citywide", bounds: citywideBounds }, { reducedMotion: false });
 
     expect(map.setMaxBounds).toHaveBeenCalledTimes(1);
     expect(map.setMinZoom).toHaveBeenCalledTimes(1);
   });
 
-  it("lowers the zoom floor when both panels leave too little room for the whole city", () => {
+  it("lowers the zoom floor when a narrow viewport needs to fit the whole city", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "citywide", bounds: citywideBounds } as const;
-    controller.setTarget(target, { directoryCollapsed: false, insightsOpen: true, immediate: true });
+    (map.getSize as Mock).mockReturnValue(toPoint(240, 480));
+    controller.setTarget(target, { immediate: true });
     expect(map.getMinZoom()).toBeLessThan(11.2);
 
     const fittedFloor = map.getMinZoom();
-    controller.setTarget(target, { directoryCollapsed: true, immediate: true });
+    controller.setTarget(target, { immediate: true });
     expect(map.getMinZoom()).toBe(fittedFloor);
   });
 });

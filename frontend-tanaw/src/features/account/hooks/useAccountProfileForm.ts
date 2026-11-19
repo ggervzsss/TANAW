@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { updateCurrentProfile } from "@/shared/services/accountService";
@@ -19,6 +19,7 @@ export function useAccountProfileForm() {
   const updateUser = useAuthStore((state) => state.updateUser);
   const user = {
     name: authUser?.managerName ?? authUser?.displayName ?? "TANAW User",
+    displayName: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
     phone: authUser?.phone ?? "",
@@ -26,6 +27,11 @@ export function useAccountProfileForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [fieldResetSignal, setFieldResetSignal] = useState(0);
+  const [isReadingImage, setIsReadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [errors, setErrors] = useState<Partial<Record<"firstName" | "middleInitial" | "lastName" | "phone", string>>>({});
+  const imageVersion = useRef(0);
   const authDisplayImageDataUrl = authUser?.displayImageDataUrl ?? null;
   const [displayImageDraft, setDisplayImageDraft] = useState(() => ({ dataUrl: authDisplayImageDataUrl, fileName: "", sourceDataUrl: authDisplayImageDataUrl }));
   const isImageDraftCurrent = displayImageDraft.sourceDataUrl === authDisplayImageDataUrl;
@@ -46,17 +52,29 @@ export function useAccountProfileForm() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isLoading || isReadingImage) return false;
     const formData = new FormData(event.currentTarget);
     const firstName = String(formData.get("firstName") ?? "");
     const middleInitial = normalizeMiddleInitial(String(formData.get("middleInitial") ?? ""));
     const lastName = String(formData.get("lastName") ?? "");
-    const validationError = validatePersonName(firstName, "First name") || validateMiddleInitial(middleInitial) || validatePersonName(lastName, "Last name");
-    if (validationError) return void toast.error(validationError);
     const phoneInput = String(formData.get("phone") ?? "");
-    const phoneError = validatePhilippineContactNumber(phoneInput, false);
-    if (phoneError) return void toast.error(phoneError);
+    const validation = {
+      firstName: validatePersonName(firstName, "First name") || undefined,
+      middleInitial: validateMiddleInitial(middleInitial) || undefined,
+      lastName: validatePersonName(lastName, "Last name") || undefined,
+      phone: validatePhilippineContactNumber(phoneInput, false) || undefined,
+    };
+    setSaveError("");
+    setErrors(validation);
+    const firstInvalid = Object.keys(validation).find((name) => validation[name as keyof typeof validation]);
+    if (firstInvalid) {
+      const form = event.currentTarget;
+      requestAnimationFrame(() => (form.elements.namedItem(firstInvalid) as HTMLInputElement | null)?.focus());
+      return false;
+    }
     const apiName = composeApiPersonName({ firstName, middleInitial, lastName });
     setIsLoading(true);
+    setIsSuccess(false);
     try {
       const updated = await updateCurrentProfile({
         firstName: apiName.firstName,
@@ -66,12 +84,15 @@ export function useAccountProfileForm() {
         displayImageDataUrl,
       });
       updateUser(updated);
+      setDisplayImageDraft({ dataUrl: updated.displayImageDataUrl ?? null, fileName: "", sourceDataUrl: updated.displayImageDataUrl ?? null });
       setIsSuccess(true);
       setFieldResetSignal((current) => current + 1);
       window.setTimeout(() => setIsSuccess(false), 2600);
       toast.success("Profile updated.");
+      return true;
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Unable to update profile."));
+      setSaveError(getApiErrorMessage(error, "Unable to update profile."));
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -80,13 +101,18 @@ export function useAccountProfileForm() {
   async function changeImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    const version = ++imageVersion.current;
+    setIsReadingImage(true);
+    setImageError("");
+    setIsSuccess(false);
     try {
       const upload = await readProfileImageFile(file);
+      if (version !== imageVersion.current) return;
       setDisplayImageDraft({ dataUrl: upload.dataUrl, fileName: upload.fileName, sourceDataUrl: authDisplayImageDataUrl });
-      toast.success("Profile photo ready to save.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load image.");
+      if (version === imageVersion.current) setImageError(error instanceof Error ? error.message : "Unable to load image.");
     } finally {
+      if (version === imageVersion.current) setIsReadingImage(false);
       event.target.value = "";
     }
   }
@@ -95,12 +121,37 @@ export function useAccountProfileForm() {
     changeImage,
     displayImageDataUrl,
     displayImageFileName,
+    errors,
     fieldResetSignal,
     initials,
+    imageError,
+    imageChanged: displayImageDataUrl !== authDisplayImageDataUrl,
+    isReadingImage,
     isLoading,
     isSuccess,
     profileName,
-    removeImage: () => setDisplayImageDraft({ dataUrl: null, fileName: "", sourceDataUrl: authDisplayImageDataUrl }),
+    saveError,
+    clearFieldError: (field: keyof typeof errors) => {
+      setErrors((current) => ({ ...current, [field]: undefined }));
+      setSaveError("");
+      setIsSuccess(false);
+    },
+    removeImage: () => {
+      imageVersion.current++;
+      setImageError("");
+      setIsSuccess(false);
+      setDisplayImageDraft({ dataUrl: null, fileName: "", sourceDataUrl: authDisplayImageDataUrl });
+    },
+    reset: () => {
+      imageVersion.current++;
+      setIsReadingImage(false);
+      setImageError("");
+      setErrors({});
+      setSaveError("");
+      setIsSuccess(false);
+      setFieldResetSignal((current) => current + 1);
+      setDisplayImageDraft({ dataUrl: authDisplayImageDataUrl, fileName: "", sourceDataUrl: authDisplayImageDataUrl });
+    },
     save,
     user,
   };

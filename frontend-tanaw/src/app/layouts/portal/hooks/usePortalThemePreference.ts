@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
+import { getApiAccountId } from "@/shared/lib/apiClient";
 import { getAccountPreferences, updateAccountPreferences } from "@/shared/services/accountService";
 import {
   applyThemePreference,
   chooseAuthenticatedThemePreference,
-  getStoredThemePreference,
   getStoredThemePreferenceOrNull,
   persistThemePreference,
   resolveThemePreference,
@@ -12,40 +12,36 @@ import {
 import type { ThemePreference } from "@/shared/utils/theme";
 import { transitionPortalTheme } from "@/shared/utils/themeTransition";
 
-export function usePortalThemePreference(animateTheme: boolean) {
-  const [theme, setTheme] = useState<ThemePreference>(getStoredThemePreference);
+export function usePortalThemePreference() {
+  const [storedThemeAtMount] = useState(getStoredThemePreferenceOrNull);
+  const [theme, setTheme] = useState<ThemePreference>(storedThemeAtMount ?? "system");
   const [systemTheme, setSystemTheme] = useState(() => resolveThemePreference("system"));
   const resolvedTheme = theme === "system" ? systemTheme : theme;
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const skipNextSaveRef = useRef(true);
-  const storedThemeAtMountRef = useRef<ThemePreference | null>(getStoredThemePreferenceOrNull());
   const themeRef = useRef(theme);
   const userSelectedThemeRef = useRef(false);
   const switching = useRef(false);
-  const [isSwitchingTheme, setIsSwitchingTheme] = useState(false);
+  const queuedTheme = useRef<ThemePreference | null>(null);
 
   useEffect(() => {
     let disposed = false;
     void getAccountPreferences()
       .then((preferences) => {
-        if (disposed) return;
-        const localPreference = userSelectedThemeRef.current ? themeRef.current : storedThemeAtMountRef.current;
-        const nextTheme = chooseAuthenticatedThemePreference(localPreference, preferences.theme);
+        if (disposed || userSelectedThemeRef.current) return;
+        const nextTheme = chooseAuthenticatedThemePreference(storedThemeAtMount, preferences.theme);
         if (nextTheme !== themeRef.current) {
           themeRef.current = nextTheme;
           setTheme(nextTheme);
         }
         persistThemePreference(nextTheme);
-        if (preferences.theme !== nextTheme) void updateAccountPreferences({ theme: nextTheme }).catch(() => undefined);
-        setPreferencesLoaded(true);
+        if (preferences.theme !== nextTheme) {
+          void updateAccountPreferences({ theme: nextTheme }).catch(() => undefined);
+        }
       })
-      .catch(() => {
-        if (!disposed) setPreferencesLoaded(true);
-      });
+      .catch(() => undefined);
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [storedThemeAtMount]);
 
   useLayoutEffect(() => {
     themeRef.current = theme;
@@ -57,50 +53,49 @@ export function usePortalThemePreference(animateTheme: boolean) {
       const next = resolveThemePreference("system");
       const apply = () => {
         if (themeRef.current === "system") {
-          applyThemePreference("system");
-          setSystemTheme(next);
+          setSystemTheme(applyThemePreference("system"));
         }
       };
-      if (animateTheme) void transitionPortalTheme(next, apply).catch(apply);
-      else apply();
+      void transitionPortalTheme(next, apply).catch(apply);
     };
     mediaQuery.addEventListener("change", onSystemChange);
     return () => mediaQuery.removeEventListener("change", onSystemChange);
-  }, [animateTheme, theme]);
+  }, [theme]);
 
-  useEffect(() => {
-    if (!preferencesLoaded) return;
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+  const selectTheme = (next: ThemePreference) => {
+    if (switching.current) {
+      queuedTheme.current = next;
       return;
     }
-    void updateAccountPreferences({ theme }).catch(() => toast.error("Unable to save theme preference."));
-  }, [preferencesLoaded, theme]);
-
-  const toggleTheme = () => {
-    if (switching.current) return;
+    if (next === themeRef.current) return;
     userSelectedThemeRef.current = true;
-    const next = resolveThemePreference(themeRef.current) === "dark" ? "light" : "dark";
-    if (!animateTheme) {
-      setTheme(next);
-      return;
-    }
-
-    switching.current = true;
-    setIsSwitchingTheme(true);
+    const accountId = getApiAccountId();
+    const nextResolved = resolveThemePreference(next);
     const apply = () => {
+      if (themeRef.current === next || getApiAccountId() !== accountId) return;
       themeRef.current = next;
       setTheme(next);
-      applyThemePreference(next);
+      const applied = applyThemePreference(next);
       persistThemePreference(next);
+      if (next === "system") setSystemTheme(applied);
+      void updateAccountPreferences({ theme: next }).catch(() => {
+        if (getApiAccountId() === accountId) toast.error("Unable to sync theme preference to your account.");
+      });
     };
-    void transitionPortalTheme(next, apply)
+    if (nextResolved === resolveThemePreference(themeRef.current)) {
+      apply();
+      return;
+    }
+    switching.current = true;
+    void transitionPortalTheme(nextResolved, apply)
       .catch(apply)
       .finally(() => {
         switching.current = false;
-        setIsSwitchingTheme(false);
+        const pending = queuedTheme.current;
+        queuedTheme.current = null;
+        if (pending && getApiAccountId() === accountId) selectTheme(pending);
       });
   };
 
-  return { resolvedTheme, toggleTheme, isSwitchingTheme };
+  return { theme, resolvedTheme, selectTheme };
 }

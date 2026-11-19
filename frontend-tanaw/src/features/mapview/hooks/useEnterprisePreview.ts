@@ -2,27 +2,25 @@ import L from "leaflet";
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { MapEnterprise } from "@/shared/types";
 import { createPopupHtml } from "../utils";
-import { getMapPanelInsets, type MapMotionController } from "../utils/mapCamera";
+import { type MapMotionController } from "../utils/mapCamera";
 
 type Options = {
   enterprise: MapEnterprise | null;
   mapRef: RefObject<L.Map | null>;
   motionRef: RefObject<MapMotionController | null>;
-  directoryCollapsed: boolean;
-  insightsOpen: boolean;
   onDismiss: (enterpriseId: string) => void;
   onViewDetails: (enterpriseId: string) => void;
 };
 
-export function useEnterprisePreview({ enterprise, mapRef, motionRef, directoryCollapsed, insightsOpen, onDismiss, onViewDetails }: Options) {
-  const current = useRef({ enterprise, directoryCollapsed, insightsOpen, onDismiss, onViewDetails });
+export function useEnterprisePreview({ enterprise, mapRef, motionRef, onDismiss, onViewDetails }: Options) {
+  const current = useRef({ enterprise, onDismiss, onViewDetails });
   const refresh = useRef<(() => void) | null>(null);
   const enterpriseId = enterprise?.id;
 
   useLayoutEffect(() => {
-    current.current = { enterprise, directoryCollapsed, insightsOpen, onDismiss, onViewDetails };
+    current.current = { enterprise, onDismiss, onViewDetails };
     refresh.current?.();
-  }, [enterprise, directoryCollapsed, insightsOpen, onDismiss, onViewDetails]);
+  }, [enterprise, onDismiss, onViewDetails]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -42,14 +40,13 @@ export function useEnterprisePreview({ enterprise, mapRef, motionRef, directoryC
       const location = popup.getLatLng();
       if (!box || !location || !popup.isOpen()) return;
       const size = map.getSize();
-      const { left, right } = getMapPanelInsets(size.x, current.current.directoryCollapsed, current.current.insightsOpen);
       const anchor = map.latLngToContainerPoint(location);
       if (anchor.x < 0 || anchor.x > size.x || anchor.y < 0 || anchor.y > size.y) {
         box.style.visibility = "hidden";
         return;
       }
-      const leftEdge = left || 12;
-      const rightEdge = size.x - (right || 12);
+      const leftEdge = 12;
+      const rightEdge = size.x - 12;
       const availableWidth = rightEdge - leftEdge;
       popup.options.maxWidth = Math.min(245, Math.max(140, availableWidth - 24));
       popup.options.maxHeight = Math.max(100, Math.max(anchor.y - 68, size.y - anchor.y - 29) - 24);

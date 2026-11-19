@@ -1,4 +1,5 @@
-import { Activity, CircleUserRound, Crosshair, FileText } from "lucide-react";
+import { Activity, CircleUserRound, Crosshair, FileText, Pin, ShieldAlert } from "lucide-react";
+import { Badge } from "@/design-system";
 import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { SystemLog } from "@/shared/types";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
@@ -112,6 +113,7 @@ export function AdminActivityTable({
               aria-label={`View details for ${log.action}`}
               onClick={() => onSelect(log)}
               onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(log))}
+              data-unresolved={log.resolutionStatus === "Unresolved" || undefined}
               className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer"
             >
               <td className="px-4 py-4 font-mono text-xs text-gray-500">
@@ -122,12 +124,20 @@ export function AdminActivityTable({
               <td className="px-4 py-4">
                 <div className="tanaw-audit-cell tanaw-audit-cell--action">
                   <span className="tanaw-audit-cell__icon" aria-hidden="true">
-                    <Activity size={15} />
+                    {log.resolutionStatus === "Unresolved" ? <ShieldAlert size={15} /> : <Activity size={15} />}
                   </span>
                   <div className="min-w-0">
                     <ExpandableTableText primary={log.action} ariaLabel="activity" className="font-semibold text-gray-900" />
-                    <div className="mt-1.5">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <ActivityGroupBadge group={activityGroupFor(log)} />
+                      {log.resolutionStatus === "Unresolved" && (
+                        <Badge tone="warning">
+                          <span className="inline-flex items-center gap-1">
+                            <Pin size={12} aria-hidden="true" /> Unresolved
+                          </span>
+                        </Badge>
+                      )}
+                      {log.resolutionStatus === "Resolved" && <Badge tone="neutral">Resolved</Badge>}
                     </div>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { matchPath, NavLink } from "react-router-dom";
 import { preloadPortalRoute } from "@/app/routers/routeModules";
 import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
-import { TopbarGlassNavigation } from "@/design-system/patterns/TopbarGlassIndicator";
+import { TopbarNavigation } from "@/design-system/patterns/TopbarNavigation";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import type { TopbarEntry } from "./portalNavigationModel";
@@ -21,13 +21,13 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
   const activeId = selected?.type === "link" ? selected.item.id : selected?.id ?? null;
   const base =
     "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 max-2xl:px-3.5";
+  const tabClass = role === "admin" ? `${base} whitespace-nowrap max-[1440px]:px-2 max-[1440px]:text-xs` : base;
   const active = "text-white";
-  const inactive = isDark ? "text-white/72 hover:text-white" : "text-white/84 hover:text-white";
+  const inactive = isDark ? "text-white/72" : "text-white/84";
   return (
-    <TopbarGlassNavigation
+    <TopbarNavigation
       activeId={activeId}
-      isDark={isDark}
-      className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
+      className={`relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4 ${role === "admin" ? "max-[1440px]:gap-1" : ""}`}
       aria-label={`${rolePortalLabel[role]} navigation`}
       onDragStart={(event) => event.preventDefault()}
     >
@@ -41,11 +41,11 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
               data-topbar-navigation={entry.item.id}
               onClick={() => onMenuChange(null)}
               {...routeIntentHandlers(queryClient, entry.item.path)}
-              className={({ isActive }) => [base, isActive ? active : inactive].join(" ")}
+              className={({ isActive }) => [tabClass, isActive ? active : inactive].join(" ")}
             >
               <span className="relative z-10 flex items-center gap-2">
                 <Icon size={16} className="shrink-0" />
-                {entry.item.label}
+                <span data-topbar-label>{entry.item.label}</span>
               </span>
             </NavLink>
           );
@@ -66,7 +66,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
             >
               <span className="relative z-10 flex items-center gap-2">
                 <Icon size={16} />
-                {entry.label}
+                <span data-topbar-label>{entry.label}</span>
                 <ChevronDown size={14} className={`ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`} />
               </span>
             </button>
@@ -101,7 +101,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
           </div>
         );
       })}
-    </TopbarGlassNavigation>
+    </TopbarNavigation>
   );
 }
 
@@ -109,7 +109,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
   const queryClient = useQueryClient();
   const selected = entries.flatMap((entry) => entry.type === "link" ? [entry.item] : entry.children).find((item) => matchesRoute(item.path, pathname));
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80 hover:text-white"}`;
+    `relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80"}`;
   return (
     <motion.div
       initial={{ opacity: 0, height: 0 }}
@@ -117,12 +117,12 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
       exit={{ opacity: 0, height: 0 }}
       className={`border-t px-6 pb-4 max-sm:px-4 ${isDark ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
     >
-      <TopbarGlassNavigation activeId={selected?.id ?? null} isDark={isDark} data-topbar-glass-layout="stacked" className="relative isolate grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
+      <TopbarNavigation activeId={selected?.id ?? null} className="relative isolate grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
         {entries.map((entry) =>
           entry.type === "link" ? (
             <NavLink key={entry.item.id} to={entry.item.path} data-topbar-navigation={entry.item.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, entry.item.path)} className={linkClass}>
               {<entry.item.icon size={16} />}
-              {entry.item.label}
+              <span data-topbar-label>{entry.item.label}</span>
             </NavLink>
           ) : (
             <div key={entry.id} className="space-y-2">
@@ -134,14 +134,14 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
                 {entry.children.map((child) => (
                   <NavLink key={child.id} to={child.path} data-topbar-navigation={child.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, child.path)} className={linkClass}>
                     {<child.icon size={15} />}
-                    {child.label}
+                    <span data-topbar-label>{child.label}</span>
                   </NavLink>
                 ))}
               </div>
             </div>
           ),
         )}
-      </TopbarGlassNavigation>
+      </TopbarNavigation>
     </motion.div>
   );
 }

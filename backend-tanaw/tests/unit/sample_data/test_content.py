@@ -198,7 +198,9 @@ async def test_latest_sample_telemetry_starts_with_zero_live_occupancy() -> None
     latest = max(scenario.telemetry, key=lambda snapshot: snapshot.received_at)
     assert scenario.current_visitors > 0
     assert latest.current_occupancy == 0
+    assert latest.entries is not None and latest.exits is not None
     assert latest.entries - latest.exits == scenario.current_visitors
+    assert latest.peak_occupancy is not None
     assert latest.peak_occupancy >= scenario.current_visitors
 
 

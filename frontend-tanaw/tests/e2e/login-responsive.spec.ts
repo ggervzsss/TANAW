@@ -402,7 +402,7 @@ test("keeps an explicit login theme through authentication, reload, and logout",
   await expect(page.locator("html")).toHaveClass(/dark/);
 
   await page.getByRole("button", { name: "Open account menu" }).click();
-  await page.getByRole("button", { name: "Logout" }).click();
+  await page.getByRole("button", { name: "Sign Out" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.locator("html")).toHaveClass(/dark/);
   expect(await page.evaluate(() => window.localStorage.getItem("tanaw-web-theme"))).toBe("dark");

@@ -21,7 +21,7 @@
   padding-inline: 26px;
   gap: 16px;
 }
-.enterprise-topbar [data-liquid-glass-navigation] {
+.enterprise-topbar [data-topbar-underline-navigation] {
   gap: 12px;
 }
 .design-card {

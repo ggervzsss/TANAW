@@ -83,22 +83,28 @@ async function expectUnifiedHeader(header: Locator, titles: string[], dividerCou
   expect(afterHover?.height).toBeCloseTo(beforeHover?.height ?? 0, 1);
 }
 
-async function expectGlassUnder(indicator: Locator, tab: Locator) {
+async function expectUnderlineUnder(indicator: Locator, tab: Locator) {
   await expect(indicator).toBeVisible();
-  const target = (await tab.boundingBox())!;
+  const target = (await tab.locator("[data-topbar-label]").boundingBox())!;
   await expect.poll(async () => {
-    const glass = (await indicator.boundingBox())!;
-    return Math.abs(glass.x + glass.width / 2 - target.x - target.width / 2) + Math.abs(glass.y - target.y);
+    const underline = (await indicator.boundingBox())!;
+    return Math.abs(underline.x + underline.width / 2 - target.x - target.width / 2) + Math.abs(underline.y - target.y - target.height - 4) + Math.abs(underline.width - target.width * 0.8);
   }).toBeLessThan(2);
 }
 
-test("unifies Admin summary metrics without changing the surrounding pages", async ({ page }) => {
+test("compactly presents Activity History metrics above its search", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockPortal(page, "admin", "light");
 
   await page.goto("/admin/activity-history");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Today", "Report Updates", "Admin Activity", "Important Updates"]);
-  await expect(page.getByPlaceholder("Search activity, name, affected item, or details")).toBeVisible();
+  const summary = page.getByRole("region", { name: "Activity history summary" });
+  for (const label of ["Today", "Report Updates", "Admin Activity", "Important Updates"]) {
+    await expect(summary.getByText(label, { exact: true })).toBeVisible();
+  }
+  const search = page.getByPlaceholder("Search activity, name, affected item, or details");
+  const bounds = (await summary.boundingBox())!;
+  expect(bounds.height).toBeLessThan(86);
+  expect(bounds.y + bounds.height).toBeLessThan((await search.boundingBox())!.y);
 
   await page.goto("/admin/operations");
   await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Needs Attention", "Busy Establishments", "Escalated Support", "Account Requests"]);
@@ -168,9 +174,9 @@ test("keeps IT dropdown navigation keyboard-accessible and reduced-motion safe",
   const overview = page.getByRole("link", { name: "Overview" });
   const workCenter = page.getByRole("link", { name: "Work Center" });
   const accounts = page.getByRole("button", { name: "Accounts" });
-  const glass = page.locator("[data-topbar-glass-indicator]");
-  await expectGlassUnder(glass, overview);
-  await expect(glass.locator(".tanaw-topbar-glass__light")).toBeHidden();
+  const underline = page.locator("[data-topbar-underline]");
+  await expectUnderlineUnder(underline, overview);
+  await expect(underline).toHaveCSS("transition-property", "none");
 
   await workCenter.focus();
   await expect(workCenter).toHaveCSS("outline-style", "solid");
@@ -181,53 +187,50 @@ test("keeps IT dropdown navigation keyboard-accessible and reduced-motion safe",
   const personnel = page.getByRole("link", { name: "LGU Personnel" });
   await expect(personnel).toBeVisible();
   await expect(page.getByRole("link", { name: "Enterprises", exact: true })).toBeVisible();
-  await expectGlassUnder(glass, overview);
+  await expectUnderlineUnder(underline, overview);
 
   await page.keyboard.press("Tab");
   await expect(personnel).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/it\/lgu-accounts$/);
   await expect(accounts).toHaveAttribute("aria-current", "true");
-  await expectGlassUnder(glass, accounts);
+  await expectUnderlineUnder(underline, accounts);
 });
 
-test("keeps the IT glass selection through hover, history, reload and mobile navigation", async ({ page }) => {
+test("keeps the IT underline selection through hover, history, reload and mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockPortal(page, "it", "dark");
   await page.goto("/it/dashboard");
 
-  const navigation = page.locator("nav[data-liquid-glass-navigation]:visible");
+  const navigation = page.locator("nav[data-topbar-underline-navigation]:visible");
   const overview = navigation.getByRole("link", { name: "Overview" });
   const workCenter = navigation.getByRole("link", { name: "Work Center" });
   const system = navigation.getByRole("button", { name: "System", exact: true });
-  const glass = navigation.locator("[data-topbar-glass-indicator]");
-  const hover = navigation.locator("[data-topbar-glass-hover]");
-  await expectGlassUnder(glass, overview);
+  const underline = navigation.locator("[data-topbar-underline]");
+  await expectUnderlineUnder(underline, overview);
   await workCenter.hover();
-  await expect(hover).toHaveCSS("opacity", "1");
-  await expectGlassUnder(hover, workCenter);
-  await expectGlassUnder(glass, overview);
+  await expect(workCenter).toHaveCSS("color", "rgb(158, 241, 200)");
+  await expectUnderlineUnder(underline, overview);
 
   await system.click();
   const settings = page.getByRole("link", { name: "System Settings" });
   await settings.hover();
-  await expect(hover).toHaveCSS("opacity", "0");
   await settings.click();
-  await expect(page).toHaveURL(/\/it\/system-settings$/);
+  await expect(page).toHaveURL(/\/it\/settings\/system$/);
   await expect(system).toHaveAttribute("aria-current", "true");
-  await expectGlassUnder(glass, system);
+  await expectUnderlineUnder(underline, system);
 
   await page.goBack();
-  await expectGlassUnder(glass, overview);
+  await expectUnderlineUnder(underline, overview);
   await page.goForward();
-  await expectGlassUnder(glass, system);
+  await expectUnderlineUnder(underline, system);
   await page.reload();
-  await expectGlassUnder(glass, system);
+  await expectUnderlineUnder(underline, system);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Open navigation" }).click();
   await expect(settings).toHaveAttribute("aria-current", "page");
-  await expectGlassUnder(glass, settings);
+  await expectUnderlineUnder(underline, settings);
 });
 
 test("keeps Staff Reporting Period as a real control beside unified metrics", async ({ page }) => {

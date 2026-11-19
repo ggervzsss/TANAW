@@ -18,6 +18,7 @@ export function usePasswordChangeForm() {
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [resetSignal, setResetSignal] = useState(0);
   const [errors, setErrors] = useState<PasswordErrors>({});
+  const [saveError, setSaveError] = useState("");
 
   const clearValues = useCallback(() => {
     setCurrentPassword("");
@@ -35,6 +36,9 @@ export function usePasswordChangeForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isLoading) return;
+    setIsSuccess(false);
+    setSaveError("");
     const form = event.currentTarget;
     const nextErrors = getPasswordErrors(currentPassword, newPassword, passwordConfirmation);
     setErrors(nextErrors);
@@ -60,18 +64,27 @@ export function usePasswordChangeForm() {
       setErrors({});
     } catch {
       clearValues();
-      toast.error("Unable to update password. Check your current password and try again.");
+      setSaveError("Unable to update password. Check your current password and try again.");
     } finally {
       setIsLoading(false);
     }
   }
 
   function updateField(field: "currentPassword" | "newPassword" | "confirmPassword", value: string) {
+    setIsSuccess(false);
+    setSaveError("");
     if (field === "currentPassword") setCurrentPassword(value);
     else if (field === "newPassword") setNewPassword(value);
     else setPasswordConfirmation(value);
     setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  return { currentPassword, errors, formRef, isLoading, isSuccess, newPassword, passwordConfirmation, resetSignal, submit, updateField };
+  const reset = () => {
+    clearValues();
+    setErrors({});
+    setIsSuccess(false);
+    setSaveError("");
+  };
+
+  return { currentPassword, errors, formRef, isLoading, isSuccess, newPassword, passwordConfirmation, reset, resetSignal, saveError, submit, updateField };
 }

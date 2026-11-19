@@ -1,5 +1,5 @@
 import { queryKeys } from "../constants/queryKeys";
-import { apiClient } from "../lib/apiClient";
+import { apiClient, getApiAccountId } from "../lib/apiClient";
 import type { AccountSummary, AuthUser } from "../types";
 
 export const currentUserQueryKey = queryKeys.currentUser;
@@ -42,9 +42,18 @@ export async function getAccountPreferences() {
   return normalizeAccountPreferences(response.data);
 }
 
-export async function updateAccountPreferences(preferences: Partial<AccountPreferences>) {
-  const response = await apiClient.patch<AccountPreferences>("/auth/preferences", preferences);
-  return normalizeAccountPreferences(response.data);
+// The API merges partial updates into one account record. Send theme and display changes in order.
+let preferenceWrites = Promise.resolve();
+
+export function updateAccountPreferences(preferences: Partial<AccountPreferences>) {
+  const accountId = getApiAccountId();
+  const write = preferenceWrites.then(async () => {
+    if (!accountId || getApiAccountId() !== accountId) throw new Error("Account changed before preferences could be saved.");
+    const response = await apiClient.patch<AccountPreferences>("/auth/preferences", preferences);
+    return normalizeAccountPreferences(response.data);
+  });
+  preferenceWrites = write.then(() => undefined, () => undefined);
+  return write;
 }
 
 function normalizeAccountPreferences(preferences: Partial<AccountPreferences>): AccountPreferences {

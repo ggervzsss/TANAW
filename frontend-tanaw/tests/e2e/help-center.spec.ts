@@ -62,7 +62,9 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
 test("offers the existing Support Tickets path from Admin help", async ({ page }) => {
   await mockPortal(page, "admin");
   await page.goto("/admin/help/admin-operations-center");
-  await expect(page.getByRole("heading", { name: "Investigate an issue in Operations Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Investigate an issue in Alerts & Requests" })).toBeVisible();
   await page.getByRole("link", { name: "Open Support Tickets" }).click();
-  await expect(page).toHaveURL(/\/admin\/operations\?view=support$/);
+  await expect(page).toHaveURL(/\/admin\/settings\/support$/);
+  await page.getByRole("button", { name: "Back from General Settings" }).click();
+  await expect(page).toHaveURL(/\/admin\/help\/admin-operations-center$/);
 });

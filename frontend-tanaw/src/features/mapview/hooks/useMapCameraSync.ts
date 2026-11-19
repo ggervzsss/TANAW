@@ -14,8 +14,6 @@ type MapCameraSyncOptions = {
   citywideBoundsRef: MutableRef<L.LatLngBounds | null>;
   findBoundaryLayerByName: (barangayName: string) => (L.Path & { feature?: GeoJSON.Feature }) | undefined;
   initializedMapInstanceRef: MutableRef<L.Map | null>;
-  isDirectoryCollapsed: boolean;
-  isInsightsOpen: boolean;
   lastCameraTargetRef: MutableRef<MapCameraTarget | null>;
   mapEnterprises: MapEnterprise[];
   mapMotionControllerRef: MutableRef<MapMotionController | null>;
@@ -32,8 +30,6 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
     citywideBoundsRef,
     findBoundaryLayerByName,
     initializedMapInstanceRef,
-    isDirectoryCollapsed,
-    isInsightsOpen,
     lastCameraTargetRef,
     mapEnterprises,
     mapMotionControllerRef,
@@ -50,7 +46,7 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
     if (initializedMapInstanceRef.current !== map) {
       const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
       if (!bounds.isValid()) return;
-      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen, immediate: true });
+      motionController.setTarget({ type: "citywide", bounds }, { immediate: true });
       initializedMapInstanceRef.current = map;
       lastCameraTargetRef.current = cameraTarget.type === "citywide" ? cameraTarget : null;
       onReady();
@@ -62,15 +58,15 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
       if (!targetLayer || !(targetLayer instanceof L.Polygon)) return;
       const bounds = barangayBoundsRef.current.get(normalizeBarangayName(cameraTarget.barangayName)) ?? targetLayer.getBounds();
       if (!bounds.isValid()) return;
-      motionController.setTarget({ type: "barangay", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
+      motionController.setTarget({ type: "barangay", bounds });
     } else if (cameraTarget.type === "enterprise") {
       const enterprise = mapEnterprises.find((item) => item.id === cameraTarget.enterpriseId);
       if (!enterprise) return;
-      motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng] }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
+      motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng] });
     } else if (cameraTarget.fit) {
       const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
       if (!bounds.isValid()) return;
-      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, insightsOpen: isInsightsOpen });
+      motionController.setTarget({ type: "citywide", bounds });
     } else {
       motionController.clearPendingSelection();
     }
@@ -83,8 +79,6 @@ export function useMapCameraSync(options: MapCameraSyncOptions) {
     citywideBoundsRef,
     findBoundaryLayerByName,
     initializedMapInstanceRef,
-    isDirectoryCollapsed,
-    isInsightsOpen,
     lastCameraTargetRef,
     mapEnterprises,
     mapMotionControllerRef,

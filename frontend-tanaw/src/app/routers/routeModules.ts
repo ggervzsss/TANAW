@@ -3,7 +3,7 @@ import type { UserRole } from "@/shared/types/role.types";
 import { routes } from "./routes";
 
 const modules = {
-  account: () => import("@/features/account"),
+  settings: () => import("@/features/account/pages/GeneralSettingsPage"),
   alerts: () => import("@/features/alerts-monitor"),
   analytics: () => import("@/features/analytics"),
   dashboard: () => import("@/features/dashboard"),
@@ -12,16 +12,14 @@ const modules = {
   lguAccounts: () => import("@/features/lgu-accounts"),
   login: () => import("@/features/login"),
   mapView: () => import("@/features/mapview"),
+  visitorInsights: () => import("@/features/mapview/pages/AdminVisitorInsightsPage"),
   notifications: () => import("@/features/notifications"),
   reports: () => import("@/features/reports"),
   systemLogs: () => import("@/features/system-logs"),
-  systemSettings: () => import("@/features/system-settings"),
-  displayPreferences: () => import("@/features/display-preferences"),
   helpCenter: () => import("@/features/help-center"),
 } as const;
 
-export const AccountProfilePage = lazy(() => modules.account().then((module) => ({ default: module.AccountProfilePage })));
-export const AccountSecurityPage = lazy(() => modules.account().then((module) => ({ default: module.AccountSecurityPage })));
+export const GeneralSettingsPage = lazy(() => modules.settings().then((module) => ({ default: module.GeneralSettingsPage })));
 export const AdminOperationsCenterPage = lazy(() => modules.alerts().then((module) => ({ default: module.AdminOperationsCenterPage })));
 export const ITWorkCenterPage = lazy(() => modules.alerts().then((module) => ({ default: module.ITWorkCenterPage })));
 export const StaffAnalyticsPage = lazy(() => modules.analytics().then((module) => ({ default: module.StaffAnalyticsPage })));
@@ -33,12 +31,11 @@ export const ActivateAccountPage = lazy(() => modules.login().then((module) => (
 export const EnterpriseAccessPage = lazy(() => modules.login().then((module) => ({ default: module.EnterpriseAccessPage })));
 export const LoginPage = lazy(() => modules.login().then((module) => ({ default: module.LoginPage })));
 export const VerifyEmailChangePage = lazy(() => modules.login().then((module) => ({ default: module.VerifyEmailChangePage })));
+export const AdminVisitorInsightsPage = lazy(() => modules.visitorInsights().then((module) => ({ default: module.AdminVisitorInsightsPage })));
 export const AdminMapViewPage = lazy(() => modules.mapView().then((module) => ({ default: module.AdminMapViewPage })));
 export const NotificationsPage = lazy(() => modules.notifications().then((module) => ({ default: module.NotificationsPage })));
 export const StaffBatchReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffBatchReportsPage })));
 export const StaffFinalReportsAuditPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffFinalReportsAuditPage })));
-export const ITSystemSettingsPage = lazy(() => modules.systemSettings().then((module) => ({ default: module.ITSystemSettingsPage })));
-export const DisplayPreferencesPage = lazy(() => modules.displayPreferences().then((module) => ({ default: module.DisplayPreferencesPage })));
 export const HelpCenterPage = lazy(() => modules.helpCenter().then((module) => ({ default: module.HelpCenterPage })));
 export const AdminActivityHistoryPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminActivityHistoryPage })));
 export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.ITSystemLogsPage })));
@@ -46,25 +43,23 @@ export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) =>
 const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.admin.activityHistory]: modules.systemLogs,
   [routes.admin.mapview]: modules.mapView,
+  [routes.admin.visitorInsights]: modules.visitorInsights,
   [routes.admin.notifications]: modules.notifications,
   [routes.admin.operations]: modules.alerts,
-  [routes.admin.profile]: modules.account,
-  [routes.admin.security]: modules.account,
+  [routes.admin.generalSettings]: modules.settings,
   [routes.it.dashboard]: modules.dashboard,
   [routes.it.enterpriseAccounts]: modules.enterpriseAccounts,
   [routes.it.lguAccounts]: modules.lguAccounts,
   [routes.it.notifications]: modules.notifications,
-  [routes.it.profile]: modules.account,
-  [routes.it.security]: modules.account,
+  [routes.it.generalSettings]: modules.settings,
   [routes.it.systemLogs]: modules.systemLogs,
-  [routes.it.systemSettings]: modules.systemSettings,
+  [routes.it.systemSettings]: modules.settings,
   [routes.it.workCenter]: modules.alerts,
   [routes.staff.analytics]: modules.analytics,
   [routes.staff.batchReports]: modules.reports,
   [routes.staff.finalReportsAudit]: modules.reports,
   [routes.staff.notifications]: modules.notifications,
-  [routes.staff.profile]: modules.account,
-  [routes.staff.security]: modules.account,
+  [routes.staff.generalSettings]: modules.settings,
 };
 
 if (import.meta.env.DEV) portalModuleByPath[routes.it.devLog] = modules.devLog;

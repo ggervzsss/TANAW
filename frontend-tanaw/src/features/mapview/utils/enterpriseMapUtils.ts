@@ -1,8 +1,8 @@
 import L from "leaflet";
+import { toSentenceCase } from "@/shared/utils/sentenceCase";
 import type { MapEnterprise } from "@/shared/types";
 import type { LeafletMapTheme } from "./leafletTheme";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
-import { getDarkMonitoringBadgeClass } from "./mapStatusStyles";
+import { getDarkMonitoringBadgeClass, getMonitoringStatusLabel } from "./mapStatusStyles";
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
@@ -97,71 +97,47 @@ export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane:
   const isAdmin = variant === "admin";
 
   return {
-    color: isDark ? (isAdmin ? "#96beaf" : "#7893aa") : isAdmin ? "#3d6e63" : "#2a3063",
-    weight: isAdmin ? 2 : 1,
-    opacity: isAdmin ? 0.92 : 0.78,
+    color: isDark ? (isAdmin ? "#b1d9cc" : "#7893aa") : isAdmin ? "#386d61" : "#2a3063",
+    weight: isAdmin ? (isDark ? 1.9 : 1.6) : 1,
+    opacity: isAdmin ? 0.96 : 0.78,
     fillColor: isDark ? mixHexColors(getGeoJsonColor(name), isAdmin ? "#244843" : "#10243a", isAdmin ? 0.48 : 0.58) : getGeoJsonColor(name),
-    fillOpacity: isDark ? 0.22 : isAdmin ? 0.25 : 0.34,
+    fillOpacity: isDark ? (isAdmin ? 0.16 : 0.22) : isAdmin ? 0.16 : 0.34,
     pane,
     className: `${isAdmin ? "tanaw-boundary-path" : "tanaw-location-boundary-path"} outline-none`,
   };
 }
 
-export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
-  if (theme === "dark") {
-    return {
-      color: "#abe6c9",
-      fillColor: "#459e80",
-      fillOpacity: 0.31,
-      opacity: 1,
-      weight: 3.25,
-    };
-  }
-
+export function getAdminBoundaryCasingStyle(theme: LeafletMapTheme): L.PathOptions {
   return {
-    color: "#167052",
-    fillColor: "#49a981",
-    fillOpacity: 0.31,
+    color: theme === "dark" ? "#071512" : "#f7fcf9",
+    opacity: theme === "dark" ? 0.94 : 0.82,
+    weight: theme === "dark" ? 4.25 : 3.5,
+    fill: false,
+    interactive: false,
+    className: "tanaw-boundary-casing",
+  };
+}
+
+export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
+  return {
+    color: theme === "dark" ? "#a0f5cb" : "#167052",
+    fillColor: theme === "dark" ? "#57b897" : "#50b88a",
+    fillOpacity: theme === "dark" ? 0.27 : 0.22,
     opacity: 1,
-    weight: 3,
+    weight: 3.25,
   };
 }
 
 export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
-  if (theme === "dark") {
-    return {
-      color: "#93baad",
-      fillOpacity: 0.18,
-      opacity: 0.82,
-      weight: 1.75,
-    };
-  }
-
   return {
-    color: "#557a6e",
-    fillOpacity: 0.17,
-    opacity: 0.84,
-    weight: 1.65,
+    color: theme === "dark" ? "#a2ccbf" : "#53766d",
+    fillColor: theme === "dark" ? "#071613" : "#203831",
+    fillOpacity: theme === "dark" ? 0.22 : 0.1,
+    opacity: theme === "dark" ? 0.89 : 0.82,
+    weight: theme === "dark" ? 1.8 : 1.5,
   };
 }
 
-export function getHoverBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
-  if (theme === "dark") {
-    return {
-      color: "#cae7dc",
-      fillOpacity: 0.34,
-      opacity: 0.98,
-      weight: 2.6,
-    };
-  }
-
-  return {
-    color: "#2d8b6d",
-    fillOpacity: 0.34,
-    opacity: 0.97,
-    weight: 2.5,
-  };
-}
 
 export function normalizeGeoJson(payload: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
   return {
@@ -437,8 +413,8 @@ export function createPopupHtml(enterprise: MapEnterprise) {
 
 function createEnterpriseMapSummary(enterprise: MapEnterprise, expanded: boolean) {
   const cameras = enterprise.cameraMonitoring;
-  const cameraCount = cameras ? `${cameras.healthyCameraCount}/${cameras.configuredCameraCount} reporting` : "Unavailable";
-  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "Unavailable";
+  const cameraCount = cameras ? `${cameras.healthyCameraCount}/${cameras.configuredCameraCount} reporting` : "No telemetry";
+  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "No live data";
   const address = enterprise.fullAddress;
   const location = [enterprise.category, enterprise.barangay].filter(Boolean).join(" · ");
   const isOccupancyAlert = enterprise.occupancyStatus === "Warning" || enterprise.occupancyStatus === "High Occupancy";
@@ -446,7 +422,7 @@ function createEnterpriseMapSummary(enterprise: MapEnterprise, expanded: boolean
     <strong>${escapeHtml(enterprise.name)}</strong>
     ${location ? `<p class="tanaw-map-marker-summary__location">${escapeHtml(location)}</p>` : ""}
     ${address && address !== location ? `<p>${escapeHtml(address)}</p>` : ""}
-    <span class="tanaw-map-marker-summary__status ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}">${escapeHtml(toSentenceCase(enterprise.monitoringStatus))}</span>
+    <span class="tanaw-map-marker-summary__status ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}">${escapeHtml(getMonitoringStatusLabel(enterprise.monitoringStatus))}</span>
     <dl>
       <div><dt>Cameras</dt><dd>${cameraCount}</dd></div>
       <div><dt>Live occupancy</dt><dd>${occupancy}</dd></div>

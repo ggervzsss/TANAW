@@ -9,6 +9,7 @@ import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketState
 
 from app.core.security import decode_access_token
 from app.core.websocket_auth import receive_websocket_bearer_token
@@ -54,7 +55,7 @@ async def realtime_websocket(websocket: WebSocket) -> None:
         ).model_dump(mode="json"),
     )
 
-    receive_task: asyncio.Task[str] | None = asyncio.create_task(websocket.receive_text())
+    receive_task: asyncio.Task[str] | None = asyncio.create_task(_receive_text(websocket))
     missed_heartbeats = 0
     try:
         while True:
@@ -70,7 +71,7 @@ async def realtime_websocket(websocket: WebSocket) -> None:
                     message = active_receive_task.result()
                 finally:
                     receive_task = None
-                receive_task = asyncio.create_task(websocket.receive_text())
+                receive_task = asyncio.create_task(_receive_text(websocket))
                 missed_heartbeats = 0
                 if _is_ping(message):
                     await realtime_manager.send_protocol(
@@ -112,6 +113,16 @@ async def realtime_websocket(websocket: WebSocket) -> None:
             with suppress(asyncio.CancelledError, WebSocketDisconnect):
                 await receive_task
         await realtime_manager.disconnect(websocket, reason="client_disconnected")
+
+
+async def _receive_text(websocket: WebSocket) -> str:
+    try:
+        return await websocket.receive_text()
+    except RuntimeError:
+        # The sender or connection manager can close the socket before this task runs.
+        if websocket.application_state is not WebSocketState.DISCONNECTED:
+            raise
+        raise WebSocketDisconnect from None
 
 
 def _is_ping(message: str) -> bool:

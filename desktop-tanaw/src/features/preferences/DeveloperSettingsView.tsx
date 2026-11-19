@@ -1,6 +1,6 @@
 import { Check, Code2, Gauge } from "lucide-react";
 import { useState } from "react";
-import { Card } from "../../components/Card";
+import { SettingsGroup } from "../../design-system/patterns/GeneralSettings";
 import { DesignSwitch } from "../../components/DesignSwitch";
 import { DEVICE_PERFORMANCE_OPTIONS, devicePerformanceLabel, readDevicePerformanceProfile, useDevicePerformanceProfile, type DevicePerformanceProfile } from "../camera/model/device-performance";
 import { applyDevicePerformanceProfile, DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus } from "../camera/services/ml-service";
@@ -42,19 +42,9 @@ export function DeveloperSettingsView() {
   };
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-sans duration-500">
-      <header>
-        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">This computer</p>
-        <h2 className="text-2xl font-bold tracking-tight text-[#111827] dark:text-white">Developer Settings</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-slate-300">
-          Detection models and diagnostic overlays for testing cameras. They are saved on this computer only and apply to every camera on it.
-        </p>
-      </header>
-
-      <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_22px_60px_rgba(15,23,42,0.08)] dark:border-white/10">
-        <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-tanaw-live to-[#d6ad33]" />
-        <SectionHeading icon={<Gauge size={18} />} title="Performance profile" description="How hard this computer works on every camera. Changing it restarts running cameras." />
-        <fieldset className="p-6">
+    <div className="space-y-5">
+      <SettingsGroup icon={<Gauge size={17} aria-hidden="true" />} title="Performance profile" description="How hard this computer works on every camera. Changing it restarts running cameras.">
+        <fieldset>
           <legend className="sr-only">Performance profile</legend>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {DEVICE_PERFORMANCE_OPTIONS.map((option) => {
@@ -62,7 +52,7 @@ export function DeveloperSettingsView() {
               return (
                 <label
                   key={option.value}
-                  className={`relative rounded-xl border p-3 transition ${selected ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600 dark:border-emerald-400 dark:bg-emerald-400/10 dark:ring-emerald-400" : "border-slate-200 bg-white hover:border-emerald-300 dark:border-white/12 dark:bg-white/4"} ${applyState.kind === "applying" ? "cursor-wait opacity-70" : "cursor-pointer"}`}
+                  className={`relative rounded-tanaw-sm border p-3 transition focus-within:outline-2 focus-within:outline-(--tanaw-focus-ring) ${selected ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600 dark:border-emerald-400 dark:bg-emerald-400/10 dark:ring-emerald-400" : "border-slate-200 bg-white hover:border-emerald-300 dark:border-white/12 dark:bg-white/4"} ${applyState.kind === "applying" ? "cursor-wait opacity-70" : "cursor-pointer"}`}
                 >
                   <input
                     type="radio"
@@ -89,11 +79,10 @@ export function DeveloperSettingsView() {
             {applyState.kind === "applying" ? "Applying…" : applyState.kind === "done" || applyState.kind === "error" ? applyState.message : null}
           </p>
         </fieldset>
-      </Card>
+      </SettingsGroup>
 
-      <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_22px_60px_rgba(15,23,42,0.08)] dark:border-white/10">
-        <SectionHeading icon={<Code2 size={18} />} title="Camera preview" description="Normally each detected person shows only a plain box." />
-        <div className="space-y-4 p-6">
+      <SettingsGroup icon={<Code2 size={17} aria-hidden="true" />} title="Camera preview" description="Normally each detected person shows only a plain box.">
+        <div className="space-y-3">
           <DesignSwitch
             label="Detection details"
             description="Show each person's tracker number, tracking state (for example In monitored area) and detection confidence."
@@ -107,21 +96,7 @@ export function DeveloperSettingsView() {
             onChange={(demographics) => updateDeveloperSettings({ demographics })}
           />
         </div>
-      </Card>
-    </div>
-  );
-}
-
-function SectionHeading({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return (
-    <div className="flex items-center gap-3 border-b border-slate-200 p-6 dark:border-white/10">
-      <span className="text-emerald-700 dark:text-emerald-300" aria-hidden="true">
-        {icon}
-      </span>
-      <div>
-        <h3 className="text-xl font-bold text-slate-950 dark:text-white">{title}</h3>
-        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-300">{description}</p>
-      </div>
+      </SettingsGroup>
     </div>
   );
 }

@@ -210,7 +210,7 @@ function RealtimeStatus({ state }: { state: RealtimeConnectionState }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-4 bottom-4 z-2000 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/95 px-4 py-2 text-xs font-bold text-amber-800 shadow-lg backdrop-blur dark:border-amber-300/25 dark:bg-slate-900/95 dark:text-amber-200"
+      className="tanaw-connection-notice pointer-events-none fixed right-4 bottom-4 z-2000 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/95 px-4 py-2 text-xs font-bold text-amber-800 shadow-lg backdrop-blur dark:border-amber-300/25 dark:bg-slate-900/95 dark:text-amber-200"
     >
       <WifiOff size={14} aria-hidden="true" />
       {label}

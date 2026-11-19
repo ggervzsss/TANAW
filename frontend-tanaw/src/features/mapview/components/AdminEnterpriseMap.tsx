@@ -1,43 +1,32 @@
 import { AnimatePresence } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useReducer, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalMapEnterprises } from "@/app/hooks/useOperationalSync";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
-import type { AccountSummary, MapEnterprise, VisitorInsightRange } from "@/shared/types";
+import type { AccountSummary, MapEnterprise } from "@/shared/types";
 import { useAdminLeafletMap, useMapDirectoryData, useSanPedroBoundary } from "../hooks";
 import { initialMapInteractionState, mapInteractionReducer } from "../utils";
-import { COMPACT_MAP_MAX_WIDTH } from "../utils/mapCamera";
+import { useBarangayInactivity } from "../hooks/useBarangayInactivity";
 import { AdminMapDirectory } from "./AdminMapDirectory";
-import { AdminMapInsights } from "./AdminMapInsights";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
-import { MapToolRail } from "./MapToolRail";
 
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 const EMPTY_MAP_ENTERPRISES: MapEnterprise[] = [];
 const MAP_LABELS_PREFERENCE = "tanaw-admin-map-labels";
-const COMPACT_MAP_QUERY = `(max-width: ${COMPACT_MAP_MAX_WIDTH}px)`;
 
 export function AdminEnterpriseMap() {
   const { boundary, isError: isBoundaryError, isLoading: isBoundaryLoading } = useSanPedroBoundary();
-  const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(() => window.matchMedia(COMPACT_MAP_QUERY).matches);
+  const navigate = useNavigate();
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [hoveredEnterpriseId, setHoveredEnterpriseId] = useState<string | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [showLabels, setShowLabels] = useState(() => window.localStorage.getItem(MAP_LABELS_PREFERENCE) !== "hidden");
   const [interactionState, dispatchMapInteraction] = useReducer(mapInteractionReducer, initialMapInteractionState);
-  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [detailsEnterpriseId, setDetailsEnterpriseId] = useState<string | null>(null);
-  const focusInsightsOnDialogExit = useRef(false);
-  const [insightRange, setInsightRange] = useState<VisitorInsightRange>("7d");
-  const revealMapSelection = useCallback((selection: "barangay" | "enterprise") => {
-    if (!window.matchMedia(COMPACT_MAP_QUERY).matches) return;
-    setIsDirectoryCollapsed(true);
-    setIsInsightsOpen(false);
-    if (selection === "barangay" && !isDirectoryCollapsed) {
-      requestAnimationFrame(() => document.getElementById("spatial-directory-toggle")?.focus({ preventScroll: true }));
-    }
-  }, [isDirectoryCollapsed]);
-  const { insightEnterpriseId, selectedBarangayName, selectedEnterpriseId } = interactionState;
+  const { selectedBarangayName, selectedEnterpriseId } = interactionState;
   const highlightedEnterprise = interactionState.cameraTarget.type === "enterprise" ? interactionState.cameraTarget : null;
   const token = useAuthStore((state) => state.token);
   const enterpriseAccountsQuery = useQuery({ queryKey: [...enterpriseAccountsQueryKey, token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
@@ -63,55 +52,29 @@ export function AdminEnterpriseMap() {
     dispatchMapInteraction,
     hoveredEnterpriseId,
     interactionState,
-    isDirectoryCollapsed,
-    isInsightsOpen,
     mapEnterprises,
     selectedEnterprise,
-    onSelectLocation: revealMapSelection,
     onViewDetails: setDetailsEnterpriseId,
     showBoundaries,
     showLabels,
     visibleEnterprises,
   });
 
-  useEffect(() => {
-    const compact = window.matchMedia(COMPACT_MAP_QUERY);
-    const keepOnePanelVisible = (event: MediaQueryListEvent) => {
-      if (event.matches && isInsightsOpen) setIsDirectoryCollapsed(true);
-    };
-    compact.addEventListener("change", keepOnePanelVisible);
-    return () => compact.removeEventListener("change", keepOnePanelVisible);
-  }, [isInsightsOpen]);
-
-  const changeDirectoryState = (collapsed: boolean) => {
-    if (!collapsed && window.matchMedia(COMPACT_MAP_QUERY).matches) setIsInsightsOpen(false);
-    setIsDirectoryCollapsed(collapsed);
-  };
-  const changeInsightsState = (open: boolean) => {
-    if (open && window.matchMedia(COMPACT_MAP_QUERY).matches) setIsDirectoryCollapsed(true);
-    setIsInsightsOpen(open);
-  };
+  const resetInactiveBarangay = useCallback(() => clearBarangaySelection("inactive"), [clearBarangaySelection]);
+  useBarangayInactivity(workspaceRef, selectedBarangayName, Boolean(detailsEnterprise), resetInactiveBarangay);
 
   return (
-    <div className="tanaw-admin-map-workspace relative min-h-0 flex-1 overflow-clip bg-(--tanaw-surface-inset)" data-insights-open={isInsightsOpen}>
-      <div className="absolute inset-0 z-0">
-        <div id="admin-enterprise-map" className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
-      </div>
+    <div ref={workspaceRef} className="tanaw-admin-map-workspace min-h-0 flex-1">
       <AdminMapDirectory
         barangayDropdownOptions={barangayDropdownOptions}
         boundaryFeatureCount={boundaryFeatureCount}
         isBoundaryError={isBoundaryError}
         isBoundaryLoading={isBoundaryLoading}
-        isCollapsed={isDirectoryCollapsed}
         isEnterpriseError={enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError}
         isEnterpriseLoading={enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading}
         isMapReady={isInitialCameraReady}
         mapEnterprises={mapEnterprises}
-        onClearBarangay={(reason) => {
-          revealMapSelection("barangay");
-          clearBarangaySelection(reason);
-        }}
-        onCollapseChange={changeDirectoryState}
+        onClearBarangay={clearBarangaySelection}
         onResetView={fitCitywide}
         onRetry={() => {
           void enterpriseAccountsQuery.refetch();
@@ -134,31 +97,22 @@ export function AdminEnterpriseMap() {
         showLabels={showLabels}
         unpinnedEnterprises={unpinnedEnterprises}
       />
-      <MapToolRail isInsightsOpen={isInsightsOpen} onToggleInsights={() => changeInsightsState(!isInsightsOpen)} />
-      <AdminMapInsights
-        barangay={selectedBarangayName ?? highlightedEnterprise?.barangayName ?? null}
-        enterpriseId={insightEnterpriseId}
-        isBoundaryError={isBoundaryError}
-        isBoundaryLoading={isBoundaryLoading}
-        isOpen={isInsightsOpen}
-        range={insightRange}
-        onRangeChange={setInsightRange}
-        onShowArea={() => dispatchMapInteraction({ type: "show-area-insights" })}
-      />
-      <AnimatePresence onExitComplete={() => {
-        if (!focusInsightsOnDialogExit.current) return;
-        focusInsightsOnDialogExit.current = false;
-        requestAnimationFrame(() => document.getElementById("visitor-insights-launcher")?.focus({ preventScroll: true }));
-      }}>
+      <div className="tanaw-admin-map-viewport relative isolate min-h-0 min-w-0 overflow-hidden">
+        <div id="admin-enterprise-map" className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
+        {(isBoundaryLoading || isBoundaryError) && (
+          <p role="status" className="tanaw-map-load-status absolute top-4 left-4 z-415 rounded-xl border px-4 py-3 text-sm font-semibold">
+            {isBoundaryError ? "Barangay boundaries are temporarily unavailable." : "Loading barangay boundaries..."}
+          </p>
+        )}
+      </div>
+      <AnimatePresence>
         {detailsEnterprise && (
           <EnterpriseDetailsModal
             enterprise={detailsEnterprise}
             onClose={closeEnterpriseDetails}
             onOpenInsights={() => {
-              dispatchMapInteraction({ type: "show-enterprise-insights", enterpriseId: detailsEnterprise.id });
-              changeInsightsState(true);
-              focusInsightsOnDialogExit.current = true;
-              setDetailsEnterpriseId(null);
+              const params = new URLSearchParams({ enterprise: detailsEnterprise.id, barangay: detailsEnterprise.barangay });
+              navigate(`${routes.admin.visitorInsights}?${params}`);
             }}
           />
         )}

@@ -18,7 +18,6 @@ export function TicketsView() {
   const {
     categoryFieldConfig,
     clearFieldError,
-    enterpriseName,
     error,
     fieldErrors,
     fileInputRef,
@@ -55,17 +54,7 @@ export function TicketsView() {
   } = useTicketsWorkspace();
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-sans duration-500">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Support</p>
-          <h2 className="text-2xl font-bold tracking-tight text-[#111827] dark:text-white">Support Tickets</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-slate-200">
-            Submit camera, reporting, maintenance, or account concerns for {enterpriseName}. Admin and IT personnel will be notified.
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-5">
       {error && (
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-950/35 dark:text-red-100">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
@@ -73,11 +62,11 @@ export function TicketsView() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
+      <div className="tanaw-ticket-layout">
+        <Card className="min-w-0 overflow-hidden">
           <TicketPanelHeader icon={<LifeBuoy size={18} />} title="New Ticket" subtitle="Provide enough detail for remote review or on-site action." />
 
-          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 bg-white p-6 dark:bg-[#121c31]">
+          <form ref={formRef} onSubmit={handleSubmit} aria-busy={isSubmitting} noValidate className="space-y-3 bg-(--tanaw-surface) p-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <SelectField
                 name="category"
@@ -243,7 +232,7 @@ export function TicketsView() {
           </form>
         </Card>
 
-        <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
+        <Card className="min-w-0 overflow-hidden">
           <TicketPanelHeader
             icon={<TicketCheck size={20} />}
             title="Support Requests"
@@ -257,7 +246,7 @@ export function TicketsView() {
           />
 
           {tickets.length > 0 ? (
-            <div className="max-h-152 divide-y divide-gray-100 overflow-y-auto bg-white dark:divide-slate-700 dark:bg-[#121c31]">
+            <div className="max-h-152 divide-y divide-(--tanaw-border-soft) overflow-y-auto">
               {sortedTickets.map((ticket) => (
                 <article
                   key={ticket.id}
@@ -270,7 +259,7 @@ export function TicketsView() {
                       setSelectedTicketId(ticket.id);
                     }
                   }}
-                  className="cursor-pointer p-5 transition duration-200 hover:bg-emerald-50/50 focus:bg-emerald-50/50 focus:outline-none dark:bg-[#121c31] dark:hover:bg-[#18243a] dark:focus:bg-[#18243a]"
+                  className="cursor-pointer p-4 transition-colors hover:bg-(--tanaw-selected-bg) focus-visible:bg-(--tanaw-selected-bg) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -309,7 +298,7 @@ export function TicketsView() {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-96 flex-col items-center justify-center bg-white px-6 py-14 text-center dark:bg-[#121c31]">
+            <div className="flex min-h-48 flex-col items-center justify-center bg-(--tanaw-surface-inset) px-4 py-8 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
                 {isLoading ? <RefreshCw size={22} className="animate-spin" /> : <CheckCircle2 size={22} />}
               </div>

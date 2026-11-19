@@ -75,10 +75,13 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   const topbar = page.locator('[data-topbar-theme="dark"]');
   await expect(topbar).toBeVisible();
   await expect(page.locator('[style*="it-topbar-building-night.png"]')).toBeVisible();
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "General Settings" }).click();
+  await page.getByRole("button", { name: "Appearance" }).click();
+  await page.getByRole("radio", { name: "Light Mode" }).click();
   await expect(page.locator('[data-topbar-theme="light"]')).toBeVisible();
   await expect(page.locator('[style*="it-topbar-building.png"]')).toBeVisible();
-  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await page.getByRole("radio", { name: "Dark Mode" }).click();
 
   await page.goto("/staff/final-reports-audit");
   const reportRow = page.getByRole("row", { name: /SAMPLE-FINAL-MAY-2026-0001/ });
@@ -165,6 +168,8 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await expect(currentPasswordToggle).toBeDisabled();
   await expect(currentPassword).not.toHaveCSS("background-color", "rgb(255, 255, 0)");
 
+  await expect(page.getByRole("button", { name: "Update Password" })).toBeDisabled();
+  await newPassword.fill("Replacement secure passphrase 2026");
   await page.getByRole("button", { name: "Update Password" }).click();
   await expect(currentPassword).toBeFocused();
   await expect(page.getByText("Enter your current password.")).toBeVisible();
@@ -208,11 +213,11 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   expect(browserErrors).toEqual([]);
 });
 
-test("shows the Logout background only while the shared profile action is interactive", async ({ page }) => {
+test("shows the Sign Out background only while the shared profile action is interactive", async ({ page }) => {
   await signInAsStaff(page);
   await page.getByRole("button", { name: "Open account menu" }).click();
-  const logout = page.getByRole("button", { name: "Logout" });
-  await expect(logout).toHaveClass(/profile-menu-danger/);
+  const logout = page.getByRole("button", { name: "Sign Out" });
+  await expect(logout).toBeVisible();
   await expect(logout).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await logout.hover();
   await expect(logout).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");

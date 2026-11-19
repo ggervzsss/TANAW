@@ -85,7 +85,7 @@ export const helpArticles: HelpArticle[] = [
     category: "Getting Started",
     keywords: ["large text", "font", "compact", "accessibility", "display"],
     sections: [
-      { heading: "Change your display", steps: ["Open the account menu.", "Choose Display Preferences.", "Select a Text size and Interface scale. Changes save immediately."] },
+      { heading: "Change your display", steps: ["Open the account menu.", "Choose General Settings, then Appearance.", "Select a Text size and Interface scale. Changes save immediately."] },
       { heading: "Reset", paragraphs: ["Choose Reset to default to restore standard sizing. Your theme does not change."] },
     ],
     relatedArticleIds: ["account-session"],

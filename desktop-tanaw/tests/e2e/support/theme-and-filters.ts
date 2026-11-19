@@ -1,7 +1,23 @@
 import { writeFile } from "node:fs/promises";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-const toggle = (page: Page) => page.getByRole("button", { name: /Switch to (light|dark) mode/ });
+export async function selectLightThemeInSettings(page: Page) {
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "General Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Light Mode" }).click();
+  await page.getByRole("button", { name: "Back from General Settings" }).click();
+}
+
+/** Use the existing storage listener to change theme without leaving the workspace under test. */
+export async function switchTheme(page: Page, theme: "light" | "dark") {
+  await page.evaluate((theme) => {
+    const key = "tanaw-enterprise-theme";
+    window.localStorage.setItem(key, theme);
+    window.dispatchEvent(new StorageEvent("storage", { key, newValue: theme }));
+  }, theme);
+  await expect(page.locator("html")).toHaveClass(theme === "dark" ? /\bdark\b/ : /\blight\b/);
+}
 async function choose(page: Page, name: string, option: string) {
   await page.getByRole("combobox", { name, exact: true }).click();
   await page.getByRole("option", { name: option, exact: true }).click();
@@ -35,16 +51,17 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator(".overview-metrics")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator(".overview-layout .design-skeleton")).toHaveCount(0);
-  if (await page.locator("html").evaluate((root) => root.classList.contains("dark"))) await toggle(page).click();
+  await switchTheme(page, "light");
   await expect(page.locator(".overview-metric").first()).toHaveCSS("opacity", "1");
   await page.mouse.move(0, 0);
   const cardBorder = await token(page, "--tanaw-border-soft");
   await expect.poll(async () => (await geometry(page, ".overview-metrics,.overview-charts > section,.overview-secondary > section")).every((node) => node.border === cardBorder)).toBe(true);
   const before = await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section");
   await page.evaluate(() => {
-    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark mode"]')!;
+    const key = "tanaw-enterprise-theme";
+    window.localStorage.setItem(key, "dark");
     const t = performance.now();
-    button.click();
+    window.dispatchEvent(new StorageEvent("storage", { key, newValue: "dark" }));
     Object.assign(window, { __themeImmediate: { dark: document.documentElement.classList.contains("dark"), elapsed: performance.now() - t } });
   });
   expect(await page.evaluate(() => (window as unknown as { __themeImmediate: { dark: boolean } }).__themeImmediate.dark)).toBe(true);
@@ -68,11 +85,11 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await auditDarkContrast(page, info, "assistant", ".tanaw-assistant");
   await page.screenshot({ path: info.outputPath("dark-assistant.png"), fullPage: true });
   await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
-  for (let n = 0; n < 4; n++) await toggle(page).click();
+  for (const theme of ["light", "dark", "light", "dark"] as const) await switchTheme(page, theme);
   await expect(page.locator("html")).toHaveClass(/dark/);
-  await toggle(page).click();
+  await switchTheme(page, "light");
   await expect.poll(() => geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section")).toEqual(before);
-  await toggle(page).click();
+  await switchTheme(page, "dark");
   await page.getByRole("button", { name: "Camera Setup", exact: true }).click();
   await page.getByRole("button", { name: "Edit configuration" }).click();
   const settings = page.getByRole("region", { name: "Camera Settings", exact: true });
@@ -96,14 +113,14 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await page.screenshot({ path: info.outputPath("dark-add-camera.png"), fullPage: true });
   await page.keyboard.press("Escape");
   await expect(add).toHaveCount(0);
-  await toggle(page).click();
+  await switchTheme(page, "light");
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   await expect(add).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(page.locator(".camera-dialog-backdrop")).toHaveCSS("background-color", "rgba(244, 248, 246, 0.56)");
   await page.screenshot({ path: info.outputPath("light-add-camera.png"), fullPage: true });
   await page.keyboard.press("Escape");
   await expect(add).toHaveCount(0);
-  await toggle(page).click();
+  await switchTheme(page, "dark");
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(page.locator(".report-origin-table")).toBeVisible();
   await expect(page.getByLabel("System unique visitor count", { exact: true })).not.toHaveText("\u2026");
@@ -166,7 +183,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await expectSynchronizedTheme(page, "light", [".enterprise-shell", ".report-ledger", ".report-status", ".enterprise-topbar__overlay", ".enterprise-topbar__image--day"], info);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
-  await toggle(page).click();
+  await switchTheme(page, "dark");
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
   await page.getByRole("button", { name: "Camera Setup", exact: true }).click();
   await page.getByRole("button", { name: "Edit configuration" }).click();
@@ -215,7 +232,9 @@ export async function expectSynchronizedTheme(page: Page, theme: "light" | "dark
           });
       }
       const firstTime = performance.now();
-      document.querySelector<HTMLButtonElement>(`button[aria-label="Switch to ${theme} mode"]`)!.click();
+      const key = "tanaw-enterprise-theme";
+      window.localStorage.setItem(key, theme);
+      window.dispatchEvent(new StorageEvent("storage", { key, newValue: theme }));
       while (!root.classList.contains(theme)) await new Promise(requestAnimationFrame);
       const commitMs = performance.now() - firstTime;
       if (startViewTransition) transitionDocument.startViewTransition = startViewTransition;

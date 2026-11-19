@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Camera, FileText, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
-import { TopbarGlassNavigation } from "./TopbarGlassIndicator";
+import { TopbarNavigation } from "./TopbarNavigation";
 
-const meta = { title: "Patterns/Topbar glass navigation", component: TopbarGlassNavigation } satisfies Meta<typeof TopbarGlassNavigation>;
+const meta = { title: "Patterns/Topbar navigation", component: TopbarNavigation } satisfies Meta<typeof TopbarNavigation>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -14,13 +14,13 @@ const items = [
 ];
 
 export const PortalTabs: Story = {
-  args: { activeId: "dashboard", isDark: false },
+  args: { activeId: "dashboard" },
   render: ({ activeId }, { globals }) => {
     const [selected, setSelected] = useState(activeId);
     const isDark = globals.theme === "Dark";
     return (
       <div className={`rounded-lg p-4 text-white ${isDark ? "bg-[#071e18]" : "bg-tanaw-civic-deep"}`}>
-        <TopbarGlassNavigation activeId={selected} isDark={isDark} className="relative isolate inline-flex items-center gap-3" aria-label="Enterprise navigation">
+        <TopbarNavigation activeId={selected} className="relative isolate inline-flex items-center gap-3" aria-label="Enterprise navigation">
           {items.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -31,10 +31,10 @@ export const PortalTabs: Story = {
               onClick={() => setSelected(id)}
             >
               <Icon size={16} />
-              {label}
+              <span data-topbar-label>{label}</span>
             </button>
           ))}
-        </TopbarGlassNavigation>
+        </TopbarNavigation>
       </div>
     );
   },

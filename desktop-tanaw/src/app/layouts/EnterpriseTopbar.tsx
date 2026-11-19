@@ -1,7 +1,8 @@
-import { BookOpen, Camera, ChevronDown, Code2, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
+import { Camera, FileText, LayoutDashboard, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { TopbarGlassNavigation } from "../../design-system/patterns/TopbarGlassIndicator";
+import { TopbarAccount } from "../../design-system/patterns/TopbarAccount";
+import { TopbarNavigation } from "../../design-system/patterns/TopbarNavigation";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
@@ -11,7 +12,6 @@ import { SAN_PEDRO_SEAL_IMAGE } from "../../lib/assets";
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
   displayName: string;
-  initials: string;
   isNotificationsOpen: boolean;
   notifications: EnterpriseNotification[];
   resolvedTheme: "light" | "dark";
@@ -24,7 +24,7 @@ type EnterpriseTopbarProps = {
   onNotificationSelect: (notification: EnterpriseNotification) => void;
   onNotificationsClose: () => void;
   onNotificationsToggle: () => void;
-  onToggleTheme: () => void;
+  onOpenSettings: (profile?: boolean) => void;
 };
 
 const enterpriseNavigation = [
@@ -33,18 +33,14 @@ const enterpriseNavigation = [
   { id: "reports", label: "Reports", icon: FileText },
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
 
-export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
+export function EnterpriseBrand() {
   return (
-    <div className="flex shrink-0 items-center gap-4">
-      <button type="button" onClick={onDashboard} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
-        <img
-          src={SAN_PEDRO_SEAL_IMAGE}
-          alt="San Pedro Seal"
-          className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10"
-        />
-        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
-      </button>
-      <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />
+    <div className="flex shrink-0 items-center gap-4 max-sm:gap-2">
+      <div className="flex items-center gap-4 max-sm:gap-2">
+        <img src={SAN_PEDRO_SEAL_IMAGE} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-8" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
+      </div>
+      <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />
       <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
         Enterprise Portal
       </span>
@@ -55,7 +51,6 @@ export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
 export function EnterpriseTopbar({
   activeView,
   displayName,
-  initials,
   isNotificationsOpen,
   notifications,
   resolvedTheme,
@@ -68,25 +63,10 @@ export function EnterpriseTopbar({
   onNotificationSelect,
   onNotificationsClose,
   onNotificationsToggle,
-  onToggleTheme,
+  onOpenSettings,
 }: EnterpriseTopbarProps) {
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showProfileMenu) return undefined;
-
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (!profileMenuRef.current?.contains(event.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
-  }, [showProfileMenu]);
 
   useEffect(() => {
     if (!isNotificationsOpen) return undefined;
@@ -102,28 +82,23 @@ export function EnterpriseTopbar({
   }, [isNotificationsOpen, onNotificationsClose]);
 
   useEffect(() => {
-    if (!showProfileMenu && !showMobileNav && !isNotificationsOpen) return undefined;
+    if (!showMobileNav && !isNotificationsOpen) return undefined;
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setShowProfileMenu(false);
       setShowMobileNav(false);
       onNotificationsClose();
     };
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [isNotificationsOpen, onNotificationsClose, showMobileNav, showProfileMenu]);
+  }, [isNotificationsOpen, onNotificationsClose, showMobileNav]);
 
-  const profileEmail = user?.email ?? "No account email";
   const isDarkTopbar = resolvedTheme === "dark";
   const controlClasses = getEnterpriseTopbarControlClasses(resolvedTheme);
-  const accountSubtitle = user?.role === "enterprise" ? "Enterprise Account" : "TANAW Account";
-  const displayImageDataUrl = user?.displayImageDataUrl ?? null;
-  const navItemBase =
-    "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 max-2xl:px-3.5";
+  const navItemBase = "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 max-2xl:px-3.5";
   const navItemActive = "text-white";
-  const navItemInactive = isDarkTopbar ? "text-white/72 hover:text-white" : "text-white/84 hover:text-white";
+  const navItemInactive = isDarkTopbar ? "text-white/72" : "text-white/84";
   const activeTab = enterpriseNavigation.find((item) => item.id === activeView)?.id ?? null;
   const navButtons = enterpriseNavigation.map((item) => {
     const Icon = item.icon;
@@ -142,7 +117,7 @@ export function EnterpriseTopbar({
       >
         <span className="relative z-10 flex items-center gap-2">
           <Icon size={16} className="shrink-0" />
-          {item.label}
+          <span data-topbar-label>{item.label}</span>
         </span>
       </button>
     );
@@ -156,145 +131,55 @@ export function EnterpriseTopbar({
           <div data-topbar-image="night" className="enterprise-topbar__image enterprise-topbar__image--night" />
         </div>
         <div className="enterprise-topbar__overlay" aria-hidden="true" />
-        <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
-          <EnterpriseBrand onDashboard={() => onNavigate("dashboard")} />
+        <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2">
+          <EnterpriseBrand />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
-          <TopbarGlassNavigation
+          <TopbarNavigation
             activeId={activeTab}
-            isDark={isDarkTopbar}
             className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
             aria-label="Enterprise navigation"
             onDragStart={(event) => event.preventDefault()}
           >
             {navButtons}
-          </TopbarGlassNavigation>
+          </TopbarNavigation>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
-            <button
-              type="button"
-              aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
-              onClick={() => setShowMobileNav((current) => !current)}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${controlClasses.icon}`}
-            >
-              {showMobileNav ? <X size={18} /> : <Menu size={18} />}
-            </button>
+          <button
+            type="button"
+            aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
+            onClick={() => setShowMobileNav((current) => !current)}
+            className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${controlClasses.icon}`}
+          >
+            {showMobileNav ? <X size={18} /> : <Menu size={18} />}
+          </button>
 
-            <button
-              type="button"
-              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={() => {
-                setShowProfileMenu(false);
-                onNotificationsClose();
-                onToggleTheme();
-              }}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${controlClasses.icon}`}
-            >
-              {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            <div ref={notificationMenuRef} className="relative z-1002">
+          <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
+            <div ref={notificationMenuRef} className="sm:relative">
               <NotificationDropdown
                 isOpen={isNotificationsOpen}
                 notifications={notifications}
                 unreadCount={unreadCount}
                 triggerVariant={isDarkTopbar ? "topbar-dark" : "topbar"}
-                onToggleOpen={() => {
-                  setShowProfileMenu(false);
-                  onNotificationsToggle();
-                }}
+                onToggleOpen={onNotificationsToggle}
                 onMarkAllRead={onMarkAllRead}
                 onSelectNotification={onNotificationSelect}
                 onViewAll={() => onNavigate("notifications")}
               />
             </div>
 
-            <div ref={profileMenuRef} className="relative z-1002">
-              <button
-                type="button"
-                aria-label="Open account menu"
-                onClick={() => {
-                  setShowProfileMenu((current) => !current);
-                  onNotificationsClose();
-                }}
-                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${controlClasses.account}`}
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
-                  {displayImageDataUrl ? <img src={displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
-                </div>
-                <div className="hidden min-w-0 flex-1 text-left lg:block">
-                  <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{displayName}</p>
-                  <p className="mt-0.5 text-[11px] leading-tight text-emerald-50/78">{accountSubtitle}</p>
-                </div>
-                <ChevronDown size={15} className={`ml-auto shrink-0 text-emerald-50/75 transition-transform duration-200 ${showProfileMenu ? "rotate-180" : ""}`} />
-              </button>
-
-              <AnimatePresence>
-                {showProfileMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="enterprise-profile-menu absolute top-full right-0 z-1003 mt-3 max-h-[calc(100svh-var(--tanaw-topbar-height)-1rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
-                  >
-                    <div className="enterprise-profile-menu__header mb-1 border-b border-emerald-100 bg-linear-to-r from-emerald-50/90 via-white to-amber-50/70 px-4 py-3.5">
-                      <p title={displayName} className="text-tanaw-navy truncate text-sm font-bold">
-                        {displayName}
-                      </p>
-                      <p className="truncate text-xs text-gray-500">{profileEmail}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("profile")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <User size={14} /> Edit Profile Info
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("security")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <Shield size={14} /> Password Settings
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("tickets")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <LifeBuoy size={14} /> Support Tickets
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("display-preferences")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <SlidersHorizontal size={14} /> Display Preferences
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("developer-settings")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <Code2 size={14} /> Developer Settings
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateFromMenu("help")}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-                    >
-                      <BookOpen size={14} /> Help Center
-                    </button>
-                    <button type="button" onClick={onLogout} className="text-tanaw-red flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-red-50">
-                      <LogOut size={14} /> Sign Out
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <TopbarAccount
+              account={{ name: displayName, email: user?.email, image: user?.displayImageDataUrl, role: "Enterprise Account" }}
+              activeAction={activeView === "settings" || activeView === "help" ? activeView : undefined}
+              onEditProfile={() => onOpenSettings(true)}
+              onSettings={() => onOpenSettings()}
+              onHelp={() => onNavigate("help")}
+              onSignOut={onLogout}
+              onOpen={() => {
+                onNotificationsClose();
+                setShowMobileNav(false);
+              }}
+            />
           </div>
         </div>
       </div>
@@ -308,7 +193,7 @@ export function EnterpriseTopbar({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
           >
-            <TopbarGlassNavigation activeId={activeTab} isDark={isDarkTopbar} data-topbar-glass-layout="stacked" className="relative isolate grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
+            <TopbarNavigation activeId={activeTab} className="relative isolate grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
               {enterpriseNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
@@ -325,22 +210,17 @@ export function EnterpriseTopbar({
                     onFocus={() => onNavigateIntent(item.id)}
                     onPointerEnter={() => onNavigateIntent(item.id)}
                     onTouchStart={() => onNavigateIntent(item.id)}
-                    className={`relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80 hover:text-white"}`}
+                    className={`relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80"}`}
                   >
                     <Icon size={16} className="shrink-0" />
-                    {item.label}
+                    <span data-topbar-label>{item.label}</span>
                   </button>
                 );
               })}
-            </TopbarGlassNavigation>
+            </TopbarNavigation>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-
-  function navigateFromMenu(view: EnterpriseView) {
-    setShowProfileMenu(false);
-    onNavigate(view);
-  }
 }

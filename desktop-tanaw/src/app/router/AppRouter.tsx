@@ -145,25 +145,17 @@ export function AppRouter() {
           }
         />
         <Route
-          path={routePaths.enterpriseProfile}
+          path={routePaths.enterpriseSettings + "/:section?"}
           element={
             <RequireAuth>
               <RendererReadyBoundary>
-                <EnterpriseShell activeView="profile" />
+                <EnterpriseShell activeView="settings" />
               </RendererReadyBoundary>
             </RequireAuth>
           }
         />
-        <Route
-          path={routePaths.enterpriseSecurity}
-          element={
-            <RequireAuth>
-              <RendererReadyBoundary>
-                <EnterpriseShell activeView="security" />
-              </RendererReadyBoundary>
-            </RequireAuth>
-          }
-        />
+        <Route path="/enterprise/profile" element={<Navigate to={routePaths.enterpriseProfile} replace />} />
+        <Route path="/enterprise/security" element={<Navigate to={routePaths.enterpriseSecurity} replace />} />
         <Route
           path={routePaths.enterpriseNotifications}
           element={
@@ -174,36 +166,9 @@ export function AppRouter() {
             </RequireAuth>
           }
         />
-        <Route
-          path={routePaths.enterpriseTickets}
-          element={
-            <RequireAuth>
-              <RendererReadyBoundary>
-                <EnterpriseShell activeView="tickets" />
-              </RendererReadyBoundary>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path={routePaths.enterpriseDisplayPreferences}
-          element={
-            <RequireAuth>
-              <RendererReadyBoundary>
-                <EnterpriseShell activeView="display-preferences" />
-              </RendererReadyBoundary>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path={routePaths.enterpriseDeveloperSettings}
-          element={
-            <RequireAuth>
-              <RendererReadyBoundary>
-                <EnterpriseShell activeView="developer-settings" />
-              </RendererReadyBoundary>
-            </RequireAuth>
-          }
-        />
+        <Route path="/enterprise/tickets" element={<Navigate to={routePaths.enterpriseTickets} replace />} />
+        <Route path="/enterprise/display-preferences" element={<Navigate to={routePaths.enterpriseSettings + "/appearance"} replace />} />
+        <Route path="/enterprise/developer-settings" element={<Navigate to={routePaths.enterpriseDeveloperSettings} replace />} />
         <Route
           path={routePaths.enterpriseHelp}
           element={

@@ -104,7 +104,7 @@ export function CameraSettingsPanel(props: Props) {
     };
     const navigate = (event: MouseEvent) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
-        '[data-topbar-navigation], .enterprise-topbar button[aria-label="Open TANAW dashboard"], .enterprise-profile-menu button, nav[aria-label="Enterprise mobile navigation"] button, a[href]',
+        '[data-topbar-navigation], [data-account-navigation], nav[aria-label="Enterprise mobile navigation"] button, a[href]',
       );
       if (!target || !dirtyRef.current || bypassNavigation.current || target.getAttribute("data-topbar-navigation") === "cameras") return;
       event.preventDefault();

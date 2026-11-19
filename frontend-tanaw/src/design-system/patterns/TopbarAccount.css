@@ -1,0 +1,270 @@
+/*
+ * GENERATED FILE. Do not edit; change design-system/src/patterns/TopbarAccount.css instead.
+ * Update with: node design-system/scripts/sync.mjs
+ * Source SHA-256: 9d3c948bdc0e41972affb9033300e381293188c727ffe893df8f54050c3bdf89
+ */
+.tanaw-account-control {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border: 1px solid var(--account-control-border, #c8f8de66);
+  border-radius: 999px;
+  background: linear-gradient(
+    115deg,
+    var(--account-control-shade, #062b21a6),
+    var(--account-control-glow, #c4f4d91f)
+  );
+  color: white;
+  box-shadow: inset 0 1px #f0fff216;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+[data-topbar-theme="dark"] .tanaw-account-control {
+  --account-control-border: #a0dcbf52;
+  --account-control-shade: #031c17d1;
+  --account-control-glow: #a0e3ba1c;
+}
+
+.tanaw-account-control[data-open="true"] {
+  border-color: #bcf7d4b3;
+  box-shadow: 0 0 0 2px #b3f4d325;
+}
+
+.tanaw-account-edit,
+.tanaw-account-trigger {
+  border-radius: 999px;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.tanaw-account-edit {
+  position: relative;
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+}
+
+.tanaw-account-trigger-avatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  background: #c2f4d9;
+  color: #083729;
+  box-shadow: 0 0 0 1px #e1fff473;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.tanaw-account-edit:is(:hover, :focus-visible) .tanaw-account-trigger-avatar {
+  transform: scale(1.045);
+  box-shadow: 0 0 0 3px #b3f4d340;
+}
+
+.tanaw-account-edit-indicator {
+  position: absolute;
+  right: 0.03rem;
+  bottom: 0.03rem;
+  display: grid;
+  width: 0.94rem;
+  height: 0.94rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #053c2e;
+  color: #f0fff6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.tanaw-account-edit:is(:hover, :focus-visible) .tanaw-account-edit-indicator {
+  opacity: 1;
+}
+
+.tanaw-account-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.55rem;
+  gap: 0.75rem;
+  padding-inline: 0.55rem 0.65rem;
+  color: white;
+  text-align: start;
+}
+
+.tanaw-account-trigger-copy {
+  max-width: 10rem;
+}
+
+.tanaw-account-trigger-role,
+.tanaw-account-trigger-chevron {
+  color: #d1ecde;
+}
+
+.tanaw-account-trigger:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: #e0ffed1f;
+}
+
+.tanaw-account-trigger:active {
+  transform: scale(0.97);
+}
+
+.tanaw-account-trigger-chevron {
+  flex: none;
+  transition: transform 160ms ease;
+}
+
+.tanaw-account-trigger[aria-expanded="true"] .tanaw-account-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.tanaw-account-menu {
+  position: absolute;
+  z-index: 1003;
+  inset: calc(100% + 0.65rem) 0 auto auto;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 7rem);
+  overflow: auto;
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: var(--radius-tanaw-lg);
+  background: var(--tanaw-surface-raised);
+  color: var(--tanaw-text);
+  box-shadow: var(--shadow-tanaw-raised);
+  transform-origin: top right;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms;
+}
+
+.tanaw-account-menu[aria-hidden="true"] {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-0.3rem) scale(0.985);
+  pointer-events: none;
+}
+
+.tanaw-account-menu-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 0.85rem 0.8rem;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  background: linear-gradient(
+    120deg,
+    var(--tanaw-selected-bg),
+    var(--tanaw-surface-inset) 86%
+  );
+}
+
+.tanaw-account-menu-avatar {
+  width: 2.65rem;
+  height: 2.65rem;
+  box-shadow: 0 0 0 3px var(--tanaw-surface-raised);
+}
+
+.tanaw-account-menu-role {
+  margin-top: 0.28rem;
+  color: var(--tanaw-accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.tanaw-account-menu-list {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.tanaw-account-menu-footer {
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+.tanaw-account-menu-action {
+  display: block;
+  width: 100%;
+  min-height: 2.7rem;
+  border-radius: var(--radius-tanaw-sm);
+  background-color: transparent;
+  text-align: start;
+  font-size: 0.86rem;
+  font-weight: 650;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.tanaw-account-menu-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.48rem 0.7rem;
+  pointer-events: none;
+  transition: transform 150ms ease;
+}
+
+.tanaw-account-menu-action:is(:hover, :focus-visible, [aria-current]) {
+  background-color: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-account-menu-action:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-account-menu-action:is(:hover, :focus-visible)
+  > .tanaw-account-menu-row {
+  transform: translateX(2px);
+}
+
+.tanaw-account-menu-action--sign-out {
+  color: var(--tanaw-danger);
+}
+
+.tanaw-account-menu-action--sign-out:is(:hover, :focus-visible) {
+  background-color: var(--tanaw-danger-surface);
+  color: var(--tanaw-danger);
+}
+
+@media (width < 40rem) {
+  /* Keep the controls usable when increased text size scales rem units. */
+  .tanaw-topbar-compact-control {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tanaw-topbar-compact-trigger {
+    min-width: 36px;
+    min-height: 44px;
+    padding-inline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-account-control,
+  .tanaw-account-edit,
+  .tanaw-account-trigger,
+  .tanaw-account-trigger-avatar,
+  .tanaw-account-trigger-chevron,
+  .tanaw-account-edit-indicator,
+  .tanaw-account-menu,
+  .tanaw-account-menu-action,
+  .tanaw-account-menu-row {
+    transition: none;
+  }
+
+  .tanaw-account-menu-action:is(:hover, :focus-visible)
+    > .tanaw-account-menu-row,
+  .tanaw-account-edit:is(:hover, :focus-visible) .tanaw-account-trigger-avatar,
+  .tanaw-account-trigger:active {
+    transform: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { Alert, Button } from "@/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Clock3, ImageIcon, TicketCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";
@@ -15,11 +16,12 @@ import { filterSupportTickets, initialTicketFilters, isTicketFilterState } from 
 type SupportTicketsPageProps = {
   mode: "admin" | "it";
   embedded?: boolean;
+  inSettings?: boolean;
 };
 
 const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
 
-export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPageProps) {
+export function SupportTicketsPage({ mode, embedded = false, inSettings = false }: SupportTicketsPageProps) {
   const { timeFormat } = useSystemDisplayPreferences();
   const [filters, setFilters] = useScopedPageState({
     initialValue: initialTicketFilters,
@@ -54,7 +56,7 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
   };
 
   return (
-    <PageMotion className="tanaw-data-page pb-12">
+    <PageMotion className={inSettings ? "tanaw-data-page space-y-3" : "tanaw-data-page pb-12"}>
       {!embedded && (
         <PageHeader
           title="Support Requests"
@@ -62,7 +64,20 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
         />
       )}
 
-      {!isItResponder && (
+      {inSettings && ticketsQuery.isError && (
+        <Alert
+          tone="danger"
+          title="Unable to load support tickets"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void ticketsQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      )}
+
+      {inSettings && !isItResponder && <Alert tone="info">Admin can review ticket status, attachments, and conversations. IT handles responses.</Alert>}
+      {!inSettings && !isItResponder && (
         <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
           IT personnel handle user responses. Admin can monitor ticket status, attachments, and communication.
         </div>

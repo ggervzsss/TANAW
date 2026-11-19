@@ -29,13 +29,17 @@ describe("realtime query routing", () => {
     });
   });
 
-  it("updates alert data and dependent dashboard counters", async () => {
+  it("updates alert data, dashboard counters, and activity history", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await routeRealtimeEvent(queryClient, event("alert.status.changed"));
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["activity-logs"],
+      refetchType: "active",
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["operational-alerts"],
       refetchType: "active",

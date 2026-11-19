@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mlResponse, mockMlRequest } from "./support/preload";
+import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 import type { Camera } from "../../../src/types/enterprise";
 
 test.describe.configure({ timeout: 60_000 });
@@ -551,7 +551,7 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   await expect(video).toHaveAttribute("data-test-original-frame", "true");
   await assertAligned();
   await assertToolbarEdge();
-  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
+  await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
   await page.screenshot({ path: info.outputPath("monitor-compact.png") });
@@ -608,7 +608,7 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   await expect(metrics.getByText("Identification unavailable")).toBeVisible();
   await expect(metrics.getByText("—", { exact: true })).toHaveCount(2);
   await page.setViewportSize({ width: 1920, height: 940 });
-  await page.getByRole("button", { name: "Switch to light mode", exact: true }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
   await assertWidePanelLayout();
   await page.screenshot({ path: info.outputPath("monitor-disconnected.png") });
@@ -669,7 +669,7 @@ test("Live Metrics aims its lines at the pointer and pauses ambient motion when 
   state.setPresence(18);
   await expect(metrics.getByText("18", { exact: true })).toBeVisible();
   await expect(ambience).toHaveAttribute("data-ambience-tone", "high");
-  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
+  await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
   const darkRest = await picture();

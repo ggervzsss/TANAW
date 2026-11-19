@@ -1,14 +1,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { CircleAlert, CircleCheckBig, LoaderCircle } from "lucide-react";
-import { BrowserRouter, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { AuthSessionManager } from "@/app/session/AuthSessionManager";
 import { useAuthStore } from "@/app/store/authStore";
-import { useHeaderStore } from "@/app/store/headerStore";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
-import { PageHeaderProvider } from "@/shared/components/layout";
 import { queryClient } from "@/shared/lib/queryClient";
 import { SystemDisplayPreferencesProvider } from "@/shared/providers/SystemDisplayPreferencesProvider";
 import { RealtimeProvider } from "@/shared/realtime/RealtimeProvider";
@@ -55,21 +53,16 @@ export function AppProviders({ children }: AppProvidersProps) {
   const token = useAuthStore((state) => state.token);
   const accountId = useAuthStore((state) => state.user?.id);
   const markAnonymous = useAuthStore((state) => state.markAnonymous);
-  const setHeader = useHeaderStore((state) => state.setHeader);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthSessionManager />
-        <RealtimeProvider authenticated={authenticated} token={token} onUnauthorized={markAnonymous}>
-          <SystemDisplayPreferencesProvider authenticated={authenticated} accountId={accountId}>
-            <PageHeaderProvider setHeader={setHeader}>
-              {children}
-              <TanawToaster />
-            </PageHeaderProvider>
-          </SystemDisplayPreferencesProvider>
-        </RealtimeProvider>
-      </BrowserRouter>
+      <AuthSessionManager />
+      <RealtimeProvider authenticated={authenticated} token={token} onUnauthorized={markAnonymous}>
+        <SystemDisplayPreferencesProvider authenticated={authenticated} accountId={accountId}>
+          {children}
+          <TanawToaster />
+        </SystemDisplayPreferencesProvider>
+      </RealtimeProvider>
     </QueryClientProvider>
   );
 }

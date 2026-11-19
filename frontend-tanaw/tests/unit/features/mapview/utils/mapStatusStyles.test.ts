@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getDarkMonitoringBadgeClass,
   getMonitoringStatusColor,
+  getMonitoringStatusLabel,
   getMonitoringStatusPresentation,
   getOccupancyBadgeClass,
   getOccupancyRingColor,
@@ -9,17 +10,17 @@ import {
 } from "../../../../../src/features/mapview/utils/mapStatusStyles";
 
 describe("enterprise map monitoring styles", () => {
-  it.each(["Stopped", "Offline"] as const)("uses neutral gray styling for %s enterprises", (status) => {
-    expect(getMonitoringStatusColor(status)).toBe("#64748b");
-    expect(getDarkMonitoringBadgeClass(status)).toContain("slate");
-    expect(getDarkMonitoringBadgeClass(status)).not.toContain("red");
+  it.each(["Stopped", "Offline"] as const)("uses cool blue styling for %s enterprises", (status) => {
+    expect(getMonitoringStatusColor(status)).toBe("#266993");
+    expect(getDarkMonitoringBadgeClass(status)).toContain("sky");
   });
 
   it.each([
     ["Fully Monitoring", "#16a34a", "green"],
-    ["Partially Monitoring", "#ea580c", "orange"],
-    ["Updates Delayed", "#ea580c", "orange"],
-    ["Fault", "#dc2626", "red"],
+    ["Partially Monitoring", "#9f6508", "amber"],
+    ["Updates Delayed", "#9f6508", "amber"],
+    ["Fault", "#ae274d", "rose"],
+    ["Not Configured", "#665090", "violet"],
   ] as const)("uses the semantic palette for %s", (status, color, classColor) => {
     expect(getMonitoringStatusColor(status)).toBe(color);
     expect(getDarkMonitoringBadgeClass(status)).toContain(classColor);
@@ -29,9 +30,9 @@ describe("enterprise map monitoring styles", () => {
     ["Fully Monitoring", "running"],
     ["Partially Monitoring", "partial"],
     ["Updates Delayed", "partial"],
-    ["Stopped", "stopped"],
-    ["Offline", "stopped"],
-    ["Not Configured", "unavailable"],
+    ["Stopped", "inactive"],
+    ["Offline", "inactive"],
+    ["Not Configured", "unconfigured"],
     ["Fault", "fault"],
   ] as const)("shares the %s presentation with markers and directory badges", (status, tone) => {
     const presentation = getMonitoringStatusPresentation(status);
@@ -40,13 +41,20 @@ describe("enterprise map monitoring styles", () => {
     expect(presentation.badgeClass).toBe(getDarkMonitoringBadgeClass(status));
   });
 
+  it("differentiates faults, missing configuration, and inactive connections", () => {
+    expect(getMonitoringStatusLabel("Fault")).toBe("Needs Attention");
+    expect(getMonitoringStatusLabel("Not Configured")).toBe("Not Configured");
+    expect(getMonitoringStatusLabel("Offline")).toBe("Offline");
+    expect(getMonitoringStatusLabel("Stopped")).toBe("Stopped");
+  });
+
   it("publishes the directory legend from the authoritative marker tones", () => {
-    expect(monitoringStatusLegend).toEqual([
+    expect(monitoringStatusLegend.map(({ tone, label }) => ({ tone, label }))).toEqual([
       { label: "All Running", tone: "running" },
-      { label: "Partial", tone: "partial" },
-      { label: "Inactive", tone: "stopped" },
-      { label: "Fault", tone: "fault" },
-      { label: "Unavailable", tone: "unavailable" },
+      { label: "Partial / Delayed", tone: "partial" },
+      { label: "Stopped / Offline", tone: "inactive" },
+      { label: "Needs Attention", tone: "fault" },
+      { label: "Not Configured", tone: "unconfigured" },
     ]);
   });
 

@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { AlertTriangle, CircleCheck, CircleX, Info, X } from "lucide-react";
 import type { CSSProperties, PropsWithChildren } from "react";
 import toast, { ToastBar, Toaster } from "react-hot-toast";
-import { HashRouter, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { queryClient } from "../../lib/queryClient";
 import { routePaths } from "../router/routePaths";
 import { AuthSessionManager } from "../../features/login/components/AuthSessionManager";
@@ -25,17 +25,15 @@ const authToastContainerStyle: CSSProperties = {
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
-      <HashRouter>
-        <AuthSessionManager />
-        <PersistentIssueProvider>
-          <RealtimeProvider>
-            <SystemDisplayPreferencesProvider>
-              {children}
-              <TanawToaster />
-            </SystemDisplayPreferencesProvider>
-          </RealtimeProvider>
-        </PersistentIssueProvider>
-      </HashRouter>
+      <AuthSessionManager />
+      <PersistentIssueProvider>
+        <RealtimeProvider>
+          <SystemDisplayPreferencesProvider>
+            {children}
+            <TanawToaster />
+          </SystemDisplayPreferencesProvider>
+        </RealtimeProvider>
+      </PersistentIssueProvider>
     </QueryClientProvider>
   );
 }
@@ -46,12 +44,7 @@ function TanawToaster() {
   const containerClassName = hasEnterpriseTopbar ? "tanaw-toast-viewport tanaw-toast-viewport--portal" : "tanaw-toast-viewport tanaw-toast-viewport--auth";
 
   return (
-    <Toaster
-      position="top-center"
-      gutter={10}
-      containerClassName={containerClassName}
-      containerStyle={hasEnterpriseTopbar ? portalToastContainerStyle : authToastContainerStyle}
-    >
+    <Toaster position="top-center" gutter={10} containerClassName={containerClassName} containerStyle={hasEnterpriseTopbar ? portalToastContainerStyle : authToastContainerStyle}>
       {(item) => {
         const Icon = item.type === "success" ? CircleCheck : item.type === "error" ? CircleX : item.className?.includes("tanaw-toast--warning") ? AlertTriangle : Info;
         return (

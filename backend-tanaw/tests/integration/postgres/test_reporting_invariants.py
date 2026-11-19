@@ -192,6 +192,7 @@ async def _create_enterprise(runtime: PostgresRuntime, *, label: str) -> Created
     async with runtime.sessions() as db:
         db.add(account)
         await db.commit()
+    assert account.enterprise_profile is not None
     return CreatedEnterprise(
         id=account.id, email=account.email, enterprise_key=account.enterprise_profile.enterprise_id
     )
@@ -1100,7 +1101,7 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
     saved = json.loads(fixture_path.read_text())
     async with postgres_runtime.sessions() as db:
         account = await db.get(Account, enterprise.id)
-        assert account is not None
+        assert account is not None and account.enterprise_profile is not None
         saved["payload"]["counting"]["enterprise_id"] = account.enterprise_profile.enterprise_id
     counting = saved["payload"]["counting"]
     counting["snapshot_version"] = snapshot_digest(counting)
@@ -1117,7 +1118,9 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
     )
     report = await _ready_report(postgres_runtime, enterprise, payload)
     assert report.metrics == {"entry": None, "exit": None, "peak": "2", "unique": 2}
+    assert report.payload is not None
     assert report.payload["counting"]["snapshot_version"] == counting["snapshot_version"]
+    assert report.demographics is not None
     assert report.demographics.thisProvMale == report.demographics.thisProvFemale == 1
     final = await _consolidate(
         postgres_runtime, [report.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} unified"
@@ -1131,6 +1134,7 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
     # The finalized source stores its own frozen snapshot rather than reading a mutable intake payload.
     async with postgres_runtime.sessions() as db:
         source = await db.get(EnterpriseReportSubmission, report.id)
+        assert source is not None
         source.payload_json = "{}"
         await db.commit()
     async with postgres_runtime.sessions() as db:

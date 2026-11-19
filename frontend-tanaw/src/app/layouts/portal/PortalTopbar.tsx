@@ -1,35 +1,37 @@
-import { BookOpen, ChevronDown, LogOut, Menu, Moon, Settings, Shield, SlidersHorizontal, Sun, TicketCheck, User, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
-import { getRoleDashboardPath, getRoleDisplayPreferencesPath, getRoleHelpPath, getRoleProfilePath, getRoleSecurityPath } from "@/app/routers/roleRoutes";
+import { getRoleHelpPath, getRoleSettingsPath, isRoleSettingsPath } from "@/app/routers/roleRoutes";
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";
-import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
+import { TopbarAccount } from "@/design-system/patterns/TopbarAccount";
+import type { ResolvedTheme } from "@/shared/utils/theme";
 import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
 import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";
 
 type PortalTopbarProps = {
   role: UserRole;
   showDevLog?: boolean;
+  resolvedTheme: ResolvedTheme;
 };
 
 export function PortalBrand({ role }: { role: UserRole }) {
   return (
     <div className="flex shrink-0 items-center gap-4">
-      <Link to={getRoleDashboardPath(role)} aria-label="Open TANAW dashboard" className="flex items-center gap-4 max-sm:min-h-11 max-sm:gap-2 max-[360px]:gap-1.5">
-        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-10 max-[360px]:size-8" />
-        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg max-[360px]:text-sm">TANAW</span>
-      </Link>
+      <div className="flex items-center gap-4 max-[360px]:gap-1.5 max-sm:min-h-11 max-sm:gap-2">
+        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-8" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
+      </div>
       <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />
       <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
         {rolePortalLabel[role]}
@@ -38,18 +40,15 @@ export function PortalBrand({ role }: { role: UserRole }) {
   );
 }
 
-export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
+export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search, hash, state } = useLocation();
   const queryClient = useQueryClient();
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const { resolvedTheme, toggleTheme, isSwitchingTheme } = usePortalThemePreference(role === "admin");
-  const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
@@ -61,27 +60,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     };
   }, [unreadCount]);
 
-  const profile = {
-    name: authUser?.displayName ?? "TANAW User",
-    email: authUser?.email ?? "",
-    department: authUser?.title ?? "City Tourism Operations",
-    displayImageDataUrl: authUser?.displayImageDataUrl ?? null,
-  };
-
-  const initials = useMemo(
-    () =>
-      profile.name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase(),
-    [profile.name],
-  );
-
   const handleLogout = async () => {
-    setShowProfileMenu(false);
     try {
       await logoutSession();
     } catch {
@@ -93,18 +72,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       toast.success("Logout complete");
       navigate(routes.login, { replace: true });
     }
-  };
-
-  const openAccountPage = (page: "profile" | "security") => {
-    setShowProfileMenu(false);
-    navigate(page === "profile" ? getRoleProfilePath(role) : getRoleSecurityPath(role));
-  };
-
-  const openSupportTickets = () => {
-    const supportTicketsPath = getRoleSupportTicketsPath(role);
-    if (!supportTicketsPath) return;
-    setShowProfileMenu(false);
-    navigate(supportTicketsPath);
   };
 
   const handleNotificationSelect = (notificationId: string, targetPath?: string) => {
@@ -125,19 +92,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       navigate(viewAllPath);
     }
   };
-
-  useEffect(() => {
-    if (!showProfileMenu) return undefined;
-
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (!profileMenuRef.current?.contains(event.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
-  }, [showProfileMenu]);
 
   useEffect(() => {
     if (!showNotifications) return undefined;
@@ -166,20 +120,19 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   }, [openMenuId]);
 
   useEffect(() => {
-    if (!openMenuId && !showProfileMenu && !showMobileNav && !showNotifications) return undefined;
+    if (!openMenuId && !showMobileNav && !showNotifications) return undefined;
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
 
       setOpenMenuId(null);
-      setShowProfileMenu(false);
       setShowMobileNav(false);
       setShowNotifications(false);
     };
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [openMenuId, showProfileMenu, showMobileNav, showNotifications]);
+  }, [openMenuId, showMobileNav, showNotifications]);
 
   const navigation = useMemo(() => getPortalNavigation(role, showDevLog), [role, showDevLog]);
   const topbarItems = useMemo(() => getTopbarEntries(role, navigation), [navigation, role]);
@@ -189,15 +142,14 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const topbarIconButton = isDarkTopbar
     ? "border-emerald-100/14 bg-black/18 text-white/88 hover:border-emerald-100/24 hover:bg-emerald-200/9"
     : "border-emerald-100/28 bg-white/8 text-white hover:bg-white/[0.14]";
-  const accountButtonTheme = isDarkTopbar
-    ? "border-emerald-100/14 bg-black/18 hover:border-emerald-100/24 hover:bg-emerald-200/9"
-    : "border-emerald-100/28 bg-white/8 hover:border-emerald-100/40 hover:bg-white/[0.14]";
-  const profilePath = getRoleProfilePath(role);
-  const securityPath = getRoleSecurityPath(role);
-  const supportTicketsPath = getRoleSupportTicketsPath(role);
-  const displayPreferencesPath = getRoleDisplayPreferencesPath(role);
+  const settingsPath = getRoleSettingsPath(role);
   const helpPath = getRoleHelpPath(role);
-  const accountMenuButtonClass = (targetPath: string) => ["profile-menu-button", pathname === targetPath ? "bg-tanaw-green/10 text-tanaw-green" : ""].filter(Boolean).join(" ");
+  const inSettings = isRoleSettingsPath(role, pathname);
+  const openSettings = (profile = false) => {
+    navigate(profile ? settingsPath + "/profile" : settingsPath, {
+      state: inSettings ? state : { returnTo: pathname + search + hash },
+    });
+  };
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
@@ -220,7 +172,9 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         />
         <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${isDarkTopbar ? "bg-emerald-100/10" : "bg-white/18"}`} />
 
-        <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2">
+        <div
+          className={`relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2 ${role === "admin" ? "xl:max-[1340px]:gap-3 xl:max-[1340px]:px-5" : ""}`}
+        >
           <PortalBrand role={role} />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
@@ -229,34 +183,17 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
             <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} />
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-1">
-            <button
-              type="button"
-              aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
-              onClick={() => setShowMobileNav((current) => !current)}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${topbarIconButton}`}
-            >
-              {showMobileNav ? <X size={18} /> : <Menu size={18} />}
-            </button>
+          <button
+            type="button"
+            aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
+            onClick={() => setShowMobileNav((current) => !current)}
+            className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${topbarIconButton}`}
+          >
+            {showMobileNav ? <X size={18} /> : <Menu size={18} />}
+          </button>
 
-            <button
-              type="button"
-              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              aria-busy={isSwitchingTheme || undefined}
-              aria-disabled={isSwitchingTheme || undefined}
-              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={() => {
-                setShowProfileMenu(false);
-                setShowNotifications(false);
-                setOpenMenuId(null);
-                toggleTheme();
-              }}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${topbarIconButton}`}
-            >
-              {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            <div ref={notificationMenuRef} className="relative">
+          <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
+            <div ref={notificationMenuRef} className="sm:relative">
               <PortalNotificationDropdown
                 isOpen={showNotifications}
                 isLoading={isLoadingNotifications}
@@ -267,90 +204,33 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                 onSelectNotification={(notification) => handleNotificationSelect(notification.id, notification.targetPath)}
                 onToggle={() => {
                   setShowNotifications((current) => !current);
-                  setShowProfileMenu(false);
                   setOpenMenuId(null);
                 }}
                 onViewAll={handleViewAllNotifications}
-                triggerClassName={topbarIconButton}
+                triggerClassName={"tanaw-topbar-compact-control " + topbarIconButton}
               />
             </div>
 
-            <div ref={profileMenuRef} className="relative">
-              <button
-                type="button"
-                aria-label="Open account menu"
-                onClick={() => {
-                  setShowProfileMenu((current) => !current);
-                  setShowNotifications(false);
-                }}
-                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:size-11 max-sm:max-w-none max-sm:justify-center max-sm:p-0 ${accountButtonTheme}`}
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
-                  {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
-                </div>
-                <div className="hidden min-w-0 flex-1 text-left lg:block">
-                  <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{profile.name}</p>
-                  <p className="mt-0.5 text-[11px] leading-tight text-emerald-50/78">{roleAccessLabel[role]}</p>
-                </div>
-                <ChevronDown size={15} className={`ml-auto shrink-0 text-emerald-50/75 transition-transform duration-200 max-sm:hidden ${showProfileMenu ? "rotate-180" : ""}`} />
-              </button>
-
-              <AnimatePresence>
-                {showProfileMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute right-0 z-1001 mt-3 max-h-[calc(100svh-var(--tanaw-topbar-height)-1rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
-                  >
-                    <div className="mb-1 border-b border-slate-100 px-4 py-3.5">
-                      <p title={profile.name} className="text-(--tanaw-text) truncate text-sm font-bold">
-                        {profile.name}
-                      </p>
-                      <p title={profile.email} className="truncate text-xs text-gray-500">
-                        {profile.email}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => openAccountPage("profile")} className={accountMenuButtonClass(profilePath)}>
-                      <User size={14} /> Profile Settings
-                    </button>
-                    <button type="button" onClick={() => openAccountPage("security")} className={accountMenuButtonClass(securityPath)}>
-                      <Shield size={14} /> Password Settings
-                    </button>
-                    <button type="button" onClick={() => { setShowProfileMenu(false); navigate(displayPreferencesPath); }} className={accountMenuButtonClass(displayPreferencesPath)}>
-                      <SlidersHorizontal size={14} /> Display Preferences
-                    </button>
-                    <button type="button" onClick={() => { setShowProfileMenu(false); navigate(helpPath); }} className={accountMenuButtonClass(helpPath)}>
-                      <BookOpen size={14} /> Help Center
-                    </button>
-                    {role === "it" && (
-                      <button type="button" onClick={() => { setShowProfileMenu(false); navigate(routes.it.systemSettings); }} className={accountMenuButtonClass(routes.it.systemSettings)}>
-                        <Settings size={14} /> System Settings
-                      </button>
-                    )}
-                    {supportTicketsPath && (
-                      <button type="button" onClick={openSupportTickets} className={accountMenuButtonClass(supportTicketsPath)}>
-                        <TicketCheck size={14} /> Support Tickets
-                      </button>
-                    )}
-                    <button type="button" onClick={handleLogout} className="profile-menu-button profile-menu-danger">
-                      <LogOut size={14} /> Logout
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <TopbarAccount
+              account={{ name: authUser?.displayName ?? "TANAW User", email: authUser?.email, image: authUser?.displayImageDataUrl, role: roleAccessLabel[role] }}
+              activeAction={inSettings ? "settings" : pathname === helpPath || pathname.startsWith(helpPath + "/") ? "help" : undefined}
+              onEditProfile={() => openSettings(true)}
+              onSettings={() => openSettings()}
+              onHelp={() => navigate(helpPath)}
+              onSignOut={handleLogout}
+              onOpen={() => {
+                setShowNotifications(false);
+                setOpenMenuId(null);
+                setShowMobileNav(false);
+              }}
+            />
           </div>
         </div>
       </div>
 
-      <AnimatePresence>{showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} onNavigate={() => setShowMobileNav(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} onNavigate={() => setShowMobileNav(false)} />}
+      </AnimatePresence>
     </div>
   );
-}
-
-function getRoleSupportTicketsPath(role: UserRole) {
-  if (role === "admin") return `${routes.admin.operations}?view=support`;
-  return null;
 }

@@ -1,6 +1,6 @@
 import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mlResponse, mockCameraSetup, mockMlRequest, mockRememberedSession } from "./support/preload";
+import { mlResponse, mockCameraSetup, mockMlRequest, mockRememberedSession, switchTheme } from "./support/preload";
 import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
@@ -162,12 +162,12 @@ test("recovers camera hydration after service startup and restores live updates 
   await expect(performance).toBeVisible();
 });
 
-async function expectSettledTopbarGlass(glass: Locator, tab: Locator) {
-  await expect(glass).toBeVisible();
-  const bounds = (await tab.boundingBox())!;
+async function expectSettledTopbarUnderline(underline: Locator, tab: Locator) {
+  await expect(underline).toBeVisible();
+  const bounds = (await tab.locator("[data-topbar-label]").boundingBox())!;
   await expect.poll(async () => {
-    const pill = (await glass.boundingBox())!;
-    return Math.abs(pill.x + 4 - bounds.x) + Math.abs(pill.width - bounds.width - 8);
+    const line = (await underline.boundingBox())!;
+    return Math.abs(line.x + line.width / 2 - bounds.x - bounds.width / 2) + Math.abs(line.y - bounds.y - bounds.height - 4) + Math.abs(line.width - bounds.width * 0.8);
   }).toBeLessThan(2);
 }
 
@@ -187,7 +187,7 @@ test("updates Support Ticket selects together after a theme change", async ({ pa
   expect(initialDarkState.categoryBackground).not.toBe("rgb(255, 255, 255)");
   expect(initialDarkState.priorityBackground).toBe(initialDarkState.categoryBackground);
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   const lightState = await page.evaluate(() => {
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
@@ -210,7 +210,7 @@ test("updates Support Ticket selects together after a theme change", async ({ pa
   await expect(page.getByRole("listbox", { name: "Category" }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
   const darkState = await page.evaluate(() => {
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
@@ -360,7 +360,7 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(preview.getByRole("button", { name: "Download PDF" })).toBeVisible();
   await preview.getByRole("button", { name: "Close preview", exact: true }).click();
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
   // A report submitted before daily entry shows its monthly origins, without a date picker.
@@ -440,7 +440,7 @@ test("presents unified daily history and distinguishes observed zero from missin
   await expect(header.locator('[data-metric-segment="visitors"]').getByText("0", { exact: true })).toBeVisible();
   await selectDashboardPeriod(page, "Today");
   await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
 
@@ -511,7 +511,7 @@ test("keeps Enterprise password inputs empty and reveals only manually entered t
   await expect(page.getByPlaceholder("Repeat the password")).toHaveValue("");
 });
 
-test("keeps resolved Support Ticket history visible and closes the composer", async ({ page }) => {
+test("submits a Support Ticket and keeps resolved history visible", async ({ page }) => {
   const resolvedTicket = {
     id: "ticket-resolved",
     code: "TCK-000099",
@@ -541,11 +541,27 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.route("**/operational/tickets**", (route) => {
+    if (route.request().method() === "POST") {
+      const request = route.request().postDataJSON();
+      expect(request).toMatchObject({ category: "Report Concern", priority: "Normal", subject: "Report summary question" });
+      return route.fulfill({ json: { ...resolvedTicket, ...request, id: "ticket-new", code: "TCK-000100", status: "Open", messages: [] } });
+    }
     const pathname = new URL(route.request().url()).pathname;
     const body = pathname.endsWith("/ticket-resolved") ? resolvedTicket : [resolvedTicket];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/#/enterprise/tickets");
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "General Settings" }).click();
+  await page.getByRole("button", { name: "Support Tickets" }).click();
+  await page.getByRole("combobox", { name: "Category" }).click();
+  await page.getByRole("option", { name: "Report Concern" }).click();
+  await page.getByRole("combobox", { name: "Priority" }).click();
+  await page.getByRole("option", { name: "Normal" }).click();
+  await page.getByLabel("Subject", { exact: true }).fill("Report summary question");
+  await page.getByLabel("Description", { exact: true }).fill("Please help confirm the correct date range for the visitor report.");
+  await page.getByRole("button", { name: "Submit Ticket" }).click();
+  await expect(page.getByText("Ticket TCK-000100 submitted.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Report summary question/ })).toBeVisible();
 
   await page.getByRole("button", { name: /Resolved camera concern/ }).click();
   await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();
@@ -554,7 +570,7 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
   await expect(page.getByRole("button", { name: "Send Reply" })).toHaveCount(0);
 });
 
-test("keeps the active glass visible and retargets it through desktop navigation", async ({ page }) => {
+test("keeps the active underline visible and retargets it through desktop navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRememberedSession(page);
   await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId), true);
@@ -563,45 +579,41 @@ test("keeps the active glass visible and retargets it through desktop navigation
   const cameras = navigation.getByRole("button", { name: "Camera Setup" });
   const dashboard = navigation.getByRole("button", { name: "Dashboard" });
   const reports = navigation.getByRole("button", { name: "Reports" });
-  const glass = navigation.locator("[data-topbar-glass-indicator]");
-  const hover = navigation.locator("[data-topbar-glass-hover]");
+  const underline = navigation.locator("[data-topbar-underline]");
 
   await expect(cameras).toHaveAttribute("aria-current", "page");
-  await expectSettledTopbarGlass(glass, cameras);
-  await expect(navigation.locator("[data-topbar-active-underline]")).toHaveCount(0);
+  await expectSettledTopbarUnderline(underline, cameras);
+  await expect(underline).toHaveCSS("height", "2px");
   await dashboard.hover();
-  await expect(hover).toHaveCSS("opacity", "1");
-  await expectSettledTopbarGlass(glass, cameras);
-  const hoveredHeight = (await hover.boundingBox())!.height;
-  await page.mouse.down();
-  await expect.poll(async () => (await hover.boundingBox())!.height).toBeLessThan(hoveredHeight - 1);
-  await page.mouse.up();
+  await expect(dashboard).toHaveCSS("color", "rgb(158, 241, 200)");
+  await expectSettledTopbarUnderline(underline, cameras);
+  await dashboard.click();
   await expect(dashboard).toHaveAttribute("aria-current", "page");
-  await expectSettledTopbarGlass(glass, dashboard);
+  await expectSettledTopbarUnderline(underline, dashboard);
 
-  const from = (await dashboard.boundingBox())!;
-  const to = (await reports.boundingBox())!;
+  const from = (await dashboard.locator("[data-topbar-label]").boundingBox())!;
+  const to = (await reports.locator("[data-topbar-label]").boundingBox())!;
   await Promise.all([
     page.waitForFunction(({ min, max }) => {
-      const pill = document.querySelector("[data-topbar-glass-indicator]");
-      if (!pill) return false;
-      const rect = pill.getBoundingClientRect();
+      const line = document.querySelector("[data-topbar-underline]");
+      if (!line) return false;
+      const rect = line.getBoundingClientRect();
       const center = rect.x + rect.width / 2;
-      return center > min + 8 && center < max - 8 && getComputedStyle(pill).visibility === "visible";
+      return center > min + 8 && center < max - 8 && getComputedStyle(line).visibility === "visible";
     }, { min: from.x + from.width / 2, max: to.x + to.width / 2 }),
     reports.press("Enter"),
   ]);
   await cameras.press("Enter");
   await reports.press("Enter");
   await expect(reports).toHaveAttribute("aria-current", "page");
-  await expectSettledTopbarGlass(glass, reports);
+  await expectSettledTopbarUnderline(underline, reports);
   await expect(reports).toHaveCSS("transform", "none");
 
   await page.goBack();
   await expect(cameras).toHaveAttribute("aria-current", "page");
-  await expectSettledTopbarGlass(glass, cameras);
+  await expectSettledTopbarUnderline(underline, cameras);
   await page.reload();
-  await expectSettledTopbarGlass(glass, cameras);
+  await expectSettledTopbarUnderline(underline, cameras);
   await dashboard.focus();
   await expect(dashboard).toHaveCSS("outline-style", "solid");
   await expect(cameras).toHaveAttribute("aria-current", "page");
@@ -610,7 +622,7 @@ test("keeps the active glass visible and retargets it through desktop navigation
   await page.getByRole("button", { name: "Open navigation" }).click();
   const mobile = page.getByRole("navigation", { name: "Enterprise mobile navigation" });
   await expect(mobile.getByRole("button", { name: "Camera Setup" })).toHaveAttribute("aria-current", "page");
-  await expect(mobile.locator("[data-topbar-glass-indicator]")).toBeVisible();
+  await expect(mobile.locator("[data-topbar-underline]")).toBeVisible();
 });
 
 async function renderTestVideoFrames(page: Page) {
@@ -656,7 +668,7 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await page.getByRole("button", { name: "Discard Changes", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await addCamera.click();
   dialog = page.locator(".camera-add-dialog");
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -773,7 +785,7 @@ test("keeps pending business-email information readable in both themes", async (
   await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", await token(page, "--theme-secondary"));
   await expect(page.getByRole("button", { name: "Cancel request" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", darkTitle);
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });
@@ -863,7 +875,7 @@ test("sets up Tapo, Tenda and custom RTSP cameras from the IP address alone", as
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
   await expect.poll(() => writes.at(-1)?.cameras[1]).toMatchObject({ cameraHost: "192.168.1.25", rtsp: "rtsp://192.168.1.25:8554/profile1" });
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   await choose("Camera brand / type", "Tenda");
   await page.getByLabel("Camera Name", { exact: false }).fill("Small window camera");

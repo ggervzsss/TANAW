@@ -302,7 +302,7 @@ test("reports validation, failed saving and confirmed upload without duplicate f
 
 test("report filters, preview and responsive workspace retain the existing layout", async ({ page }, testInfo) => {
   await setup(page, "mixed", true);
-  if (await page.getByRole("button", { name: "Switch to light mode" }).isVisible()) await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   const search = page.getByRole("searchbox", { name: "Search reports" });
   await page.locator(".report-history-search > button").click();
   await search.fill("not-a-report");

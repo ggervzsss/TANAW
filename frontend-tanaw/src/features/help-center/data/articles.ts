@@ -26,7 +26,7 @@ export const helpArticles: HelpArticle[] = [
     keywords: ["large text", "font", "zoom", "compact", "accessibility", "display"],
     recommended: true,
     sections: [
-      { heading: "Change your display", steps: ["Open your account menu.", "Choose Display Preferences.", "Select a Text size and Interface scale. Each change saves immediately."] },
+      { heading: "Change your display", steps: ["Open your account menu.", "Choose General Settings, then Appearance.", "Select a Text size and Interface scale. Each change saves immediately."] },
       { heading: "Return to the standard view", paragraphs: ["Choose Reset to default. Theme is a separate preference and is not changed by this action."] },
     ],
     relatedArticleIds: ["account-session-help"],
@@ -41,24 +41,24 @@ export const helpArticles: HelpArticle[] = [
     recommended: true,
     sections: [
       { heading: "Find an enterprise", steps: ["Open Map View.", "Use the enterprise directory or map controls to choose a barangay.", "Select a marker or directory result to open the matching enterprise details."] },
-      { heading: "What status means", paragraphs: ["Marker and camera status reflect the latest operational data available to TANAW. Review Operations Center when a status needs investigation."] },
+      { heading: "What status means", paragraphs: ["Marker and camera status reflect the latest operational data available to TANAW. Review Alerts & Requests when a status needs investigation."] },
     ],
     relatedArticleIds: ["admin-operations-center"],
   },
   {
     id: "admin-operations-center",
-    title: "Investigate an issue in Operations Center",
+    title: "Investigate an issue in Alerts & Requests",
     summary: "Review alerts, enterprise support requests, and operational details from one workspace.",
     roles: ["admin"],
-    category: "Operations",
+    category: "Alerts & Requests",
     keywords: ["alert", "support ticket", "operations", "monitoring", "issue"],
     commonIssue: true,
     sections: [
-      { heading: "What to check", steps: ["Open Operations Center.", "Choose the view that matches the alert or support request.", "Open the record and review its current status and history before responding."] },
+      { heading: "What to check", steps: ["Open Alerts & Requests.", "Choose the view that matches the alert or support request.", "Open the record and review its current status and history before responding."] },
       { heading: "When to escalate", paragraphs: ["Use the Support Tickets view when an enterprise has submitted a request that needs follow-up."] },
     ],
     relatedArticleIds: ["admin-map-navigation"],
-    supportPath: `${routes.admin.operations}?view=support`,
+    supportPath: `${routes.admin.generalSettings}/support`,
   },
   {
     id: "staff-submit-reports",
