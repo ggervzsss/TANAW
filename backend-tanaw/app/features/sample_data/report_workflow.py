@@ -12,6 +12,7 @@ from app.features.notifications.service import (
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
 )
+from app.features.reporting.counting import complete_sum
 from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import (
     EnterpriseReportSubmission,
@@ -299,8 +300,8 @@ async def create_final_reports(
             prepared_by=REPORTING_STAFF_NAME,
             prepared_role="Staff Processing Division",
             status="Finalized",
-            total_entry=sum(report.entries for report in reports),
-            total_exit=sum(report.exits for report in reports),
+            total_entry=complete_sum(report.entries for report in reports),
+            total_exit=complete_sum(report.exits for report in reports),
             total_unique=sum(report.unique_count for report in reports),
             enterprise_count=len({report.enterprise_profile_id for report in reports}),
         )

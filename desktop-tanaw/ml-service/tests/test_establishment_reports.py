@@ -18,12 +18,12 @@ SUBMITTED = datetime(2026, 11, 2, 2, tzinfo=UTC)
 
 def observed(
     service: EstablishmentRegistry,
-    key="first",
+    key: str = "first",
     *,
-    internal=False,
-    area_role="internal_observation",
-    vector=None,
-):
+    internal: bool = False,
+    area_role: str = "internal_observation",
+    vector: np.ndarray | None = None,
+) -> None:
     service.observe(
         observation_id=key,
         camera_id=1,
@@ -65,7 +65,7 @@ def request(repo, count=1, **changes):
 @pytest.mark.parametrize("area_role", ["internal_observation", "external_boundary"])
 def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(
     tmp_path: Path, area_role: str
-):
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service, internal=True, area_role=area_role)
     repo = EstablishmentReportRepository(service.database)
@@ -85,7 +85,7 @@ def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(
 
 def test_idempotent_retry_does_not_replace_frozen_counts_after_reconciliation_changes(
     tmp_path: Path,
-):
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -97,7 +97,7 @@ def test_idempotent_retry_does_not_replace_frozen_counts_after_reconciliation_ch
     assert LocalDataStore(str(tmp_path), "park").list_report_submissions()[0]["unique_count"] == 1
 
 
-def test_operation_id_cannot_be_reused_for_different_content(tmp_path: Path):
+def test_operation_id_cannot_be_reused_for_different_content(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -107,7 +107,7 @@ def test_operation_id_cannot_be_reused_for_different_content(tmp_path: Path):
         repo.submit(**{**operation, "notes": "Changed"})
 
 
-def test_stale_snapshot_or_forged_metrics_are_rejected(tmp_path: Path):
+def test_stale_snapshot_or_forged_metrics_are_rejected(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -119,7 +119,9 @@ def test_stale_snapshot_or_forged_metrics_are_rejected(tmp_path: Path):
         repo.submit(**operation)
 
 
-def test_resubmission_explicitly_refreshes_counts_and_keeps_previous_snapshot(tmp_path: Path):
+def test_resubmission_explicitly_refreshes_counts_and_keeps_previous_snapshot(
+    tmp_path: Path,
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -136,7 +138,9 @@ def test_resubmission_explicitly_refreshes_counts_and_keeps_previous_snapshot(tm
         assert db.execute("select count(*) from report_submission_snapshots").fetchone()[0] == 2
 
 
-def test_demographic_revision_can_reuse_original_snapshot_after_source_retention(tmp_path: Path):
+def test_demographic_revision_can_reuse_original_snapshot_after_source_retention(
+    tmp_path: Path,
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -154,7 +158,7 @@ def test_demographic_revision_can_reuse_original_snapshot_after_source_retention
     assert result["counting"]["snapshot_version"] == first["expected_snapshot_version"]
 
 
-def test_only_selected_calendar_months_raw_evidence_is_consumed(tmp_path: Path):
+def test_only_selected_calendar_months_raw_evidence_is_consumed(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     raw = OccupancyEventRepository(service.database)
@@ -170,7 +174,7 @@ def test_only_selected_calendar_months_raw_evidence_is_consumed(tmp_path: Path):
     assert rows == {"selected": "REP-ONE", "next-month": None}
 
 
-def test_demographics_and_duplicate_period_use_one_establishment_baseline(tmp_path: Path):
+def test_demographics_and_duplicate_period_use_one_establishment_baseline(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -181,7 +185,7 @@ def test_demographics_and_duplicate_period_use_one_establishment_baseline(tmp_pa
         repo.submit(**request(repo, report_id="REP-OTHER"))
 
 
-def test_periods_come_from_recorded_local_data_and_are_enterprise_scoped(tmp_path: Path):
+def test_periods_come_from_recorded_local_data_and_are_enterprise_scoped(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
@@ -190,7 +194,7 @@ def test_periods_come_from_recorded_local_data_and_are_enterprise_scoped(tmp_pat
     assert EstablishmentReportRepository(other.database).periods() == []
 
 
-def test_snapshot_version_survives_browser_whole_number_serialization(tmp_path: Path):
+def test_snapshot_version_survives_browser_whole_number_serialization(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     value = EstablishmentReportRepository(service.database).period_summary("October 2026")[
@@ -200,7 +204,7 @@ def test_snapshot_version_survives_browser_whole_number_serialization(tmp_path: 
     assert snapshot_digest(browser) == value["snapshot_version"]
 
 
-def test_blank_zero_demographic_cells_use_the_same_visitor_baseline(tmp_path: Path):
+def test_blank_zero_demographic_cells_use_the_same_visitor_baseline(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service, internal=True)
     repo = EstablishmentReportRepository(service.database)
@@ -228,7 +232,7 @@ def test_visitors_without_a_recorded_sex_count_toward_the_baseline(tmp_path: Pat
     assert saved["origins"] == body["payload"]["origins"]
 
 
-def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_path: Path):
+def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.observe(
         observation_id="unidentified",
@@ -249,7 +253,7 @@ def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_p
         repo.submit(**request(repo, 0))
 
 
-def test_offline_camera_keeps_the_running_cameras_counts(tmp_path: Path):
+def test_offline_camera_keeps_the_running_cameras_counts(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     service.repository.checkpoint_occupancy(
@@ -270,7 +274,7 @@ def test_offline_camera_keeps_the_running_cameras_counts(tmp_path: Path):
     assert result["metrics"]["entries"] == 1
 
 
-def test_non_identifying_source_provenance_survives_detail_retention(tmp_path: Path):
+def test_non_identifying_source_provenance_survives_detail_retention(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     service.repository.cleanup(OBSERVED + timedelta(days=31))

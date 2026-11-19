@@ -3,6 +3,7 @@ import copy
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -182,6 +183,7 @@ async def _create_accounts(runtime: PostgresRuntime, *, label: str) -> tuple[Cre
             )
             or 0
         )
+    assert enterprise.enterprise_profile is not None
     return CreatedAccount(
         id=enterprise.id,
         email=enterprise.email,
@@ -216,7 +218,7 @@ def _submission(
     status: str = "Submitted",
     entries: int = 12,
     notes: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     unique_count = 6
     return {
         "submissionId": submission_id,
@@ -253,7 +255,7 @@ def _submission(
 async def _post_submission(
     client: AsyncClient,
     enterprise: CreatedAccount,
-    payload: dict[str, object],
+    payload: dict[str, Any],
 ) -> Response:
     payload = copy.deepcopy(payload)
     snapshot = payload["payload"]["counting"]

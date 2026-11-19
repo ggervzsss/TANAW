@@ -34,7 +34,7 @@ class CaptureWorker:
     def run(self, session: ProcessingSession, stream_url: str) -> None:
         reconnect_attempt = 0
         while not session.stop_event.is_set() and self._is_current_session(session):
-            capture: Any | None = None
+            capture: Any = None
             failed_since: float | None = None
             reconnect_message = "Camera stream could not be opened."
             try:
