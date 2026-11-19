@@ -15,7 +15,8 @@
       "otherProvMale": "0",
       "otherProvFemale": "0",
       "foreignMale": "0",
-      "foreignFemale": "0"
+      "foreignFemale": "0",
+      "thisProvUnspecified": "0"
     },
     "status": "Submitted",
     "counting": {
@@ -60,8 +61,19 @@
               ],
               "camera_id": 1,
               "camera_name": "Camera 1",
+              "configuration_revisions": [],
+              "embedding_spaces": [
+                "person_reid_onnx:3"
+              ],
               "entries": null,
               "exits": null,
+              "identity_confidence": {
+                "high": 2
+              },
+              "matching_decisions": {
+                "new": 2
+              },
+              "observation_state": "observed",
               "qualified_observations": 2,
               "unique_count": 2
             }
@@ -98,14 +110,25 @@
           ],
           "camera_id": 1,
           "camera_name": "Camera 1",
+          "configuration_revisions": [],
+          "embedding_spaces": [
+            "person_reid_onnx:3"
+          ],
           "entries": null,
           "exits": null,
+          "identity_confidence": {
+            "high": 2
+          },
+          "matching_decisions": {
+            "new": 2
+          },
+          "observation_state": "observed",
           "qualified_observations": 2,
           "unique_count": 2
         }
       ],
       "occupancy_corrections": [],
-      "snapshot_version": "041a91209ee9b468a7543c94571b489080b53b2d66899f709442e3e7598622a9",
+      "snapshot_version": "5847862b41090faca335c76e4333a0658685fe3e89ee964894356b6ee1109aa6",
       "male_count": 1,
       "female_count": 1,
       "sex_estimation_state": "estimated"
@@ -161,8 +184,19 @@
             ],
             "camera_id": 1,
             "camera_name": "Camera 1",
+            "configuration_revisions": [],
+            "embedding_spaces": [
+              "person_reid_onnx:3"
+            ],
             "entries": null,
             "exits": null,
+            "identity_confidence": {
+              "high": 2
+            },
+            "matching_decisions": {
+              "new": 2
+            },
+            "observation_state": "observed",
             "qualified_observations": 2,
             "unique_count": 2
           }
@@ -199,14 +233,25 @@
         ],
         "camera_id": 1,
         "camera_name": "Camera 1",
+        "configuration_revisions": [],
+        "embedding_spaces": [
+          "person_reid_onnx:3"
+        ],
         "entries": null,
         "exits": null,
+        "identity_confidence": {
+          "high": 2
+        },
+        "matching_decisions": {
+          "new": 2
+        },
+        "observation_state": "observed",
         "qualified_observations": 2,
         "unique_count": 2
       }
     ],
     "occupancy_corrections": [],
-    "snapshot_version": "041a91209ee9b468a7543c94571b489080b53b2d66899f709442e3e7598622a9",
+    "snapshot_version": "5847862b41090faca335c76e4333a0658685fe3e89ee964894356b6ee1109aa6",
     "male_count": 1,
     "female_count": 1,
     "sex_estimation_state": "estimated"
