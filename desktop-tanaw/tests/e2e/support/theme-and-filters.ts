@@ -192,10 +192,33 @@ export async function expectSynchronizedTheme(page: Page, theme: "light" | "dark
           const style = getComputedStyle(element);
           return { selector, color: style.color, bg: style.backgroundColor, image: style.backgroundImage, opacity: style.opacity, border: style.borderColor };
         });
+      // Time the switch the way a person makes it: on a settled page. Finite animations (a dialog
+      // opening, the previous theme dissolve) finish, then the browser gets time to draw the new
+      // screen. Right after a dialog opens, the first capture otherwise waits for that drawing,
+      // which on this laptop's software renderer can take about 300 ms.
+      const finite = document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity);
+      await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      // The app's own work runs inside the view transition update; time it separately so a slow
+      // React render is caught even though the browser's capture time is not the app's.
+      const transitionDocument = document as Document & { startViewTransition?: (update: () => void) => unknown };
+      const startViewTransition = transitionDocument.startViewTransition;
+      const timing: { updateMs: number | null } = { updateMs: null };
+      if (startViewTransition) {
+        transitionDocument.startViewTransition = (update: () => void) =>
+          startViewTransition.call(document, () => {
+            const started = performance.now();
+            update();
+            timing.updateMs = performance.now() - started;
+          });
+      }
       const firstTime = performance.now();
       document.querySelector<HTMLButtonElement>(`button[aria-label="Switch to ${theme} mode"]`)!.click();
       while (!root.classList.contains(theme)) await new Promise(requestAnimationFrame);
       const commitMs = performance.now() - firstTime;
+      if (startViewTransition) transitionDocument.startViewTransition = startViewTransition;
       const atCommit = read();
       const snapshot = root.dataset.themeTransition;
       await new Promise(requestAnimationFrame);
@@ -203,7 +226,7 @@ export async function expectSynchronizedTheme(page: Page, theme: "light" | "dark
       const durations = animations.map((animation) => animation.effect!.getComputedTiming().duration);
       await Promise.all(animations.map((animation) => animation.finished));
       while (root.hasAttribute("data-theme-transition")) await new Promise(requestAnimationFrame);
-      return { atCommit, settled: read(), commitMs, snapshot, durations };
+      return { atCommit, settled: read(), commitMs, updateMs: timing.updateMs, snapshot, durations };
     },
     { theme, selectors },
   );
@@ -214,6 +237,7 @@ export async function expectSynchronizedTheme(page: Page, theme: "light" | "dark
   }
   expect(frames.snapshot).toBe("snapshot");
   expect(frames.commitMs).toBeLessThan(150);
+  if (frames.updateMs !== null) expect(frames.updateMs).toBeLessThan(50);
   expect(frames.durations).toEqual([220]);
   expect(frames.atCommit).toEqual(frames.settled);
   return frames;
