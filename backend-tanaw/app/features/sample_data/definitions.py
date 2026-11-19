@@ -10,14 +10,6 @@ DEFAULT_SCENARIO = "full-workflow"
 DEFAULT_SEED = "tanaw-sample-v1"
 REPORTING_STAFF_NAME = "Carla Mendoza"
 SAMPLE_UUID_NAMESPACE = UUID("b8df7e73-013f-4d10-8554-e8d54f90086f")
-DEMOGRAPHIC_FIELDS = (
-    "thisProvMale",
-    "thisProvFemale",
-    "otherProvMale",
-    "otherProvFemale",
-    "foreignMale",
-    "foreignFemale",
-)
 
 
 @dataclass(frozen=True)

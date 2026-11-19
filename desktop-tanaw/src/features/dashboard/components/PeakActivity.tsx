@@ -1,7 +1,14 @@
 import { Hourglass, UsersRound } from "lucide-react";
-import type { EstablishmentSummary } from "../../camera/services/ml-service";
+import type { EstablishmentHourly, EstablishmentSummary } from "../../camera/services/ml-service";
+import type { SystemTimeFormat } from "../../../utils/date-time";
+import { busiestHour } from "../assistant/facts";
+import { formatHourRange } from "../assistant/phrases";
 
-export function PeakActivity({ summary }: { summary: EstablishmentSummary | null }) {
+type Props = { summary: EstablishmentSummary | null; hourly: EstablishmentHourly | null; timeFormat: SystemTimeFormat };
+
+export function PeakActivity({ summary, hourly, timeFormat }: Props) {
+  const busiest = busiestHour(hourly);
+  const arrivals = busiest ? `${busiest.arrivals.toLocaleString()} ${busiest.arrivals === 1 ? "arrival" : "arrivals"}` : "";
   return (
     <section className="design-card overview-peak">
       <header>
@@ -13,8 +20,8 @@ export function PeakActivity({ summary }: { summary: EstablishmentSummary | null
           <span>
             <Hourglass /> <b>Busiest Hour</b>
           </span>
-          <strong>{"\u2014"}</strong>
-          <small>Hourly data unavailable</small>
+          <strong>{busiest ? formatHourRange(busiest.hour, timeFormat) : "—"}</strong>
+          <small>{busiest ? (busiest.peak == null ? arrivals : `Up to ${busiest.peak.toLocaleString()} inside · ${arrivals}`) : "No hourly activity yet"}</small>
         </div>
         <div>
           <span>

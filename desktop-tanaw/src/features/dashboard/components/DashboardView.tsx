@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CAMERA_MODE_LABEL, cameraModeName } from "../../camera/utils/camera-mode";
 import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
@@ -6,10 +6,13 @@ import { DotFormModal } from "../../reports/components/DotFormModal";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import { useAuthStore } from "../../login/stores/auth-store";
+import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { countingFromPayload } from "../../reports/model/report-workspace";
 import { useEstablishmentAnalytics } from "../hooks/useEstablishmentAnalytics";
+import { usePeriodOrigins } from "../hooks/usePeriodOrigins";
 import type { TrendFilter } from "../types/dashboard";
-import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
+import { periodDemographics } from "../utils/establishment";
+import { emptyDemo, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
 import { DashboardHeader } from "./DashboardHeader";
 import { DemographicsBreakdownChart } from "./DemographicsBreakdownChart";
 import { EstablishmentMetrics } from "./EstablishmentMetrics";
@@ -22,7 +25,10 @@ type DotPreviewState = { enterpriseId: string | null | undefined; demo: DemoBrea
 
 export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName: string; cameras?: Camera[] }) {
   const [filter, setFilter] = useState<TrendFilter>("Today");
-  const { summary, live, range, error, loading } = useEstablishmentAnalytics(cameras, filter);
+  const { summary, live, hourly, range, error, loading } = useEstablishmentAnalytics(cameras, filter);
+  const { timeFormat } = useSystemDisplayPreferences();
+  const origins = usePeriodOrigins(range);
+  const demographics = useMemo(() => periodDemographics(summary, origins), [summary, origins]);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
   const [ledger, setLedger] = useState<{ enterpriseId: typeof enterpriseId; reports: ReportRecord[] } | null>(null);
@@ -70,9 +76,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
     };
   }, [refreshReports, enterpriseId]);
 
-  const demographicsReport = reports.find(hasDemographics) ?? reports[0] ?? null;
   const offline = live?.state === "partial";
-  const partial = summary?.reconciliation_state === "partial";
   return (
     <div className={`overview-layout ${assistantOpen ? "assistant-is-open" : ""}`}>
       <div className="overview-main">
@@ -95,10 +99,10 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           </p>
         )}
         <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
-        <EstablishmentTrendChart summary={summary} range={range} filter={filter} unavailable={Boolean(error)} />
+        <EstablishmentTrendChart summary={summary} hourly={hourly} range={range} filter={filter} timeFormat={timeFormat} unavailable={Boolean(error)} />
         <div className="overview-secondary">
-          <DemographicsBreakdownChart report={demographicsReport} />
-          <PeakActivity summary={summary} />
+          <DemographicsBreakdownChart demographics={demographics} filter={filter} />
+          <PeakActivity summary={summary} hourly={hourly} timeFormat={timeFormat} />
         </div>
         <SubmissionLedgerPreview
           enterpriseName={enterpriseName}
@@ -107,19 +111,6 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
             setPreview({ enterpriseId, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
           }
         />
-        <details className="overview-coverage">
-          <summary>Counting coverage and estimate details</summary>
-          <section aria-label="Counting coverage" className="space-y-2 border-l-2 border-emerald-700 pl-4 text-sm text-slate-600 dark:border-emerald-400 dark:text-slate-300">
-            <p>Recognized people count once per establishment each day. For several days, the visitor total adds the daily estimates; a person visiting on different days can contribute again.</p>
-            {partial && <p>Some visitors could not be recognized or some days have no observations. These figures are partial estimates.</p>}
-            {summary && (
-              <p className="text-xs">
-                Observation coverage: {summary.coverage_ratio > 0 && summary.coverage_ratio < 0.01 ? "<1" : Math.round(summary.coverage_ratio * 100)}% of the selected period. Unresolved observations:{" "}
-                {summary.unresolved_observations.toLocaleString()}. Live occupancy shows the current observation; other figures follow the period below.
-              </p>
-            )}
-          </section>
-        </details>
         {cameras.length > 0 && (
           <details className="rounded-xl border border-slate-200 px-5 py-4 text-sm dark:border-slate-700">
             <summary className="cursor-pointer font-semibold text-slate-900 dark:text-slate-100">Camera status</summary>

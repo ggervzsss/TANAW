@@ -5,13 +5,15 @@ import {
   DEFAULT_ML_SERVICE_BASE_URL,
   getEstablishmentReportPeriods,
   getEstablishmentSummary,
+  getLocalReportDraft,
   getMlServiceStatus,
   listLocalReportSubmissions,
   type EstablishmentSummary,
 } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
-import { countingFromPayload, mergeReportHistory, reportFromCloudSubmission, reportFromLocalSubmission, type PreparedReportCounts } from "../model/report-workspace";
+import { originsFromPayload } from "../model/daily-origins";
+import { countingFromPayload, getDemographicDraftKey, mergeReportHistory, reportFromCloudSubmission, reportFromLocalSubmission, type PreparedReportCounts } from "../model/report-workspace";
 import { listEnterpriseReportHistory } from "../services/report-history";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 
@@ -64,13 +66,17 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
       ]);
       if (enterpriseId && [selected, currentSummary, ...periods.map((item) => item.counting)].some((item) => item && item.enterprise_id !== enterpriseId))
         throw new Error("The report data belongs to another establishment. Reconnect the local service.");
+      // Pending months show the origins already confirmed in their drafts.
+      const drafts = await Promise.all(
+        periods.map((item) => (isSameReportingMonth(item.period, currentReportingPeriod) ? null : getLocalReportDraft(base, getDemographicDraftKey(null, item.period)).catch(() => null))),
+      );
       if (sequence !== metricsSequence.current || useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       setPacket({
         enterpriseId,
         period,
         selected,
         current: currentSummary ?? selected,
-        periods: periods.map((item) => ({
+        periods: periods.map((item, index) => ({
           period: item.period,
           reportId: `PENDING-${reportingMonthKey(item.period)}`,
           entries: item.metrics.entries,
@@ -78,6 +84,7 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
           peakOccupancy: item.metrics.peak_occupancy,
           uniqueCount: item.metrics.unique_count,
           counting: item.counting,
+          origins: originsFromPayload(drafts[index]?.payload.origins),
         })),
       });
       setRequestError(null);

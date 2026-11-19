@@ -15,7 +15,7 @@ import {
   prepareLocalSampleCounts,
   type LocalReportSubmissionRecord,
 } from "../../../../../../src/features/camera/services/ml-service";
-import { syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
+import { DESKTOP_SAMPLE_PREPARED_EVENT, syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
 
 vi.mock("../../../../../../src/lib/axios", () => ({
   staffApi: {
@@ -125,7 +125,7 @@ describe("establishment telemetry", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("window", { localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
+    vi.stubGlobal("window", { dispatchEvent: vi.fn(), localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
     vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
     vi.mocked(getLocalMetricsSummary).mockResolvedValue({ entries: 12, exits: 7, current_occupancy: 5, unique_count: 3, unsynced_events: 0, unsubmitted_events: 0 } as Awaited<ReturnType<typeof getLocalMetricsSummary>>);
     const areaSession = {
@@ -196,6 +196,7 @@ describe("establishment telemetry", () => {
 
     await expect(prepareDesktopSampleCounts()).resolves.toBe(60);
     expect(prepareLocalSampleCounts).toHaveBeenCalledTimes(2);
+    expect(window.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: DESKTOP_SAMPLE_PREPARED_EVENT }));
     expect(prepareLocalSampleCounts).toHaveBeenCalledWith("http://127.0.0.1:8765", {
       enterpriseId: "ENT-SAMPLE",
       enterpriseName: "Sample Park",

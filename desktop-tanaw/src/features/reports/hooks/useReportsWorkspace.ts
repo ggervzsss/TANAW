@@ -83,10 +83,13 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     setIsRefreshing(false);
     setRevisionMetrics(null);
     setPreviewReport(null);
-    setActiveReportId(row.kind === "history" ? row.report.id : null);
-    setPeriod(row.report.period ?? row.report.date ?? getCurrentReportingPeriod());
+    const nextReportId = row.kind === "history" ? row.report.id : null;
+    const nextPeriod = row.report.period ?? row.report.date ?? getCurrentReportingPeriod();
+    setActiveReportId(nextReportId);
+    setPeriod(nextPeriod);
     setNotes(row.kind === "history" ? (row.report.notes ?? "") : "");
-    setOrigins(row.kind === "history" ? (row.report.origins ?? {}) : {});
+    // Another report loads its own draft. Clearing the open one would save the blank and delete its draft.
+    if (getDemographicDraftKey(nextReportId, nextPeriod) !== demographicDraftKey) setOrigins(row.kind === "history" ? (row.report.origins ?? {}) : {});
   };
   const handlePreviewReport = (report: ReportRecord) =>
     setPreviewReport({

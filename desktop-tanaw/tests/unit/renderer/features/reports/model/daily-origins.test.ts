@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mergeMissingOriginDays,
   confirmAllThisCity,
   dailyOriginsError,
   formatReportDate,
@@ -131,5 +132,22 @@ describe("This City male and female from TANAW's estimate", () => {
   it("leaves This City male and female blank in months without any estimate", () => {
     const demo = monthlyDemoFromDays(reportDays("November 2026", metrics, confirmAllThisCity({}, "2026-11-01"), "2026-11-16"));
     expect([demo.thisCityMale, demo.thisCityFemale, demo.thisCityUnspecified]).toEqual(["", "", "17"]);
+  });
+});
+
+describe("origins confirmed by sample preparation after a report loaded", () => {
+  const day = (otherCity: number) => ({ otherCity: { male: otherCity, female: 0 }, otherProvince: { male: 0, female: 0 }, foreign: { male: 0, female: 0 } });
+
+  it("adds the stored days and keeps the days already shown", () => {
+    const shown: DailyOrigins = { "2026-07-02": day(1) };
+    const stored: DailyOrigins = { "2026-07-01": day(5), "2026-07-02": day(9) };
+
+    expect(mergeMissingOriginDays(shown, stored)).toEqual({ "2026-07-01": day(5), "2026-07-02": day(1) });
+  });
+
+  it("returns the shown origins unchanged when nothing is new, so nothing is saved again", () => {
+    const shown: DailyOrigins = { "2026-07-01": day(2) };
+
+    expect(mergeMissingOriginDays(shown, { "2026-07-01": day(7) })).toBe(shown);
   });
 });

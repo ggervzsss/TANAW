@@ -14,7 +14,9 @@ export function getCurrentAnalyticsPeriod(date = new Date()): AnalyticsPeriod {
 }
 
 export function getAnalyticsPeriods(reports: IntakeReport[], currentPeriod: AnalyticsPeriod) {
-  const periods = new Map<string, AnalyticsPeriod>([[currentPeriod.key, currentPeriod]]);
+  // Fresh period objects on every call: pushing into the caller's period would count reports
+  // again on each refetch and keep memoized enterprise rows pointing at a stale array.
+  const periods = new Map<string, AnalyticsPeriod>([[currentPeriod.key, { ...currentPeriod, reports: [] }]]);
   reports.forEach((report) => {
     const year = getReportYear(report);
     const monthIndex = MONTH_ORDER.indexOf(report.month);

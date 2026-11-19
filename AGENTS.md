@@ -53,6 +53,20 @@ test. Run the same spec on the base branch to find out whether the branch
 caused the failure; either way, fix it or report it instead of filing. A
 flaky test is a defect to fix, not a failure to rerun until it passes.
 
+## Commit Messages
+
+When an implementation is done, always provide a ready-to-use commit message
+for it at the end of the response.
+
+- Base the message on the actual uncommitted changes (`git status` and
+  `git diff`), not only on the most recent task.
+- If several changes are still uncommitted, write one message that covers all
+  of them; the subject summarizes the whole set and the body lists each change.
+- Follow the repository's existing style: a Conventional Commits subject with a
+  scope (for example `fix(desktop): ...`), and a body that explains what changed
+  and why.
+- Only generate the message. Do not commit unless the user asks.
+
 ## Database Schema And Migration Policy
 
 TANAW is currently in a pre-production stage. There is no production or

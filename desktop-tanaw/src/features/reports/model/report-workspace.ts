@@ -3,7 +3,7 @@ import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../.
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
 import type { EnterpriseIntakeReport } from "../services/report-history";
 import { getDemographicAllocationStatus } from "../utils/demographics";
-import { dailyOriginsError, originsFromPayload, type ReportDay } from "./daily-origins";
+import { dailyOriginsError, monthlyDemoFromDays, originsFromPayload, reportDays, type ReportDay } from "./daily-origins";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 import { sortReportLedgerRows } from "../utils/report-ledger";
 import type { ReportLedgerRow } from "./report-ledger";
@@ -18,6 +18,8 @@ export type PreparedReportCounts = {
   peakOccupancy: number | null;
   uniqueCount: number;
   counting?: EstablishmentSummary;
+  /** Origins already confirmed in the month's draft. */
+  origins?: DailyOrigins;
 };
 
 export function countingFromPayload(value: unknown): EstablishmentSummary | undefined {
@@ -158,6 +160,7 @@ export function buildLedgerRows({
 }
 
 function reportFromPendingCounts(counts: PreparedReportCounts): ReportRecord {
+  const metrics: Metrics = { entries: counts.entries, exits: counts.exits, peak: counts.peakOccupancy, unique: counts.uniqueCount, ...(counts.counting ? { counting: counts.counting } : {}) };
   return {
     id: counts.reportId,
     date: counts.period,
@@ -168,7 +171,8 @@ function reportFromPendingCounts(counts: PreparedReportCounts): ReportRecord {
     unique: counts.uniqueCount,
     counting: counts.counting,
     period: counts.period,
-    demo: emptyDemo(),
+    demo: counts.origins ? monthlyDemoFromDays(reportDays(counts.period, metrics, counts.origins)) : emptyDemo(),
+    origins: counts.origins,
     notes: "",
   };
 }

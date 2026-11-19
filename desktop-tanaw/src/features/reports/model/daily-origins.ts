@@ -171,6 +171,12 @@ export function monthlyDemoFromDays(days: ReportDay[]): DemoBreakdown {
   };
 }
 
+/** Adds the stored days missing from the shown origins; shown days keep their values. Unchanged input is returned as is. */
+export function mergeMissingOriginDays(shown: DailyOrigins, stored: DailyOrigins): DailyOrigins {
+  const added = Object.entries(stored).filter(([date]) => !(date in shown));
+  return added.length ? { ...Object.fromEntries(added), ...shown } : shown;
+}
+
 export function originsFromPayload(value: unknown): DailyOrigins | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const result: DailyOrigins = {};

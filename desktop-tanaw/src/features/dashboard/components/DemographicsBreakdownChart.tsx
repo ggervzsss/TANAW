@@ -2,12 +2,16 @@ import { useState } from "react";
 import { MapPin, Plane, Trees } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import type { ReportRecord } from "../../../types/enterprise";
-import { getDemographicTotals, getDemographicAllocationStatus } from "../../reports/utils/demographics";
+import type { DemoBreakdown } from "../../../types/enterprise";
+import { getDemographicTotals } from "../../reports/utils/demographics";
+import type { TrendFilter } from "../types/dashboard";
 import { emptyDemo } from "../utils/reportLedger";
 
-export function DemographicsBreakdownChart({ report }: { report: ReportRecord | null }) {
-  const totals = getDemographicTotals(report?.demo ?? emptyDemo());
+type Props = { demographics: { demo: DemoBreakdown; unconfirmedDays: number } | null; filter: TrendFilter };
+
+/** Visitors counted in the selected period, by sex and by residence. */
+export function DemographicsBreakdownChart({ demographics, filter }: Props) {
+  const totals = getDemographicTotals(demographics?.demo ?? emptyDemo());
   const reduceMotion = useReducedMotion();
   const [active, setActive] = useState<string | null>(null);
   const colors = ["var(--dashboard-demographic-female, #06513e)", "var(--dashboard-demographic-male, #16bd93)", "var(--dashboard-demographic-others, #1bc79a)"];
@@ -15,7 +19,7 @@ export function DemographicsBreakdownChart({ report }: { report: ReportRecord | 
   const gender = [
     { label: "Female", value: totals.female, color: colors[0] },
     { label: "Male", value: totals.male, color: colors[1] },
-    // TANAW does not detect sex yet, so This City visitors have no male/female split.
+    // Days without TANAW's male/female estimate keep a total only.
     ...(totals.unspecified > 0 ? [{ label: "Not recorded", value: totals.unspecified, color: "var(--dashboard-demographic-unspecified, #cbd5e1)" }] : []),
   ];
   const residence = [
@@ -24,12 +28,11 @@ export function DemographicsBreakdownChart({ report }: { report: ReportRecord | 
     { label: "Foreign", value: totals.foreign, icon: Plane },
   ];
   const percent = (value: number) => (totals.grandTotal ? `${((value / totals.grandTotal) * 100).toFixed(1)}%` : "—");
-  const allocation = report ? getDemographicAllocationStatus(report.demo ?? emptyDemo(), report.unique) : null;
   return (
     <section className="design-card overview-demographics">
       <header>
         <h3>Demographic Breakdown</h3>
-        <p>{report ? `Visitor distribution · ${report.period ?? report.date}` : "Visitor distribution from submitted reports"}</p>
+        <p>Visitor distribution · {filter === "Today" ? "today" : filter === "Week" ? "past 7 days" : "past 30 days"}</p>
       </header>
       {total > 0 ? (
         <>
@@ -92,11 +95,15 @@ export function DemographicsBreakdownChart({ report }: { report: ReportRecord | 
               ))}
             </ul>
           </div>
-          {allocation?.validationMessage && <p className="design-note">{allocation.validationMessage}</p>}
+          {demographics && demographics.unconfirmedDays > 0 && (
+            <p className="design-note">
+              Visitors on {demographics.unconfirmedDays === 1 ? "1 day" : `${demographics.unconfirmedDays} days`} without confirmed origins are counted as This Province.
+            </p>
+          )}
         </>
       ) : (
         <div className="demographic-empty" role="status">
-          No demographic data available from submitted reports.
+          No visitors counted for this period yet.
         </div>
       )}
     </section>

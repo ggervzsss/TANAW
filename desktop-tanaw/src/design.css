@@ -388,13 +388,6 @@
   padding: 10px 0;
   font-size: 14px;
 }
-.overview-coverage {
-  font-size: 12px;
-  color: var(--enterprise-muted);
-}
-.overview-coverage summary {
-  margin-bottom: 8px;
-}
 .design-note {
   font-size: 13px;
   color: var(--enterprise-muted);

@@ -28,6 +28,8 @@ import { isSameReportingMonth } from "../../reports/utils/reporting-period";
 import { buildCameraMonitoringSummary } from "./camera-monitoring";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
+/** Sample preparation finished; open reports re-read the origins it may have confirmed. */
+export const DESKTOP_SAMPLE_PREPARED_EVENT = "tanaw:desktop-sample-prepared";
 
 const DEVICE_ID_STORAGE_KEY = "tanaw-desktop-device-id";
 
@@ -73,6 +75,8 @@ export async function prepareDesktopSampleCounts() {
     preparedSamplePeriods.add(`${preparation.enterpriseId}|${counts.reportId}|${today}`);
     preparedDays += result.days;
   }
+  // Origins can be confirmed even when no day changed, so notify after every run.
+  window.dispatchEvent(new Event(DESKTOP_SAMPLE_PREPARED_EVENT));
   return preparedDays;
 }
 
