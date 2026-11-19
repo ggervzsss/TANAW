@@ -277,6 +277,9 @@ test("reveals and focuses the first invalid Support Ticket field", async ({ page
 });
 
 test("keeps the modern Reports workspace dense, rounded, and fully interactive", async ({ page }) => {
+  // About sixty steps across both themes, three viewports and the report preview; a busy full
+  // suite run can take longer than the default 30 seconds.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   const reportDemo = {

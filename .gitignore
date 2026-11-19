@@ -5,6 +5,7 @@
 !.env.production.example
 
 # Editor and operating-system files
+.claude/
 .vscode/
 .idea/
 .DS_Store
@@ -17,6 +18,5 @@ release/
 
 # Private working documents
 -docs/
-AGENTS.md
 test-videos
 documentation
