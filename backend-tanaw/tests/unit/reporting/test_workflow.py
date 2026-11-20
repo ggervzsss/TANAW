@@ -194,7 +194,51 @@ def test_report_demographics_preserve_submitted_breakdown() -> None:
         "thisProvFemale": 161,
         "thisProvMale": 161,
         "thisProvUnspecified": 0,
+        "thisCityMale": None,
+        "thisCityFemale": None,
+        "thisCityUnspecified": None,
     }
+
+
+def test_report_demographics_keep_the_city_split_for_var2m() -> None:
+    demo = {
+        "foreignFemale": "1",
+        "foreignMale": "1",
+        "otherProvFemale": "2",
+        "otherProvMale": "2",
+        "thisProvFemale": "10",
+        "thisProvMale": "8",
+        "thisProvUnspecified": "4",
+        "thisCityFemale": "7",
+        "thisCityMale": "6",
+        "thisCityUnspecified": "3",
+    }
+
+    demographics = report_demographics_from_payload({"demo": demo}, 28)
+
+    assert demographics is not None
+    assert (demographics.thisCityMale, demographics.thisCityFemale) == (6, 7)
+    assert demographics.thisCityUnspecified == 3
+
+
+def test_report_demographics_drop_a_city_split_larger_than_the_province() -> None:
+    demo = {
+        "foreignFemale": "0",
+        "foreignMale": "0",
+        "otherProvFemale": "0",
+        "otherProvMale": "0",
+        "thisProvFemale": "5",
+        "thisProvMale": "5",
+        "thisCityFemale": "6",
+        "thisCityMale": "1",
+    }
+
+    demographics = report_demographics_from_payload({"demo": demo}, 10)
+
+    assert demographics is not None
+    assert demographics.thisProvMale == 5
+    assert demographics.thisCityMale is None
+    assert demographics.thisCityFemale is None
 
 
 def test_report_demographics_count_visitors_without_a_recorded_sex() -> None:

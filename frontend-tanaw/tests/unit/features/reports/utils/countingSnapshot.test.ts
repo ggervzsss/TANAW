@@ -58,7 +58,7 @@ describe("Staff exports of the saved unified desktop snapshot", () => {
       expect(pdf).toContain("Camera 1: 2 daily visitor observations");
       expect(pdf).not.toContain("Zone A - Main Entrance");
     }
-    expect(finalPdf).toContain("Citywide Consolidated Total");
+    expect(finalPdf).toContain("Total of this Month ****");
     expect(finalPdf).toContain("Each establishment total contributes once");
     const output = process.env.TANAW_PDF_REVIEW_DIR;
     if (output) {

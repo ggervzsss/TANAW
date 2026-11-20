@@ -6,7 +6,8 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import type { IntakeReport } from "@/shared/types";
 import { CountingSummary } from "./CountingSummary";
 import { measuredCount } from "../utils/counting";
-import { DotSingleReportTable } from "./DotReportTable";
+import { buildVar2m } from "../model/varForms";
+import { Var2mSheet } from "./VarSheets";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
 import { downloadIntakeReportPdf, formatReportSubmittedDate } from "../utils/pdf";
@@ -88,7 +89,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm">
                 <div className="mb-6 border-b-2 border-current pb-4">
                   <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.code}</p>
-                  <h1 className="mt-1 text-xl font-bold">TANAW - DOT Visitor Attraction Report</h1>
+                  <h1 className="mt-1 text-xl font-bold">Establishment Report Details</h1>
                   <div className="mt-4 grid gap-x-8 gap-y-2 text-xs sm:grid-cols-2">
                     <DocumentDetail label="Enterprise" value={report.enterprise} />
                     <DocumentDetail label="Category" value={report.category} />
@@ -100,7 +101,13 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                     <DocumentDetail label="Report Code" value={report.code} />
                   </div>
                 </div>
-                <DotSingleReportTable report={report} />
+                <p className="mb-3 text-xs text-gray-600">
+                  This report as its row in the month&apos;s consolidated VAR 2M. Visitor totals are camera estimates; residence and sex are entered by the establishment.
+                </p>
+                <Var2mSheet
+                  form={buildVar2m(report.period, [{ id: report.id, name: report.enterprise, unique: report.metrics.unique, demographics: report.demographics ?? report.payload?.demo }])}
+                  label={`${report.enterprise} VAR 2M row`}
+                />
                 <div className="mt-6 border-t border-current/30 pt-4 text-xs leading-6">
                   <h2 className="text-sm font-bold">Saved Establishment Summary</h2>
                   <p>

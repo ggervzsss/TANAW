@@ -109,11 +109,11 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await reportRow.click();
   const viewer = page.getByRole("dialog", { name: /official artifact viewer/ });
   await expect(viewer).toBeVisible();
-  const sourceCells = viewer.locator(".tanaw-official-report-table tbody tr").first().locator("td");
-  const ordinaryCellColor = await sourceCells.nth(2).evaluate((cell) => getComputedStyle(cell).backgroundColor);
-  await expect(sourceCells.nth(4)).not.toHaveCSS("background-color", ordinaryCellColor);
-  await expect(sourceCells.nth(11)).toHaveCSS("background-color", ordinaryCellColor);
-  await expect(sourceCells.nth(13)).not.toHaveCSS("background-color", ordinaryCellColor);
+  const var2m = viewer.getByRole("table", { name: /VAR 2M May 2026/ });
+  await expect(var2m.getByRole("columnheader", { name: "This Municipality" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
+  await expect(var2m.locator("tbody td").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(var2m.locator("tfoot td").last()).toHaveCSS("background-color", "rgb(146, 208, 80)");
+  await expect(var2m.locator("tfoot td").last()).toHaveText("377");
   const downloadPromise = page.waitForEvent("download");
   await viewer.getByRole("button", { name: "Download PDF" }).click();
   const download = await downloadPromise;
@@ -136,6 +136,21 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await viewer.getByRole("button", { name: "Archive", exact: true }).click();
   await page.getByRole("button", { name: "Archive Report", exact: true }).click();
   await expect(viewer).toBeHidden();
+});
+
+test("compiles the finalized months into the annual VAR 3M", async ({ page }) => {
+  await signInAsStaff(page);
+  await page.goto("/staff/final-reports-audit");
+  await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
+
+  const var3 = page.getByRole("table", { name: "VAR 3M LGU Annual Report 2026" });
+  await expect(var3.getByRole("columnheader", { name: "Archie's Event Place" })).toBeVisible();
+  await expect(var3.getByRole("rowheader", { name: "May" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
+  await expect(var3.getByRole("row", { name: /^May/ })).toContainText("377");
+  await expect(page.getByText("1 of 12 months finalized for 2026.")).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF" }).click();
+  expect((await download).suggestedFilename()).toBe("VAR3M-2026.pdf");
 });
 
 test("keeps Password Settings blank, theme-correct, and resettable", async ({ page }) => {

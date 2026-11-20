@@ -100,6 +100,21 @@ class ReportDemographicsSummary(BaseModel):
     otherProvFemale: int = Field(ge=0)
     foreignMale: int = Field(ge=0)
     foreignFemale: int = Field(ge=0)
+    thisCityMale: int | None = Field(
+        default=None,
+        ge=0,
+        description="This City/Municipality share of thisProvMale; null when not recorded.",
+    )
+    thisCityFemale: int | None = Field(
+        default=None,
+        ge=0,
+        description="This City/Municipality share of thisProvFemale; null when not recorded.",
+    )
+    thisCityUnspecified: int | None = Field(
+        default=None,
+        ge=0,
+        description="This City/Municipality share of thisProvUnspecified; null when not recorded.",
+    )
 
 
 class IntakeReportSummary(BaseModel):

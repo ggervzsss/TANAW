@@ -2155,6 +2155,21 @@ export interface components {
             otherProvFemale: number;
             /** Otherprovmale */
             otherProvMale: number;
+            /**
+             * Thiscityfemale
+             * @description This City/Municipality share of thisProvFemale; null when not recorded.
+             */
+            thisCityFemale?: number | null;
+            /**
+             * Thiscitymale
+             * @description This City/Municipality share of thisProvMale; null when not recorded.
+             */
+            thisCityMale?: number | null;
+            /**
+             * Thiscityunspecified
+             * @description This City/Municipality share of thisProvUnspecified; null when not recorded.
+             */
+            thisCityUnspecified?: number | null;
             /** Thisprovfemale */
             thisProvFemale: number;
             /** Thisprovmale */

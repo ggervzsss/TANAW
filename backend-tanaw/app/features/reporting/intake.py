@@ -37,6 +37,12 @@ REPORT_DEMOGRAPHIC_FIELDS = (
     "foreignFemale",
 )
 OPTIONAL_REPORT_DEMOGRAPHIC_FIELDS = ("thisProvUnspecified",)
+# This City/Municipality is a subset of This Province, so it is not part of the total.
+CITY_DEMOGRAPHIC_FIELDS = (
+    ("thisCityMale", "thisProvMale"),
+    ("thisCityFemale", "thisProvFemale"),
+    ("thisCityUnspecified", "thisProvUnspecified"),
+)
 
 
 async def ingest_report_submission(
@@ -231,7 +237,22 @@ def report_demographics_from_payload(
     if sum(values.values()) != unique_count:
         return None
 
-    return ReportDemographicsSummary(**values)
+    return ReportDemographicsSummary(**values, **city_demographics(demo, values))
+
+
+def city_demographics(demo: Mapping[str, object], province: Mapping[str, int]) -> dict[str, int]:
+    """The This City/Municipality split, or nothing when it is missing or exceeds This Province."""
+    city: dict[str, int] = {}
+    for field, province_field in CITY_DEMOGRAPHIC_FIELDS:
+        raw = demo.get(field)
+        if raw in (None, "") and field == "thisCityUnspecified":
+            value: int | None = 0
+        else:
+            value = report_non_negative_int(raw)
+        if value is None or value > province[province_field]:
+            return {}
+        city[field] = value
+    return city
 
 
 def report_non_negative_int(value: object) -> int | None:

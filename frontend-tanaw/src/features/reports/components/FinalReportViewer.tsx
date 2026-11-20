@@ -5,7 +5,8 @@ import type { FinalReport } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { CountingSummary } from "./CountingSummary";
 import { measuredCount } from "../utils/counting";
-import { DotFinalReportTable } from "./DotReportTable";
+import { var2mFromFinalReport } from "../model/varForms";
+import { Var2mSheet } from "./VarSheets";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { useFinalReportViewer } from "../hooks";
 
@@ -64,7 +65,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <div>
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
                 <h3 className="text-(--tanaw-text) mt-1 text-lg font-bold">Official Artifact Viewer</h3>
-                <p className="text-xs font-semibold text-gray-500">LGU official format with data lineage.</p>
+                <p className="text-xs font-semibold text-gray-500">VAR 2M LGU Month Report with data lineage.</p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 {report.status === "Archived" ? (
@@ -158,30 +159,17 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 </ul>
               </div>
 
-              <div className="mb-6 border-b-2 border-black pb-4 text-center">
-                <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
-                <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
-                <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
-                <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
-                <p className="mt-2 font-mono text-[10px] tracking-widest uppercase">{report.id}</p>
-              </div>
-
-              <div className="mb-6 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
+              <div className="mb-5 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-4">
                 <DocumentDetail label="Generated On" value={formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })} />
                 <DocumentDetail label="Prepared By" value={`${report.preparedBy} (${report.preparedRole})`} />
                 <DocumentDetail label="Audit Status" value={report.status} />
                 <DocumentDetail label="Enterprise Reports" value={String(report.enterpriseCount)} />
               </div>
 
-              <p className="mb-6 text-justify text-sm leading-relaxed">
-                This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from{" "}
-                {report.enterpriseCount} enterprise reports.
-              </p>
-
-              <DotFinalReportTable report={report} />
+              <Var2mSheet form={var2mFromFinalReport(report)} label={`${report.title} VAR 2M ${report.period}`} />
               <p className="mt-4 text-xs leading-6">
-                Each establishment report contributes once. Citywide arrivals: {measuredCount(report.totalEntry)}. Citywide departures: {measuredCount(report.totalExit)}. A total is unmeasured when
-                any source lacks that measurement; camera evidence is never added again.
+                Combined from {report.enterpriseCount} establishment reports; each contributes once. Citywide arrivals: {measuredCount(report.totalEntry)}. Citywide departures:{" "}
+                {measuredCount(report.totalExit)}. A movement total is unmeasured when any source lacks that measurement; camera evidence is never added again.
               </p>
               <details className="mt-4">
                 <summary className="cursor-pointer text-sm font-semibold">Establishment counting details</summary>
@@ -194,17 +182,6 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                   </div>
                 ))}
               </details>
-
-              <div className="mt-auto pt-10">
-                <div className="mb-8 flex items-end justify-between">
-                  <Signature label="Prepared By" sub={report.preparedRole} />
-                  <div className="h-24 w-48" aria-hidden="true" />
-                </div>
-                <div className="flex items-end justify-between">
-                  <Signature label="Checked By" sub="Tourism Audit Officer" />
-                  <Signature label="Approved By" sub="Head of Department" />
-                </div>
-              </div>
             </div>
           </motion.section>
         </motion.div>
@@ -334,16 +311,6 @@ function DocumentDetail({ label, value }: { label: string; value: string }) {
     <div className="min-w-0">
       <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
       <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
-    </div>
-  );
-}
-
-function Signature({ label, sub }: { label: string; sub: string }) {
-  return (
-    <div className="w-56 text-center">
-      <div className="flex h-8 items-end justify-center border-b border-black" />
-      <p className="mt-2 text-xs font-bold tracking-wide uppercase">{label}</p>
-      <p className="mt-1 text-[10px] text-gray-500">{sub}</p>
     </div>
   );
 }

@@ -370,7 +370,13 @@ def source_demographics(
     if any(value is None for value in values.values()):
         return None
     return ReportDemographicsSummary.model_validate(
-        {**values, "thisProvUnspecified": source.this_prov_unspecified or 0}
+        {
+            **values,
+            "thisProvUnspecified": source.this_prov_unspecified or 0,
+            "thisCityMale": source.this_city_male,
+            "thisCityFemale": source.this_city_female,
+            "thisCityUnspecified": source.this_city_unspecified,
+        }
     )
 
 
@@ -408,6 +414,9 @@ def update_final_report_source_snapshot(
     snapshot.other_prov_female = demographics.otherProvFemale if demographics else None
     snapshot.foreign_male = demographics.foreignMale if demographics else None
     snapshot.foreign_female = demographics.foreignFemale if demographics else None
+    snapshot.this_city_male = demographics.thisCityMale if demographics else None
+    snapshot.this_city_female = demographics.thisCityFemale if demographics else None
+    snapshot.this_city_unspecified = demographics.thisCityUnspecified if demographics else None
 
 
 def mark_source_consolidated(source: EnterpriseReportSubmission) -> None:
