@@ -289,8 +289,8 @@ Targeted Playwright
 4. Build `periods`, `facts`, `phrases`, `compose`, `suggestions` with tests.
 5. Build `data.ts` with tests.
 6. Rewire `TanawAssistant.tsx` and `DashboardView.tsx`; add styles for the
-   language switch, details, notes and pending state in `design.css` and
-   `theme.css` (dark mode).
+   language switch, details, notes and pending state in `src/styles/workspace.css`
+   and `src/styles/theme.css` (dark mode).
 7. Update the Playwright specs that name the assistant.
 8. Run fast checks and the targeted Playwright specs; commit.
 

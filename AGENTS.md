@@ -2,9 +2,6 @@
 
 ## Testing Policy
 
-Fast checks protect everyday work; Playwright end-to-end suites run at specific
-points instead of after every change.
-
 ### After every change
 
 Run the fast checks for each area the change touches:
@@ -23,23 +20,19 @@ they are generated from `design-system/`.
 
 Put logic checks in unit tests (Vitest or pytest), not in Playwright.
 
-### During implementation: targeted Playwright only
+### Playwright end-to-end tests
 
-Do not run the full Playwright suites while implementing. Run only the specs
-for the affected area, and only when the change touches a screen, a user
-workflow, or a request or response that a spec mocks or asserts on, for example:
+Run Playwright browser and Electron tests only when the user explicitly asks
+to run end-to-end tests. This applies during implementation and when opening or
+reviewing a pull request. Run the relevant specs unless the user asks for a
+full suite. For a targeted desktop browser test, use a command such as the
+following.
 
 ```shell
 npx playwright test tests/e2e/browser/unified-reporting.spec.ts
 ```
 
-Skip Playwright entirely for backend-only, ML-service-internal, script, and
-documentation changes.
-
-### Before filing a pull request: full suites
-
-Before opening any pull request, run the complete end-to-end suites for each
-client the branch changes:
+For a requested full suite, use the commands for the relevant client.
 
 - desktop-tanaw: `npm run test:e2e`, then `npm run test:electron`
 - frontend-tanaw: `npm run test:e2e`
@@ -48,10 +41,16 @@ client the branch changes:
 Electron config directly after the browser suite reuses a renderer-only build
 and stalls at login.
 
-Every suite is expected to pass. Do not file a pull request with a failing
-test. Run the same spec on the base branch to find out whether the branch
-caused the failure; either way, fix it or report it instead of filing. A
-flaky test is a defect to fix, not a failure to rerun until it passes.
+When asked to investigate a Playwright failure, compare the same spec on the
+base branch to see whether the failure predates the change. Treat flaky tests
+as defects to investigate and fix.
+
+### Pull request testing summary
+
+Summarize the checks that ran and their results in the pull request
+description. Say when Playwright was skipped. Skipping Playwright does not
+block filing. Fix known test failures before filing. If a failure remains,
+report it to the user.
 
 ## Commit Messages
 
