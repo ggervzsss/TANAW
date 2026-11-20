@@ -86,6 +86,9 @@ class LocalOperationsService:
     def mark_report_synced(self, report_id: str, submission_id: str) -> bool:
         return self._store.mark_report_synced(report_id, submission_id)
 
+    def mark_report_upload_rejected(self, report_id: str, submission_id: str) -> bool:
+        return self._store.mark_report_upload_rejected(report_id, submission_id)
+
     def purge_report_raw_events(self, report_id: str) -> dict[str, Any]:
         return self._store.purge_report_raw_events(report_id)
 

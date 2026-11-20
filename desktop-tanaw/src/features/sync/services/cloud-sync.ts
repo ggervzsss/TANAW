@@ -1,4 +1,5 @@
 import { apiPaths, type ApiDesktopReportSubmission, type ApiDesktopTelemetry, type ApiSchemas } from "../../../contracts/api";
+import { isAxiosError } from "axios";
 import { staffApi } from "../../../lib/axios";
 import { DAY_MS, philippineDayStart } from "../../../utils/date-time";
 import { useAuthStore } from "../../login/stores/auth-store";
@@ -15,6 +16,7 @@ import {
   listLocalReportSubmissions,
   markLocalEventsSynced,
   markLocalReportSynced,
+  markLocalReportUploadRejected,
   prepareLocalSampleCounts,
   purgeLocalReportRawEvents,
   type LocalReportSubmissionRecord,
@@ -139,15 +141,32 @@ export async function syncDesktopTelemetry() {
   return payload;
 }
 
+/** Backend answers that will not change on retry: the report itself was refused. */
+const REFUSED_UPLOAD_STATUSES = new Set([400, 409, 413, 422]);
+
+/**
+ * Whether the backend refused a report upload for good. An expired sign-in (401, 403), a
+ * missing route, a timeout or rate limit, and server errors are worth retrying instead.
+ */
+export function isRefusedUpload(error: unknown) {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+  return status !== undefined && REFUSED_UPLOAD_STATUSES.has(status);
+}
+
 export async function syncDesktopReportSubmissions(limit = 100) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const submissions = (await listLocalReportSubmissions(baseUrl, limit)).filter((submission) => submission.sync_status !== "synced");
+  const submissions = (await listLocalReportSubmissions(baseUrl, limit)).filter((submission) => submission.sync_status !== "synced" && submission.sync_status !== "upload_rejected");
   let syncedCount = 0;
 
   for (const submission of submissions) {
-    await syncReportSubmission(baseUrl, submission);
-    syncedCount += 1;
+    try {
+      await syncReportSubmission(baseUrl, submission);
+      syncedCount += 1;
+    } catch (error) {
+      // A refused report must not hold back the reports after it; any other failure retries later.
+      if (!isRefusedUpload(error)) throw error;
+    }
   }
 
   await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
@@ -199,7 +218,12 @@ async function uploadReportSubmission(baseUrl: string, submission: LocalReportSu
       },
     },
   } satisfies ApiDesktopReportSubmission;
-  await staffApi.post(apiPaths.desktopReportSubmissions, payload);
+  try {
+    await staffApi.post(apiPaths.desktopReportSubmissions, payload);
+  } catch (error) {
+    if (isRefusedUpload(error)) await resolveOptional(() => markLocalReportUploadRejected(baseUrl, submission.report_id, submission.submission_id));
+    throw error;
+  }
   await markLocalReportSynced(baseUrl, submission.report_id, submission.submission_id);
 }
 

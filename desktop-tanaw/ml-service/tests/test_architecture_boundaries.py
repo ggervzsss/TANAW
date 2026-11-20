@@ -39,6 +39,7 @@ class ArchitectureBoundariesTest(unittest.TestCase):
             "get_report_draft",
             "list_report_submissions",
             "mark_report_synced",
+            "mark_report_upload_rejected",
             "purge_report_raw_events",
             "save_report_draft",
         }

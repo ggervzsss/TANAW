@@ -18,6 +18,7 @@ import {
   validateDemographicAllocation,
   validateReportDraft,
   reportFromLocalSubmission,
+  reportSubmissionErrorMessage,
 } from "../model/report-workspace";
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
 import { syncSubmittedReportToCloud } from "../services/report-workspace";
@@ -226,9 +227,9 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       setRevisionMetrics(null);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
-    } catch {
+    } catch (issue) {
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
-      notifyError("Report submission failed. Please try again.", toastId);
+      notifyError(reportSubmissionErrorMessage(issue), toastId);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
     } finally {

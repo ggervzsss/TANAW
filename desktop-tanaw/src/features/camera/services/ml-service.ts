@@ -239,6 +239,11 @@ export async function markLocalReportSynced(baseUrl: string, reportId: string, s
   return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/synced`, { method: "POST" }, 2500);
 }
 
+/** Marks a submission the backend refused, so the background upload stops retrying it. */
+export async function markLocalReportUploadRejected(baseUrl: string, reportId: string, submissionId: string): Promise<{ updated: number }> {
+  return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/upload-rejected`, { method: "POST" }, 2500);
+}
+
 export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {
   return requestJson<{ report_id: string; purged_events: number; raw_purged_at: string | null }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/purge-raw`, { method: "POST" }, 5000);
 }

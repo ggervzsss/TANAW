@@ -246,6 +246,14 @@ def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path) -> Non
         )
         assert submitted.status_code == 200, submitted.text
         assert submitted.json()["unique_count"] == 90
+
+        submission_id = submitted.json()["submission_id"]
+        refused = client.post(f"/reports/local/REP-OCT/submissions/{submission_id}/upload-rejected")
+        assert refused.json() == {"updated": 1}
+        listed = client.get("/reports/local").json()
+        assert [(item["report_id"], item["sync_status"]) for item in listed] == [
+            ("REP-OCT", "upload_rejected")
+        ]
     finally:
         pipelines.close()
 

@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import Select, and_, case, delete, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, case, delete, false, func, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,13 +86,50 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
     return False
 
 
+def role_visibility_clause(role: str) -> ColumnElement[bool]:
+    """``can_role_view_log`` as a SQL condition, so a listing limit counts only visible logs."""
+    if role == AccountRole.ADMIN.value:
+        return or_(
+            ActivityLog.category.in_(ADMIN_ACTIVITY_CATEGORIES),
+            and_(
+                ActivityLog.category == "IT Activity",
+                or_(
+                    ActivityLog.action.in_(ADMIN_IT_ACTIVITY_ACTIONS),
+                    ActivityLog.action.startswith("Alert "),
+                ),
+            ),
+            and_(
+                ActivityLog.category == "System",
+                or_(
+                    ActivityLog.severity.in_({"Warning", "Critical"}),
+                    ActivityLog.action.startswith("Alert "),
+                ),
+            ),
+            and_(
+                ActivityLog.action.in_(IMPORTANT_TICKET_ACTIONS), ActivityLog.severity == "Warning"
+            ),
+            and_(
+                ActivityLog.action == "Desktop Application Problem",
+                ActivityLog.severity == "Warning",
+            ),
+            ActivityLog.severity == "Critical",
+        )
+    if role == AccountRole.IT.value:
+        return or_(
+            ActivityLog.category.in_({"System", "IT Activity", "Enterprise Activity"}),
+            ActivityLog.actor_role == "IT Personnel",
+        )
+    return false()
+
+
 async def list_activity_logs_for_account(
     db: AsyncSession, account: Account, limit: int = 250
 ) -> list[ActivityLogSummary]:
     retention_days = await get_activity_log_retention_days(db)
     cutoff = activity_log_retention_cutoff(retention_days)
     if account.role == AccountRole.ADMIN:
-        activity = activity_resolution_records().cte("activity_resolution")
+        visible = activity_resolution_records().where(role_visibility_clause(account.role.value))
+        activity = visible.cte("activity_resolution")
         active = select(activity.c.id, activity.c.resolution).where(
             activity.c.resolution == "Unresolved"
         )
@@ -119,7 +156,7 @@ async def list_activity_logs_for_account(
 
     result = await db.scalars(
         select(ActivityLog)
-        .where(ActivityLog.timestamp >= cutoff)
+        .where(ActivityLog.timestamp >= cutoff, role_visibility_clause(account.role.value))
         .order_by(ActivityLog.timestamp.desc())
         .limit(limit)
     )

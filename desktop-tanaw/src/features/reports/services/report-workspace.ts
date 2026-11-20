@@ -1,7 +1,6 @@
-import { isAxiosError } from "axios";
 import type { DailyOrigins } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, saveLocalReportDraft } from "../../camera/services/ml-service";
-import { syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
+import { isRefusedUpload, syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
 
 const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
 
@@ -41,7 +40,6 @@ export async function syncSubmittedReportToCloud(reportId: string, submissionId:
   try {
     return (await syncDesktopReportSubmission(reportId, submissionId)) ? "confirmed" : "pending";
   } catch (error) {
-    const status = isAxiosError(error) ? error.response?.status : undefined;
-    return status && status >= 400 && status < 500 && status !== 408 && status !== 429 ? "rejected" : "pending";
+    return isRefusedUpload(error) ? "rejected" : "pending";
   }
 }

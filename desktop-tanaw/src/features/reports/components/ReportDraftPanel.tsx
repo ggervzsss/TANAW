@@ -60,10 +60,11 @@ export function ReportDraftPanel({
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
+  const uploadRejected = activeReport?.syncStatus === "upload_rejected";
   const steps = [
     { label: "Complete Visitor Details", done: complete },
     { label: "Review Report Form", done: submitted || (reviewed && complete) },
-    { label: "Submit Report", done: submitted && !waitingForUpload },
+    { label: "Submit Report", done: submitted && !waitingForUpload && !uploadRejected },
   ];
   return (
     <section className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
@@ -155,7 +156,7 @@ export function ReportDraftPanel({
             />
             {isReadOnly && (
               <p className="report-workflow-status">
-                {waitingForUpload ? "Saved on this device · Upload pending" : activeReport?.status} · {activeReportId}
+                {waitingForUpload ? "Saved on this device · Upload pending" : uploadRejected ? "Saved on this device · Upload rejected" : activeReport?.status} · {activeReportId}
               </p>
             )}
             {!isReadOnly && (metricsError || validationError) && (

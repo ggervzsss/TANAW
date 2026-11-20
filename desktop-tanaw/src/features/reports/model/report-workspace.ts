@@ -1,6 +1,7 @@
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
+import { MlServiceRequestError } from "../../camera/services/ml-service.types";
 import type { EnterpriseIntakeReport } from "../services/report-history";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { dailyOriginsError, monthlyDemoFromDays, originsFromPayload, reportDays, type ReportDay } from "./daily-origins";
@@ -49,6 +50,20 @@ export function validateReportDraft(
     return `A report for ${period} has already been submitted.`;
   }
   return null;
+}
+
+/**
+ * What to tell the user when saving a report on this device fails. The local service rejects a
+ * report with a plain-language reason (the counts changed, the period was already submitted), so
+ * that reason is shown; other failures can be retried.
+ */
+export function reportSubmissionErrorMessage(error: unknown) {
+  if (error instanceof MlServiceRequestError) {
+    const generic = /^Request failed with status \d+\.$/.test(error.message);
+    if (error.status !== null && error.status >= 400 && error.status < 500 && error.message && !generic) return `Report not submitted. ${error.message}`;
+    if (error.code === "service_unavailable" || error.code === "request_timeout") return `Report not submitted. ${error.message} Please try again.`;
+  }
+  return "Report submission failed. Please try again.";
 }
 
 export function validateDemographicAllocation(metrics: Metrics, demo: DemoBreakdown) {
@@ -313,6 +328,7 @@ function isPendingLocalReport(report: ReportRecord) {
 function uploadStatusLabel(status: string) {
   if (status === "synced") return "Up to date";
   if (status === "pending_cloud_sync") return "Waiting to upload";
+  if (status === "upload_rejected") return "Upload rejected";
   return status.replace(/_/g, " ");
 }
 

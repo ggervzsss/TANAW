@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildLedgerRows, emptyDemo, validateDemographicAllocation, type PreparedReportCounts } from "../../../../../../src/features/reports/model/report-workspace";
+import { buildLedgerRows, emptyDemo, reportSubmissionErrorMessage, validateDemographicAllocation, type PreparedReportCounts } from "../../../../../../src/features/reports/model/report-workspace";
+import { MlServiceRequestError } from "../../../../../../src/features/camera/services/ml-service.types";
 import { dailyOriginsError, reportDays } from "../../../../../../src/features/reports/model/daily-origins";
 import type { EstablishmentSummary } from "../../../../../../src/features/camera/services/establishment.types";
 import type { DailyOrigins } from "../../../../../../src/types/enterprise";
@@ -52,5 +53,21 @@ describe("pending report rows", () => {
 
     expect(report?.origins).toBeUndefined();
     expect(report?.demo).toEqual(emptyDemo());
+  });
+});
+
+describe("report submission failures", () => {
+  it("show the reason the local service rejected the report", () => {
+    const conflict = new MlServiceRequestError("unknown", "A report for October 2026 has already been submitted.", 409);
+    expect(reportSubmissionErrorMessage(conflict)).toBe("Report not submitted. A report for October 2026 has already been submitted.");
+  });
+
+  it("ask to try again when the service is unreachable or gave no reason", () => {
+    expect(reportSubmissionErrorMessage(new MlServiceRequestError("service_unavailable", "The local ML service is unavailable."))).toBe(
+      "Report not submitted. The local ML service is unavailable. Please try again.",
+    );
+    expect(reportSubmissionErrorMessage(new MlServiceRequestError("unknown", "Request failed with status 422.", 422))).toBe("Report submission failed. Please try again.");
+    expect(reportSubmissionErrorMessage(new MlServiceRequestError("unknown", "Internal Server Error", 500))).toBe("Report submission failed. Please try again.");
+    expect(reportSubmissionErrorMessage(new Error("boom"))).toBe("Report submission failed. Please try again.");
   });
 });
