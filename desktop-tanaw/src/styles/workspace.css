@@ -21,7 +21,7 @@
   padding-inline: 26px;
   gap: 16px;
 }
-.enterprise-topbar [data-liquid-glass-navigation] {
+.enterprise-topbar [data-topbar-underline-navigation] {
   gap: 12px;
 }
 .design-card {
@@ -645,18 +645,6 @@
   min-height: 220px;
   margin-bottom: 12px;
 }
-.camera-management:has(.camera-settings) > .mb-4 {
-  display: none;
-}
-.camera-management:has(.camera-settings) > [data-camera-sidebar] {
-  display: block;
-}
-.camera-management:has(.camera-settings) #configured-cameras-panel {
-  display: none;
-}
-.camera-management:has(.camera-settings) > [data-camera-sidebar] > .min-h-0 {
-  height: 100%;
-}
 .camera-settings {
   height: 100%;
   display: flex;
@@ -727,6 +715,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 25% minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 .camera-settings-body > nav {
   border-right: 1px solid var(--enterprise-border-soft);
@@ -765,6 +754,7 @@
   background: var(--design-tint);
 }
 .camera-settings-content {
+  min-height: 0;
   overflow-y: auto;
   padding: 16px 4% 38px 3%;
   scrollbar-color: var(--tanaw-control-border-hover) transparent;

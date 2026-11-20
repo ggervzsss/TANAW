@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { normalizePassword, validatePasswordPolicy } from "../../../utils/password-policy";
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { CredentialControl, type PasswordChangeValues } from "./CredentialControl";
 
 export function SecurityView() {
@@ -14,19 +14,20 @@ export function SecurityView() {
 
   const handlePasswordUpdate = async ({ confirmPassword, currentPassword, newPassword }: PasswordChangeValues) => {
     if (!currentPassword) {
-      notifyError("Enter your current password.");
+      notifyWarning("Enter your current password.");
       return false;
     }
     if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
-      notifyError("New passwords do not match.");
+      notifyWarning("New passwords do not match.");
       return false;
     }
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) {
-      notifyError(policyError);
+      notifyWarning(policyError);
       return false;
     }
 
+    setIsPasswordSuccess(false);
     setIsPasswordLoading(true);
     try {
       const session = await changePassword(currentPassword, newPassword);
@@ -45,14 +46,6 @@ export function SecurityView() {
   };
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-sans duration-500">
-      <div className="mx-auto w-full">
-        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Controls</p>
-        <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Password Settings</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Update your enterprise account password.</p>
-      </div>
-
-      <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
-    </div>
+    <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
   );
 }

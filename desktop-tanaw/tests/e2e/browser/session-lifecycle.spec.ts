@@ -87,6 +87,19 @@ test("keeps a valid Enterprise Desktop session active while idle and restores it
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
   await expect.poll(() => logoutCalls).toBe(1);
   await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.locator(".tanaw-toast--success")).toContainText("Signed out of TANAW.");
+});
+
+test("reports local sign-out when the server cannot confirm it", async ({ page }) => {
+  await mockAuthenticatedEnterprise(page, () => undefined, () => undefined);
+  await page.route("**/auth/logout", (route) => route.fulfill({ status: 503, json: { detail: "Unavailable" } }));
+  await page.goto("/#/enterprise/dashboard");
+  await expectAuthenticatedEnterprise(page);
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.locator(".tanaw-toast--warning")).toContainText("Signed out on this device.");
+  await expect(page.locator(".tanaw-toast--success")).toHaveCount(0);
 });
 
 test("redirects to login when the Enterprise Desktop session cannot be restored", async ({ page }) => {

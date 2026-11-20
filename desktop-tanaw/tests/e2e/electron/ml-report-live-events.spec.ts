@@ -15,9 +15,10 @@ test("mediates authenticated report events across preload and IPC", async () => 
   let electronApp: ElectronApplication | undefined;
 
   try {
+    const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[0] !== "ELECTRON_RUN_AS_NODE"));
     electronApp = await electron.launch({
       args: [".", `--user-data-dir=${path.join(dataDirectory, "profile")}`, "--headless", "--no-sandbox"],
-      env: { ...process.env, XDG_CONFIG_HOME: dataDirectory, APPDATA: dataDirectory, LOCALAPPDATA: dataDirectory, TANAW_ML_SERVICE_PORT: String(sidecar.port) },
+      env: { ...env, XDG_CONFIG_HOME: dataDirectory, APPDATA: dataDirectory, LOCALAPPDATA: dataDirectory, TANAW_ML_SERVICE_PORT: String(sidecar.port) },
     });
     const page = await getMainWindow(electronApp);
     await expectBridge(page);

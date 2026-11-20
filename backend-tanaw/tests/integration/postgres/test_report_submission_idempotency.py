@@ -258,7 +258,10 @@ async def _post_submission(
     payload: dict[str, Any],
 ) -> Response:
     payload = copy.deepcopy(payload)
-    snapshot = payload["payload"]["counting"]
+    report_payload = payload["payload"]
+    assert isinstance(report_payload, dict)
+    snapshot = report_payload["counting"]
+    assert isinstance(snapshot, dict)
     snapshot["enterprise_id"] = enterprise.enterprise_key
     snapshot["snapshot_version"] = snapshot_digest(snapshot)
     return await client.post(

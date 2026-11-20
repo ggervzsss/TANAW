@@ -1,10 +1,9 @@
-export type MapDeselectReason = "all-barangays" | "back" | "map-background";
+export type MapDeselectReason = "all-barangays" | "back" | "inactive" | "map-background";
 
-export type MapCameraTarget = { type: "citywide" } | { type: "barangay"; barangayName: string } | { type: "enterprise"; barangayName: string; enterpriseId: string };
+export type MapCameraTarget = { type: "citywide"; fit?: true } | { type: "barangay"; barangayName: string } | { type: "enterprise"; barangayName: string; enterpriseId: string };
 
 export type MapInteractionState = {
   cameraTarget: MapCameraTarget;
-  insightEnterpriseId: string | null;
   selectedBarangayName: string | null;
   selectedEnterpriseId: string | null;
 };
@@ -13,49 +12,36 @@ export type MapInteractionAction =
   | { type: "select-barangay"; barangayName: string }
   | { type: "select-enterprise"; barangayName: string; enterpriseId: string }
   | { type: "clear-barangay"; reason: MapDeselectReason }
-  | { type: "close-enterprise"; enterpriseId: string }
-  | { type: "show-area-insights" }
-  | { type: "show-enterprise-insights"; enterpriseId: string };
+  | { type: "close-enterprise"; enterpriseId: string };
 
 export const initialMapInteractionState: MapInteractionState = {
   cameraTarget: { type: "citywide" },
-  insightEnterpriseId: null,
   selectedBarangayName: null,
   selectedEnterpriseId: null,
 };
 
 export function mapInteractionReducer(state: MapInteractionState, action: MapInteractionAction): MapInteractionState {
   switch (action.type) {
-    case "select-barangay": {
-      if (
-        state.selectedBarangayName === action.barangayName &&
-        state.selectedEnterpriseId === null &&
-        state.insightEnterpriseId === null &&
-        state.cameraTarget.type === "barangay" &&
-        state.cameraTarget.barangayName === action.barangayName
-      ) {
-        return state;
-      }
-
+    case "select-barangay":
       return {
         cameraTarget: { type: "barangay", barangayName: action.barangayName },
-        insightEnterpriseId: null,
         selectedBarangayName: action.barangayName,
         selectedEnterpriseId: null,
       };
-    }
     case "select-enterprise":
       return {
         cameraTarget:
           state.cameraTarget.type === "enterprise" && state.cameraTarget.enterpriseId === action.enterpriseId
             ? state.cameraTarget
             : { type: "enterprise", barangayName: action.barangayName, enterpriseId: action.enterpriseId },
-        insightEnterpriseId: null,
         selectedBarangayName: state.selectedBarangayName,
         selectedEnterpriseId: action.enterpriseId,
       };
     case "clear-barangay": {
-      if (state.selectedBarangayName === null && state.selectedEnterpriseId === null && state.insightEnterpriseId === null && state.cameraTarget.type === "citywide") {
+      if (action.reason !== "map-background") {
+        return { ...initialMapInteractionState, cameraTarget: { type: "citywide", fit: true } };
+      }
+      if (state.selectedBarangayName === null && state.selectedEnterpriseId === null && state.cameraTarget.type === "citywide") {
         return state;
       }
 
@@ -63,10 +49,6 @@ export function mapInteractionReducer(state: MapInteractionState, action: MapInt
     }
     case "close-enterprise":
       return state.selectedEnterpriseId === action.enterpriseId ? { ...state, selectedEnterpriseId: null } : state;
-    case "show-area-insights":
-      return state.insightEnterpriseId === null ? state : { ...state, insightEnterpriseId: null };
-    case "show-enterprise-insights":
-      return state.insightEnterpriseId === action.enterpriseId ? state : { ...state, insightEnterpriseId: action.enterpriseId };
   }
 }
 

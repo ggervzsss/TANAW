@@ -51,11 +51,12 @@ const alert = {
 };
 
 async function restoreAdminSession(page: Page) {
-  await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "system"));
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "admin-detail-token", user: adminUser }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(adminUser) }));
   await page.route("**/auth/preferences", (route) => {
-    const body = route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme: "dark" };
+    const body = route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme: "system" };
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route("**/activity-logs", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([log]) }));
@@ -117,7 +118,8 @@ test("balances Admin log and alert details with accessible long-text disclosures
   await expect(alertDialog.getByText(longSummary, { exact: true })).toBeVisible();
 
   await alertDialog.getByRole("button", { name: "Close modal" }).click();
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveClass(/\blight\b/);
   await page.getByRole("button", { name: "View situation details" }).click();
   await expect(alertDialog).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Maintenance Request" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -141,7 +143,8 @@ test("themes the shared Admin response panel without a bright dark-mode surface"
 
   const darkBackground = await responsePanel.evaluate((element) => getComputedStyle(element).backgroundColor);
   await dialog.getByRole("button", { name: "Close modal" }).click();
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveClass(/\blight\b/);
   await page.getByRole("button", { name: "View situation details" }).click();
   await expect(dialog).toBeVisible();
   const lightResponsePanel = page.getByRole("dialog", { name: "Maintenance Request" }).locator(".tanaw-modal-action-panel");

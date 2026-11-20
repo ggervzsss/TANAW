@@ -428,7 +428,7 @@ test("camera settings tabs, scoped display saves, cancellation, editor undo and 
   await page.emulateMedia({ reducedMotion: "reduce" });
   const state = await setup(page);
   await page.setViewportSize({ width: 1440, height: 1024 });
-  if (await page.getByRole("button", { name: "Switch to light mode" }).isVisible()) await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await page.goto("/#/enterprise/cameras");
   await page.getByRole("button", { name: "Edit configuration" }).click();
   const settings = page.getByRole("region", { name: "Camera Settings", exact: true });

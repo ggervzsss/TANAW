@@ -23,7 +23,7 @@
 }
 
 .tanaw-base-tiles--dark {
-  filter: grayscale(0.85) contrast(0.68) brightness(0.87) sepia(0.17) hue-rotate(111deg) saturate(0.84);
+  filter: var(--tanaw-dark-basemap);
 }
 
 .tanaw-label-tiles--dark {
@@ -31,18 +31,13 @@
 }
 
 #admin-enterprise-map[data-map-theme="dark"] {
-  background: #263230;
-}
-
-@media (min-width: 541px) {
-  .tanaw-admin-map-workspace[data-insights-open="true"] #admin-enterprise-map .leaflet-bottom.leaflet-right {
-    right: calc(440px + 1.5rem);
-  }
+  --tanaw-dark-basemap: sepia(0.46) hue-rotate(115deg) saturate(0.9) brightness(1.14);
+  background: #132322;
 }
 
 /* If the provider stalls, recolor the retained tiles until a complete set is available. */
 #admin-enterprise-map[data-map-theme="dark"][data-map-tiles="light"] .tanaw-base-tiles--light {
-  filter: invert(0.92) grayscale(0.85) contrast(0.68) brightness(0.87) sepia(0.17) hue-rotate(111deg) saturate(0.84);
+  filter: invert(0.92) var(--tanaw-dark-basemap);
 }
 
 #admin-enterprise-map[data-map-theme="dark"][data-map-tiles="light"] .tanaw-label-tiles--light,
@@ -377,108 +372,41 @@
   background: rgb(16 185 129 / 0.1);
 }
 
-.tanaw-spatial-directory-frame {
-  --tanaw-directory-width: min(384px, calc(100vw - 2rem));
-  width: var(--tanaw-directory-width);
-}
-
-.tanaw-spatial-directory-frame[data-directory-state="collapsed"] {
-  width: 0;
+.tanaw-admin-map-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, clamp(19rem, 37%, 42rem)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  background: light-dark(#eaf1ed, #0d1619);
 }
 
 .tanaw-spatial-directory-shell,
-.tanaw-visitor-insights {
-  transform: translateX(0);
-  opacity: 1;
-  visibility: visible;
-  transition:
-    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease-out,
-    visibility 0s;
-}
-
-.tanaw-spatial-directory-shell {
-  width: var(--tanaw-directory-width);
-}
-
-.tanaw-spatial-directory-frame[data-directory-state="collapsed"] .tanaw-spatial-directory-shell,
-.tanaw-visitor-insights[data-panel-state="closed"] {
-  pointer-events: none;
-  transform: translateX(calc(100% + 1rem));
-  opacity: 0;
-  visibility: hidden;
-  transition-delay: 0s, 0s, 280ms;
-}
-
-.tanaw-spatial-directory-frame[data-directory-state="collapsed"] .tanaw-spatial-directory-shell {
-  transform: translateX(calc(-100% - 1rem));
-}
-
-.tanaw-map-panel {
-  border: 1px solid var(--tanaw-border);
-  border-radius: 24px;
+.tanaw-admin-map-viewport {
+  border: 1px solid light-dark(#c7d8d0, #31423f);
+  border-radius: 1.25rem;
   background: var(--tanaw-surface);
-  box-shadow: var(--shadow-tanaw-raised);
-}
-
-html.dark .tanaw-map-panel {
-  --tanaw-control-bg: #1a2b29;
-  --tanaw-control-hover: #233732;
-  --tanaw-control-border: #40574f;
-  --tanaw-control-border-hover: #5b796b;
-  --tanaw-surface-inset: #132320;
-  border-color: rgb(132 174 161 / 0.26);
-  background: linear-gradient(155deg, #182724, #111d20 58%, #142325);
-  box-shadow: 0 20px 48px rgb(3 12 11 / 0.42), inset 0 1px 0 rgb(183 221 205 / 0.055);
-}
-
-html:not(.dark) .tanaw-map-panel {
-  border-color: rgb(76 127 104 / 0.29);
-  background: linear-gradient(150deg, rgb(248 254 250 / 0.91), rgb(245 250 247 / 0.96) 34%, rgb(251 253 251 / 0.95) 76%, rgb(225 242 232 / 0.91));
-  box-shadow: 0 2px 4px rgb(30 65 49 / 0.07), 0 18px 46px rgb(30 65 49 / 0.17);
-  backdrop-filter: blur(9px) saturate(1.14);
-}
-
-html:not(.dark) .tanaw-map-panel::after {
-  position: absolute;
-  z-index: 25;
-  inset: 0;
-  border: 1px solid transparent;
-  border-radius: inherit;
-  background: linear-gradient(148deg, #ffffff 6%, rgb(255 255 255 / 0.82) 25%, transparent 57%, rgb(129 184 156 / 0.38) 81%, rgb(255 255 255 / 0.96)) border-box;
-  content: "";
-  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  html:not(.dark) .tanaw-map-panel {
-    background: var(--tanaw-surface);
-    backdrop-filter: none;
-  }
-}
-
-.tanaw-map-panel-toggle {
-  border-color: var(--tanaw-control-border);
-  background: var(--tanaw-surface-raised);
-  color: var(--tanaw-accent-ink);
   box-shadow: var(--shadow-tanaw-resting);
-  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, scale 160ms ease;
 }
 
-.tanaw-map-panel-toggle[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--tanaw-accent-ink) 30%, transparent);
-  background: var(--tanaw-interactive-selected-bg);
+.tanaw-map-load-status {
+  border-color: var(--tanaw-border);
+  background: var(--tanaw-surface);
+  color: var(--tanaw-text);
 }
 
-.tanaw-map-panel-toggle:hover {
-  border-color: var(--tanaw-control-border-hover);
-  background: var(--tanaw-interactive-hover-bg);
-}
+@media (max-width: 740px) {
+  .tanaw-admin-map-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(24rem, 55svh) minmax(24rem, 65svh);
+    overflow-y: auto;
+    gap: .75rem;
+    padding: .75rem;
+  }
 
-.tanaw-map-panel-toggle:active {
-  scale: 0.96;
+  .tanaw-admin-map-viewport {
+    grid-row: 1;
+  }
 }
 
 .tanaw-visitor-insights__title-icon {
@@ -488,129 +416,180 @@ html:not(.dark) .tanaw-map-panel::after {
 }
 
 .tanaw-map-directory {
+  --directory-gutter: clamp(.85rem, 4cqi, 1.4rem);
+  --directory-surface: light-dark(#f6faf7, #192522);
+  --directory-records: light-dark(#fff, #141e20);
+  --directory-line: light-dark(#d4e2db, #344640);
+  --directory-muted: light-dark(#4f665e, #adc2bb);
+  --directory-selected: light-dark(#e5f5ec, #213b32);
+  --tanaw-control-bg: light-dark(#fff, #111d1c);
+  --tanaw-control-border: light-dark(#becfc5, #4b645b);
+  --tanaw-control-hover: light-dark(#eaf6ef, #21362f);
+  --tanaw-control-border-hover: light-dark(#7ba991, #81a99a);
+  border-radius: inherit;
+  background: var(--directory-records);
   color: var(--tanaw-text);
 }
 
-.tanaw-map-directory__options {
-  border-bottom: 1px solid var(--tanaw-border-subtle);
+.tanaw-spatial-directory-shell {
+  overflow: hidden;
 }
 
-html.dark :is(.tanaw-map-directory__header, .tanaw-map-directory__options) {
-  background: #182724;
+.tanaw-map-directory__header {
+  min-height: 6rem;
+  padding: 1.1rem var(--directory-gutter);
+  border-radius: calc(1.25rem - 1px) calc(1.25rem - 1px) 0 0;
+  background: linear-gradient(105deg, light-dark(#e0f3e9, #204439), light-dark(#eff8f2, #192d2a) 85%);
+  box-shadow: inset 0 2px light-dark(#5dab88, #68bd9d);
 }
 
-html:not(.dark) .tanaw-visitor-insights__header {
-  background: linear-gradient(135deg, rgb(255 255 255 / 0.76), rgb(230 245 236 / 0.48));
+.tanaw-map-directory__place {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .25rem;
+  color: var(--tanaw-accent-ink);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
 }
 
-.tanaw-map-directory__title,
-.tanaw-map-directory__section-title,
-.tanaw-map-enterprise-card__title {
-  color: var(--tanaw-text);
+.tanaw-map-directory__title {
+  font-size: clamp(1.38rem, 4.7cqi, 2rem);
+  line-height: 1.05;
+  letter-spacing: -.025em;
+  text-wrap: balance;
 }
 
-.tanaw-map-directory__subtitle,
-.tanaw-map-enterprise-card__address,
-.tanaw-map-enterprise-card__camera,
-.tanaw-map-enterprise-card__metrics dt,
-.tanaw-map-directory__legend-note,
-.tanaw-directory-select-label,
-.tanaw-directory-select-chevron {
-  color: var(--tanaw-secondary-text);
+.tanaw-map-directory__coverage {
+  display: grid;
+  flex: none;
+  max-width: 8rem;
+  gap: .15rem;
+  padding-inline-start: clamp(.7rem, 3cqi, 1.25rem);
+  border-inline-start: 1px solid light-dark(#a7c9b6, #4a6d60);
+  color: var(--directory-muted);
+  font-size: .7rem;
+  font-weight: 600;
+  text-align: end;
 }
 
-@media (max-width: 380px) {
-  .tanaw-map-directory__toggle {
-    gap: 0.25rem;
-    padding-inline: 0.45rem;
-  }
+.tanaw-map-directory__coverage strong {
+  color: var(--tanaw-accent-ink);
+  font: 700 clamp(1.35rem, 5cqi, 2rem)/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.tanaw-map-directory__controls {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem var(--directory-gutter) .9rem;
+  border-bottom: 1px solid var(--directory-line);
+  background: var(--directory-surface);
+}
+
+.tanaw-map-directory__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  padding: .24rem;
+  border-radius: .65rem;
+  background: light-dark(#e8f0eb, #111d1c);
 }
 
 .tanaw-map-directory__toggle,
 .tanaw-map-directory__back,
 .tanaw-map-directory__retry {
-  border-color: var(--tanaw-control-border);
-  background: var(--tanaw-control-bg);
-  color: var(--tanaw-text-secondary);
-  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, scale 160ms ease;
+  display: inline-flex;
+  min-height: 2.1rem;
+  align-items: center;
+  gap: .35rem;
+  padding: .25rem clamp(.4rem, 1.7cqi, .65rem);
+  border-radius: .45rem;
+  color: var(--directory-muted);
+  font-size: .75rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.tanaw-map-directory__reset {
+  margin-inline-start: auto;
 }
 
 .tanaw-map-directory__toggle[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--tanaw-accent-ink) 40%, transparent);
-  background: var(--tanaw-interactive-selected-bg);
+  background: var(--directory-selected);
   color: var(--tanaw-accent-ink);
 }
 
 .tanaw-map-directory__toggle:hover:not(:disabled),
 .tanaw-map-directory__back:hover,
 .tanaw-map-directory__retry:hover {
-  border-color: var(--tanaw-control-border-hover);
-  background: var(--tanaw-interactive-hover-bg);
+  background: var(--tanaw-control-hover);
   color: var(--tanaw-accent-ink);
 }
 
-.tanaw-map-directory__toggle:active:not(:disabled) {
-  scale: 0.97;
-}
-
 .tanaw-map-directory__toggle:disabled {
-  opacity: 0.5;
+  cursor: default;
+  opacity: .5;
 }
 
-.tanaw-map-directory__toggle:focus-visible,
-.tanaw-map-panel-toggle:focus-visible,
-.tanaw-map-enterprise-card:focus-visible,
+.tanaw-map-directory :is(button, [tabindex]):focus-visible,
 .tanaw-visitor-insights :is(button, select):focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: -2px;
 }
 
-.tanaw-map-directory__results-header,
-.tanaw-map-enterprise-card__operations {
-  border-color: var(--tanaw-border-subtle);
+.tanaw-map-directory__legend {
+  color: var(--directory-muted);
 }
 
-.tanaw-map-directory__legend {
-  color: var(--tanaw-text-secondary);
+.tanaw-map-directory__legend-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .2rem .6rem;
+  margin-bottom: .35rem;
+  color: var(--tanaw-text);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.tanaw-map-directory__legend-note {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--directory-muted);
+  font-size: .68rem;
+  font-weight: 500;
+}
+
+.tanaw-map-directory__legend-ring {
+  width: .65rem;
+  height: .65rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.tanaw-map-directory__legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .38rem .8rem;
+  font-size: .69rem;
+  font-weight: 600;
 }
 
 .tanaw-map-directory__legend-dot {
-  border: 1px solid rgb(255 255 255 / 0.72);
-  box-shadow: 0 0 0 1px rgb(71 85 105 / 0.2);
+  width: .55rem;
+  height: .55rem;
+  flex: none;
+  border: 1px solid light-dark(rgb(23 52 44 / .22), rgb(234 251 243 / .45));
+  border-radius: 50%;
 }
 
-.tanaw-map-directory__legend-dot[data-tone="running"] {
-  background: var(--color-tanaw-live);
-}
-
-.tanaw-map-directory__legend-dot[data-tone="partial"] {
-  background: #ea580c;
-}
-
-.tanaw-map-directory__legend-dot[data-tone="stopped"] {
-  background: #64748b;
-}
-
-.tanaw-map-directory__legend-dot[data-tone="fault"] {
-  background: #dc2626;
-}
-
-.tanaw-map-directory__legend-dot[data-tone="unavailable"] {
-  border-style: dashed;
-  background: #394858;
-}
-
-.tanaw-map-directory__selector {
-  border-bottom: 1px solid var(--tanaw-border-subtle);
-  background: var(--tanaw-surface);
-}
-
-html.dark .tanaw-map-directory__selector {
-  background: #152523;
-}
-
-html:not(.dark) .tanaw-map-directory__selector {
-  background: rgb(255 255 255 / 0.49);
+.tanaw-map-directory .tanaw-directory-select-label {
+  color: var(--directory-muted);
 }
 
 html:not(.dark) .tanaw-map-directory__selector .tanaw-directory-select-trigger {
@@ -650,8 +629,7 @@ html:not(.dark) .tanaw-map-directory__selector .tanaw-directory-select-trigger:i
   color: var(--tanaw-muted-text);
 }
 
-.tanaw-directory-select-meta,
-.tanaw-map-directory__count {
+.tanaw-directory-select-meta {
   border: 1px solid var(--tanaw-border-subtle);
   background: var(--tanaw-surface-inset);
   color: var(--tanaw-secondary-text);
@@ -689,88 +667,184 @@ html.dark .tanaw-directory-select-menu {
   --tw-ring-color: color-mix(in srgb, var(--tanaw-accent-ink) 24%, transparent);
 }
 
-.tanaw-map-directory__barangay-summary {
-  border: 1px solid var(--tanaw-border-subtle);
-  background: rgb(255 255 255 / 0.72);
-  box-shadow:
-    0 10px 24px rgb(15 23 42 / 0.07),
-    inset 0 1px 0 rgb(255 255 255 / 0.75);
+.tanaw-map-directory__results-header {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem .75rem;
+  padding: .85rem var(--directory-gutter) .72rem;
+  border-bottom: 1px solid var(--directory-line);
 }
 
-.tanaw-map-directory__empty {
-  border-color: var(--tanaw-border-subtle);
-  background: var(--tanaw-surface-inset);
-  color: var(--tanaw-secondary-text);
+.tanaw-map-directory__result-caption,
+.tanaw-map-directory__count {
+  color: var(--directory-muted);
+  font-size: .72rem;
+  font-weight: 600;
 }
 
-.tanaw-map-enterprise-card {
-  border-color: rgb(71 85 105 / 0.16);
-  background: var(--tanaw-surface-raised);
-  color: var(--tanaw-secondary-text);
-  box-shadow:
-    0 2px 6px rgb(33 62 47 / 0.055),
-    inset 0 1px 0 rgb(255 255 255 / 0.72);
-  transition:
-    border-color 170ms ease,
-    background-color 170ms ease,
-    box-shadow 170ms ease,
-    scale 170ms cubic-bezier(0.22, 1, 0.36, 1);
+.tanaw-map-directory__count {
+  font-variant-numeric: tabular-nums;
 }
 
-.tanaw-map-enterprise-card:is(button):is(:hover, :focus-visible) {
-  border-color: rgb(5 150 105 / 0.3);
-  background: rgb(249 255 251 / 0.96);
-  box-shadow:
-    0 5px 14px rgb(33 62 47 / 0.1),
-    inset 0 1px 0 rgb(255 255 255 / 0.85);
-}
-
-.tanaw-map-enterprise-card:is(button):active {
-  scale: 0.99;
-}
-
-.tanaw-map-enterprise-card[data-selected="true"] {
-  border-color: rgb(5 150 105 / 0.52);
-  background: rgb(236 253 245 / 0.94);
-  box-shadow:
-    0 10px 24px rgb(5 95 63 / 0.12),
-    inset 0 1px 0 rgb(255 255 255 / 0.78);
-}
-
-.tanaw-map-enterprise-card__selection {
-  background: transparent;
-}
-
-.tanaw-map-enterprise-card[data-selected="true"] .tanaw-map-enterprise-card__selection {
-  background: var(--tanaw-action);
-}
-
-.tanaw-map-enterprise-card__metrics {
-  min-height: 2.15rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--tanaw-border-subtle);
-  border-radius: 10px;
-  background: var(--tanaw-interactive-selected-bg);
-}
-
-.tanaw-map-enterprise-card__metrics dd {
+.tanaw-map-directory__section-title {
   color: var(--tanaw-text);
+  font-size: 1.08rem;
+  line-height: 1.2;
 }
 
-.tanaw-map-enterprise-card__metrics svg {
+.tanaw-map-directory__back,
+.tanaw-map-directory__retry {
   color: var(--tanaw-accent-ink);
 }
 
-.tanaw-map-enterprise-card__arrow {
-  transition: translate 180ms ease;
+.tanaw-map-directory__empty {
+  color: var(--directory-muted);
 }
 
-.tanaw-map-enterprise-card:is(:hover, :focus-visible) .tanaw-map-enterprise-card__arrow {
+.tanaw-map-directory__records > li + li {
+  border-top: 1px solid var(--directory-line);
+}
+
+.tanaw-map-enterprise-card {
+  position: relative;
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .85rem;
+  padding: .9rem var(--directory-gutter);
+  color: var(--tanaw-text);
+  text-align: start;
+  transition: background-color 170ms ease, box-shadow 170ms ease;
+}
+
+.tanaw-map-enterprise-card__select {
+  justify-self: start;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.tanaw-map-enterprise-card__select::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.tanaw-map-enterprise-card[data-selected]:is(:hover, :focus-within) {
+  background: var(--directory-surface);
+}
+
+.tanaw-map-enterprise-card[data-selected="true"] {
+  background: var(--directory-selected);
+  box-shadow: inset 3px 0 var(--tanaw-accent-ink);
+}
+
+.tanaw-map-directory .tanaw-map-enterprise-card__select:focus-visible {
+  outline: none;
+}
+
+.tanaw-map-enterprise-card:has(.tanaw-map-enterprise-card__select:focus-visible) {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-map-enterprise-card__identity,
+.tanaw-map-enterprise-card__details {
+  display: grid;
+  min-width: 0;
+  gap: .3rem;
+}
+
+.tanaw-map-enterprise-card__title {
+  font-size: .94rem;
+  font-weight: 750;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.tanaw-map-enterprise-card__address {
+  color: var(--directory-muted);
+  font-size: .75rem;
+  line-height: 1.35;
+}
+
+.tanaw-map-enterprise-card__status {
+  justify-self: start;
+}
+
+.tanaw-map-enterprise-card__telemetry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: .55rem;
+  margin-top: .25rem;
+}
+
+.tanaw-map-enterprise-card__metric-label {
+  display: block;
+  color: var(--directory-muted);
+  font-size: .69rem;
+  font-weight: 650;
+}
+
+.tanaw-map-enterprise-card__measure,
+.tanaw-map-enterprise-card__missing,
+.tanaw-map-enterprise-card__unpinned-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .05rem .25rem;
+  margin-top: .1rem;
+  color: var(--directory-muted);
+  font-size: .73rem;
+  line-height: 1.3;
+}
+
+.tanaw-map-enterprise-card__measure strong {
+  color: var(--tanaw-text);
+  font-size: .92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tanaw-map-enterprise-card__unpinned-status {
+  align-items: center;
+  color: var(--tanaw-warning-text);
+  font-weight: 650;
+}
+
+.tanaw-map-enterprise-card__arrow {
+  align-self: center;
+  color: var(--tanaw-accent-ink);
+  transition: translate 160ms ease;
+}
+
+.tanaw-map-enterprise-card:is(:hover, :focus-within) .tanaw-map-enterprise-card__arrow {
   translate: 2px;
 }
 
-.tanaw-map-enterprise-card--unpinned {
-  background: rgb(248 250 252 / 0.76);
+@container (max-width: 32rem) {
+  .tanaw-map-enterprise-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .65rem;
+  }
+
+  .tanaw-map-enterprise-card__details {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .tanaw-map-enterprise-card__arrow {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .tanaw-map-enterprise-card__telemetry {
+    margin-top: 0;
+  }
 }
 
 html.dark .tanaw-visitor-insights__title-icon {
@@ -778,48 +852,10 @@ html.dark .tanaw-visitor-insights__title-icon {
   background: rgb(70 182 134 / 0.12);
 }
 
-html.dark .tanaw-map-directory__legend {
-  color: var(--tanaw-text-secondary);
-}
-
-html.dark .tanaw-map-directory__barangay-summary {
-  background: rgb(24 38 51 / 0.7);
-  box-shadow:
-    0 12px 28px rgb(0 0 0 / 0.2),
-    inset 0 1px 0 rgb(255 255 255 / 0.025);
-}
-
-html.dark .tanaw-map-enterprise-card {
-  border-color: rgb(174 188 201 / 0.15);
-  background: #172725;
-  box-shadow:
-    0 7px 18px rgb(0 0 0 / 0.17),
-    inset 0 1px 0 rgb(255 255 255 / 0.018);
-}
-
-html.dark .tanaw-map-enterprise-card:is(button):is(:hover, :focus-visible) {
-  border-color: rgb(52 211 153 / 0.26);
-  background: rgb(27 45 45 / 0.7);
-  box-shadow:
-    0 11px 26px rgb(0 0 0 / 0.24),
-    inset 0 1px 0 rgb(255 255 255 / 0.028);
-}
-
-html.dark .tanaw-map-enterprise-card[data-selected="true"] {
-  border-color: rgb(52 211 153 / 0.5);
-  background: rgb(18 57 47 / 0.68);
-  box-shadow:
-    0 11px 28px rgb(0 0 0 / 0.24),
-    inset 0 1px 0 rgb(167 243 208 / 0.035);
-}
-
-html.dark .tanaw-map-enterprise-card--unpinned {
-  background: rgb(15 25 35 / 0.48);
-}
-
 .tanaw-map-directory__list {
   overscroll-behavior-y: contain;
   scroll-padding-block: 0.25rem;
+  background: var(--directory-records);
   scrollbar-color: rgb(100 116 139 / 0.42) transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -864,14 +900,6 @@ html.dark .tanaw-map-directory__list::-webkit-scrollbar-thumb:hover {
   background-clip: padding-box;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tanaw-spatial-directory-frame,
-  .tanaw-spatial-directory-shell,
-  .tanaw-visitor-insights {
-    transition: none;
-  }
-}
-
 .tanaw-visitor-insights {
   --tanaw-insights-axis: #52665b;
   --tanaw-insights-bar: #0d976a;
@@ -883,46 +911,35 @@ html.dark .tanaw-map-directory__list::-webkit-scrollbar-thumb:hover {
   color: var(--tanaw-text);
 }
 
-.tanaw-visitor-insights__header {
-  border-bottom: 1px solid var(--tanaw-border-subtle);
-  background: linear-gradient(145deg, rgb(255 255 255 / 0.88), rgb(239 248 243 / 0.82));
-  padding-right: 4.5rem;
+.tanaw-visitor-insights__toolbar {
+  border-color: var(--tanaw-border);
+  background: var(--tanaw-surface);
 }
 
-.tanaw-visitor-insights__eyebrow,
 .tanaw-visitor-insights__accent,
 .tanaw-visitor-insights__metric-label,
 .tanaw-visitor-insights__section-title {
   color: var(--tanaw-accent-ink);
 }
 
-.tanaw-visitor-insights__title,
 .tanaw-visitor-insights__value {
   color: var(--tanaw-text);
 }
 
-.tanaw-visitor-insights__description,
 .tanaw-visitor-insights__muted,
 .tanaw-visitor-insights__updated {
-  color: var(--tanaw-secondary-text);
+  color: var(--tanaw-text-secondary);
 }
 
-.tanaw-visitor-insights__scroll {
-  overscroll-behavior-y: contain;
-  scrollbar-color: rgb(100 116 139 / 0.42) transparent;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
+.tanaw-visitor-insights__metric,
+.tanaw-visitor-insights__section {
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
-.tanaw-visitor-insights__scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.tanaw-visitor-insights__scroll::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: rgb(100 116 139 / 0.42);
-  background-clip: padding-box;
+.tanaw-visitor-insights__metric:hover,
+.tanaw-visitor-insights__section:hover {
+  border-color: var(--tanaw-control-border-hover);
+  box-shadow: var(--shadow-tanaw-resting);
 }
 
 .tanaw-visitor-insights__segments {
@@ -963,18 +980,9 @@ html.dark .tanaw-map-directory__list::-webkit-scrollbar-thumb:hover {
   color: var(--tanaw-insights-tab-ink);
 }
 
-.tanaw-visitor-insights__metric-select {
-  border-color: var(--tanaw-control-border);
-  background: var(--tanaw-control-bg);
-  color: var(--tanaw-text);
-  color-scheme: light;
-  cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-.tanaw-visitor-insights__metric-select:hover {
-  border-color: var(--tanaw-control-border-hover);
-  background: var(--tanaw-control-hover);
+.tanaw-visitor-insights__metric-buttons {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-inset);
 }
 
 .tanaw-visitor-insights__chart {
@@ -1045,11 +1053,6 @@ html.dark .tanaw-visitor-insights {
   --tanaw-insights-tooltip: #182824;
 }
 
-html.dark .tanaw-visitor-insights__header {
-  background: #182724;
-}
-
-html.dark .tanaw-visitor-insights__eyebrow,
 html.dark .tanaw-visitor-insights__accent,
 html.dark .tanaw-visitor-insights__metric-label,
 html.dark .tanaw-visitor-insights__section-title {
@@ -1069,10 +1072,6 @@ html.dark .tanaw-visitor-insights__area-link:hover {
 
 html.dark .tanaw-visitor-insights__segments {
   background: rgb(11 22 33 / 0.72);
-}
-
-html.dark .tanaw-visitor-insights__metric-select {
-  color-scheme: dark;
 }
 
 html.dark .tanaw-visitor-insights__metric,
@@ -1156,7 +1155,7 @@ html.dark .tanaw-visitor-insights__busy-row {
   stroke-width: 1.8;
 }
 
-.tanaw-enterprise-marker[data-tone="unavailable"] .tanaw-enterprise-marker__body {
+.tanaw-enterprise-marker[data-tone="unconfigured"] .tanaw-enterprise-marker__body {
   border-style: dashed;
 }
 
@@ -1290,24 +1289,9 @@ html.dark .tanaw-visitor-insights__busy-row {
   }
 }
 
-@media (max-width: 540px) {
-  .tanaw-visitor-insights__title-icon {
-    display: none;
-  }
-
-  .tanaw-visitor-insights__header {
-    min-height: 4.75rem;
-    padding-left: 4.5rem;
-  }
-
-  .tanaw-map-directory__header {
-    padding-right: 4.5rem;
-  }
-}
-
 @media (max-width: 380px) {
   .tanaw-map-directory__title {
-    font-size: 1rem;
+    font-size: 1.25rem;
   }
 }
 
@@ -1327,13 +1311,11 @@ html.dark .tanaw-visitor-insights__busy-row {
     top: 0;
   }
 
-  html:not(.dark) .tanaw-map-directory__header {
-    background: #f6fbf7;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tanaw-map-panel-toggle,
+  .tanaw-visitor-insights__metric,
+  .tanaw-visitor-insights__section,
   .tanaw-map-directory__toggle,
   .tanaw-map-enterprise-card,
   .tanaw-map-enterprise-card__arrow,
@@ -1353,12 +1335,30 @@ html.dark .tanaw-visitor-insights__busy-row {
   }
 }
 
-#admin-enterprise-map .tanaw-boundary-path {
+#admin-enterprise-map :is(.tanaw-boundary-path, .tanaw-boundary-casing) {
   vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+#admin-enterprise-map .tanaw-boundary-casing {
+  pointer-events: none;
+}
+
+#admin-enterprise-map .tanaw-boundary-path {
+  cursor: pointer;
   transition:
+    fill 180ms ease,
     fill-opacity 180ms ease,
     stroke-opacity 180ms ease,
     stroke 180ms ease;
+}
+
+@media (hover: hover) {
+  #admin-enterprise-map .leaflet-map-pane:not(.leaflet-zoom-anim) .tanaw-boundary-path:not([data-boundary-state="selected"]):hover {
+    stroke: light-dark(#095d66, #d0f2ee);
+    stroke-opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

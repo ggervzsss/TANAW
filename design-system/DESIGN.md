@@ -191,8 +191,8 @@ white for records.
 
 ### Secondary
 
-- **Seal Gold** (#d7b35a): ornament only. The metric strip's accent thread, the active
-  navigation underline, a single highlight per screen. Never text on white (2.0:1).
+- **Seal Gold** (#d7b35a): ornament only. Use it for the metric strip's accent thread
+  or a single highlight per screen. Never text on white (2.0:1).
 - **Gold Ink** (#8a6a12): gold that has to be read, such as an eyebrow over a page
   title. The original UI used #b7952b for this, which fails contrast on white
   (2.9:1); #8a6a12 keeps the hue at 5.1:1.
@@ -359,7 +359,7 @@ Every spec below is implemented once in `src/` and synced into both apps (see
 | Segmented Filters | `SegmentedControl` (and `Tabs` for switching views) |
 | Search Fields | `SearchField` |
 | Selects and Switches | `Select`, `Switch` |
-| Navigation | `TopbarLiquidGlass`, `TopbarActiveUnderline`, `Avatar` |
+| Navigation | `TopbarGlassNavigation`, `Avatar` |
 | Metric Strip | `MetricStrip` |
 | Tables | `Table`, `TableHead`, `TableBody`, `TableRow`, `TableHeaderCell`, `TableCell` |
 | Empty States | `EmptyState` |
@@ -439,7 +439,8 @@ searched ("Search name or email").
 - **Topbar (signature):** the Canopy gradient with the city hall photograph blended in
   from the right (day image at 55% opacity, night image in dark mode), the city seal
   in a translucent circle, the TANAW wordmark in Bai Jamjuree, and "Enterprise Portal"
-  as a tracked label. Links are white; the active link carries a short underline.
+  as a tracked label. A green glass capsule marks the current section and springs
+  between links. Hover feedback and the keyboard focus outline are independent of selection.
   Theme, notifications and the account menu sit at the right in glass circles.
 - **Portal label:** the tracked label after the wordmark names the app: "Enterprise
   Portal" on the desktop, "Admin Portal", "IT Portal" or "Staff Portal" on the web.

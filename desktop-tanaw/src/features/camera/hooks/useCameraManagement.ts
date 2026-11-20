@@ -22,7 +22,7 @@ import {
 } from "../services/ml-service";
 import { MlServiceRequestError } from "../services/ml-service";
 import { deleteCameraCredential, getCameraPasswordReplacement, loadCameraCredentialMetadata, saveCameraCredential, type CameraCredentialMetadataRecords } from "../services/camera-credentials";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useCameraRuntimeController } from "./useCameraRuntimeController";
 import { createBackoffPoller } from "../../../utils/backoff-poller";
 
@@ -259,9 +259,6 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
       setCameras((current) => current.map((camera) => (camera.id === cameraId ? savedCamera : camera)));
       setCameraError(savedCamera.id, null);
-      if (!shouldRestart) {
-        notifySuccess(shouldUpdateCounting ? "Tripwire configuration saved" : "Camera configuration updated.");
-      }
     } catch (error) {
       setCameraAction(cameraId);
       const message = shouldUpdateCounting ? getTripwireSaveErrorMessage(error) : toErrorMessage(error);
@@ -277,15 +274,17 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     if (!desiredRunning && isRunning) {
       try {
         await stopCameraProcessing(mlBaseUrl, cameraId);
-        await refreshCameraStates();
+        await refreshCameraStates().catch(() => undefined);
       } catch (error) {
         setCameraError(cameraId, toErrorMessage(error));
+        notifyWarning("Camera configuration saved, but counting could not be stopped. Check Camera Setup.");
         setCameraAction(cameraId);
         cameraUpdateGateRef.current.end(cameraId);
         return false;
       }
     }
     if (!shouldRestart) {
+      notifySuccess(shouldUpdateCounting ? "Counting configuration saved." : !desiredRunning && isRunning ? "Camera configuration saved and counting stopped." : "Camera configuration saved.");
       setCameraAction(cameraId);
       cameraUpdateGateRef.current.end(cameraId);
       return true;
@@ -295,13 +294,15 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     try {
       await startCameraProcessing(mlBaseUrl, savedCamera, storageKey);
       setCameraAction(savedCamera.id, "starting");
-      notifySuccess("Camera configuration saved. Starting this camera...");
+      notifyInfo("Camera configuration saved. Waiting for the camera to reconnect.", `camera-start:${savedCamera.id}`);
       void refreshCameraStates().catch(() => undefined);
     } catch (error) {
       const remainsPending = handleCameraStartFailure(savedCamera.id, error);
       if (remainsPending) {
+        notifyInfo("Camera configuration saved. TANAW is checking the connection.", `camera-start:${savedCamera.id}`);
         void refreshCameraStates().catch(() => undefined);
       } else {
+        notifyWarning("Camera configuration saved, but the camera could not start. Check its connection.", `camera-start:${savedCamera.id}`);
         return false;
       }
     } finally {
@@ -315,7 +316,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     if (hasReachedCameraConfigurationLimit(cameras.length, configuredCameraLimit)) {
       const message = cameraConfigurationLimitMessage(configuredCameraLimit);
       setConfigurationError(message);
-      notifyError(message);
+      notifyWarning(message);
       setShowAddModal(false);
       return;
     }
@@ -416,6 +417,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       notifySuccess("Camera removed.");
     } catch (error) {
       setCameraError(cameraId, toErrorMessage(error));
+      notifyError("Camera could not be removed. Check Camera Setup and try again.");
     }
   };
 
@@ -423,7 +425,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     if (hasReachedCameraConfigurationLimit(cameras.length, configuredCameraLimit)) {
       const message = cameraConfigurationLimitMessage(configuredCameraLimit);
       setConfigurationError(message);
-      notifyError(message);
+      notifyWarning(message);
       return;
     }
     setCameraFormErrors({});

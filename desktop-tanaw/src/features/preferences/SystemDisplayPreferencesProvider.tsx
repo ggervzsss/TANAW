@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { staffApi } from "../../lib/axios";
 import { resolveSystemTimeFormat } from "../../utils/date-time";
 import { useAuthStore } from "../login/stores/auth-store";
+import { notifyError, notifySuccess } from "../toasts/services/toast-service";
 import { getAccountPreferences, updateAccountPreferences } from "./account-preferences-service";
 import {
   defaultDisplayPreferences,
@@ -85,12 +86,14 @@ export function SystemDisplayPreferencesProvider({ children }: { children: React
         if (sameDisplayPreferences(desiredRef.current, snapshot)) {
           desiredRef.current = confirmed;
           setLocalState({ accountId: targetAccountId, preferences: confirmed, status: "saved" });
+          notifySuccess("Display preferences saved.", "display-preferences-save");
         }
       } catch {
-        if (sameDisplayPreferences(desiredRef.current, snapshot)) {
+        if (activeAccountIdRef.current === targetAccountId && sameDisplayPreferences(desiredRef.current, snapshot)) {
           failedDesiredRef.current = snapshot;
           desiredRef.current = confirmedRef.current;
           setLocalState({ accountId: targetAccountId, preferences: confirmedRef.current, status: "error" });
+          notifyError("Display preferences could not be saved. Use Retry to try again.", "display-preferences-save");
         }
       }
     });

@@ -84,16 +84,16 @@ test("synchronizes explicit logout to another browser tab", async ({ context, pa
     logoutCalls += 1;
   });
   await page.goto("/admin/operations");
-  await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
 
   const secondTab = await context.newPage();
   await mockAuthenticatedPortal(secondTab, "admin", () => undefined);
   await secondTab.goto("/admin/operations");
-  await expect(secondTab.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(secondTab.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
 
   await page.bringToFront();
   await page.getByRole("button", { name: "Open account menu" }).click();
-  await page.getByRole("button", { name: "Logout", exact: true }).click();
+  await page.getByRole("button", { name: "Sign Out", exact: true }).click();
 
   await expect.poll(() => logoutCalls).toBe(1);
   await expect(page).toHaveURL(/\/login$/);
@@ -106,12 +106,12 @@ test("synchronizes a server-rejected authenticated session to another browser ta
   });
   await mockAuthenticatedPortal(page, "admin", () => undefined);
   await page.goto("/admin/operations");
-  await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
 
   const secondTab = await context.newPage();
   await mockAuthenticatedPortal(secondTab, "admin", () => undefined);
   await secondTab.goto("/admin/operations");
-  await expect(secondTab.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(secondTab.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
 
   await page.route("**/auth/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Session revoked" }) }));
   await page.reload();

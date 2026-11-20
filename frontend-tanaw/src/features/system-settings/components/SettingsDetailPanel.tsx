@@ -1,6 +1,6 @@
 import { Check, CircleAlert, Save, ShieldAlert } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Panel } from "@/shared/components/panel";
+import { useSettingsDraft } from "@/design-system/lib/settingsDraft";
 import { FilterSelect, ModalFrame, Switch } from "@/shared/components/ui";
 import type { SettingField, SettingSection, SettingValue } from "../types";
 
@@ -22,6 +22,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
   const initialValues = useMemo(() => ({ ...defaults, ...storedValues }), [defaults, storedValues]);
   const [values, setValues] = useState<Record<string, SettingValue>>(initialValues);
   const [saveStateByKey, setSaveStateByKey] = useState<Record<string, SaveState>>({});
+  const draftMarker = useSettingsDraft(Object.values(saveStateByKey).includes("dirty"));
   const [confirmSecurity, setConfirmSecurity] = useState(false);
   const confirmedRef = useRef(initialValues);
   const valuesRef = useRef(initialValues);
@@ -95,12 +96,19 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
     queuePatch(patch);
   };
 
+  const cancelSection = (keys: string[]) => {
+    const restored = Object.fromEntries(keys.map((key) => [key, confirmedRef.current[key]]));
+    valuesRef.current = { ...valuesRef.current, ...restored };
+    setValues(valuesRef.current);
+    setSaveStateByKey((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, "idle" as const])) }));
+  };
+
   return (
-    <Panel className="mx-auto max-w-6xl overflow-hidden">
-      <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
+    <div data-settings-draft={draftMarker} className="min-w-0">
+      <div className="rounded-tanaw-sm bg-(--tanaw-surface-inset) px-4 py-2.5">
         <p className="text-sm font-semibold text-slate-500 dark:text-slate-300">{metadataLabel}</p>
       </div>
-      <div className="divide-y divide-slate-200 dark:divide-white/10">
+      <div className="divide-y divide-(--tanaw-border-soft)">
         {sections.map((section) => {
           const Icon = section.icon;
           const isImmediateSection = section.id === "display" || section.id === "notifications";
@@ -108,24 +116,50 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
           const isDirty = sectionKeys.some((key) => saveStateByKey[key] === "dirty");
           const isSaving = sectionKeys.some((key) => saveStateByKey[key] === "saving");
           return (
-            <section key={section.id} className="p-6 sm:p-7">
-              <div className="mb-5 flex items-start gap-3">
-                <div className="bg-tanaw-ledger/10 text-tanaw-ledger rounded-xl p-3 dark:bg-emerald-300/10 dark:text-emerald-300"><Icon className="h-5 w-5" /></div>
+            <section key={section.id} className="py-4">
+              <div className="mb-3 flex items-start gap-2.5">
+                <div className="bg-tanaw-ledger/10 text-tanaw-ledger rounded-tanaw-sm p-2 dark:bg-emerald-300/10 dark:text-emerald-300">
+                  <Icon className="h-5 w-5" />
+                </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-950 dark:text-white">{section.title}</h2>
+                  <h3 className="font-bold text-(--tanaw-text)">{section.title}</h3>
                   <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-300">{section.description}</p>
                 </div>
               </div>
               <div className="divide-y divide-slate-100 border-y border-slate-100 dark:divide-white/8 dark:border-white/8">
                 {section.fields.map((field) => {
                   const key = settingKey(section.id, field);
-                  return <SettingRow key={key} field={field} value={values[key] ?? field.value} saveState={saveStateByKey[key] ?? "idle"} onChange={(value) => updateValue(key, value, isImmediateSection)} onRetry={() => retryFailedPatch(key)} />;
+                  return (
+                    <SettingRow
+                      key={key}
+                      field={field}
+                      value={values[key] ?? field.value}
+                      saveState={saveStateByKey[key] ?? "idle"}
+                      onChange={(value) => updateValue(key, value, isImmediateSection)}
+                      onRetry={() => retryFailedPatch(key)}
+                    />
+                  );
                 })}
               </div>
               {!isImmediateSection && (
                 <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
                   {isDirty && <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">Unsaved section changes</span>}
-                  <button type="button" disabled={!isDirty || isSaving} onClick={() => (section.id === "security" ? setConfirmSecurity(true) : saveSection(section))} className="bg-tanaw-civic hover:bg-tanaw-civic-deep inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                  {isDirty && (
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => cancelSection(sectionKeys)}
+                      className="rounded-tanaw-sm border border-(--tanaw-control-border) px-3 py-2 text-sm font-semibold hover:bg-(--tanaw-control-hover)"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!isDirty || isSaving}
+                    onClick={() => (section.id === "security" ? setConfirmSecurity(true) : saveSection(section))}
+                    className="bg-tanaw-civic hover:bg-tanaw-civic-deep inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     <Save size={15} /> {isSaving ? "Applying…" : "Apply section"}
                   </button>
                 </div>
@@ -138,24 +172,58 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
       {confirmSecurity && (
         <ModalFrame title="Apply Sign-in Protection" eyebrow="Security setting" onClose={() => setConfirmSecurity(false)} maxWidthClassName="max-w-xl">
           <div className="space-y-5">
-            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100"><ShieldAlert className="mt-0.5 shrink-0" size={20} /><p className="text-sm leading-6">These values change when accounts are temporarily locked after failed sign-in attempts. The change applies to all TANAW accounts and can be changed again later.</p></div>
+            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100">
+              <ShieldAlert className="mt-0.5 shrink-0" size={20} />
+              <p className="text-sm leading-6">
+                These values change when accounts are temporarily locked after failed sign-in attempts. The change applies to all TANAW accounts and can be changed again later.
+              </p>
+            </div>
             <div className="flex justify-end gap-3 border-t border-slate-100 pt-5 dark:border-white/10">
-              <button type="button" onClick={() => setConfirmSecurity(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 dark:border-white/15 dark:text-slate-100">Cancel</button>
-              <button type="button" onClick={() => { const section = sections.find((candidate) => candidate.id === "security"); if (section) saveSection(section); setConfirmSecurity(false); }} className="bg-tanaw-ledger rounded-xl px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">Apply to all accounts</button>
+              <button
+                type="button"
+                onClick={() => setConfirmSecurity(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 dark:border-white/15 dark:text-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const section = sections.find((candidate) => candidate.id === "security");
+                  if (section) saveSection(section);
+                  setConfirmSecurity(false);
+                }}
+                className="bg-tanaw-ledger rounded-xl px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+              >
+                Apply to all accounts
+              </button>
             </div>
           </div>
         </ModalFrame>
       )}
-    </Panel>
+    </div>
   );
 }
 
 function SettingRow({ field, value, saveState, onChange, onRetry }: { field: SettingField; value: SettingValue; saveState: SaveState; onChange: (value: SettingValue) => void; onRetry: () => void }) {
   return (
     <div className="grid gap-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)] sm:items-center">
-      <div><h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{field.label}</h3>{field.description && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-300">{field.description}</p>}</div>
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{field.label}</h3>
+        {field.description && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-300">{field.description}</p>}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-        {field.type === "toggle" ? <Switch checked={Boolean(value)} label={field.label} disabled={saveState === "saving"} onChange={onChange} /> : <FilterSelect value={String(value)} onChange={(nextValue) => onChange(typeof field.value === "number" ? Number(nextValue) : nextValue)} options={field.options.map((option) => [String(option), formatSelectOption(field, option)] as const)} ariaLabel={field.label} className="min-w-52" />}
+        {field.type === "toggle" ? (
+          <Switch checked={Boolean(value)} label={field.label} disabled={saveState === "saving"} onChange={onChange} />
+        ) : (
+          <FilterSelect
+            value={String(value)}
+            onChange={(nextValue) => onChange(typeof field.value === "number" ? Number(nextValue) : nextValue)}
+            options={field.options.map((option) => [String(option), formatSelectOption(field, option)] as const)}
+            ariaLabel={field.label}
+            className="min-w-52"
+          />
+        )}
         <SettingSaveStatus state={saveState} onRetry={onRetry} />
       </div>
     </div>
@@ -164,8 +232,21 @@ function SettingRow({ field, value, saveState, onChange, onRetry }: { field: Set
 
 function SettingSaveStatus({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === "idle" || state === "dirty") return null;
-  if (state === "error") return <span role="alert" className="inline-flex items-center gap-1 text-xs font-bold text-red-700 dark:text-red-300"><CircleAlert size={14} /> Failed <button type="button" onClick={onRetry} className="underline underline-offset-2">Retry</button></span>;
-  return <span role="status" aria-live="polite" className="inline-flex min-w-16 items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-300">{state === "saving" ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" /> : <Check size={14} className="text-emerald-600" />}{state === "saving" ? "Saving…" : "Saved"}</span>;
+  if (state === "error")
+    return (
+      <span role="alert" className="inline-flex items-center gap-1 text-xs font-bold text-red-700 dark:text-red-300">
+        <CircleAlert size={14} /> Failed{" "}
+        <button type="button" onClick={onRetry} className="underline underline-offset-2">
+          Retry
+        </button>
+      </span>
+    );
+  return (
+    <span role="status" aria-live="polite" className="inline-flex min-w-16 items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-300">
+      {state === "saving" ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" /> : <Check size={14} className="text-emerald-600" />}
+      {state === "saving" ? "Saving…" : "Saved"}
+    </span>
+  );
 }
 
 function formatSelectOption(field: SettingField, option: string | number) {

@@ -108,6 +108,7 @@ export type SystemLog = {
   target: string;
   summary: string;
   sourceId?: string;
+  resolutionStatus?: "Unresolved" | "Resolved" | null;
   metadata?: Record<string, string | number | boolean | null>;
 };
 

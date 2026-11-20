@@ -123,7 +123,7 @@ type CameraConnectionAndProcessing = {
 export type Camera = CameraConnectionAndProcessing & ({ analysisMode?: "entrance_exit"; openSpace?: null } | { analysisMode: "open_space"; openSpace: OpenSpaceSettings | null });
 
 export type ThemePreference = "light" | "dark" | "system";
-export type EnterpriseView = "dashboard" | "cameras" | "reports" | "profile" | "security" | "notifications" | "tickets" | "display-preferences" | "developer-settings" | "help";
+export type EnterpriseView = "dashboard" | "cameras" | "reports" | "profile" | "security" | "notifications" | "tickets" | "settings" | "help";
 
 export type EnterpriseNotification = {
   id: number;

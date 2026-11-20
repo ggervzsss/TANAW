@@ -1,6 +1,8 @@
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
-import { Check, MailCheck, RefreshCw, Save, Shield, Upload } from "lucide-react";
-import { Card } from "../../../components/Card";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { MailCheck } from "lucide-react";
+import { Alert } from "../../../design-system";
+import { useSettingsDraft } from "../../../design-system/lib/settingsDraft";
+import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "../../../design-system/patterns/GeneralSettings";
 import { useAuthStore } from "../../login/stores/auth-store";
 import {
   type BusinessEmailChangeStatus,
@@ -12,7 +14,7 @@ import {
   updateLeadAdminName,
   updateProfileImage,
 } from "../../login/api/login";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifyError, notifyInfo, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
 import { PHILIPPINE_MOBILE_ERROR, type PersonNameParts, formatPersonName, normalizeEmail, normalizeMiddleInitial, parsePersonName, toPhilippineLocalDigits } from "../../../utils/form-validation";
 
@@ -41,18 +43,34 @@ export function ProfileView() {
   const [isEmailChangeCancelling, setIsEmailChangeCancelling] = useState(false);
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? user?.name ?? "Enterprise Account";
   const managerName = user?.managerName ?? user?.name ?? user?.displayName ?? "Not provided";
-  const businessEmail = user?.email ?? "Not provided";
   const buildingCapacity = user?.buildingCapacity ?? 100;
   const phoneLocal = toPhilippineLocalDigits(user?.phone ?? "");
   const phoneDisplay = phoneLocal ? `+63 ${phoneLocal}` : "Not provided";
   const initials = getInitials(enterpriseName);
   const [displayImageDataUrl, setDisplayImageDataUrl] = useState<string | null>(() => user?.displayImageDataUrl ?? null);
   const [displayImageFileName, setDisplayImageFileName] = useState("");
+  const [isReadingImage, setIsReadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const imageVersion = useRef(0);
+  const logoChanged = displayImageDataUrl !== (user?.displayImageDataUrl ?? null);
+  const modalDirty =
+    activeModal === "managerName"
+      ? formatPersonName(modalName) !== formatPersonName(parsePersonName(user?.managerName ?? ""))
+      : activeModal === "email"
+        ? modalValue !== (user?.email ?? "")
+        : activeModal === "phone"
+          ? Boolean(modalPhoneLocal)
+          : activeModal === "buildingCapacity" && modalValue !== String(buildingCapacity);
+  const draftMarker = useSettingsDraft(logoChanged || isReadingImage || modalDirty);
 
   useEffect(() => {
+    imageVersion.current++;
     setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
     setDisplayImageFileName("");
-  }, [user?.buildingCapacity, user?.displayImageDataUrl, user?.email, user?.managerName, user?.phone]);
+    setIsReadingImage(false);
+    setImageError("");
+  }, [user?.id, user?.displayImageDataUrl]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -71,7 +89,10 @@ export function ProfileView() {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isLoading || isReadingImage || !logoChanged) return;
+    setIsSuccess(false);
     setIsLoading(true);
+    setSaveError("");
     try {
       const updated = await updateProfileImage(displayImageDataUrl);
       updateUser(updated);
@@ -81,79 +102,58 @@ export function ProfileView() {
       notifySuccess("Profile logo saved.");
     } catch {
       setIsLoading(false);
-      notifyError("Unable to update profile logo.");
+      setSaveError("Unable to update profile logo.");
     }
   };
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const version = ++imageVersion.current;
+    setIsReadingImage(true);
+    setImageError("");
+    setIsSuccess(false);
 
     try {
       const upload = await readProfileImageFile(file);
+      if (version !== imageVersion.current) return;
       setDisplayImageDataUrl(upload.dataUrl);
       setDisplayImageFileName(upload.fileName);
-      notifySuccess("Logo ready to save.");
     } catch (error) {
-      notifyError(error instanceof Error ? error.message : "Unable to load image.");
+      if (version === imageVersion.current) setImageError(error instanceof Error ? error.message : "Unable to load image.");
     } finally {
+      if (version === imageVersion.current) setIsReadingImage(false);
       event.target.value = "";
     }
   };
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-sans duration-500">
-      <div className="mx-auto w-full">
-        <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-tanaw-gold-ink dark:text-(--tanaw-gold-ink) uppercase">Enterprise Account</p>
-        <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Enterprise Profile</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Manage your establishment's identity and primary contact details.</p>
-      </div>
-
-      <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
-        <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-tanaw-live to-[#d6ad33]" />
-        <div className="p-6 md:p-8">
-          <div className="enterprise-profile-logo-panel mb-8 flex flex-col items-start gap-6 rounded-3xl border border-emerald-100 bg-linear-to-r from-emerald-50/80 via-white to-amber-50/60 p-5 sm:flex-row sm:items-center">
-            <label
-              htmlFor="enterprise-logo-upload"
-              className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 bg-white shadow-sm"
-            >
-              {displayImageDataUrl ? (
-                <img src={displayImageDataUrl} alt="Enterprise logo preview" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-tanaw-navy font-['Bai_Jamjuree'] text-2xl font-bold transition-opacity group-hover:opacity-0">{initials}</span>
-              )}
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                <Upload size={20} className="text-white" />
-              </div>
-              <input id="enterprise-logo-upload" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageChange} className="sr-only" />
-            </label>
-            <div className="min-w-0">
-              <h3 className="text-lg font-bold text-[#111827]">Establishment Logo</h3>
-              <p className="mt-1 max-w-xl text-xs leading-relaxed text-gray-500">
-                Upload a professional logo or primary display picture.
-                <br />
-                Recommended format: 256x256px PNG or JPG.
-              </p>
-              {displayImageFileName && <p className="mt-2 text-xs font-semibold text-emerald-700">{displayImageFileName}</p>}
-              {displayImageDataUrl && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDisplayImageDataUrl(null);
-                    setDisplayImageFileName("");
-                  }}
-                  className="mt-3 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
-                >
-                  Remove logo
-                </button>
-              )}
-            </div>
-          </div>
+    <>
+      <form data-settings-draft={draftMarker} onSubmit={handleSave} noValidate aria-busy={isLoading}>
+        <fieldset disabled={isLoading} className="tanaw-settings-body">
+          <SettingsImageUpload
+            account={{ name: enterpriseName, email: user?.email, role: "Enterprise Account" }}
+            onEditEmail={() => openEditModal("email")}
+            title="Establishment logo"
+            initials={initials}
+            image={displayImageDataUrl}
+            fileName={displayImageFileName}
+            error={imageError}
+            loading={isReadingImage}
+            onChange={handleImageChange}
+            removeLabel="Remove logo"
+            onRemove={() => {
+              setDisplayImageDataUrl(null);
+              setDisplayImageFileName("");
+              setImageError("");
+              setIsSuccess(false);
+            }}
+          />
 
           {accountChangeStatus && (
             <div
-              className={`enterprise-profile-change-notice mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${
-                accountChangeStatus.tone === "success" ? "border-emerald-200 bg-emerald-50 text-tanaw-ledger" : "border-amber-200 bg-amber-50 text-amber-800"
+              className={`enterprise-profile-change-notice rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                accountChangeStatus.tone === "success" ? "text-tanaw-ledger border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50 text-amber-800"
               }`}
               data-tone={accountChangeStatus.tone}
             >
@@ -162,7 +162,7 @@ export function ProfileView() {
           )}
 
           {pendingEmailChange ? (
-            <div className="enterprise-profile-pending-email mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
+            <div className="enterprise-profile-pending-email flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="enterprise-profile-pending-email__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/60 bg-white/70 text-amber-700 shadow-sm">
                   <MailCheck className="h-4.5 w-4.5" />
@@ -190,43 +190,45 @@ export function ProfileView() {
             </div>
           ) : null}
 
-          <form onSubmit={handleSave} noValidate className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <ProfileDisplayField label="Lead Admin Name" value={managerName} onEdit={() => openEditModal("managerName")} />
-              <ProfileDisplayField label="Business Email" value={businessEmail} onEdit={() => openEditModal("email")} />
-              <ProfileDisplayField label="Contact Number" value={phoneDisplay} onEdit={() => openEditModal("phone")} />
-              <ProfileDisplayField label="Building Capacity" value={`${buildingCapacity.toLocaleString()} people`} onEdit={() => openEditModal("buildingCapacity")} />
-              <ProfileDisplayField label="Enterprise Name" value={enterpriseName} locked />
-              <div className="md:col-span-2">
-                <ProfileDisplayField label="Registered Address" value={user?.address ?? "Not provided"} locked />
+          <div className="tanaw-profile-layout">
+            <SettingsGroup title="Contact and operations" description="Edit each field individually. Phone changes follow the account review process.">
+              <div className="tanaw-settings-fields">
+                <ProfileDisplayField label="Lead Admin Name" value={managerName} onEdit={() => openEditModal("managerName")} />
+                <ProfileDisplayField label="Contact Number" value={phoneDisplay} onEdit={() => openEditModal("phone")} />
+                <ProfileDisplayField label="Building Capacity" value={buildingCapacity.toLocaleString() + " people"} onEdit={() => openEditModal("buildingCapacity")} />
               </div>
-            </div>
-
-            <div className="enterprise-profile-identity-panel mt-8 space-y-4 rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/70 via-white to-slate-50 p-5 shadow-inner">
-              <h4 className="flex items-center gap-2 text-xs font-bold tracking-wider text-[#111827] uppercase">
-                <Shield size={14} className="text-tanaw-ledger" /> Enterprise Identity (Read-Only)
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <ReadOnlyIdentityField label="Current Enterprise" value={enterpriseName} />
-                <ReadOnlyIdentityField label="LGU Affiliation" value={[user?.category ?? "Registered Enterprise", user?.barangay ? `Barangay ${user.barangay}` : "San Pedro City"].join(" - ")} />
+            </SettingsGroup>
+            <SettingsGroup title="Enterprise registration">
+              <div className="mb-2">
+                <SettingsReadOnly>Contact the LGU Administrator to update registration details.</SettingsReadOnly>
+              </div>
+              <dl className="tanaw-settings-fields rounded-tanaw-sm bg-(--tanaw-surface-inset) p-3">
                 <ReadOnlyIdentityField label="Enterprise ID" value={user?.enterpriseId ?? "Not assigned"} />
-              </div>
-              <p className="text-[10px] font-medium text-gray-500">To modify your establishment's structural identity, please contact the LGU Administrator.</p>
-            </div>
-
-            <div className="flex justify-end pt-4">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="flex min-w-42.5 items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-6 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition-colors hover:bg-[#044a36] disabled:bg-tanaw-ledger/70"
-              >
-                {isLoading ? <RefreshCw size={16} className="animate-spin" /> : isSuccess ? <Check size={16} /> : <Save size={16} />}
-                {isLoading ? "Saving..." : isSuccess ? "Saved Successfully" : "Save Changes"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Card>
+                <ReadOnlyIdentityField label="Registered Address" value={user?.address ?? "Not provided"} />
+                <ReadOnlyIdentityField label="LGU Affiliation" value={[user?.category ?? "Registered Enterprise", user?.barangay ? "Barangay " + user.barangay : "San Pedro City"].join(" - ")} />
+              </dl>
+            </SettingsGroup>
+          </div>
+          {saveError && <Alert tone="danger">{saveError}</Alert>}
+        </fieldset>
+        <SettingsActions
+          busy={isLoading}
+          dirty={logoChanged}
+          saveDisabled={!logoChanged || isReadingImage}
+          detail={isSuccess ? "Logo saved" : "Logo changes are saved here."}
+          onCancel={() => {
+            imageVersion.current++;
+            setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
+            setDisplayImageFileName("");
+            setIsSuccess(false);
+            setIsReadingImage(false);
+            setImageError("");
+            setSaveError("");
+          }}
+        >
+          Save Changes
+        </SettingsActions>
+      </form>
 
       {activeModal && (
         <ProfileEditModal
@@ -259,7 +261,7 @@ export function ProfileView() {
           }}
         />
       )}
-    </div>
+    </>
   );
 
   function openEditModal(field: EditableProfileField) {
@@ -295,14 +297,14 @@ export function ProfileView() {
 
   function getCurrentModalDisplay(field: EditableProfileField) {
     if (field === "managerName") return managerName;
-    if (field === "email") return businessEmail;
+    if (field === "email") return user?.email ?? "Not provided";
     if (field === "buildingCapacity") return `${buildingCapacity.toLocaleString()} people`;
     return phoneDisplay;
   }
 
   async function handleModalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeModal) return;
+    if (!activeModal || isModalSaving) return;
 
     if (activeModal === "managerName") {
       const nameErrors = validateStructuredName(modalName);
@@ -325,13 +327,15 @@ export function ProfileView() {
         notifySuccess("Lead admin name updated.");
       } else if (activeModal === "email") {
         const response = await requestBusinessEmailChange(normalizeEmail(modalValue));
-        setPendingEmailChange(await getBusinessEmailChangeStatus());
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifySuccess("Email ownership verification queued.");
+        notifyInfo("Business email change requested. Follow the verification instructions.");
+        void getBusinessEmailChangeStatus()
+          .then(setPendingEmailChange)
+          .catch(() => undefined);
       } else if (activeModal === "phone") {
         const response = await requestContactNumberChange(`+63${modalPhoneLocal}`);
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifySuccess("Contact number change request recorded.");
+        notifyInfo("Contact number change request recorded.");
       } else {
         const updated = await updateBuildingCapacity(Number(modalValue));
         updateUser(updated);
@@ -341,7 +345,9 @@ export function ProfileView() {
       closeEditModal();
     } catch (error) {
       setIsModalSaving(false);
-      setModalError(getRequestErrorMessage(error, "Unable to save this change."));
+      const message = getRequestErrorMessage(error, "Unable to save this change. Please try again.");
+      setModalError(message);
+      notifyError(message);
     }
   }
 

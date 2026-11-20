@@ -188,18 +188,6 @@
     box-shadow: var(--theme-shadow);
   }
 
-  html.dark .enterprise-shell .enterprise-profile-menu {
-    background: var(--enterprise-card-elevated-bg);
-    border-color: var(--enterprise-border);
-    color: var(--enterprise-text);
-    box-shadow: var(--tanaw-shadow-raised);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-menu__header {
-    background: var(--theme-raised);
-    border-color: var(--enterprise-border-soft);
-  }
-
   html.dark .enterprise-shell .enterprise-ticket-panel-header {
     background: var(--theme-raised);
     border-color: var(--enterprise-border);
@@ -252,24 +240,6 @@
 
   html.dark .enterprise-shell .tanaw-report-remarks__message {
     color: var(--theme-warning-text);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-menu button {
-    color: var(--theme-text);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-menu button:hover {
-    background-color: var(--theme-raised);
-    color: var(--theme-text);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red {
-    color: var(--theme-danger-text);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red:hover {
-    background-color: var(--theme-danger-bg);
-    color: var(--theme-danger-text);
   }
 
   html.dark .enterprise-shell table thead {
@@ -349,20 +319,6 @@
   html.dark .enterprise-shell .bg-gray-50,
   html.dark .enterprise-shell .bg-gray-50\/80 {
     background-color: var(--enterprise-panel-bg);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-logo-panel,
-  html.dark .enterprise-shell .enterprise-profile-identity-panel {
-    background: var(--theme-surface);
-    border-color: var(--enterprise-border);
-    box-shadow: var(--theme-shadow);
-  }
-
-  html.dark .enterprise-shell .enterprise-profile-logo-panel label,
-  html.dark .enterprise-shell .enterprise-profile-identity-panel .bg-white {
-    background-color: var(--enterprise-input-bg);
-    border-color: var(--enterprise-border);
-    color: var(--enterprise-text);
   }
 
   html.dark body .enterprise-shell .enterprise-profile-change-notice[data-tone="info"] {

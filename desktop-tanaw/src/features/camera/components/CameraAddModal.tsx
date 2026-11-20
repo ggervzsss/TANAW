@@ -82,6 +82,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 reportsDismissal
                 value={newCam.cameraBrand ?? "tapo"}
                 ariaLabel="Camera brand / type"
+                menuClassName="camera-add-dropdown"
                 options={CAMERA_BRANDS}
                 onChange={(brand) =>
                   onChange({ ...newCam, ...updateCameraConnection(newCam, { cameraBrand: brand as CameraFormValues["cameraBrand"] }), cameraHost: newCam.cameraHost })
@@ -96,6 +97,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               <SelectDropdown
                 reportsDismissal
                 ariaLabel={CAMERA_MODE_LABEL}
+                menuClassName="camera-add-dropdown"
                 value={newCam.analysisMode ?? "entrance_exit"}
                 options={CAMERA_MODE_OPTIONS}
                 onChange={(mode) => onChange({ ...newCam, analysisMode: mode as CameraFormValues["analysisMode"] })}
@@ -106,12 +108,14 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
             </Field>
           </div>
           <div hidden={step !== "connection"} className="camera-add-connection">
-            <CameraConnectionFields
-              value={newCam}
-              hostError={shownErrors.cameraHost ?? duplicateIpError}
-              streamError={shownErrors.rtsp}
-              onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "" })}
-            />
+            <div className="camera-add-address">
+              <CameraConnectionFields
+                value={newCam}
+                hostError={shownErrors.cameraHost ?? duplicateIpError}
+                streamError={shownErrors.rtsp}
+                onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "" })}
+              />
+            </div>
             <Field id="camera-username" label="Camera Username" required error={shownErrors.username}>
               <input
                 id="camera-username"

@@ -81,14 +81,34 @@ describe("desktop report cloud idempotency", () => {
     vi.mocked(listLocalReportSubmissions).mockImplementation(async () => [current]);
     vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
 
-    await syncDesktopReportSubmission(current.report_id);
+    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
     current = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
-    await syncDesktopReportSubmission(current.report_id);
+    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
 
     expect(vi.mocked(staffApi.post).mock.calls.map((call) => call[1])).toEqual([
       expect.objectContaining({ submissionId: "11111111-1111-4111-8111-111111111111" }),
       expect.objectContaining({ submissionId: "22222222-2222-4222-8222-222222222222" }),
     ]);
+  });
+
+  it("requires the submitted revision and recognizes a background upload already confirmed", async () => {
+    const submission = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([{ ...submission, sync_status: "synced" }]);
+
+    await expect(syncDesktopReportSubmission(submission.report_id, "older-submission")).resolves.toBe(false);
+    await expect(syncDesktopReportSubmission(submission.report_id, submission.submission_id)).resolves.toBe(true);
+    expect(staffApi.post).not.toHaveBeenCalled();
+  });
+
+  it("shares an in-flight upload between manual submission and background sync", async () => {
+    const submission = localSubmission("11111111-1111-4111-8111-111111111111");
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([submission]);
+    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
+
+    await Promise.all([syncDesktopReportSubmission(submission.report_id, submission.submission_id), syncDesktopReportSubmissions()]);
+
+    expect(staffApi.post).toHaveBeenCalledTimes(1);
+    expect(markLocalReportSynced).toHaveBeenCalledTimes(1);
   });
 });
 

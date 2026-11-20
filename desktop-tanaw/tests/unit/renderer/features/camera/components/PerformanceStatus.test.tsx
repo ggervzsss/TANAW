@@ -16,7 +16,7 @@ describe("PerformanceStatus", () => {
     const markup = render("balanced", 11.64);
     expect(markup).toContain("Auto, using Balanced");
     expect(markup).toContain("(11.6 AI FPS)");
-    expect(markup).toContain('href="/enterprise/developer-settings"');
+    expect(markup).toContain('href="/enterprise/settings/developer"');
     expect(markup).toContain(">Change<");
   });
 

@@ -89,12 +89,12 @@ export function AdminOperationsCenterPage() {
   return (
     <PageMotion className="tanaw-data-page pb-12">
       <PageHeader
-        title="Operations Center"
+        title="Alerts & Requests"
         description="Review situations that need an Admin decision, important support requests, and pending account changes."
       />
 
       <UnifiedMetricsHeader
-        ariaLabel="Operations Center summary"
+        ariaLabel="Alerts & Requests summary"
         metrics={[
           {
             id: "needs-attention",
@@ -146,7 +146,7 @@ export function AdminOperationsCenterPage() {
               <p>{viewCounts[view]} items in the current view</p>
             </div>
           </div>
-          <div className="tanaw-operations-switcher flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Operations Center categories">
+          <div className="tanaw-operations-switcher flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Alerts & Requests categories">
             {operationsViews.map((item) => (
               <button
                 key={item.id}
@@ -174,7 +174,7 @@ export function AdminOperationsCenterPage() {
                 <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
                 <input
                   value={query}
-                  aria-label="Search Operations Center"
+                  aria-label="Search alerts and requests"
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={view === "situations" ? "Search establishment, situation, or suggested response" : "Search enterprise, request, category, or status"}
                   className="tanaw-data-search w-full rounded-xl border py-2.5 pr-4 pl-9 text-sm transition outline-none"

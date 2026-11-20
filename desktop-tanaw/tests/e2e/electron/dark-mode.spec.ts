@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { FakeMlSidecar } from "./support/fake-ml-sidecar";
 import { themeServiceFixture, themeUser } from "../support/theme-fixture";
-import { verifyThemeAndFilters } from "../support/theme-and-filters";
+import { switchTheme, verifyThemeAndFilters } from "../support/theme-and-filters";
 
 test("desktop dark theme, camera dialogs and automatic report filtering preserve layout", async ({ playwright }, info) => {
   test.setTimeout(150_000);
@@ -44,16 +44,31 @@ test("desktop dark theme, camera dialogs and automatic report filtering preserve
       const window = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().startsWith("tanaw-app://desktop"));
       window?.show();
     });
+    await page.getByRole("button", { name: "Open account menu" }).click();
+    await page.getByRole("button", { name: "General Settings" }).click();
+    await page.getByRole("button", { name: "Password & Security" }).click();
+    const currentPassword = page.getByLabel("Current Password", { exact: true });
+    await currentPassword.focus();
+    await currentPassword.fill("Unsaved password input");
+    await page.getByRole("button", { name: "Appearance" }).click();
+    const discard = page.getByRole("dialog", { name: "Discard unsaved settings?" });
+    await discard.getByRole("button", { name: "Keep editing" }).click();
+    await expect(currentPassword).toHaveValue("Unsaved password input");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Appearance" }).click();
+    await page.getByRole("radio", { name: "Dark Mode" }).click();
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+    await page.getByRole("button", { name: "Back from General Settings" }).click();
     await verifyThemeAndFilters(page, info, false);
     for (const size of [
       { width: 1918, height: 980 },
       { width: 1100, height: 760 },
     ]) {
       await page.setViewportSize(size);
-      for (const theme of ["dark", "light"]) {
+      for (const theme of ["dark", "light"] as const) {
         const dark = await page.locator("html").evaluate((node) => node.classList.contains("dark"));
         if (dark !== (theme === "dark")) {
-          await page.getByRole("button", { name: `Switch to ${theme} mode` }).click();
+          await switchTheme(page, theme);
           await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
         }
         for (const destination of ["Dashboard", "Reports", "Camera Setup"]) {

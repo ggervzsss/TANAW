@@ -4,48 +4,31 @@ import { ModalPortal } from "../../../components/ModalPortal";
 import { PERSON_NAME_MAX_LENGTH, type PersonNameParts } from "../../../utils/form-validation";
 import type { EditableProfileField } from "../model/profile-edit";
 
-type ProfileDisplayFieldProps = {
-  label: string;
-  locked?: boolean;
-  onEdit?: () => void;
-  prefix?: string;
-  value: string;
-};
-
-export function ProfileDisplayField({ label, locked = false, onEdit, prefix, value }: ProfileDisplayFieldProps) {
+export function ProfileDisplayField({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
   return (
-    <div>
-      <label className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase">{label}</label>
-      <div className="flex min-h-12.5 overflow-hidden rounded-xl border border-gray-200 bg-white text-sm text-[#111827] shadow-sm" aria-readonly="true">
-        {prefix && <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 font-bold text-gray-700">{prefix}</span>}
-        <div className="flex min-w-0 flex-1 items-center px-3.5 py-3">
-          <span className="truncate">{value}</span>
-        </div>
-        {onEdit && !locked && (
-          <button
-            type="button"
-            aria-label={`Edit ${label}`}
-            onClick={onEdit}
-            className="m-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-emerald-50 hover:text-tanaw-ledger"
-          >
-            <Pencil size={16} />
-          </button>
-        )}
+    <div className="min-w-0">
+      <p className="mb-1.5 text-sm font-semibold text-(--tanaw-text-secondary)">{label}</p>
+      <div className="rounded-tanaw-sm flex min-h-10 items-center gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) py-1 pr-1 pl-3">
+        <span className="min-w-0 flex-1 text-sm font-medium wrap-break-word text-(--tanaw-text)">{value}</span>
+        <button
+          type="button"
+          aria-label={"Edit " + label}
+          title={"Edit " + label}
+          onClick={onEdit}
+          className="rounded-tanaw-sm grid size-8 shrink-0 place-items-center bg-(--tanaw-surface-inset) text-(--tanaw-accent-ink) hover:bg-(--tanaw-selected-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+        >
+          <Pencil size={15} aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
 }
 
-type ReadOnlyIdentityFieldProps = {
-  label: string;
-  value: string;
-};
-
-export function ReadOnlyIdentityField({ label, value }: ReadOnlyIdentityFieldProps) {
+export function ReadOnlyIdentityField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <label className="mb-1 block text-[10px] font-bold tracking-wider text-gray-400 uppercase">{label}</label>
-      <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm font-semibold text-[#111827] shadow-sm">{value}</div>
+    <div className="min-w-0">
+      <dt className="text-xs font-semibold text-(--tanaw-text-secondary)">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium wrap-break-word text-(--tanaw-text)">{value}</dd>
     </div>
   );
 }
@@ -166,7 +149,7 @@ export function ProfileEditModal({
                 <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
                 {isPhone ? (
                   <div
-                    className={`flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-tanaw-ledger focus-within:ring-2 focus-within:ring-tanaw-ledger/12 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`focus-within:border-tanaw-ledger focus-within:ring-tanaw-ledger/12 flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:ring-2 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   >
                     <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 text-sm font-bold text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       +63
@@ -198,7 +181,7 @@ export function ProfileEditModal({
                     maxLength={field === "email" ? 254 : undefined}
                     aria-invalid={Boolean(error)}
                     onChange={(event) => onValueChange(event.target.value)}
-                    className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`focus:border-tanaw-ledger focus:ring-tanaw-ledger/12 w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:ring-2 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   />
                 )}
                 {(error || !isPhone) && (
@@ -221,7 +204,7 @@ export function ProfileEditModal({
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex min-w-32 items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-tanaw-ledger/70"
+                className="bg-tanaw-ledger disabled:bg-tanaw-ledger/70 flex min-w-32 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed"
               >
                 {isSaving && <RefreshCw size={15} className="animate-spin" />}
                 {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : field === "buildingCapacity" ? "Update Capacity" : "Submit Request"}
@@ -267,7 +250,7 @@ function ProfileNameInput({
         aria-invalid={Boolean(error)}
         aria-describedby={error || helperText ? descriptionId : undefined}
         onChange={(event) => onChange(name, event.target.value)}
-        className={`w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+        className={`focus:border-tanaw-ledger focus:ring-tanaw-ledger/12 w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:ring-2 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
       />
       {(error || helperText) && (
         <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>

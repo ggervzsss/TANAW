@@ -1,6 +1,6 @@
 import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mlResponse, mockCameraSetup, mockMlRequest } from "./support/preload";
+import { mlResponse, mockCameraSetup, mockMlRequest, mockRememberedSession, switchTheme } from "./support/preload";
 import { token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
@@ -15,7 +15,7 @@ const enterpriseUser = {
   buildingCapacity: 100,
 };
 
-async function signIn(page: Page, configureMl?: () => Promise<void>) {
+async function signIn(page: Page, configureMl?: () => Promise<void>, remember = false) {
   let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
   await page.route("**/auth/login", (route) => {
@@ -40,6 +40,7 @@ async function signIn(page: Page, configureMl?: () => Promise<void>) {
   await page.goto("/#/login");
   await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
   await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
+  if (remember) await page.getByRole("checkbox", { name: "Remember me" }).check();
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
@@ -137,7 +138,8 @@ test("recovers camera hydration after service startup and restores live updates 
   };
   const emit = (payload: unknown) => page.evaluate((detail) => window.dispatchEvent(new CustomEvent("e2e-ml-live-event", { detail })), payload);
   await emit(envelope);
-  await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible({ timeout: 1000 });
+  const performance = page.locator(".camera-page-heading").getByText(/11\.7 AI FPS/);
+  await expect(performance).toBeVisible({ timeout: 1000 });
   const box = page.locator("[data-track-id=\"7\"]");
   await expect(box).toBeVisible();
   expect(await box.evaluate((element) => (element as HTMLElement).style.left)).toBe("9.375%");
@@ -151,53 +153,22 @@ test("recovers camera hydration after service startup and restores live updates 
   await emit({ type: "disconnected" });
   await expect.poll(() => runtimeReads).toBeGreaterThan(readsAfterLive);
   await emit({ type: "service.error", code: "local_database_reset_required", message: "Close TANAW and reset the local database.", retryable: false });
-  await page.getByRole("button", { name: "ML Service Needs Attention details", exact: true }).click();
-  await expect(page.getByText("Close TANAW and reset the local database.", { exact: false }).first()).toBeVisible();
+  await expect(page.locator(".camera-preview-feedback")).toContainText("Close TANAW and reset the local database.");
   const readsAfterReset = runtimeReads;
   await page.waitForTimeout(2700);
   expect(runtimeReads).toBe(readsAfterReset);
   await emit({ type: "connected" });
   await emit(envelope);
-  await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible();
+  await expect(performance).toBeVisible();
 });
 
-async function readTopbarGlassFrame(page: Page) {
-  return page.evaluate(() => {
-    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
-    if (!material || !optics) throw new Error("Liquid glass layers are missing");
-    const rect = material.getBoundingClientRect();
-    return {
-      center: rect.left + rect.width / 2,
-      materialOpacity: Number(getComputedStyle(material).opacity),
-      opticsOpacity: Number(getComputedStyle(optics).opacity),
-    };
-  });
-}
-
-// Observe in the renderer on every animation frame so a brief transition cannot
-// finish between separate Playwright polling round trips.
-async function expectTopbarGlassTransition(page: Page, target: Locator, previousCenter: number) {
-  await Promise.all([
-    page.waitForFunction(
-      (center) => {
-        const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
-        const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
-        if (!material || !optics) return false;
-        const rect = material.getBoundingClientRect();
-        return Math.abs(rect.left + rect.width / 2 - center) > 1 && Number(getComputedStyle(optics).opacity) > 0.15 && Number(getComputedStyle(material).opacity) > 0.85;
-      },
-      previousCenter,
-      { polling: "raf", timeout: 1500 },
-    ),
-    target.hover(),
-  ]);
-}
-
-async function expectSettledTopbarGlass(page: Page, targetCenter: number) {
-  await expect.poll(async () => Math.abs((await readTopbarGlassFrame(page)).center - targetCenter), { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThan(1);
-  await expect.poll(async () => (await readTopbarGlassFrame(page)).materialOpacity, { timeout: 1_500 }).toBeGreaterThan(0.95);
-  await expect.poll(async () => (await readTopbarGlassFrame(page)).opticsOpacity, { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThanOrEqual(0.01);
+async function expectSettledTopbarUnderline(underline: Locator, tab: Locator) {
+  await expect(underline).toBeVisible();
+  const bounds = (await tab.locator("[data-topbar-label]").boundingBox())!;
+  await expect.poll(async () => {
+    const line = (await underline.boundingBox())!;
+    return Math.abs(line.x + line.width / 2 - bounds.x - bounds.width / 2) + Math.abs(line.y - bounds.y - bounds.height - 4) + Math.abs(line.width - bounds.width * 0.8);
+  }).toBeLessThan(2);
 }
 
 test("updates Support Ticket selects together after a theme change", async ({ page }) => {
@@ -216,7 +187,7 @@ test("updates Support Ticket selects together after a theme change", async ({ pa
   expect(initialDarkState.categoryBackground).not.toBe("rgb(255, 255, 255)");
   expect(initialDarkState.priorityBackground).toBe(initialDarkState.categoryBackground);
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   const lightState = await page.evaluate(() => {
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
@@ -239,7 +210,7 @@ test("updates Support Ticket selects together after a theme change", async ({ pa
   await expect(page.getByRole("listbox", { name: "Category" }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
   const darkState = await page.evaluate(() => {
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
@@ -389,7 +360,7 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(preview.getByRole("button", { name: "Download PDF" })).toBeVisible();
   await preview.getByRole("button", { name: "Close preview", exact: true }).click();
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
   // A report submitted before daily entry shows its monthly origins, without a date picker.
@@ -469,7 +440,7 @@ test("presents unified daily history and distinguishes observed zero from missin
   await expect(header.locator('[data-metric-segment="visitors"]').getByText("0", { exact: true })).toBeVisible();
   await selectDashboardPeriod(page, "Today");
   await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
 
@@ -540,7 +511,7 @@ test("keeps Enterprise password inputs empty and reveals only manually entered t
   await expect(page.getByPlaceholder("Repeat the password")).toHaveValue("");
 });
 
-test("keeps resolved Support Ticket history visible and closes the composer", async ({ page }) => {
+test("submits a Support Ticket and keeps resolved history visible", async ({ page }) => {
   const resolvedTicket = {
     id: "ticket-resolved",
     code: "TCK-000099",
@@ -570,11 +541,27 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.route("**/operational/tickets**", (route) => {
+    if (route.request().method() === "POST") {
+      const request = route.request().postDataJSON();
+      expect(request).toMatchObject({ category: "Report Concern", priority: "Normal", subject: "Report summary question" });
+      return route.fulfill({ json: { ...resolvedTicket, ...request, id: "ticket-new", code: "TCK-000100", status: "Open", messages: [] } });
+    }
     const pathname = new URL(route.request().url()).pathname;
     const body = pathname.endsWith("/ticket-resolved") ? resolvedTicket : [resolvedTicket];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/#/enterprise/tickets");
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "General Settings" }).click();
+  await page.getByRole("button", { name: "Support Tickets" }).click();
+  await page.getByRole("combobox", { name: "Category" }).click();
+  await page.getByRole("option", { name: "Report Concern" }).click();
+  await page.getByRole("combobox", { name: "Priority" }).click();
+  await page.getByRole("option", { name: "Normal" }).click();
+  await page.getByLabel("Subject", { exact: true }).fill("Report summary question");
+  await page.getByLabel("Description", { exact: true }).fill("Please help confirm the correct date range for the visitor report.");
+  await page.getByRole("button", { name: "Submit Ticket" }).click();
+  await expect(page.getByText("Ticket TCK-000100 submitted.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Report summary question/ })).toBeVisible();
 
   await page.getByRole("button", { name: /Resolved camera concern/ }).click();
   await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();
@@ -583,138 +570,59 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
   await expect(page.getByRole("button", { name: "Send Reply" })).toHaveCount(0);
 });
 
-test("shows navigation feedback for pointer and keyboard interaction", async ({ page }) => {
+test("keeps the active underline visible and retargets it through desktop navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
+  await mockRememberedSession(page);
+  await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId), true);
   await page.goto("/#/enterprise/cameras");
-  const cameraNavigation = page.getByRole("button", { name: "Camera Setup", exact: true });
-  const dashboardNavigation = page.getByRole("button", { name: "Dashboard", exact: true });
-  const reportsNavigation = page.getByRole("button", { name: "Reports", exact: true });
-  const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
-  const activeUnderline = cameraNavigation.locator("[data-topbar-active-underline='true']");
-  await expect(cameraNavigation).toHaveAttribute("aria-current", "page");
-  await expect(activeUnderline).toHaveCount(1);
-  await expect(glassIndicator).toHaveCount(1);
-  expect(await glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
-  await expect(glassIndicator).toHaveCSS("opacity", "0");
-  await expect(page.locator("[data-topbar-active-surface], [data-topbar-liquid-layer], [data-topbar-liquid-bridge]")).toHaveCount(0);
-  await dashboardNavigation.hover();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "dashboard");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-origin", "droplet-center");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "raf-spring");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-geometry", "continuous-capsule");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-shape", "continuous-waterdrop");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
-  const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
-  await expect(refractiveEdge).toHaveCount(1);
-  const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
-  await expect(foregroundOptics).toHaveCount(1);
-  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-edge-zone", "feathered");
-  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
-  await expect(foregroundOptics.locator("[data-topbar-glass-edge-side]")).toHaveCount(0);
-  await expect(glassIndicator.locator("[data-topbar-glass-lobe], [data-topbar-glass-neck]")).toHaveCount(0);
-  const refractionTrack = foregroundOptics.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
-  await expect(refractionTrack).toHaveCSS("filter", /tanaw-topbar-lens/);
-  await expect(refractionTrack).toHaveAttribute("data-topbar-lens-magnification", "1.10x1.06");
-  await expect(refractionTrack.locator("[data-topbar-refraction-copy='true']")).toHaveCount(3);
-  await expect(refractionTrack).toContainText("Camera Setup");
-  const opticalFilter = page.locator("filter[id^='tanaw-topbar-lens-']");
-  await expect(opticalFilter.locator("feDisplacementMap")).toHaveAttribute("scale", "22");
-  await expect(opticalFilter.locator("[data-topbar-glass-smear='neutral']")).toHaveAttribute("stdDeviation", "2.4 0.32");
-  await expect(opticalFilter.locator("[data-topbar-glass-smear-output='true']")).toHaveAttribute("in", "neutralSmear");
-  await expect(opticalFilter.locator("[data-topbar-glass-core='attenuated']")).toHaveAttribute("result", "warpedCore");
-  await expect(opticalFilter.locator("[data-topbar-chromatic-channel]")).toHaveCount(2);
-  await expect(foregroundOptics).toHaveCSS("backdrop-filter", /blur/);
-  await expect(foregroundOptics).toHaveCSS("z-index", "20");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-response", "filtered-foreground-replica");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-surface", "transparent");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-chromatic", "split-fringe");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-stretch", "integrated-endcap");
-  await expect(glassIndicator).toHaveCSS("border-top-width", "1px");
-  await expect(glassIndicator).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
-  await expect(glassIndicator).toHaveCSS("clip-path", "none");
-  await page.waitForTimeout(480);
-  const dashboardBox = await dashboardNavigation.boundingBox();
-  const cameraBox = await cameraNavigation.boundingBox();
-  expect(dashboardBox).not.toBeNull();
-  expect(cameraBox).not.toBeNull();
-  const dashboardCenter = dashboardBox!.x + dashboardBox!.width / 2;
-  await expectSettledTopbarGlass(page, dashboardCenter);
-  await expectTopbarGlassTransition(page, cameraNavigation, dashboardCenter);
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
-  await page.waitForTimeout(260);
-  const stretchedGlassBox = await glassIndicator.boundingBox();
-  expect(stretchedGlassBox).not.toBeNull();
-  const cameraCenter = cameraBox!.x + cameraBox!.width / 2;
-  const glidingCenter = stretchedGlassBox!.x + stretchedGlassBox!.width / 2;
-  const fullUnionWidth = cameraBox!.x + cameraBox!.width - dashboardBox!.x;
-  expect(glidingCenter).toBeGreaterThan(dashboardCenter);
-  expect(glidingCenter).toBeLessThan(cameraCenter);
-  expect(stretchedGlassBox!.width).toBeLessThan(fullUnionWidth * 0.85);
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
-  await page.mouse.move((dashboardBox!.x + dashboardBox!.width + cameraBox!.x) / 2, cameraBox!.y + cameraBox!.height / 2);
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "gap");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "gap:dashboard:cameras");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-deformation", "1.000");
-  await expect(glassIndicator).toHaveCSS("border-radius", /px$/);
-  await reportsNavigation.hover();
-  const reportsGlass = glassIndicator;
-  await expect(reportsGlass).toHaveAttribute("data-topbar-glass-target", "reports");
-  await page.waitForTimeout(720);
-  const reportsBox = await reportsNavigation.boundingBox();
-  const reportsGlassBox = await reportsGlass.boundingBox();
-  expect(reportsGlassBox!.x + reportsGlassBox!.width / 2).toBeCloseTo(reportsBox!.x + reportsBox!.width / 2, 0);
-  const reportsCenter = reportsBox!.x + reportsBox!.width / 2;
-  await expectSettledTopbarGlass(page, reportsCenter);
-  await page.mouse.down();
-  await page.mouse.move(reportsBox!.x + reportsBox!.width + 38, reportsBox!.y + reportsBox!.height / 2, { steps: 6 });
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "pull");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "pull:reports:right");
-  const pullAmount = Number(await glassIndicator.getAttribute("data-topbar-glass-pull"));
-  expect(pullAmount).toBeGreaterThan(0.4);
-  await page.waitForTimeout(120);
-  const pulledBox = await glassIndicator.boundingBox();
-  expect(pulledBox).not.toBeNull();
-  expect(pulledBox!.width).toBeGreaterThan(reportsBox!.width + 24);
-  expect(pulledBox!.width).toBeLessThan(reportsBox!.width + 38);
-  expect(pulledBox!.x + pulledBox!.width - (reportsBox!.x + reportsBox!.width)).toBeGreaterThan(18);
-  const pulledLayerWidths = await page.evaluate(() => {
-    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
-    return { material: material?.getBoundingClientRect().width ?? null, optics: optics?.getBoundingClientRect().width ?? null };
-  });
-  expect(pulledLayerWidths.material).not.toBeNull();
-  expect(pulledLayerWidths.optics).not.toBeNull();
-  expect(Math.abs(pulledLayerWidths.optics! - pulledLayerWidths.material!)).toBeLessThan(1.5);
-  const pulledRadii = await page.evaluate(() => {
-    const material = document.querySelector("[data-topbar-glass-indicator='true']");
-    const optics = document.querySelector("[data-topbar-glass-optics='foreground-endcaps']");
-    return { material: material ? getComputedStyle(material).borderRadius : null, optics: optics ? getComputedStyle(optics).borderRadius : null };
-  });
-  expect(pulledRadii.optics).toBe(pulledRadii.material);
-  await page.mouse.up();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "reports");
-  await page.waitForTimeout(260);
-  const releasedBox = await glassIndicator.boundingBox();
-  expect(releasedBox!.width).toBeCloseTo(reportsBox!.width + 8, 0);
-  await expectSettledTopbarGlass(page, reportsCenter);
-  await reportsNavigation.blur();
-  await expect(reportsNavigation).not.toHaveCSS("transform", /matrix/);
-  await expectTopbarGlassTransition(page, cameraNavigation, reportsCenter);
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
-  await expect(activeUnderline).toHaveCount(1);
-  await page.mouse.move(900, 150);
-  await expect.poll(() => glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
-  await expect(glassIndicator).toHaveCSS("opacity", "0");
-  await expect(activeUnderline).toHaveCount(1);
-  await dashboardNavigation.focus();
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "dashboard");
-  await page.keyboard.press("Tab");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
+  const navigation = page.getByRole("navigation", { name: "Enterprise navigation", exact: true });
+  const cameras = navigation.getByRole("button", { name: "Camera Setup" });
+  const dashboard = navigation.getByRole("button", { name: "Dashboard" });
+  const reports = navigation.getByRole("button", { name: "Reports" });
+  const underline = navigation.locator("[data-topbar-underline]");
+
+  await expect(cameras).toHaveAttribute("aria-current", "page");
+  await expectSettledTopbarUnderline(underline, cameras);
+  await expect(underline).toHaveCSS("height", "2px");
+  await dashboard.hover();
+  await expect(dashboard).toHaveCSS("color", "rgb(158, 241, 200)");
+  await expectSettledTopbarUnderline(underline, cameras);
+  await dashboard.click();
+  await expect(dashboard).toHaveAttribute("aria-current", "page");
+  await expectSettledTopbarUnderline(underline, dashboard);
+
+  const from = (await dashboard.locator("[data-topbar-label]").boundingBox())!;
+  const to = (await reports.locator("[data-topbar-label]").boundingBox())!;
+  await Promise.all([
+    page.waitForFunction(({ min, max }) => {
+      const line = document.querySelector("[data-topbar-underline]");
+      if (!line) return false;
+      const rect = line.getBoundingClientRect();
+      const center = rect.x + rect.width / 2;
+      return center > min + 8 && center < max - 8 && getComputedStyle(line).visibility === "visible";
+    }, { min: from.x + from.width / 2, max: to.x + to.width / 2 }),
+    reports.press("Enter"),
+  ]);
+  await cameras.press("Enter");
+  await reports.press("Enter");
+  await expect(reports).toHaveAttribute("aria-current", "page");
+  await expectSettledTopbarUnderline(underline, reports);
+  await expect(reports).toHaveCSS("transform", "none");
+
+  await page.goBack();
+  await expect(cameras).toHaveAttribute("aria-current", "page");
+  await expectSettledTopbarUnderline(underline, cameras);
+  await page.reload();
+  await expectSettledTopbarUnderline(underline, cameras);
+  await dashboard.focus();
+  await expect(dashboard).toHaveCSS("outline-style", "solid");
+  await expect(cameras).toHaveAttribute("aria-current", "page");
+
+  await page.setViewportSize({ width: 800, height: 700 });
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const mobile = page.getByRole("navigation", { name: "Enterprise mobile navigation" });
+  await expect(mobile.getByRole("button", { name: "Camera Setup" })).toHaveAttribute("aria-current", "page");
+  await expect(mobile.locator("[data-topbar-underline]")).toBeVisible();
 });
 
 async function renderTestVideoFrames(page: Page) {
@@ -760,7 +668,7 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await page.getByRole("button", { name: "Discard Changes", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await addCamera.click();
   dialog = page.locator(".camera-add-dialog");
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -773,46 +681,13 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
   await expect(dialog).toBeHidden();
 
-  const controlsHeading = page.getByText("SYSTEM STATUS & CONTROLS", { exact: true });
-  await expect(controlsHeading).toBeVisible();
-  await expect(page.getByText("Camera Connection", { exact: true })).toBeVisible();
-  await expect(page.getByText("IP Address", { exact: true })).toBeVisible();
-  await expect(page.getByText("Profile pending", { exact: false })).toHaveCount(0);
-  await expect(page.getByText("FPS adaptive", { exact: false })).toHaveCount(0);
-  await expect(page.getByText("Frame Telemetry Idle", { exact: false })).toHaveCount(0);
-  await expect(page.getByText("ML Service Ready", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Service", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live Metrics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /system status|camera connection/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start Camera", exact: true })).toBeVisible();
 
-  const cameraWorkspace = page.locator("[data-camera-sidebar]");
-  const cameraPanel = page.locator("#configured-cameras-panel");
-  const selectedCamera = cameraPanel.locator("button[aria-pressed='true']");
-  const selectedCameraTop = (await selectedCamera.boundingBox())?.y ?? 0;
+  const selectedCamera = page.getByRole("button", { name: /Entrance/, pressed: true });
   await selectedCamera.hover();
   await expect(selectedCamera).toHaveCSS("transform", "none");
-  expect((await selectedCamera.boundingBox())?.y ?? 0).toBeCloseTo(selectedCameraTop, 0);
-  const collapseControl = page.getByRole("button", { name: "Collapse configured cameras" });
-  const expandedPanelBox = await cameraPanel.boundingBox();
-  const expandedControlBox = await collapseControl.boundingBox();
-  expect(expandedControlBox && expandedPanelBox).toBeTruthy();
-  expect((expandedControlBox?.x ?? 0) + (expandedControlBox?.width ?? 0) / 2).toBeCloseTo((expandedPanelBox?.x ?? 0) + (expandedPanelBox?.width ?? 0), 0);
-  expect((expandedControlBox?.y ?? 0) + (expandedControlBox?.height ?? 0) / 2).toBeCloseTo((expandedPanelBox?.y ?? 0) + (expandedPanelBox?.height ?? 0) / 2, 0);
-  const previewWorkspace = cameraWorkspace.locator(":scope > div").nth(1);
-  const expandedPreviewWidth = (await previewWorkspace.boundingBox())?.width ?? 0;
-  await collapseControl.click();
-  await expect(cameraWorkspace).toHaveAttribute("data-camera-sidebar", "collapsed");
-  await expect(page.getByRole("button", { name: "Expand configured cameras" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toHaveCount(0);
-  await expect.poll(async () => (await previewWorkspace.boundingBox())?.width ?? 0).toBeGreaterThan(expandedPreviewWidth + 100);
-  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
-  const expandControl = page.getByRole("button", { name: "Expand configured cameras" });
-  const collapsedPanelBox = await cameraPanel.boundingBox();
-  const collapsedControlBox = await expandControl.boundingBox();
-  expect((collapsedControlBox?.y ?? 0) + (collapsedControlBox?.height ?? 0) / 2).toBeCloseTo((collapsedPanelBox?.y ?? 0) + (collapsedPanelBox?.height ?? 0) / 2, 0);
-  await expandControl.click();
-  await expect(cameraWorkspace).toHaveAttribute("data-camera-sidebar", "expanded");
-  await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
   expect(Number.parseFloat(await addCamera.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThan(12);
 
   await page.evaluate(async (enterpriseId) => {
@@ -884,8 +759,9 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await page.setViewportSize({ width: 800, height: 500 });
   await expect(page.getByRole("heading", { name: "Camera Monitoring" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
-  await page.getByText("SYSTEM STATUS & CONTROLS", { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
+  const narrowMetrics = page.getByRole("heading", { name: "Live Metrics" });
+  await narrowMetrics.scrollIntoViewIfNeeded();
+  await expect(narrowMetrics).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
@@ -909,7 +785,7 @@ test("keeps pending business-email information readable in both themes", async (
   await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", await token(page, "--theme-secondary"));
   await expect(page.getByRole("button", { name: "Cancel request" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", darkTitle);
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });
@@ -999,7 +875,7 @@ test("sets up Tapo, Tenda and custom RTSP cameras from the IP address alone", as
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
   await expect.poll(() => writes.at(-1)?.cameras[1]).toMatchObject({ cameraHost: "192.168.1.25", rtsp: "rtsp://192.168.1.25:8554/profile1" });
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   await choose("Camera brand / type", "Tenda");
   await page.getByLabel("Camera Name", { exact: false }).fill("Small window camera");

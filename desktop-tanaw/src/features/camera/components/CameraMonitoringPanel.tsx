@@ -1,16 +1,13 @@
-import { Activity, AlertTriangle, CheckCircle, CircleAlert, LogIn, LogOut, Play, RefreshCw, Square, Users, Wifi } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle, CircleAlert, RefreshCw, Wifi } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
-import type { MlAreaState, MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
+import type { MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
 import type { CameraPreviewState } from "./CameraVideoPreview";
-import { Badge } from "../../../design-system";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
-  runtimeReady?: boolean;
-  area?: MlAreaState | null;
   counts: MlCounts;
   health: MlHealth | null;
   serviceStatus: MlServiceStatus | null;
@@ -18,19 +15,14 @@ type CameraMonitoringPanelProps = {
   error: string | null;
   isRestartingService: boolean;
   isStarting: boolean;
-  isStopping: boolean;
   isTesting: boolean;
   previewState: CameraPreviewState;
   onRestartService: () => void;
-  onStartProcessing: () => void;
-  onStopProcessing: () => void;
   onTestConnection: () => void;
 };
 
 export function CameraMonitoringPanel({
   activeCam,
-  runtimeReady = true,
-  area,
   counts,
   health,
   serviceStatus,
@@ -38,12 +30,9 @@ export function CameraMonitoringPanel({
   error,
   isRestartingService,
   isStarting,
-  isStopping,
   isTesting,
   previewState,
   onRestartService,
-  onStartProcessing,
-  onStopProcessing,
   onTestConnection,
 }: CameraMonitoringPanelProps) {
   const isProcessingThisCamera = counts.running;
@@ -62,18 +51,8 @@ export function CameraMonitoringPanel({
       : counts.running && previewState !== "live"
         ? "Restoring Live Preview"
         : "Stream Needs Check";
-  const estimatedUniqueCount = runtimeReady ? (health?.estimated_unique_count ?? health?.confirmed_unique_count ?? "—") : "—";
-  const pendingUniqueEntries = health?.pending_unique_entries ?? 0;
   const modelStatus = formatModelStatus(health);
   const hasActiveModel = Boolean(health?.model_ready && (health.selected_model || health.model_name));
-  const isProcessRunning = counts.running && !isStarting;
-  const ProcessIcon = isProcessRunning ? Square : Play;
-  const processButtonLabel = isProcessRunning ? (isStopping ? "Stopping..." : "Stop") : isStarting ? "Starting..." : "Start";
-  const processButtonDisabled = isProcessRunning ? isStopping : isStarting;
-  const processButtonClassName = isProcessRunning
-    ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
-    : "bg-tanaw-ledger text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
-  const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
   const serviceIssue = serviceIssueSource ? getUserFacingIssueMessage(serviceIssueSource) : null;
   const serviceNeedsRecovery = Boolean(!serviceOnline && (serviceStatus?.error || serviceError));
   const cameraIssueSource = error ?? health?.error ?? counts.error;
@@ -81,200 +60,83 @@ export function CameraMonitoringPanel({
   const fallbackIssue = health?.fallback_reason ? "AI fallback mode is active. Visitor counts may be less accurate." : null;
 
   return (
-    <div className="space-y-3">
-      <section className="camera-live-metrics rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Live Metrics</h4>
-          <Badge size="sm" tone={counts.running ? "success" : "neutral"} dot={counts.running ? "pulse" : false}>
-            {counts.status}
-          </Badge>
-        </div>
-        {activeCam.analysisMode === "open_space" ? (
-          <div className="space-y-3">
-            <div className="grid auto-rows-fr grid-cols-2 gap-2">
-              <MetricBox
-                icon={Users}
-                label="Live Occupancy"
-                value={area?.available ? (area.presence ?? "—") : "—"}
-                detail="Observed now in this zone"
-                tone="entry"
-                tooltip="People currently observed inside this camera's monitored zone. This is a live count, not a total of unique visitors."
-              />
-              <MetricBox
-                icon={Users}
-                label="Unique Visitors"
-                value={area?.unique_visitors_available ? (area.unique_visitors ?? "—") : "—"}
-                tone="unique"
-                detail={area?.unique_visitors_available ? "Estimated · today in this zone" : "Identification unavailable"}
-                tooltip="Estimated distinct visitors observed today in this camera zone, using appearance-based re-identification. Repeat matches count once, and uncertain identities are excluded. Requires an active visitor identification model."
-              />
-            </div>
-            <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-600 dark:bg-white/4 dark:text-slate-300">
-              <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${area?.available ? "bg-emerald-500" : "bg-amber-500"}`} />
-              <span className="min-w-0 truncate">{area?.available ? area.zone_name || activeCam.openSpace?.zone_name || "Monitored area" : "Live observations unavailable"}</span>
-            </div>
-            {!activeCam.openSpace ? (
-              <p className="text-xs text-amber-700 dark:text-amber-200">Zone setup required. Start the preview, edit the configuration, and draw your monitored area.</p>
-            ) : (
-              <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">Zone occupancy and count history are available in Enterprise Analytics.</p>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="grid auto-rows-fr grid-cols-2 gap-2">
-              <MetricBox icon={LogIn} label="Entry" value={runtimeReady ? (counts.entry ?? "—") : "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
-              <MetricBox icon={LogOut} label="Exit" value={runtimeReady ? (counts.exit ?? "—") : "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
-              <MetricBox
-                icon={Users}
-                label="Establishment Occupancy"
-                value={runtimeReady ? (counts.occupancy ?? "—") : "—"}
-                tone="occupancy"
-                tooltip="People inside, counted across all Entry / Exit cameras. The Dashboard also adds people in Open Space areas."
-              />
-              <MetricBox
-                icon={Users}
-                label="Estimated Visitors"
-                value={estimatedUniqueCount}
-                tone="unique"
-                tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded until TANAW gets stronger evidence."
-              />
-            </div>
-            {pendingUniqueEntries > 0 ? (
-              <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/8 dark:text-amber-200">
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                <span>
-                  {pendingUniqueEntries} provisional {pendingUniqueEntries === 1 ? "identity is" : "identities are"} excluded from the visitor estimate pending a stronger match.
-                </span>
-              </div>
-            ) : null}
-          </>
-        )}
-      </section>
-
-      <section className="camera-system-status rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
-        <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
-        <div className="space-y-2">
+    <section className="camera-system-status rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
+      <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
+      <div className="space-y-2">
+        <StatusRow
+          icon={Activity}
+          issue={serviceIssue ? { message: serviceIssue, tone: "error" } : null}
+          label={serviceLabel}
+          tone={serviceOnline ? "ok" : "error"}
+          tooltip="Shows whether the local AI counting service is available."
+        />
+        <StatusRow
+          icon={Wifi}
+          issue={cameraIssue ? { message: `${activeCam.name} unavailable: ${cameraIssue}`, tone: "error" } : null}
+          label={cameraState.label}
+          tone={cameraState.tone}
+          tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable."
+        />
+        <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
+        {hasActiveModel ? (
           <StatusRow
             icon={Activity}
-            issue={serviceIssue ? { message: serviceIssue, tone: "error" } : null}
-            label={serviceLabel}
-            tone={serviceOnline ? "ok" : "error"}
-            tooltip="Shows whether the local AI counting service is available."
+            issue={fallbackIssue ? { message: fallbackIssue, tone: "warning" } : null}
+            label={modelStatus}
+            tone="ok"
+            tooltip="Shows the active detector model, runtime, and tracker selected by TANAW."
           />
-          <StatusRow
-            icon={Wifi}
-            issue={cameraIssue ? { message: `${activeCam.name} unavailable: ${cameraIssue}`, tone: "error" } : null}
-            label={cameraState.label}
-            tone={cameraState.tone}
-            tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable."
-          />
-          <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
-          {hasActiveModel ? (
-            <StatusRow
-              icon={Activity}
-              issue={fallbackIssue ? { message: fallbackIssue, tone: "warning" } : null}
-              label={modelStatus}
-              tone="ok"
-              tooltip="Shows the active detector model, runtime, and tracker selected by TANAW."
-            />
-          ) : null}
-        </div>
-        <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400 dark:text-slate-500">
-          Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
-          {health?.api_contract_version ?? "unknown"}
-        </p>
-        <p className="truncate text-[9px] font-medium text-gray-400 dark:text-slate-500" title={serviceStatus?.desktopBuild}>
-          Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
-        </p>
+        ) : null}
+      </div>
+      <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400 dark:text-slate-500">
+        Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
+        {health?.api_contract_version ?? "unknown"}
+      </p>
+      <p className="truncate text-[9px] font-medium text-gray-400 dark:text-slate-500" title={serviceStatus?.desktopBuild}>
+        Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
+      </p>
 
-        <div className="mt-3 space-y-2">
-          <motion.div
-            className="grid"
-            initial={false}
-            animate={{
-              columnGap: serviceNeedsRecovery ? 8 : 0,
-              gridTemplateColumns: serviceNeedsRecovery ? "minmax(0, 1fr) minmax(0, 1fr)" : "0fr minmax(0, 1fr)",
-            }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-          >
-            <div className="min-w-0 overflow-hidden">
-              <AnimatePresence initial={false}>
-                {serviceNeedsRecovery ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.14 }}>
-                    <InfoTooltip content="Restarts the local ML service after a service failure." focusable={false}>
-                      <button
-                        type="button"
-                        onClick={onRestartService}
-                        disabled={isRestartingService}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/3 dark:text-slate-300 dark:hover:bg-white/6"
-                      >
-                        <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
-                      </button>
-                    </InfoTooltip>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
-            <InfoTooltip content="Tests the selected camera stream configuration." focusable={false}>
-              <button
-                type="button"
-                onClick={onTestConnection}
-                disabled={isTesting || isProcessingThisCamera}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-tanaw-ledger/30 bg-white px-2 py-2.5 text-[11px] font-bold text-tanaw-ledger transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
-              >
-                <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
-              </button>
-            </InfoTooltip>
-          </motion.div>
-          <InfoTooltip content={processButtonTooltip} focusable={false}>
+      <div className="mt-3 space-y-2">
+        <motion.div
+          className="grid"
+          initial={false}
+          animate={{
+            columnGap: serviceNeedsRecovery ? 8 : 0,
+            gridTemplateColumns: serviceNeedsRecovery ? "minmax(0, 1fr) minmax(0, 1fr)" : "0fr minmax(0, 1fr)",
+          }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          <div className="min-w-0 overflow-hidden">
+            <AnimatePresence initial={false}>
+              {serviceNeedsRecovery ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.14 }}>
+                  <InfoTooltip content="Restarts the local ML service after a service failure." focusable={false}>
+                    <button
+                      type="button"
+                      onClick={onRestartService}
+                      disabled={isRestartingService}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/3 dark:text-slate-300 dark:hover:bg-white/6"
+                    >
+                      <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
+                    </button>
+                  </InfoTooltip>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+          <InfoTooltip content="Tests the selected camera stream configuration." focusable={false}>
             <button
               type="button"
-              data-camera-process-control
-              onClick={isProcessRunning ? onStopProcessing : onStartProcessing}
-              disabled={processButtonDisabled}
-              aria-pressed={isProcessRunning}
-              className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold transition-colors disabled:cursor-not-allowed ${processButtonClassName}`}
+              onClick={onTestConnection}
+              disabled={isTesting || isProcessingThisCamera}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-tanaw-ledger/30 bg-white px-2 py-2.5 text-[11px] font-bold text-tanaw-ledger transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
             >
-              <ProcessIcon size={14} /> {processButtonLabel}
+              <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
             </button>
           </InfoTooltip>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-type MetricBoxProps = {
-  detail?: string;
-  icon: typeof LogIn;
-  label: string;
-  tone: "entry" | "exit" | "occupancy" | "unique";
-  tooltip: string;
-  value: number | string;
-};
-
-function MetricBox({ icon: Icon, label, tone, tooltip, value, detail }: MetricBoxProps) {
-  const toneClass = {
-    entry: "border-emerald-200 bg-emerald-50 text-tanaw-ledger dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-300",
-    exit: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/25 dark:bg-red-400/12 dark:text-red-200",
-    occupancy: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/12 dark:text-blue-200",
-    unique: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-200",
-  }[tone];
-
-  return (
-    <InfoTooltip content={tooltip} className="h-full" focusable={false}>
-      <div
-        data-tone={tone}
-        className={`camera-metric flex h-full min-h-22 flex-col rounded-xl border p-3 transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md group-focus:-translate-y-0.5 ${toneClass}`}
-      >
-        <div className="flex min-h-7 items-start justify-between gap-2">
-          <span className="camera-metric-title text-[9px] leading-tight font-bold tracking-wider uppercase">{label}</span>
-          <Icon size={13} className="shrink-0" />
-        </div>
-        <div className="camera-metric-value mt-auto pt-1.5 font-['Bai_Jamjuree'] text-2xl leading-none font-bold">{value}</div>
-        {detail && <p className="camera-metric-detail mt-2 min-h-6 text-[9px] leading-tight">{detail}</p>}
+        </motion.div>
       </div>
-    </InfoTooltip>
+    </section>
   );
 }
 

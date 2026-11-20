@@ -40,8 +40,16 @@ test("applies and reloads enterprise display preferences", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Display Preferences" })).toBeVisible();
   await page.getByRole("radio", { name: /Large Makes text easier/ }).check({ force: true });
   await page.getByRole("radio", { name: /Compact Reduces workspace/ }).check({ force: true });
-  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+  await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Display preferences saved." })).toHaveCount(1);
   expect(readPreferences()).toMatchObject({ textSize: "large", interfaceScale: "compact" });
+  await page.route("**/auth/preferences", (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    return route.fulfill({ status: 503, json: { detail: "Save unavailable" } });
+  }, { times: 1 });
+  await page.getByRole("radio", { name: /Comfortable Adds room/ }).check({ force: true });
+  await expect(page.locator(".tanaw-toast--error")).toContainText("Display preferences could not be saved.");
+  await expect(page.locator(".tanaw-toast--success")).toHaveCount(0);
   await page.reload();
   await expect(page.locator("html")).toHaveCSS("font-size", "18px");
   await expect(page.locator("html")).toHaveAttribute("data-interface-scale", "compact");

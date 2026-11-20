@@ -1,4 +1,4 @@
-﻿import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -207,8 +207,15 @@ async function rejectedIpc(page: Page) {
 async function exerciseUi(page: Page) {
   for (const destination of ["Reports", "Camera Setup", "Dashboard", "Camera Setup"]) {
     await page.getByRole("button", { name: destination, exact: true }).click();
-    await page.getByRole("button", { name: /Switch to (light|dark) mode/ }).click();
+    await page.getByRole("button", { name: "Open account menu" }).click();
+    await page.getByRole("button", { name: "General Settings" }).click();
+    await page.getByRole("button", { name: "Appearance" }).click();
+    const dark = await page.getByRole("radio", { name: "Dark Mode" }).getAttribute("aria-checked") === "true";
+    const target = page.getByRole("radio", { name: dark ? "Light Mode" : "Dark Mode" });
+    await target.click();
+    await expect(target).toBeChecked();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
+    await page.getByRole("button", { name: "Back from General Settings" }).click();
   }
   await page.getByRole("button", { name: "Add Camera", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Camera Information", exact: true })).toBeVisible();

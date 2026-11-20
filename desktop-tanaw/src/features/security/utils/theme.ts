@@ -32,6 +32,10 @@ export const getResolvedThemeSnapshot = (): ResolvedTheme => {
   if (typeof document === "undefined") return "light";
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 };
+export const getThemePreferenceSnapshot = (): ThemePreference => {
+  const applied = typeof document === "undefined" ? null : document.documentElement.dataset.enterpriseTheme ?? null;
+  return isThemePreference(applied) ? applied : getInitialThemePreference();
+};
 export const subscribeToTheme = (listener: () => void) => {
   listeners.add(listener);
   return () => {

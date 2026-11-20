@@ -128,6 +128,42 @@ async def test_realtime_websocket_disconnects_when_session_is_invalidated(
 
 
 @pytest.mark.asyncio
+async def test_realtime_websocket_exits_when_closed_before_receiving(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    websocket = WebSocket(
+        {"type": "websocket"},
+        receive=AsyncMock(return_value={"type": "websocket.connect"}),
+        send=AsyncMock(),
+    )
+    await websocket.accept()
+
+    async def close_during_ready(socket: WebSocket, _: dict) -> bool:
+        await socket.close(code=1001)
+        return True
+
+    manager = SimpleNamespace(
+        connect=AsyncMock(),
+        disconnect=AsyncMock(),
+        send_protocol=AsyncMock(side_effect=close_during_ready),
+    )
+    monkeypatch.setattr(
+        realtime_router, "receive_websocket_bearer_token", AsyncMock(return_value="access-token")
+    )
+    monkeypatch.setattr(
+        realtime_router,
+        "authenticate_websocket_account",
+        AsyncMock(return_value=active_it_account()),
+    )
+    monkeypatch.setattr(realtime_router, "AsyncSessionLocal", AsyncSessionContext)
+    monkeypatch.setattr(realtime_router, "realtime_manager", manager)
+
+    await realtime_router.realtime_websocket(websocket)
+
+    manager.disconnect.assert_awaited_once_with(websocket, reason="client_disconnected")
+
+
+@pytest.mark.asyncio
 async def test_realtime_authentication_rejects_pending_inactive_and_revoked_accounts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
