@@ -1,34 +1,11 @@
+import type { ApiSchemas } from "@/contracts/api";
 import { queryKeys } from "@/shared/constants/queryKeys";
 import { apiClient } from "@/shared/lib/apiClient";
 import type { AccountSummary, ProfileChangeRequestType } from "@/shared/types";
 import type { EnterpriseLocationSuggestion } from "../types";
 
-export type CreateEnterpriseAccountPayload = {
-  enterpriseName: string;
-  category: string;
-  managerName: string;
-  email: string;
-  contactNumber?: string;
-  barangay: string;
-  address: string;
-  enterpriseId?: string;
-  latitude: number;
-  longitude: number;
-  buildingCapacity: number;
-};
-
-export type UpdateEnterpriseAccountPayload = {
-  enterpriseName: string;
-  category: string;
-  managerName: string;
-  email: string;
-  contactNumber?: string;
-  barangay: string;
-  address: string;
-  buildingCapacity: number;
-  latitude?: number;
-  longitude?: number;
-};
+export type CreateEnterpriseAccountPayload = ApiSchemas["EnterpriseAccountCreate"];
+export type UpdateEnterpriseAccountPayload = ApiSchemas["EnterpriseAccountUpdate"];
 
 export const enterpriseAccountsQueryKey = queryKeys.enterpriseAccounts;
 

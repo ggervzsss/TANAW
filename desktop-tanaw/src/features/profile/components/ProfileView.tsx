@@ -200,12 +200,21 @@ export function ProfileView() {
             </SettingsGroup>
             <SettingsGroup title="Enterprise registration">
               <div className="mb-2">
-                <SettingsReadOnly>Contact the LGU Administrator to update registration details.</SettingsReadOnly>
+                <SettingsReadOnly>Contact IT personnel to update registration and attraction classification.</SettingsReadOnly>
               </div>
               <dl className="tanaw-settings-fields rounded-tanaw-sm bg-(--tanaw-surface-inset) p-3">
                 <ReadOnlyIdentityField label="Enterprise ID" value={user?.enterpriseId ?? "Not assigned"} />
                 <ReadOnlyIdentityField label="Registered Address" value={user?.address ?? "Not provided"} />
-                <ReadOnlyIdentityField label="LGU Affiliation" value={[user?.category ?? "Registered Enterprise", user?.barangay ? "Barangay " + user.barangay : "San Pedro City"].join(" - ")} />
+                <ReadOnlyIdentityField label="LGU Affiliation" value={user?.barangay ? `Barangay ${user.barangay}` : "San Pedro City"} />
+                {user?.attraction && (
+                  <>
+                    <ReadOnlyIdentityField label="DOT Attraction Category" value={`${user.attraction.code} · ${user.attraction.category}`} />
+                    {user.attractionDescription && <ReadOnlyIdentityField label="Attraction Description" value={user.attractionDescription} />}
+                    <ReadOnlyIdentityField label="Attraction Type" value={`${user.attraction.typeCode} · ${user.attraction.type}`} />
+                    <ReadOnlyIdentityField label="NTDP Portfolio" value={user.attraction.portfolioCategory} />
+                    <ReadOnlyIdentityField label="NTDP Code" value={user.attraction.ntdpCode} />
+                  </>
+                )}
               </dl>
             </SettingsGroup>
           </div>

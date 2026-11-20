@@ -51,7 +51,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
     expected_enterprises = (
         (
             "Balon ni Lolo Uweng",
-            "tourism",
+            "901",
             "Ma Regine Javier",
             "Landayan",
             "Barangay Landayan, San Pedro, Laguna 4023",
@@ -62,7 +62,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
         ),
         (
             "San Pedro Apostol Parish",
-            "tourism",
+            "202",
             "Irish May Arabaca",
             "Nueva",
             "Barangay Nueva, San Pedro, Laguna 4023",
@@ -73,7 +73,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
         ),
         (
             "Lolo Uweng Pilgrim Church",
-            "tourism",
+            "202",
             "David Kristian Vallejera",
             "Landayan",
             "Barangay Landayan, San Pedro, Laguna 4023",
@@ -84,7 +84,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
         ),
         (
             "Tricia's Bar & Lounge",
-            "business",
+            "901",
             "Kenneth Delicano",
             "Nueva",
             "Barangay Nueva, San Pedro, Laguna 4023",
@@ -95,7 +95,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
         ),
         (
             "Hallow Ridge Filipinas Golf Inc.",
-            "tourism",
+            "401",
             "Sebastien Bercasio",
             "San Antonio",
             "Barangay San Antonio, San Pedro, Laguna 4023",
@@ -110,7 +110,7 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
         tuple(
             (
                 enterprise.name,
-                enterprise.category,
+                enterprise.attraction_code,
                 enterprise.manager,
                 enterprise.barangay,
                 enterprise.address,
@@ -133,7 +133,7 @@ def test_generated_account_content_has_no_mock_label() -> None:
         values.extend(
             [
                 enterprise.name,
-                enterprise.category,
+                enterprise.attraction_code,
                 enterprise.manager,
                 enterprise.barangay,
                 enterprise.address,
@@ -473,7 +473,7 @@ def _enterprise_account(account_id: str, name: str) -> Account:
         account_id=account_id,
         enterprise_id=f"ENT-{account_id}",
         enterprise_name=name,
-        category="business",
+        attraction_code="411",
         manager_name="Test Manager",
         barangay="Nueva",
         building_capacity=250,
@@ -487,7 +487,7 @@ def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmissio
         report_id=report_id,
         enterprise_profile_id="enterprise-account",
         enterprise_name="Test Enterprise",
-        category="Tourism",
+        attraction_code="411",
         barangay="Nueva",
         period=f"{submitted_at:%b} 1 - {submitted_at:%b} 31, {submitted_at.year}",
         month=submitted_at.strftime("%B"),

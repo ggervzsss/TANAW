@@ -31,7 +31,7 @@ const finalReport = {
   totalExit: 571,
   totalUnique: 377,
   enterpriseCount: 1,
-  sources: [{ id: "source-1", enterprise: "Archie's Event Place", code: "SAMPLE-REP-2605-01", unique: 377, entry: 598, exit: 571 }],
+  sources: [{ id: "source-1", enterpriseProfileId: "archie", attractionCode: "799", enterprise: "Archie's Event Place", code: "SAMPLE-REP-2605-01", unique: 377, entry: 598, exit: 571 }],
 };
 
 const archivedReport = {
@@ -40,7 +40,7 @@ const archivedReport = {
   period: "June 2025",
   generatedOn: "June 30, 2025",
   status: "Archived",
-  sources: [{ ...finalReport.sources[0], enterprise: "Riverside Museum" }],
+  sources: [{ ...finalReport.sources[0], enterpriseProfileId: "museum", attractionCode: "205", enterprise: "Riverside Museum" }],
 };
 
 async function signInAsStaff(page: Page) {
@@ -147,7 +147,7 @@ test("compiles the finalized months into the annual VAR 3M", async ({ page }, te
   await page.getByRole("button", { name: "View annual report" }).click();
 
   const var3 = page.getByRole("table", { name: "VAR 3M LGU Annual Report 2026" });
-  await expect(var3.getByRole("columnheader", { name: "Archie's Event Place" })).toBeVisible();
+  await expect(var3.getByRole("columnheader", { name: "Archie's Event Place - 799" })).toBeVisible();
   await expect(var3.getByRole("rowheader", { name: "May" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
   await expect(var3.getByRole("row", { name: /^May/ })).toContainText("377");
   await expect(page.getByText("1 of 12 months finalized", { exact: true })).toBeVisible();

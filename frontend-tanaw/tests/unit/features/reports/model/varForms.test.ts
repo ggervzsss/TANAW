@@ -17,7 +17,7 @@ const allocated = {
 };
 
 function finalReport(id: string, period: string, status: FinalReport["status"], sources: Partial<FinalReportSource>[]): FinalReport {
-  const full = sources.map((source, index) => ({ id: `${id}-${index}`, enterprise: "Unnamed", code: `REP-${index}`, unique: 0, entry: null, exit: null, ...source }));
+  const full = sources.map((source, index) => ({ id: `${id}-${index}`, enterpriseProfileId: source.enterprise ?? "unnamed", attractionCode: "411", enterprise: "Unnamed", code: `REP-${index}`, unique: 0, entry: null, exit: null, ...source }));
   return {
     id,
     title: "Citywide Tourism Aggregation",
@@ -54,18 +54,40 @@ describe("VAR 2M", () => {
 
   it("totals the month like the template's SUM, and explains blank cells", () => {
     const form = buildVar2m("May 2026", [
-      { id: "a", name: "Plaza", unique: 100, demographics: allocated },
-      { id: "b", name: "Museum", unique: 40, demographics: undefined },
+      { id: "a", name: "Plaza", attractionCode: "411", unique: 100, demographics: allocated },
+      { id: "b", name: "Museum", attractionCode: "205", unique: 40, demographics: undefined },
     ]);
     expect(form.totals[0]).toBe(20);
     expect(form.totals[14]).toBe(140);
-    expect(form.rows.map((row) => row.code)).toEqual(["", ""]);
+    expect(form.rows.map((row) => row.code)).toEqual(["411", "205"]);
     expect(form.notes).toEqual(["Sex and residence were not recorded for Museum; only the grand total is shown."]);
     expect(sumCells([null, null])).toBeNull();
   });
 });
 
 describe("VAR 3M", () => {
+  it("uses the establishment identity and saved code to keep same-name or reclassified sites distinct", () => {
+    const reports = [
+      finalReport("may", "May 2026", "Finalized", [
+        { enterpriseProfileId: "one", enterprise: "Riverside", attractionCode: "411", unique: 10 },
+        { enterpriseProfileId: "two", enterprise: "Riverside", attractionCode: "411", unique: 20 },
+      ]),
+      finalReport("june", "June 2026", "Finalized", [
+        { enterpriseProfileId: "one", enterprise: "Riverside Museum", attractionCode: "205", unique: 30 },
+        { enterpriseProfileId: "two", enterprise: "Riverside Park", attractionCode: "411", unique: 40 },
+      ]),
+    ];
+
+    const form = buildVar3(reports, 2026);
+    expect(form.attractions).toEqual([
+      { key: "one:411", name: "Riverside", code: "411" },
+      { key: "one:205", name: "Riverside Museum", code: "205" },
+      { key: "two:411", name: "Riverside Park", code: "411" },
+    ]);
+    expect(form.totals.map((cells) => cells[2])).toEqual([10, 30, 60]);
+    expect(form.grand[2]).toBe(100);
+  });
+
   it("counts every Philippine residence as domestic", () => {
     expect(var3Cells(100, allocated)).toEqual([88, 12, 100]);
     expect(var3Cells(100, null)).toEqual([null, null, 100]);

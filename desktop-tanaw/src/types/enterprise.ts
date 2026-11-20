@@ -39,6 +39,7 @@ export type AuditEntry = {
 
 export type ReportRecord = {
   id: string;
+  attractionType?: string;
   date: string;
   status: string;
   entries: number | null;

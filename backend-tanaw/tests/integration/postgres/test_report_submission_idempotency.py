@@ -152,7 +152,7 @@ async def _create_accounts(runtime: PostgresRuntime, *, label: str) -> tuple[Cre
         enterprise_profile=EnterpriseProfile(
             enterprise_id=f"idempotency-enterprise-{label}-{suffix}",
             enterprise_name=f"Idempotency Enterprise {label}",
-            category="business",
+            attraction_code="411",
             manager_name=f"Manager {label}",
             barangay="Poblacion",
         ),

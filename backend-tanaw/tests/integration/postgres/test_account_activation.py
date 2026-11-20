@@ -137,7 +137,7 @@ async def _create_pending_account(
                 EnterpriseProfile(
                     enterprise_id=f"activation_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
                     enterprise_name=f"Activation Test {label} Enterprise",
-                    category="business",
+                    attraction_code="411",
                     manager_name="Activation Test",
                     barangay="Poblacion",
                 )

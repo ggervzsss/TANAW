@@ -2,7 +2,6 @@ import { type Dispatch, type SetStateAction } from "react";
 import { CalendarDays, Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { useAuthStore } from "../../login/stores/auth-store";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { VisitorDetails } from "./VisitorDetails";
@@ -15,6 +14,7 @@ import { CountingDetails } from "./CountingDetails";
 
 type Props = {
   enterpriseName: string;
+  attractionType?: string;
   reviewed?: boolean;
   activeReport: ReportRecord | null;
   activeReportId: string | null;
@@ -37,6 +37,7 @@ type Props = {
 
 export function ReportDraftPanel({
   enterpriseName,
+  attractionType,
   reviewed = false,
   activeReport,
   activeReportId,
@@ -56,7 +57,6 @@ export function ReportDraftPanel({
   setOrigins,
   setNotes,
 }: Props) {
-  const category = useAuthStore((state) => state.user?.category);
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
@@ -93,7 +93,7 @@ export function ReportDraftPanel({
               <dt>Tourism Attraction</dt>
               <dd>
                 <Landmark aria-hidden="true" />
-                <span>{category || "Not recorded"}</span>
+                <span>{attractionType ?? "Not recorded"}</span>
               </dd>
             </div>
           </dl>

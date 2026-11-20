@@ -1,4 +1,4 @@
-import type { FinalReport, IntakeReport } from "@/shared/types";
+import type { FinalReport, FinalReportSource, IntakeReport } from "@/shared/types";
 
 /**
  * The DOT Tourism Attraction Visitor Record templates the LGU reports with.
@@ -92,10 +92,10 @@ export function var2mCells(unique: number, demographics: DemographicInput): VarC
 export type Var2mRow = { id: string; name: string; code: string; cells: VarCell[] };
 export type Var2mForm = { period: string; municipality: string; rows: Var2mRow[]; totals: VarCell[]; notes: string[] };
 
-type Var2mSource = { id: string; name: string; unique: number; demographics: DemographicInput };
+type Var2mSource = { id: string; name: string; attractionCode: string; unique: number; demographics: DemographicInput };
 
 export function buildVar2m(period: string, sources: readonly Var2mSource[]): Var2mForm {
-  const rows = sources.map((source) => ({ id: source.id, name: source.name, code: "", cells: var2mCells(source.unique, source.demographics) }));
+  const rows = sources.map((source) => ({ id: source.id, name: source.name, code: source.attractionCode, cells: var2mCells(source.unique, source.demographics) }));
   const unrecorded = sources.filter((source) => !recordedDemographics(source.unique, source.demographics)).map((source) => source.name);
   const withoutCity = sources.filter((source) => recordedDemographics(source.unique, source.demographics)?.city === null).map((source) => source.name);
   const notes = [
@@ -115,13 +115,15 @@ export function buildVar2m(period: string, sources: readonly Var2mSource[]): Var
 }
 
 export function var2mFromIntakeReport(report: IntakeReport): Var2mForm {
-  return buildVar2m(report.period, [{ id: report.id, name: report.enterprise, unique: report.metrics.unique, demographics: report.demographics ?? report.payload?.demo }]);
+  return buildVar2m(report.period, [
+    { id: report.id, name: report.enterprise, attractionCode: report.attraction.code, unique: report.metrics.unique, demographics: report.demographics ?? report.payload?.demo },
+  ]);
 }
 
 export function var2mFromFinalReport(report: Pick<FinalReport, "period" | "sources">): Var2mForm {
   return buildVar2m(
     report.period,
-    report.sources.map((source) => ({ id: source.id, name: source.enterprise, unique: source.unique, demographics: source.demographics })),
+    report.sources.map((source) => ({ id: source.id, name: source.enterprise, attractionCode: source.attractionCode, unique: source.unique, demographics: source.demographics })),
   );
 }
 
@@ -165,16 +167,24 @@ export function var3Years(reports: readonly FinalReport[]) {
 
 /**
  * VAR 3 for one year from the finalized monthly reports. Archived, draft and returned reports
- * are left out. Attractions are matched by name until TANAW assigns attraction codes.
+ * are left out. Each establishment and its recorded attraction code form one column group.
  */
 export function buildVar3(reports: readonly FinalReport[], year: number): Var3Form {
   const finalized = reports.filter((report) => report.status === "Finalized" && periodParts(report.period)?.year === year);
-  const names = [...new Set(finalized.flatMap((report) => report.sources.map((source) => source.enterprise)))].sort((a, b) => a.localeCompare(b));
-  const attractions = names.map((name) => ({ key: name, name, code: "" }));
+  const reportsByMonth = MONTH_NAMES.map((_, index) => finalized.filter((report) => periodParts(report.period)?.index === index));
+  const attractionsByKey = new Map<string, Var3Attraction>();
+  // Keep the name used in the latest reporting month for each establishment/code pair.
+  for (const report of reportsByMonth.flat()) {
+    for (const source of report.sources) {
+      const key = attractionKey(source);
+      attractionsByKey.set(key, { key, name: source.enterprise, code: source.attractionCode });
+    }
+  }
+  const attractions = [...attractionsByKey.values()].sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
   const months: Var3Month[] = MONTH_NAMES.map((month, index) => {
-    const monthReports = finalized.filter((report) => periodParts(report.period)?.index === index);
+    const monthReports = reportsByMonth[index];
     const cells = attractions.map((attraction) => {
-      const sources = monthReports.flatMap((report) => report.sources.filter((source) => source.enterprise === attraction.key));
+      const sources = monthReports.flatMap((report) => report.sources.filter((source) => attractionKey(source) === attraction.key));
       const values = sources.map((source) => var3Cells(source.unique, source.demographics));
       return sumColumns(values, 3);
     });
@@ -206,6 +216,10 @@ export function buildVar3(reports: readonly FinalReport[], year: number): Var3Fo
     ),
     notes,
   };
+}
+
+function attractionKey(source: FinalReportSource) {
+  return `${source.enterpriseProfileId}:${source.attractionCode}`;
 }
 
 function listMonths(months: string[]) {

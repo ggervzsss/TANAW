@@ -65,12 +65,6 @@ def sample_submitted_at(
     return min(planned, latest)
 
 
-def category_label(value: str | None) -> str:
-    return {"events venue": "Events Venue", "tourism": "Tourism", "business": "Business"}.get(
-        value or "", "Uncategorized"
-    )
-
-
 def should_skip_target_report(
     month_start: datetime,
     current_month: datetime,

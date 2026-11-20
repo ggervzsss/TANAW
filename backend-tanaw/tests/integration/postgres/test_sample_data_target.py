@@ -30,7 +30,7 @@ def enterprise(seed: str, sequence: int = 1) -> Account:
         enterprise_profile=EnterpriseProfile(
             enterprise_id=f"{seed}_{sequence:03d}@tanaw.sanpedro",
             enterprise_name=f"Target selector {uuid4().hex}",
-            category="business",
+            attraction_code="411",
             manager_name="Test Manager",
             barangay="Nueva",
         ),

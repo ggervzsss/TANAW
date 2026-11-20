@@ -50,7 +50,7 @@ def _account(*, role: AccountRole) -> Account:
             account_id=account.id,
             enterprise_id="ENT-001",
             enterprise_name="Test Enterprise",
-            category="business",
+            attraction_code="411",
             manager_name="Test Manager",
             barangay="Poblacion",
         )

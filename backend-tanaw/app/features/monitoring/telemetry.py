@@ -5,9 +5,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.json_values import parse_json_object
+from app.features.accounts.attractions import attraction_category
 from app.features.accounts.enterprise import require_enterprise_profile
 from app.features.accounts.models import Account, AccountRole
-from app.features.accounts.options import format_enterprise_category
 from app.features.monitoring.models import EnterpriseTelemetrySnapshot
 from app.features.monitoring.schemas import (
     DesktopCameraMonitoringSummary,
@@ -129,7 +129,7 @@ def to_telemetry_summary(
         id=snapshot.id,
         enterpriseId=profile.enterprise_id,
         enterpriseName=profile.enterprise_name if account else snapshot.enterprise_name,
-        category=format_enterprise_category(profile.category),
+        category=attraction_category(profile.attraction_code, profile.attraction_description),
         barangay=profile.barangay,
         cameraId=snapshot.camera_id,
         cameraName=snapshot.camera_name,

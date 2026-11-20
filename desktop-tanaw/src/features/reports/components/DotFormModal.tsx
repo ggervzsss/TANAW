@@ -3,7 +3,6 @@ import { motion, useReducedMotion } from "motion/react";
 import { Download, FileText, Maximize, Printer, Ratio, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { DailyOrigins, DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
-import { useAuthStore } from "../../login/stores/auth-store";
 import { downloadDotReportPdf, type DotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1DataNotes, var1Days, var1MonthlyCells } from "../model/var1";
@@ -12,6 +11,7 @@ import { CountingDetails } from "./CountingDetails";
 
 type Props = {
   demo: DemoBreakdown;
+  attractionType?: string;
   enterpriseName: string;
   metrics: Metrics;
   notes: string;
@@ -23,9 +23,8 @@ type Props = {
 };
 const PAPER_WIDTH = REPORT_PAPER_WIDTH;
 
-export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, origins, notes, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, origins, notes, attractionType, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
   const reduceMotion = useReducedMotion();
-  const category = useAuthStore((state) => state.user?.category);
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const closeCallback = useRef(onClose);
@@ -36,7 +35,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, o
     if (reduceMotion) closeCallback.current();
     else setClosing(true);
   }, [reduceMotion]);
-  const report: DotReportPdf = { demo, origins, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType: category ?? undefined };
+  const report: DotReportPdf = { demo, origins, enterpriseName, metrics, notes, period: formatReportingPeriodLabel(period), reportId, attractionType };
 
   useEffect(() => {
     if (!closing) return;

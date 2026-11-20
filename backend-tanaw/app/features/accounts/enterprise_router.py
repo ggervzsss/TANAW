@@ -124,7 +124,8 @@ async def create_enterprise_account(
         title="Enterprise Account",
         enterprise_profile=EnterpriseProfile(
             enterprise_name=payload.enterpriseName,
-            category=payload.category,
+            attraction_code=payload.attractionCode,
+            attraction_description=payload.attractionDescription,
             manager_name=payload.managerName,
             barangay=payload.barangay,
             address=payload.address,
@@ -228,7 +229,8 @@ async def update_enterprise_account(
 
     profile.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
-    profile.category = payload.category
+    profile.attraction_code = payload.attractionCode
+    profile.attraction_description = payload.attractionDescription
     profile.manager_name = payload.managerName
     account.phone = payload.contactNumber
     profile.barangay = payload.barangay

@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 
+const parkClassification = { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" };
+
 test.describe.configure({ timeout: 60_000 });
 const fixtures = Object.fromEntries(
   ["open-space", "entrance-exit", "mixed", "corrected-open-space"].map((mode) => [
@@ -9,7 +11,7 @@ const fixtures = Object.fromEntries(
     JSON.parse(readFileSync(new URL(`../../../ml-service/tests/fixtures/reports/${mode}-establishment-report.json`, import.meta.url), "utf8")),
   ]),
 );
-const user = { id: "report-operator", email: "reports@example.test", role: "enterprise", name: "Park Operator", enterpriseId: "park-fixture", enterpriseName: "Park" };
+const user = { id: "report-operator", email: "reports@example.test", role: "enterprise", name: "Park Operator", enterpriseId: "park-fixture", enterpriseName: "Park", attraction: parkClassification };
 
 async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed", revision = false) {
   let signedIn = false;
@@ -61,7 +63,8 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
             id: "cloud-one",
             enterpriseId: user.enterpriseId,
             enterprise: "Park",
-            category: "Tourism",
+            category: "Parks",
+            attraction: parkClassification,
             barangay: "Poblacion",
             month: "October",
             period: frozen.period,
@@ -117,6 +120,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
       submissions.push(body);
       if (!localSaveAvailable) return reply({ detail: "Local save unavailable" }, 503);
       expect(body.expected_snapshot_version).toBe(counting.snapshot_version);
+      expect(body.payload.attractionCode).toBe("411");
       expect(body.metrics).toEqual(metrics);
       const reportPayload = { ...body.payload, counting, metrics: payloadMetrics };
       saved = { ...fixture, ...metrics, report_id: body.report_id, submission_id: body.request_id, notes: body.notes, payload: reportPayload, counting, synced_at: null };
@@ -199,6 +203,7 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await page.getByRole("tab", { name: "Reports History", exact: true }).click();
     await savedRow.getByRole("button", { name: /View/ }).click();
     const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
+    await expect(preview.getByText("411 - Parks", { exact: true })).toBeVisible();
     await preview.getByText("Report details and camera evidence", { exact: true }).click();
     await expect(preview.getByRole("region", { name: "Establishment counting basis" })).toContainText(mode === "open_space" ? "Not measured" : "4");
     const downloadEvent = page.waitForEvent("download");

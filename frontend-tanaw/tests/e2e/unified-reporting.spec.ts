@@ -9,7 +9,8 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
     id: "source-one",
     enterpriseId: "park-fixture",
     enterprise: "Park",
-    category: "Tourism",
+    category: "Parks",
+    attraction: { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" },
     barangay: "Poblacion",
     month: "October",
     period: saved.period,
@@ -33,7 +34,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
     totalEntry: null,
     totalExit: null,
     totalUnique: 2,
-    sources: [{ id: intake.id, enterprise: "Park", code: intake.code, unique: 2, entry: null, exit: null, demographics: intake.demographics, counting: saved.counting }],
+    sources: [{ id: intake.id, enterpriseProfileId: "park-profile", attractionCode: "411", enterprise: "Park", code: intake.code, unique: 2, entry: null, exit: null, demographics: intake.demographics, counting: saved.counting }],
   };
   let generated = false;
   let generations = 0;
@@ -90,6 +91,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   const intakeDialog = page.getByRole("dialog", { name: "Establishment report", exact: true });
   await expect(intakeDialog).toBeVisible();
   const table = intakeDialog.getByRole("table", { name: "Park VAR 2M" });
+  await expect(table.getByRole("cell", { name: "411", exact: true })).toBeVisible();
   await expect(table.locator("tfoot td").last()).toHaveText("2");
   await expect(intakeDialog.getByText(/Establishment Report Details|Saved Establishment Summary|counting basis|Camera evidence/)).toHaveCount(0);
   await expect(table).toBeInViewport({ ratio: 1 });
@@ -126,6 +128,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   const monthlyDialog = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
   const monthlyTable = monthlyDialog.getByRole("table", { name: "VAR 2M October 2026" });
   await expect(monthlyTable.getByRole("rowheader", { name: "Park" })).toBeVisible();
+  await expect(monthlyTable.getByRole("cell", { name: "411", exact: true })).toBeVisible();
   await expect(monthlyTable.locator("tfoot td").last()).toHaveText("2");
   await expect(monthlyDialog.getByText(/Report History|Establishment counting details|Citywide arrivals|Camera evidence/)).toHaveCount(0);
   await expect(monthlyTable).toBeInViewport({ ratio: 1 });
@@ -147,6 +150,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   await page.screenshot({ path: testInfo.outputPath("generated-reports-light.png"), animations: "disabled" });
   await generatedReports.getByRole("button", { name: "View annual report" }).click();
   const annualDialog = page.getByRole("dialog", { name: "Annual report (VAR 3M)" });
+  await expect(annualDialog.getByRole("columnheader", { name: "Park - 411" })).toBeVisible();
   await expect(annualDialog.getByRole("row", { name: /^October/ })).toContainText("2");
   expect(generations).toBe(1);
 });

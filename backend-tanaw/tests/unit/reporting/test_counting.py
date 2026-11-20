@@ -36,6 +36,8 @@ def test_actual_desktop_open_space_snapshot_preserves_null_movement_and_one_tota
     assert report.peakOccupancy == 2
     source = EnterpriseReportSubmission(
         id="source-id",
+        enterprise_profile_id="park-profile",
+        attraction_code="411",
         enterprise_name="Park",
         report_id=report.reportId,
         entries=report.entries,
@@ -45,6 +47,8 @@ def test_actual_desktop_open_space_snapshot_preserves_null_movement_and_one_tota
     )
     snapshot = final_report_source_snapshot("final-id", source)
     assert snapshot.unique_count == 2
+    assert snapshot.attraction_code == "411"
+    assert snapshot.enterprise_profile_id == "park-profile"
     assert snapshot.entries is snapshot.exits is None
     assert snapshot.counting_json == report.payload["counting"]
     assert snapshot.this_prov_male == snapshot.this_prov_female == 1

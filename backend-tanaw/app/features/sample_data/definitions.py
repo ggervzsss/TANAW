@@ -15,7 +15,7 @@ SAMPLE_UUID_NAMESPACE = UUID("b8df7e73-013f-4d10-8554-e8d54f90086f")
 @dataclass(frozen=True)
 class SampleEnterprise:
     name: str
-    category: str
+    attraction_code: str
     manager: str
     barangay: str
     address: str
@@ -23,6 +23,7 @@ class SampleEnterprise:
     longitude: float
     email: str
     phone: str
+    attraction_description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class AdminVisitorScenario:
 ENTERPRISES = (
     SampleEnterprise(
         "Balon ni Lolo Uweng",
-        "tourism",
+        "901",
         "Ma Regine Javier",
         "Landayan",
         "Barangay Landayan, San Pedro, Laguna 4023",
@@ -45,10 +46,11 @@ ENTERPRISES = (
         121.067985,
         "balon.lolo.uweng@tanaw.test",
         "+639171110001",
+        attraction_description="Heritage well",
     ),
     SampleEnterprise(
         "San Pedro Apostol Parish",
-        "tourism",
+        "202",
         "Irish May Arabaca",
         "Nueva",
         "Barangay Nueva, San Pedro, Laguna 4023",
@@ -59,7 +61,7 @@ ENTERPRISES = (
     ),
     SampleEnterprise(
         "Lolo Uweng Pilgrim Church",
-        "tourism",
+        "202",
         "David Kristian Vallejera",
         "Landayan",
         "Barangay Landayan, San Pedro, Laguna 4023",
@@ -70,7 +72,7 @@ ENTERPRISES = (
     ),
     SampleEnterprise(
         "Tricia's Bar & Lounge",
-        "business",
+        "901",
         "Kenneth Delicano",
         "Nueva",
         "Barangay Nueva, San Pedro, Laguna 4023",
@@ -78,10 +80,11 @@ ENTERPRISES = (
         121.064359,
         "tricias.bar@tanaw.test",
         "+639171110004",
+        attraction_description="Bar and lounge",
     ),
     SampleEnterprise(
         "Hallow Ridge Filipinas Golf Inc.",
-        "tourism",
+        "401",
         "Sebastien Bercasio",
         "San Antonio",
         "Barangay San Antonio, San Pedro, Laguna 4023",

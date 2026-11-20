@@ -37,7 +37,11 @@ from app.features.reporting.final_reports import (
     return_final_report_for_revision,
     to_final_report_summary,
 )
-from app.features.reporting.intake import ingest_report_submission, update_report_status
+from app.features.reporting.intake import (
+    ingest_report_submission,
+    to_intake_report_summary,
+    update_report_status,
+)
 from app.features.reporting.models import (
     EnterpriseReportSubmission,
     FinalReport,
@@ -184,7 +188,7 @@ async def _create_enterprise(runtime: PostgresRuntime, *, label: str) -> Created
         enterprise_profile=EnterpriseProfile(
             enterprise_id=f"reporting-test-{label}-{suffix}",
             enterprise_name=f"Reporting Test {label}",
-            category="business",
+            attraction_code="411",
             manager_name=f"Reporting Test Manager {label}",
             barangay="Poblacion",
         ),
@@ -364,7 +368,7 @@ async def _seed_final_listing_records(
                 report_id=f"REP-F09-{label.upper()}-{index:03d}",
                 enterprise_profile_id=enterprise.id,
                 enterprise_name=snapshot_enterprise,
-                category="business",
+                attraction_code="411",
                 barangay="Poblacion",
                 period=period,
                 month=f"F09-{index:03d}",
@@ -408,6 +412,8 @@ async def _seed_final_listing_records(
                 FinalReportSource(
                     final_report_id=final_id,
                     intake_report_id=intake_report_id,
+                    enterprise_profile_id=enterprise.id,
+                    attraction_code="411",
                     enterprise=snapshot_enterprise,
                     code=intake.report_id,
                     unique_count=snapshot_unique,
@@ -718,6 +724,8 @@ async def test_source_cannot_be_added_to_a_second_final_report(
             FinalReportSource(
                 final_report_id=duplicate_final.id,
                 intake_report_id=source.id,
+                enterprise_profile_id=enterprise.id,
+                attraction_code=source.attraction.code,
                 enterprise="Duplicate Constraint Test",
                 code="REP-REUSE-001",
                 unique_count=6,
@@ -1100,6 +1108,7 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
         assert account is not None
         assert account.enterprise_profile is not None
         saved["payload"]["counting"]["enterprise_id"] = account.enterprise_profile.enterprise_id
+    saved["payload"]["attractionCode"] = "205"  # Client metadata cannot override the profile.
     counting = saved["payload"]["counting"]
     counting["snapshot_version"] = snapshot_digest(counting)
     payload = DesktopReportSubmissionIngest(
@@ -1115,7 +1124,9 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
     )
     report = await _ready_report(postgres_runtime, enterprise, payload)
     assert report.metrics == {"entry": None, "exit": None, "peak": "2", "unique": 2}
+    assert report.attraction.code == "411"
     assert report.payload is not None
+    assert report.payload["attractionCode"] == "411"
     assert report.payload["counting"]["snapshot_version"] == counting["snapshot_version"]
     assert report.demographics is not None
     assert report.demographics.thisProvMale == report.demographics.thisProvFemale == 1
@@ -1128,11 +1139,15 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
     assert len(final.sources) == 1
     assert final.sources[0].counting == counting
     assert final.sources[0].unique == 2
+    assert final.sources[0].attractionCode == "411"
+    assert final.sources[0].enterpriseProfileId == enterprise.id
     # The finalized source stores its own frozen snapshot rather than reading a mutable intake payload.
     async with postgres_runtime.sessions() as db:
         source = await db.get(EnterpriseReportSubmission, report.id)
         assert source is not None
         source.payload_json = "{}"
+        source.enterprise_profile.attraction_code = "205"
+        assert to_intake_report_summary(source).attraction.code == "411"
         await db.commit()
     async with postgres_runtime.sessions() as db:
         account = await db.get(Account, enterprise.id)
@@ -1140,3 +1155,4 @@ async def test_unified_open_space_report_round_trip_and_single_staff_consolidati
         found = await list_final_reports(db, account)
         retained = next(item for item in found if item.id == final.id)
         assert retained.sources[0].counting == counting
+        assert retained.sources[0].attractionCode == "411"

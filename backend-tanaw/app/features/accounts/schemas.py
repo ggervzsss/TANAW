@@ -9,8 +9,8 @@ from app.core.password_policy import (
     PASSWORD_MIN_LENGTH,
     validate_password_policy,
 )
+from app.features.accounts.attractions import AttractionClassification, AttractionSelection
 from app.features.accounts.options import (
-    ENTERPRISE_CATEGORIES,
     SAN_PEDRO_ADDRESS_SUFFIX,
     SAN_PEDRO_BARANGAYS,
 )
@@ -89,6 +89,8 @@ class AuthUser(BaseModel):
     enterpriseId: str | None = None
     enterpriseName: str | None = None
     category: str | None = None
+    attraction: AttractionClassification | None = None
+    attractionDescription: str | None = None
     managerName: str | None = None
     barangay: str | None = None
     address: str | None = None
@@ -121,9 +123,8 @@ class LguAccountCreate(BaseModel):
         return normalize_optional_contact_number(value)
 
 
-class EnterpriseAccountCreate(BaseModel):
+class EnterpriseAccountCreate(AttractionSelection):
     enterpriseName: str = Field(min_length=1, max_length=120)
-    category: str = Field(min_length=1, max_length=120)
     managerName: str = Field(min_length=1, max_length=120)
     email: EmailStr
     contactNumber: str | None = Field(default=None, max_length=40)
@@ -166,14 +167,6 @@ class EnterpriseAccountCreate(BaseModel):
             return value.strip() or None
         return value
 
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in ENTERPRISE_CATEGORIES:
-            raise ValueError("Enterprise category is not supported.")
-        return normalized
-
     @field_validator("barangay")
     @classmethod
     def validate_barangay(cls, value: str) -> str:
@@ -212,6 +205,8 @@ class AccountSummary(BaseModel):
     lastName: str | None
     enterpriseName: str | None
     category: str | None
+    attraction: AttractionClassification | None = None
+    attractionDescription: str | None = None
     managerName: str | None
     barangay: str | None
     address: str | None
@@ -271,11 +266,10 @@ class LguAccountUpdate(BaseModel):
         return normalize_optional_contact_number(value)
 
 
-class EnterpriseAccountUpdate(BaseModel):
+class EnterpriseAccountUpdate(AttractionSelection):
     model_config = ConfigDict(extra="forbid")
 
     enterpriseName: str = Field(min_length=2, max_length=120)
-    category: str = Field(min_length=1, max_length=120)
     managerName: str = Field(min_length=2, max_length=120)
     email: EmailStr
     contactNumber: str | None = Field(default=None, max_length=40)
@@ -315,14 +309,6 @@ class EnterpriseAccountUpdate(BaseModel):
     @classmethod
     def normalize_contact_number(cls, value: object) -> str | None:
         return normalize_optional_contact_number(value)
-
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in ENTERPRISE_CATEGORIES:
-            raise ValueError("Enterprise category is not supported.")
-        return normalized
 
     @field_validator("barangay")
     @classmethod

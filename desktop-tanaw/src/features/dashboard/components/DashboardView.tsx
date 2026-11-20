@@ -21,7 +21,7 @@ import { TanawAssistant } from "./TanawAssistant";
 import { PeakActivity } from "./PeakActivity";
 import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
 
-type DotPreviewState = { enterpriseId: string | null | undefined; demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
+type DotPreviewState = { attractionType?: string; enterpriseId: string | null | undefined; demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName: string; cameras?: Camera[] }) {
   const [filter, setFilter] = useState<TrendFilter>("Today");
@@ -82,6 +82,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
       <div className="overview-main">
         {preview && preview.enterpriseId === enterpriseId && (
           <DotFormModal
+            attractionType={preview.attractionType}
             demo={preview.demo}
             enterpriseName={enterpriseName}
             metrics={preview.metrics}
@@ -108,7 +109,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           enterpriseName={enterpriseName}
           reports={reports}
           onPreviewReport={(report) =>
-            setPreview({ enterpriseId, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
+            setPreview({ enterpriseId, attractionType: report.attractionType, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
           }
         />
         {cameras.length > 0 && (

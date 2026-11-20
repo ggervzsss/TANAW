@@ -6,6 +6,7 @@ import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
 import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
+import { formatReportAttraction } from "../../../utils/attractions";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
 import {
   buildLedgerRows,
@@ -30,11 +31,14 @@ import { monthlyDemoFromDays, reportDays } from "../model/daily-origins";
 import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
 
 type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
-type Preview = { demo: DemoBreakdown; origins?: DailyOrigins; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
+type Preview = { attractionType?: string; demo: DemoBreakdown; origins?: DailyOrigins; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: Options) {
   const { timeFormat } = useSystemDisplayPreferences();
   const currentReportingPeriod = useCurrentReportingPeriod();
+  const currentAttraction = useAuthStore((state) => state.user?.attraction);
+  const attractionDescription = useAuthStore((state) => state.user?.attractionDescription);
+  const currentAttractionType = formatReportAttraction(currentAttraction?.code, attractionDescription);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [period, setPeriod] = useState(currentReportingPeriod);
   const [notes, setNotes] = useState("");
@@ -48,6 +52,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
+  const attractionType = isReadOnly ? activeReport?.attractionType : currentAttractionType;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
   const { origins, setOrigins, isHydrating } = useOriginsDraft({ activeReportId, draftKey: demographicDraftKey, isReadOnly, period, reportsHistory });
   const data = useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat });
@@ -94,6 +99,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   };
   const handlePreviewReport = (report: ReportRecord) =>
     setPreviewReport({
+      attractionType: report.status === "Draft" ? currentAttractionType : report.attractionType,
       demo: report.demo ?? emptyDemo(),
       origins: report.origins,
       metrics: metricsFromReport(report),
@@ -118,7 +124,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       demo: reportDemo,
       origins: report.origins,
       notes: report.notes ?? "",
-      attractionType: useAuthStore.getState().user?.category ?? undefined,
+      attractionType: report.status === "Draft" ? currentAttractionType : report.attractionType,
     });
   };
   const refreshRevisionCounts = async () => {
@@ -155,7 +161,10 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     }
     submitting.current = true;
     setIsSubmitting(true);
-    const enterpriseId = useAuthStore.getState().user?.enterpriseId;
+    const user = useAuthStore.getState().user;
+    const enterpriseId = user?.enterpriseId;
+    const attractionCode = user?.attraction?.code;
+    const attractionDescription = user?.attractionDescription;
     if (counting.enterprise_id !== enterpriseId) {
       submitting.current = false;
       setIsSubmitting(false);
@@ -163,7 +172,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       return;
     }
     const statusLabel = activeReportId ? "Resubmitted" : "Submitted";
-    const key = JSON.stringify({ enterpriseId, activeReportId, period, notes, origins, snapshot: counting.snapshot_version });
+    const key = JSON.stringify({ enterpriseId, attractionCode, attractionDescription, activeReportId, period, notes, origins, snapshot: counting.snapshot_version });
     if (pendingOperation.current?.key !== key)
       pendingOperation.current = {
         key,
@@ -188,6 +197,8 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         period,
         reportId,
         reportPayload: {
+          attractionCode,
+          attractionDescription,
           auditTrail,
           demo,
           origins,
@@ -242,6 +253,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     activeLedgerKey,
     activeReport,
     activeReportId,
+    attractionType,
     blockingMetricsError,
     days,
     demo,

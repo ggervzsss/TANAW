@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.features.accounts.attractions import attraction_category
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.enterprise import (
     enterprise_identifier,
@@ -12,7 +13,6 @@ from app.features.accounts.enterprise import (
     require_enterprise_profile,
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
-from app.features.accounts.options import format_enterprise_category
 from app.features.activity_logs.service import record_activity_log as record_operational_log
 from app.features.monitoring.alerts import (
     can_manage_operational_alert,
@@ -279,7 +279,9 @@ async def list_map_enterprises(
                 "id": profile.enterprise_id,
                 "name": profile.enterprise_name,
                 "barangay": profile.barangay or "Unassigned",
-                "category": format_enterprise_category(profile.category) or "Uncategorized",
+                "category": attraction_category(
+                    profile.attraction_code, profile.attraction_description
+                ),
                 "fullAddress": profile.address or "Address not provided",
                 "lat": profile.latitude,
                 "lng": profile.longitude,

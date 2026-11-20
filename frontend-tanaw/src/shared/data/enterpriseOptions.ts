@@ -1,9 +1,3 @@
-export const enterpriseCategories = [
-  { value: "events venue", label: "Events Venue" },
-  { value: "tourism", label: "Tourism" },
-  { value: "business", label: "Business" },
-] as const;
-
 export const sanPedroBarangays = [
   "Bagong Silang",
   "Bayan-bayanan",

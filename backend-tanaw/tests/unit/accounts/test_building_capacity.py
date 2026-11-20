@@ -59,7 +59,7 @@ def test_account_serializers_include_building_capacity() -> None:
 def enterprise_create_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "enterpriseName": "Acme Mall",
-        "category": "business",
+        "attractionCode": "411",
         "managerName": "Alex Santos",
         "email": "enterprise@example.com",
         "contactNumber": "+639171234567",
@@ -112,7 +112,7 @@ def enterprise_account(*, building_capacity: int) -> Account:
             account_id="account-1",
             enterprise_id="ent-001",
             enterprise_name="Acme Mall",
-            category="business",
+            attraction_code="411",
             manager_name="Alex Santos",
             barangay="Poblacion",
             address="123 Main Street, San Pedro, Laguna 4023",

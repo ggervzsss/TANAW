@@ -61,7 +61,8 @@ async def create_accounts(db: AsyncSession) -> dict[str, list[Account]]:
             activated_at=datetime.now(UTC),
             enterprise_profile=EnterpriseProfile(
                 enterprise_name=enterprise.name,
-                category=enterprise.category,
+                attraction_code=enterprise.attraction_code,
+                attraction_description=enterprise.attraction_description,
                 manager_name=enterprise.manager,
                 barangay=enterprise.barangay,
                 address=enterprise.address,

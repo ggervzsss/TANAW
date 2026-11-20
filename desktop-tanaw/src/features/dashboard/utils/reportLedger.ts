@@ -1,3 +1,4 @@
+import { formatReportAttraction } from "../../../utils/attractions";
 import type { LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { countingFromPayload } from "../../reports/model/report-workspace";
@@ -10,6 +11,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 
   return {
     id: submission.report_id,
+    attractionType: formatReportAttraction(payload.attractionCode, payload.attractionDescription),
     date: submission.period,
     status: payloadStatus,
     entries: metrics.entries,

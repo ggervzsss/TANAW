@@ -1,4 +1,5 @@
-import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
+import { attractionClassifications, otherAttractionCode } from "@/contracts/generated/attractions";
+import { sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import type { AccountSummary } from "@/shared/types";
 import type { CreateEnterpriseAccountPayload, UpdateEnterpriseAccountPayload } from "../services";
 import {
@@ -16,7 +17,8 @@ import type { LocationDraft } from "../types";
 
 export type EnterpriseFormState = {
   enterpriseName: string;
-  category: string;
+  attractionCode: string;
+  attractionDescription: string;
   managerFirstName: string;
   managerMiddleInitial: string;
   managerLastName: string;
@@ -35,10 +37,11 @@ export type EnterpriseFormErrors = Partial<Record<keyof EnterpriseFormState, str
 export type EnterpriseCreateFormErrors = Partial<Record<keyof EnterpriseCreateFormState, string>>;
 
 export const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
-const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((category) => category.value));
+const attractionCodes = new Set<string>(attractionClassifications.map(({ code }) => code));
 const enterpriseFieldOrder: readonly (keyof EnterpriseFormState)[] = [
   "enterpriseName",
-  "category",
+  "attractionCode",
+  "attractionDescription",
   "managerFirstName",
   "managerMiddleInitial",
   "managerLastName",
@@ -52,7 +55,8 @@ const enterpriseFieldOrder: readonly (keyof EnterpriseFormState)[] = [
 export function createEmptyEnterpriseForm(): EnterpriseCreateFormState {
   return {
     enterpriseName: "",
-    category: "",
+    attractionCode: "",
+    attractionDescription: "",
     managerFirstName: "",
     managerMiddleInitial: "",
     managerLastName: "",
@@ -69,7 +73,8 @@ export function createEnterpriseEditForm(enterprise: AccountSummary): Enterprise
   const managerName = parsePersonName(enterprise.managerName ?? "");
   return {
     enterpriseName: enterprise.enterpriseName ?? enterprise.displayName,
-    category: enterprise.category ?? "",
+    attractionCode: enterprise.attraction?.code ?? "",
+    attractionDescription: enterprise.attractionDescription ?? "",
     managerFirstName: managerName.firstName,
     managerMiddleInitial: managerName.middleInitial,
     managerLastName: managerName.lastName,
@@ -92,7 +97,9 @@ export function validateEnterpriseForm(form: EnterpriseFormState): EnterpriseFor
 
   if (!enterpriseName) errors.enterpriseName = "Enterprise name is required.";
   if (enterpriseName && enterpriseName.length < 2) errors.enterpriseName = "Enterprise name must be at least 2 characters.";
-  if (!enterpriseCategoryValues.has(form.category)) errors.category = "Choose a valid enterprise type.";
+  if (!attractionCodes.has(form.attractionCode)) errors.attractionCode = "Choose a DOT attraction category.";
+  if (form.attractionCode === otherAttractionCode && !form.attractionDescription.trim()) errors.attractionDescription = "Specify the attraction.";
+  if (form.attractionCode === otherAttractionCode && form.attractionDescription.trim().length > 120) errors.attractionDescription = "Use 120 characters or fewer.";
   if (managerFirstNameError) errors.managerFirstName = managerFirstNameError;
   if (managerMiddleInitialError) errors.managerMiddleInitial = managerMiddleInitialError;
   if (managerLastNameError) errors.managerLastName = managerLastNameError;
@@ -113,7 +120,8 @@ export function toEnterpriseAccountFields(form: EnterpriseFormState) {
   const normalizedPhone = form.contactLocal ? normalizePhilippineContactNumber(`+63${form.contactLocal}`) : "";
   return {
     enterpriseName: form.enterpriseName.trim(),
-    category: form.category,
+    attractionCode: form.attractionCode,
+    attractionDescription: form.attractionCode === otherAttractionCode ? form.attractionDescription.trim().replace(/\s+/g, " ") : null,
     managerName: formatPersonName({ firstName: form.managerFirstName, middleInitial: form.managerMiddleInitial, lastName: form.managerLastName }),
     email: normalizeEmail(form.email),
     contactNumber: normalizedPhone || undefined,
@@ -148,14 +156,17 @@ export function getEnterpriseChanges(enterprise: AccountSummary, payload: Update
   const changes: string[] = [];
   if ((enterprise.enterpriseName ?? enterprise.displayName) !== payload.enterpriseName)
     changes.push(`Enterprise name: ${enterprise.enterpriseName ?? enterprise.displayName} -> ${payload.enterpriseName}`);
-  if ((enterprise.category ?? "") !== payload.category) changes.push(`Category: ${enterprise.category ?? "Not provided"} -> ${payload.category}`);
+  if (enterprise.attraction?.code !== payload.attractionCode || (enterprise.attractionDescription ?? null) !== (payload.attractionDescription ?? null)) {
+    const next = attractionClassifications.find((item) => item.code === payload.attractionCode);
+    changes.push(`DOT classification changes to ${payload.attractionCode} · ${payload.attractionDescription ?? next?.category ?? ""}.`);
+  }
   if ((enterprise.managerName ?? "") !== payload.managerName) changes.push(`Contact person: ${enterprise.managerName ?? "Not provided"} -> ${payload.managerName}`);
   if (enterprise.email !== payload.email) changes.push(`Email: ${enterprise.email} -> ${payload.email}`);
   if ((enterprise.phone ?? "") !== (payload.contactNumber ?? "")) changes.push(`Contact number: ${enterprise.phone ?? "Not provided"} -> ${payload.contactNumber ?? "Not provided"}`);
   if ((enterprise.barangay ?? "") !== payload.barangay) changes.push(`Barangay: ${enterprise.barangay ?? "Not provided"} -> ${payload.barangay}`);
   if ((enterprise.address ?? "") !== payload.address) changes.push("Registered address will be updated.");
   if (enterprise.buildingCapacity !== payload.buildingCapacity) changes.push(`Building capacity: ${enterprise.buildingCapacity} -> ${payload.buildingCapacity}`);
-  if (payload.latitude !== undefined && payload.longitude !== undefined && (enterprise.latitude !== payload.latitude || enterprise.longitude !== payload.longitude)) {
+  if (payload.latitude != null && payload.longitude != null && (enterprise.latitude !== payload.latitude || enterprise.longitude !== payload.longitude)) {
     const previousLocation = enterprise.latitude !== null && enterprise.longitude !== null ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}` : "Not pinned";
     changes.push(`Map location: ${previousLocation} -> ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`);
   }

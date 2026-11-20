@@ -1,7 +1,15 @@
-import { ContactNumberField, FormField, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
-import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
+import { ContactNumberField, FormField, SearchableDropdownField, SelectDropdown, type DropdownOption } from "@/shared/components/ui";
+import { attractionClassifications, otherAttractionCode } from "@/contracts/generated/attractions";
+import { sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { PERSON_NAME_MAX_LENGTH, normalizeMiddleInitial } from "@/shared/utils/accountValidation";
 import type { EnterpriseFormErrors, EnterpriseFormState } from "../model";
+
+const attractionOptions = attractionClassifications.map((item) => ({
+  value: item.code,
+  label: item.category,
+  meta: `${item.code} · ${item.type}`,
+  searchText: `${item.type} ${item.portfolioCategory} ${item.ntdpCode}`,
+}));
 
 type EnterpriseAccountFieldsProps = {
   errors: EnterpriseFormErrors;
@@ -16,15 +24,31 @@ export function EnterpriseAccountFields({ enterpriseId = "", errors, form, mode,
   return (
     <>
       <FormField name="enterpriseName" label="Enterprise Name" value={form.enterpriseName} onChange={(value) => onChange("enterpriseName", value)} error={errors.enterpriseName} required />
-      <SearchableDropdownField
-        name="category"
-        label="Enterprise Type / Category"
-        options={enterpriseCategories.map((category): DropdownOption => [category.value, category.label])}
-        value={form.category}
-        onChange={(value) => onChange("category", value)}
-        error={errors.category}
-        required
-      />
+      <div className="space-y-2">
+        <SelectDropdown
+          name="attractionCode"
+          label="DOT attraction category"
+          placeholder="Choose a category"
+          options={attractionOptions}
+          value={form.attractionCode}
+          onChange={(value) => onChange("attractionCode", value)}
+          error={errors.attractionCode}
+          required
+          searchable
+          searchPlaceholder="Search category, type, or code"
+        />
+        {form.attractionCode === otherAttractionCode && (
+          <FormField
+            name="attractionDescription"
+            label="Specify the attraction"
+            value={form.attractionDescription}
+            onChange={(value) => onChange("attractionDescription", value)}
+            error={errors.attractionDescription}
+            maxLength={120}
+            required
+          />
+        )}
+      </div>
       <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
         <FormField
           name="managerFirstName"

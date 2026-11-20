@@ -42,7 +42,8 @@ class EnterpriseReportSubmission(Base):
         nullable=False,
     )
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    attraction_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    attraction_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
     barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
     period: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     month: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
@@ -162,7 +163,9 @@ class FinalReportSource(Base):
         index=True,
         nullable=False,
     )
+    enterprise_profile_id: Mapped[str] = mapped_column(String(36), nullable=False)
     enterprise: Mapped[str] = mapped_column(String(120), nullable=False)
+    attraction_code: Mapped[str] = mapped_column(String(3), nullable=False)
     code: Mapped[str] = mapped_column(String(80), nullable=False)
     unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     entries: Mapped[int | None] = mapped_column(Integer, nullable=True)

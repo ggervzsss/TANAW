@@ -29,6 +29,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     activeLedgerKey,
     activeReport,
     activeReportId,
+    attractionType,
     blockingMetricsError,
     days,
     demo,
@@ -70,6 +71,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     <div className="tanaw-reports-workspace" data-reports-surface="var1-workspace">
       {previewReport && (
         <DotFormModal
+          attractionType={previewReport.attractionType}
           demo={previewReport.demo}
           origins={previewReport.origins}
           enterpriseName={enterpriseName}
@@ -126,6 +128,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
 
       <div id="reports-panel-create" role="tabpanel" aria-labelledby="reports-tab-create" hidden={tab !== "create"} className="reports-tab-panel">
         <ReportDraftPanel
+          attractionType={attractionType}
           enterpriseName={enterpriseName}
           reviewed={reviewedKey === reviewKey}
           activeReport={activeReport}
@@ -143,6 +146,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           onSubmitPrompt={() => setShowConfirm(true)}
           onReview={() =>
             setPreviewReport({
+              attractionType,
               demo,
               origins: hasDailyOrigins ? origins : undefined,
               metrics: displayedMetrics,

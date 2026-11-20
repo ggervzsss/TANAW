@@ -9,7 +9,8 @@ const intake: IntakeReport = {
   id: "frozen-source",
   enterpriseId: "park-fixture",
   enterprise: "Park",
-  category: "Tourism",
+  category: "Parks",
+  attraction: { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" },
   barangay: "Poblacion",
   month: "October",
   period: saved.period,
@@ -36,6 +37,8 @@ const final: FinalReport = {
     {
       id: intake.id,
       enterprise: intake.enterprise,
+      enterpriseProfileId: "park-profile",
+      attractionCode: intake.attraction.code,
       code: intake.code,
       unique: saved.unique_count,
       entry: null,

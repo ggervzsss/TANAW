@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
+from app.features.accounts.attractions import ATTRACTION_CLASSIFICATIONS, OTHER_ATTRACTION_CODE
 from app.features.realtime.contracts import (
     RealtimeEnvelope,
     RealtimeHeartbeat,
@@ -26,6 +27,10 @@ def build_contract_bundle() -> dict[str, Any]:
 
     return {
         "openapi": app.openapi(),
+        "attractionClassifications": [
+            row.model_dump() for row in ATTRACTION_CLASSIFICATIONS.values()
+        ],
+        "otherAttractionCode": OTHER_ATTRACTION_CODE,
         "realtime": {
             "openapi": "3.1.0",
             "info": {"title": "TANAW Realtime Contract", "version": "1"},

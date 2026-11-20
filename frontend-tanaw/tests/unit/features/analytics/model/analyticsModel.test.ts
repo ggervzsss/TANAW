@@ -13,6 +13,7 @@ function report(id: string, enterprise: ReportEnterprise, entry: number, unique:
     enterpriseId: enterprise.id,
     enterprise: enterprise.name,
     category: enterprise.category,
+    attraction: { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" },
     barangay: enterprise.barangay,
     month: "June",
     period: "June 2026",

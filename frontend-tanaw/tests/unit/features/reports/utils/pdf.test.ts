@@ -7,7 +7,8 @@ const intakeReport: IntakeReport = {
   id: "2b70bc67-a0ce-410d-98cb-38bc6e0f14d6",
   enterpriseId: "enterprise-1",
   enterprise: "Archie's Event Place",
-  category: "Tourism",
+  category: "Other Events",
+  attraction: { code: "799", typeCode: "7", type: "Special Event", category: "Other Events", portfolioCategory: "MICE and Events Tourism", ntdpCode: "TD503" },
   barangay: "San Antonio",
   month: "May 2026",
   period: "May 2026",
@@ -61,6 +62,7 @@ describe("VAR 2M PDF", () => {
     expect(pdf).toContain("0.573 0.816 0.314 rg");
     expect(pdf).toContain("Archie's Event Place");
     expect(pdf).toContain("(377) Tj");
+    expect(pdf).toContain("(799) Tj");
     expect(pdf).toContain("/Count 1");
     expect(pdf).toContain("(REP-260501) Tj");
     expect(pdf).not.toContain("Saved Establishment Summary");
@@ -90,7 +92,7 @@ describe("VAR 2M PDF", () => {
   });
 
   it("repeats the header across pages and keeps the monthly total on the last one", () => {
-    const sources = Array.from({ length: 30 }, (_, index) => ({ id: `source-${index}`, enterprise: `Enterprise ${index + 1}`, code: `REP-${index + 1}`, unique: 100 + index, entry: 120, exit: 110 }));
+    const sources = Array.from({ length: 30 }, (_, index) => ({ id: `source-${index}`, enterprise: `Enterprise ${index + 1}`, enterpriseProfileId: `enterprise-${index}`, attractionCode: "411", code: `REP-${index + 1}`, unique: 100 + index, entry: 120, exit: 110 }));
     const pdf = createFinalReportPdf(finalReport(sources));
     const pages = pdf.split("/Type /Page /Parent").length - 1;
 
@@ -104,8 +106,8 @@ describe("VAR 2M PDF", () => {
   it("derives the monthly total from its source rows instead of trusting stale summary data", () => {
     const report = finalReport(
       [
-        { id: "one", enterprise: "One", code: "REP-1", unique: 100, entry: 15, exit: 12 },
-        { id: "two", enterprise: "Two", code: "REP-2", unique: 200, entry: 15, exit: 13 },
+        { id: "one", enterprise: "One", enterpriseProfileId: "one", attractionCode: "411", code: "REP-1", unique: 100, entry: 15, exit: 12 },
+        { id: "two", enterprise: "Two", enterpriseProfileId: "two", attractionCode: "205", code: "REP-2", unique: 200, entry: 15, exit: 13 },
       ],
       { totalUnique: 999_999 },
     );
@@ -119,8 +121,8 @@ describe("VAR 2M PDF", () => {
 describe("VAR 3M PDF", () => {
   it("prints the annual sheet with months, column groups and the grand total", () => {
     const reports = [
-      finalReport([{ id: "a", enterprise: "Plaza", code: "REP-1", unique: 120, entry: null, exit: null }]),
-      finalReport([{ id: "b", enterprise: "Museum", code: "REP-2", unique: 80, entry: null, exit: null }], { id: "CON-JUN-2026-0001", period: "June 2026" }),
+      finalReport([{ id: "a", enterprise: "Plaza", enterpriseProfileId: "plaza", attractionCode: "411", code: "REP-1", unique: 120, entry: null, exit: null }]),
+      finalReport([{ id: "b", enterprise: "Museum", enterpriseProfileId: "museum", attractionCode: "205", code: "REP-2", unique: 80, entry: null, exit: null }], { id: "CON-JUN-2026-0001", period: "June 2026" }),
     ];
     const pdf = createAnnualReportPdf(buildVar3(reports, 2026));
 
@@ -128,14 +130,14 @@ describe("VAR 3M PDF", () => {
     expect(pdf).toContain("(Province:) Tj");
     expect(pdf).toContain("(Laguna) Tj");
     expect(pdf).toContain("(January - December 2026) Tj");
-    for (const label of ["January", "December", "Total:", "Domestic", "Foreign", "Grand Total Visitors", "Museum", "Plaza"]) expect(pdf).toContain(`(${label}) Tj`);
+    for (const label of ["January", "December", "Total:", "Domestic", "Foreign", "Grand Total Visitors", "Museum - 205", "Plaza - 411"]) expect(pdf).toContain(`(${label}) Tj`);
     expect(pdf).toContain("(200) Tj");
     expect(pdf).not.toContain("Compiled from finalized monthly reports");
     expect(pdf).toContain("/Count 1");
   });
 
   it("continues column groups on further pages when there are more than four", () => {
-    const sources = Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, enterprise: `Attraction ${index + 1}`, code: `REP-${index}`, unique: 10, entry: null, exit: null }));
+    const sources = Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, enterprise: `Attraction ${index + 1}`, enterpriseProfileId: `enterprise-${index}`, attractionCode: "411", code: `REP-${index}`, unique: 10, entry: null, exit: null }));
     const pdf = createAnnualReportPdf(buildVar3([finalReport(sources)], 2026));
 
     expect(pdf).toContain("/Count 2");

@@ -29,7 +29,6 @@ from app.features.sample_data.definitions import (
     REPORTING_STAFF_NAME,
 )
 from app.features.sample_data.helpers import (
-    category_label,
     last_reported_day,
     latest_capture_time,
     month_starts,
@@ -159,7 +158,8 @@ async def create_operational_history(
                 report_id=(f"{SAMPLE_REPORT_PREFIX}{month_start:%y%m}{enterprise_index + 1:02d}"),
                 enterprise_profile_id=profile.account_id,
                 enterprise_name=profile.enterprise_name,
-                category=category_label(profile.category),
+                attraction_code=profile.attraction_code,
+                attraction_description=profile.attraction_description,
                 barangay=profile.barangay,
                 period=period,
                 month=month_name,

@@ -1,3 +1,4 @@
+import { formatReportAttraction } from "../../../utils/attractions";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
@@ -208,6 +209,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 
   return {
     id: submission.report_id,
+    attractionType: formatReportAttraction(payload.attractionCode, payload.attractionDescription),
     date: submission.period,
     status: payloadStatus,
     entries: metrics.entries,
@@ -262,6 +264,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
   const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   return {
     id: report.code,
+    attractionType: formatReportAttraction(report.attraction?.code, report.attractionDescription),
     date: report.period,
     status,
     entries: report.metrics.entry,

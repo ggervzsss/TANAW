@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.features.accounts.attractions import AttractionClassification
 from app.features.reporting.counting import counting_metrics
 from app.features.reporting.periods import reporting_period_submission_error
 
@@ -122,6 +123,8 @@ class IntakeReportSummary(BaseModel):
     enterpriseId: str
     enterprise: str
     category: str
+    attraction: AttractionClassification
+    attractionDescription: str | None = None
     barangay: str
     month: str
     period: str
@@ -143,7 +146,9 @@ OperationalAlertUrgency = Literal["Normal", "Important", "Urgent"]
 
 class FinalReportSourceSummary(BaseModel):
     id: str
+    enterpriseProfileId: str
     enterprise: str
+    attractionCode: str
     code: str
     unique: int
     entry: int | None
