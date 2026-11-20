@@ -128,7 +128,8 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
       const window = BrowserWindow.getAllWindows().find((value) => value.webContents.getURL().startsWith("tanaw-app://desktop"));
       if (!window) throw new Error("Camera window not found");
       window.unmaximize();
-      window.setContentSize(1000, 625);
+      // Leave room for native window sizing and renderer zoom rounding across platforms.
+      window.setContentSize(1000, 612);
       window.webContents.setZoomFactor(1.25);
     });
     await expect.poll(() => page.evaluate(() => window.innerHeight)).toBeLessThanOrEqual(500);
