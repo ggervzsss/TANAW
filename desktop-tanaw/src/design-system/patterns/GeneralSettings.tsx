@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/patterns/GeneralSettings.tsx instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: 494d6306a83eb6c819786eadaf5856fbb75a0ffbf5212e456590c37686daabb6
+ * Source SHA-256: a4d13a34d1afc7fc6e1998324ed40419ec48b8f827dab2063d10be78aa5b3326
  */
 import {
   ArrowLeft,
@@ -66,8 +66,14 @@ export function GeneralSettings({
   const sectionTitle = useId();
   const workspace = useRef<HTMLElement>(null);
   const content = useRef<HTMLElement>(null);
-  useEffect(() => workspace.current?.focus({ preventScroll: true }), []);
-  useEffect(() => content.current?.scrollTo({ top: 0 }), [active]);
+  // Block bodies: scroll methods return a Promise in current Chromium, and React treats an
+  // effect's return value as its clean-up, so returning one crashes on unmount.
+  useEffect(() => {
+    workspace.current?.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    content.current?.scrollTo({ top: 0 });
+  }, [active]);
   const CategoryIcon = settingsSections[active].icon;
 
   return (

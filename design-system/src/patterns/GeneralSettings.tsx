@@ -61,8 +61,14 @@ export function GeneralSettings({
   const sectionTitle = useId();
   const workspace = useRef<HTMLElement>(null);
   const content = useRef<HTMLElement>(null);
-  useEffect(() => workspace.current?.focus({ preventScroll: true }), []);
-  useEffect(() => content.current?.scrollTo({ top: 0 }), [active]);
+  // Block bodies: scroll methods return a Promise in current Chromium, and React treats an
+  // effect's return value as its clean-up, so returning one crashes on unmount.
+  useEffect(() => {
+    workspace.current?.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    content.current?.scrollTo({ top: 0 });
+  }, [active]);
   const CategoryIcon = settingsSections[active].icon;
 
   return (
