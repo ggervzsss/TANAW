@@ -61,8 +61,10 @@ describe("VAR 2M PDF", () => {
     expect(pdf).toContain("0.573 0.816 0.314 rg");
     expect(pdf).toContain("Archie's Event Place");
     expect(pdf).toContain("(377) Tj");
-    expect(pdf).toContain("Saved Establishment Summary");
-    expect(pdf).toContain("May 31, 2026, 6:15 PM Philippine Time");
+    expect(pdf).toContain("/Count 1");
+    expect(pdf).toContain("(REP-260501) Tj");
+    expect(pdf).not.toContain("Saved Establishment Summary");
+    expect(pdf).not.toContain(intakeReport.remarks);
     expect(pdf).toContain("Sex and residence were not recorded for Archie's Event Place");
     expect(pdf).not.toContain(intakeReport.id);
     expect(pdf).toContain("/BaseFont /Helvetica-Bold");
@@ -74,7 +76,7 @@ describe("VAR 2M PDF", () => {
     expect(numbers.filter((value) => value === "377")).toHaveLength(2);
   });
 
-  it("safely transliterates submission text and keeps long remarks", () => {
+  it("safely transliterates attraction names and omits review remarks", () => {
     const pdf = createIntakeReportPdf({
       ...intakeReport,
       enterprise: "José’s Cafe and Niño’s Tourism Destination",
@@ -83,7 +85,7 @@ describe("VAR 2M PDF", () => {
 
     expect(pdf).toContain("Jos\\351's Cafe");
     expect(pdf).toContain("Ni\\361o's Tourism");
-    expect(pdf).toContain("FINAL-REMARK");
+    expect(pdf).not.toContain("FINAL-REMARK");
     expect(pdf).not.toContain("Jos s Cafe");
   });
 
@@ -96,7 +98,7 @@ describe("VAR 2M PDF", () => {
     expect(pdf.split("(Visitor Attraction) Tj").length - 1).toBe(pages);
     expect(pdf.split("Total of this Month").length - 1).toBe(1);
     expect(pdf).toContain(`Page ${pages} of ${pages}`);
-    expect(pdf).toContain("(CON-MAY-2026-0001 - Prepared by LGU Staff \\(Staff Processing Division\\) - Finalized) Tj");
+    expect(pdf).toContain("(CON-MAY-2026-0001) Tj");
   });
 
   it("derives the monthly total from its source rows instead of trusting stale summary data", () => {
@@ -128,7 +130,7 @@ describe("VAR 3M PDF", () => {
     expect(pdf).toContain("(January - December 2026) Tj");
     for (const label of ["January", "December", "Total:", "Domestic", "Foreign", "Grand Total Visitors", "Museum", "Plaza"]) expect(pdf).toContain(`(${label}) Tj`);
     expect(pdf).toContain("(200) Tj");
-    expect(pdf).toContain("Compiled from finalized monthly reports: CON-MAY-2026-0001, CON-JUN-2026-0001.");
+    expect(pdf).not.toContain("Compiled from finalized monthly reports");
     expect(pdf).toContain("/Count 1");
   });
 

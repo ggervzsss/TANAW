@@ -38,9 +38,17 @@ export async function updateIntakeReportStatus(reportId: string, payload: Update
   return response.data;
 }
 
-export async function listFinalReports() {
-  const response = await apiClient.get<FinalReport[]>(apiPaths.finalReports);
-  return response.data;
+export async function listFinalReports({ signal }: { signal?: AbortSignal } = {}) {
+  const pageSize = 500;
+  const reports = new Map<string, FinalReport>();
+  let offset = 0;
+
+  while (true) {
+    const { data } = await apiClient.get<FinalReport[]>(apiPaths.finalReports, { signal, params: offset > 0 ? { offset } : undefined });
+    for (const report of data) reports.set(report.id, report);
+    if (data.length < pageSize) return [...reports.values()];
+    offset += data.length;
+  }
 }
 
 export async function createFinalReport(payload: FinalReportCreatePayload) {

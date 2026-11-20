@@ -50,7 +50,7 @@ const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
   [routes.it.workCenter]: [alerts, enterpriseAccounts, supportTickets, emailDeliveries],
   [routes.staff.analytics]: [operationalReports, reportEnterprises],
   [routes.staff.batchReports]: [operationalReports, reportEnterprises],
-  [routes.staff.finalReportsAudit]: [operationalFinalReports, operationalReports],
+  [routes.staff.generatedReports]: [operationalFinalReports],
   [routes.staff.notifications]: [operationalNotifications],
 };
 

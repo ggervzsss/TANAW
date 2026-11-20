@@ -51,9 +51,9 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: Layers,
     },
     {
-      id: "final-reports-audit",
-      label: "Final Reports Audit",
-      path: routes.staff.finalReportsAudit,
+      id: "generated-reports",
+      label: "Generated Reports",
+      path: routes.staff.generatedReports,
       icon: FileCheck2,
     },
   ],

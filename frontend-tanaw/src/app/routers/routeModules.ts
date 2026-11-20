@@ -34,8 +34,8 @@ export const VerifyEmailChangePage = lazy(() => modules.login().then((module) =>
 export const AdminVisitorInsightsPage = lazy(() => modules.visitorInsights().then((module) => ({ default: module.AdminVisitorInsightsPage })));
 export const AdminMapViewPage = lazy(() => modules.mapView().then((module) => ({ default: module.AdminMapViewPage })));
 export const NotificationsPage = lazy(() => modules.notifications().then((module) => ({ default: module.NotificationsPage })));
+export const StaffGeneratedReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffGeneratedReportsPage })));
 export const StaffBatchReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffBatchReportsPage })));
-export const StaffFinalReportsAuditPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffFinalReportsAuditPage })));
 export const HelpCenterPage = lazy(() => modules.helpCenter().then((module) => ({ default: module.HelpCenterPage })));
 export const AdminActivityHistoryPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminActivityHistoryPage })));
 export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.ITSystemLogsPage })));
@@ -57,7 +57,7 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.it.workCenter]: modules.alerts,
   [routes.staff.analytics]: modules.analytics,
   [routes.staff.batchReports]: modules.reports,
-  [routes.staff.finalReportsAudit]: modules.reports,
+  [routes.staff.generatedReports]: modules.reports,
   [routes.staff.notifications]: modules.notifications,
   [routes.staff.generalSettings]: modules.settings,
 };

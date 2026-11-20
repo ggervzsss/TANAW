@@ -24,7 +24,7 @@ import {
   NotificationsPage,
   StaffAnalyticsPage,
   StaffBatchReportsPage,
-  StaffFinalReportsAuditPage,
+  StaffGeneratedReportsPage,
   VerifyEmailChangePage,
 } from "./routeModules";
 
@@ -106,7 +106,8 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.staff.analytics} replace />} />
           <Route path="batch-reports" element={<StaffBatchReportsPage />} />
-          <Route path="final-reports-audit" element={<StaffFinalReportsAuditPage />} />
+          <Route path="generated-reports" element={<StaffGeneratedReportsPage />} />
+          <Route path="final-reports-audit" element={<Navigate to={routes.staff.generatedReports} replace />} />
           <Route path="analytics" element={<StaffAnalyticsPage />} />
           <Route path="notifications" element={<NotificationsPage role="staff" />} />
           <Route path="settings/:section?" element={<GeneralSettingsPage role="staff" />} />

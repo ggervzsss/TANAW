@@ -248,68 +248,6 @@ html.dark .tanaw-request-queue {
   html.dark :where(input, textarea, select) {
     color-scheme: dark;
   }
-
-  html.dark :where(.tanaw-document-preview) {
-    background-color: var(--tanaw-surface-inset) !important;
-    color: var(--tanaw-text) !important;
-    color-scheme: dark;
-  }
-
-  html.dark :where(.tanaw-document-preview .bg-white) {
-    background-color: var(--tanaw-surface);
-  }
-
-  html.dark :where(.tanaw-document-preview .bg-gray-50, .tanaw-document-preview .bg-slate-50) {
-    background-color: var(--tanaw-surface-raised);
-  }
-
-  html.dark :where(.tanaw-document-preview .bg-gray-100, .tanaw-document-preview .bg-slate-100) {
-    background-color: var(--tanaw-surface-raised);
-  }
-
-  html.dark :where(.tanaw-document-preview .bg-gray-200, .tanaw-document-preview .bg-slate-200) {
-    background-color: var(--tanaw-control-hover);
-  }
-
-  html.dark :where(.tanaw-document-preview .bg-gray-300) {
-    background-color: #344762;
-  }
-
-  html.dark :where(.tanaw-document-preview .border-gray-200, .tanaw-document-preview .border-slate-200) {
-    border-color: var(--tanaw-border);
-  }
-
-  html.dark :where(.tanaw-document-preview .divide-gray-100, .tanaw-document-preview .divide-slate-100) > :not([hidden]) ~ :not([hidden]) {
-    border-color: var(--tanaw-border);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-gray-900, .tanaw-document-preview .text-slate-900) {
-    color: var(--tanaw-text);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-gray-800, .tanaw-document-preview .text-slate-800) {
-    color: var(--tanaw-text);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-gray-700, .tanaw-document-preview .text-slate-700) {
-    color: var(--tanaw-text);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-gray-600, .tanaw-document-preview .text-slate-600) {
-    color: var(--tanaw-text-secondary);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
-    color: var(--tanaw-text-muted);
-  }
-
-  html.dark :where(.tanaw-document-preview .text-black) {
-    color: var(--tanaw-text);
-  }
-
-  html.dark :where(.tanaw-document-preview .border-black) {
-    border-color: #64748b;
-  }
 }
 
 html.dark .it-portal-main {

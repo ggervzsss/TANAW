@@ -34,6 +34,15 @@ const finalReport = {
   sources: [{ id: "source-1", enterprise: "Archie's Event Place", code: "SAMPLE-REP-2605-01", unique: 377, entry: 598, exit: 571 }],
 };
 
+const archivedReport = {
+  ...finalReport,
+  id: "SAMPLE-FINAL-JUNE-2025-0001",
+  period: "June 2025",
+  generatedOn: "June 30, 2025",
+  status: "Archived",
+  sources: [{ ...finalReport.sources[0], enterprise: "Riverside Museum" }],
+};
+
 async function signInAsStaff(page: Page) {
   let signedIn = false;
   await page.addInitScript(() => {
@@ -53,11 +62,7 @@ async function signInAsStaff(page: Page) {
     const body = route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme: "dark" };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.route("**/operational/reports/final", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([finalReport]) }));
-  await page.route("**/operational/reports/final/*/status", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ status: "Archived" });
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...finalReport, status: "Archived", archivedFromStatus: "Finalized" }) });
-  });
+  await page.route("**/operational/reports/final", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([finalReport, archivedReport]) }));
   await page.route("**/operational/reports/intake", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/reports/enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
@@ -69,7 +74,7 @@ async function signInAsStaff(page: Page) {
   await expect(page).toHaveURL(/\/staff\/analytics$/);
 }
 
-test("uses the night topbar, keyboard custom dropdown, and maximized report viewer", async ({ page }, testInfo) => {
+test("uses the night topbar, keyboard month filter, and wide report preview", async ({ page }, testInfo) => {
   await signInAsStaff(page);
 
   const topbar = page.locator('[data-topbar-theme="dark"]');
@@ -83,33 +88,42 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await expect(page.locator('[style*="it-topbar-building.png"]')).toBeVisible();
   await page.getByRole("radio", { name: "Dark Mode" }).click();
 
-  await page.goto("/staff/final-reports-audit");
-  const reportRow = page.getByRole("row", { name: /SAMPLE-FINAL-MAY-2026-0001/ });
-  const artifactDisclosure = page.getByRole("button", { name: "Show full artifact ID" });
-  await expect(artifactDisclosure).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show full report preparer" })).toHaveCount(0);
-  await artifactDisclosure.click();
-  const collapseArtifactDisclosure = page.getByRole("button", { name: "Collapse full artifact ID" });
-  await expect(collapseArtifactDisclosure).toHaveAttribute("aria-expanded", "true");
-  await expect(collapseArtifactDisclosure).toHaveText("…");
-  await collapseArtifactDisclosure.click();
-  await reportRow.hover();
-  const hoverColor = await reportRow.evaluate((row) => getComputedStyle(row).backgroundColor);
-  expect(hoverColor).toMatch(/^rgba?\(27, 48, 47/);
+  await page.goto("/staff/batch-reports");
+  const generation = page.getByRole("region", { name: "Monthly report", exact: true });
+  await expect(generation.getByRole("button", { name: "Generate monthly report" })).toBeDisabled();
+  await expect(generation.getByText("No establishments to consolidate for this selection.")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("batch-reports-dark.png"), animations: "disabled" });
 
+  await page.goto("/staff/final-reports-audit");
+  await expect(page).toHaveURL(/\/staff\/generated-reports$/);
+  const generatedReports = page.getByRole("region", { name: "Monthly reports (VAR 2M)" });
+  await expect(generatedReports.getByText(archivedReport.id, { exact: true })).toBeVisible();
+  await expect(generatedReports.getByText(finalReport.id, { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("generated-reports-dark.png"), animations: "disabled" });
+  const search = page.getByRole("searchbox", { name: "Search generated reports" });
+  await search.fill("Riverside Museum");
+  await expect(generatedReports.getByText(finalReport.id, { exact: true })).toHaveCount(0);
+  await generatedReports.getByRole("button", { name: `View monthly report ${archivedReport.id}` }).click();
+  const archivedViewer = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
+  await expect(archivedViewer.getByRole("rowheader", { name: "Riverside Museum" })).toBeVisible();
+  await archivedViewer.getByRole("button", { name: "Close report" }).click();
+  await search.clear();
   const monthDropdown = page.getByRole("combobox", { name: "Report month" });
   await expect(monthDropdown).toHaveJSProperty("tagName", "BUTTON");
   await monthDropdown.focus();
   await monthDropdown.press("Enter");
   await expect(page.getByRole("listbox", { name: "Report month" })).toBeVisible();
-  await monthDropdown.press("End");
+  await monthDropdown.press("ArrowDown");
   await monthDropdown.press("Enter");
   await expect(monthDropdown).toContainText("May");
 
-  await reportRow.click();
-  const viewer = page.getByRole("dialog", { name: /official artifact viewer/ });
+  await page.getByRole("button", { name: `View monthly report ${finalReport.id}` }).click();
+  const viewer = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
   await expect(viewer).toBeVisible();
-  const var2m = viewer.getByRole("table", { name: /VAR 2M May 2026/ });
+  const var2m = viewer.getByRole("table", { name: "VAR 2M May 2026" });
+  await expect(var2m).toBeInViewport({ ratio: 1 });
+  await expect(viewer.locator("[data-dialog-body]")).toHaveCSS("background-color", "rgb(16, 25, 35)");
+  await page.screenshot({ path: testInfo.outputPath("monthly-report-dark.png"), animations: "disabled" });
   await expect(var2m.getByRole("columnheader", { name: "This Municipality" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
   await expect(var2m.locator("tbody td").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(var2m.locator("tfoot td").last()).toHaveCSS("background-color", "rgb(146, 208, 80)");
@@ -122,32 +136,27 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await expect(viewer.getByRole("button", { name: "Print to PDF" })).toHaveCount(0);
   await expect(page.locator('iframe[title="Official report print document"]')).toHaveCount(0);
   await expect(page.locator("html")).not.toHaveAttribute("data-print-invoked", "true");
-  const fullscreen = page.getByRole("button", { name: "Open fullscreen report view" });
-  await fullscreen.click();
-  await expect(viewer).toHaveClass(/max-w-none/);
-  await expect(page.getByRole("button", { name: "Exit fullscreen report view" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
-  await expect(viewer).not.toHaveClass(/max-w-none/);
-  await expect(page.getByRole("button", { name: "Open fullscreen report view" })).toHaveAttribute("aria-pressed", "false");
-  await viewer.getByRole("button", { name: "Close final report" }).click();
   await expect(viewer).toBeHidden();
-
-  await reportRow.click();
-  await viewer.getByRole("button", { name: "Archive", exact: true }).click();
-  await page.getByRole("button", { name: "Archive Report", exact: true }).click();
-  await expect(viewer).toBeHidden();
+  await expect(page.getByRole("button", { name: `View monthly report ${finalReport.id}` })).toBeFocused();
 });
 
-test("compiles the finalized months into the annual VAR 3M", async ({ page }) => {
+test("compiles the finalized months into the annual VAR 3M", async ({ page }, testInfo) => {
   await signInAsStaff(page);
-  await page.goto("/staff/final-reports-audit");
-  await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
+  await page.getByRole("link", { name: "Generated Reports" }).click();
+  await page.getByRole("button", { name: "View annual report" }).click();
 
   const var3 = page.getByRole("table", { name: "VAR 3M LGU Annual Report 2026" });
   await expect(var3.getByRole("columnheader", { name: "Archie's Event Place" })).toBeVisible();
   await expect(var3.getByRole("rowheader", { name: "May" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
   await expect(var3.getByRole("row", { name: /^May/ })).toContainText("377");
-  await expect(page.getByText("1 of 12 months finalized for 2026.")).toBeVisible();
+  await expect(page.getByText("1 of 12 months finalized", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("annual-report-dark.png"), animations: "disabled" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const annual = page.getByRole("dialog", { name: "Annual report (VAR 3M)" });
+  await expect(annual.getByRole("table")).toHaveCount(2);
+  await expect(annual.getByRole("columnheader", { name: "Grand Total Visitors" })).toBeVisible();
+  await expect.poll(() => annual.locator("[data-dialog-body]").evaluate((body) => body.scrollWidth - body.clientWidth)).toBe(0);
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download PDF" }).click();
   expect((await download).suggestedFilename()).toBe("VAR3M-2026.pdf");

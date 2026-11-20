@@ -1,4 +1,4 @@
-import { attractionLabel, formatVarCell, VAR2M_RESIDENCES, VAR3_MEASURES, VAR_NOTE, VAR_SEX_COLUMNS, VAR_SUBTITLE, VAR_TITLE, type Var2mForm, type Var3Form, type VarCell } from "../model/varForms";
+import { attractionLabel, formatVarCell, VAR2M_RESIDENCES, VAR3_GROUPS_PER_PAGE, VAR3_MEASURES, VAR_NOTE, VAR_SEX_COLUMNS, VAR_SUBTITLE, VAR_TITLE, type Var2mForm, type Var3Form, type VarCell } from "../model/varForms";
 import { escapePdfText, sanitizePdfText, wrappedPdfLines } from "./pdfText";
 
 /** A4 landscape, as both LGU templates print. */
@@ -213,7 +213,6 @@ export function finishVarPdfPages(pages: PdfPage[], reference = "") {
 // VAR 3M --------------------------------------------------------------------------------------
 
 const VAR3_MONTH = 76;
-const VAR3_GROUPS_PER_PAGE = 4;
 const VAR3_VALUE = (USABLE_WIDTH - VAR3_MONTH) / (VAR3_GROUPS_PER_PAGE * 3);
 
 function var3Grid(labels: string[]): GridSpec {

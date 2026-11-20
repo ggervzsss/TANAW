@@ -10,7 +10,6 @@ export type SubmissionPeriod = {
 export type EnterpriseReportRow = {
   enterprise: ReportEnterprise;
   currentReport: IntakeReport | undefined;
-  archivedReports: IntakeReport[];
   status: ReportStatus | "Missing";
 };
 
@@ -73,25 +72,11 @@ export function getAvailableYears(reports: IntakeReport[], currentPeriod: Submis
   return years.sort((left, right) => Number(right) - Number(left));
 }
 
-export function getEnterpriseReportRows(reportEnterprises: ReportEnterprise[], filteredByPeriod: IntakeReport[], nonPeriodReports: IntakeReport[], query: string): EnterpriseReportRow[] {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  return reportEnterprises
-    .map((enterprise) => {
-      const currentReport = filteredByPeriod.find((report) => report.enterpriseId === enterprise.id);
-      const archivedReports = nonPeriodReports.filter((report) => report.enterpriseId === enterprise.id);
-      const status: ReportStatus = currentReport?.status ?? "Missing";
-      return {
-        enterprise,
-        currentReport,
-        archivedReports,
-        status,
-      };
-    })
-    .filter(
-      (row) =>
-        !normalizedQuery || [row.enterprise.name, row.enterprise.category, row.enterprise.barangay, row.currentReport?.code ?? ""].some((value) => value.toLowerCase().includes(normalizedQuery)),
-    );
+export function getEnterpriseReportRows(reportEnterprises: ReportEnterprise[], filteredByPeriod: IntakeReport[]): EnterpriseReportRow[] {
+  return reportEnterprises.map((enterprise) => {
+    const currentReport = filteredByPeriod.find((report) => report.enterpriseId === enterprise.id);
+    return { enterprise, currentReport, status: currentReport?.status ?? "Missing" };
+  });
 }
 
 function getDateYear(value: string | undefined) {

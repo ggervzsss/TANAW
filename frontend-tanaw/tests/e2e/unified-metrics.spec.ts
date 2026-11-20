@@ -233,7 +233,7 @@ test("keeps the IT underline selection through hover, history, reload and mobile
   await expectUnderlineUnder(underline, settings);
 });
 
-test("keeps Staff Reporting Period as a real control beside unified metrics", async ({ page }) => {
+test("keeps Staff Reporting Period accessible and shows the monthly generation state", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await mockPortal(page, "staff", "light");
   await page.route("**/operational/reports/enterprises", (route) =>
@@ -314,7 +314,13 @@ test("keeps Staff Reporting Period as a real control beside unified metrics", as
   expect(complianceBox).not.toBeNull();
   expect(complianceBox!.y).toBeGreaterThan(trafficBox!.y + trafficBox!.height - 2);
 
-  await page.goto("/staff/batch-reports");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Registered Enterprises", "Ready Reports", "Missing Submissions", "Archived Reports"]);
-  await expect(page.getByRole("button", { name: "Generate Final Report" })).toBeVisible();
+  await page.goto("/staff/batch-reports?month=August&year=2026&barangay=Nueva");
+  const generation = page.getByRole("region", { name: "Monthly report", exact: true });
+  await expect(generation.getByText("August 2026 · Nueva")).toBeVisible();
+  const generate = generation.getByRole("button", { name: "Generate monthly report" });
+  await expect(generate).toBeEnabled();
+  await expect(generate).toBeInViewport({ ratio: 1 });
+  await page.getByRole("tab", { name: /^Ready/ }).click();
+  await expect(page.getByRole("button", { name: "View report for Hallow Ridge Filipinas Golf Inc." })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("batch-reports-ready-light.png"), animations: "disabled" });
 });

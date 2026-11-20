@@ -7,7 +7,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/app/hooks/useOperationalSync";
 import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
-import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
+import type { FinalReport, IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
 import {
   ALL_BARANGAYS_FILTER,
   batchReportsSearchParams,
@@ -17,6 +17,7 @@ import {
   sameBatchReportsPageState,
   type BatchReportsPageState,
 } from "../model";
+import { getBatchReportQueues } from "../model/batchReportQueues";
 import { getAvailableMonths, getAvailableYears, getCurrentSubmissionPeriod, getDefaultSubmissionPeriod, getEnterpriseReportRows, reportMatchesPeriod } from "../utils";
 
 const EMPTY_ENTERPRISES: ReportEnterprise[] = [];
@@ -39,6 +40,7 @@ export function useBatchReportsPage() {
   const [pageState, setPageState] = useScopedPageState({ initialValue: initialPageState, isValid: isBatchReportsPageState, namespace: "filters", preferInitial: hasInitialUrlState, version: 1 });
   const [selectedEnterprise, setSelectedEnterprise] = useState<ReportEnterprise | null>(null);
   const [selectedReport, setSelectedReport] = useState<IntakeReport | null>(null);
+  const [selectedMonthlyReport, setSelectedMonthlyReport] = useState<FinalReport | null>(null);
   const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
   const initializedUrlRef = useRef(false);
   const [firstPageState] = useState(pageState);
@@ -74,18 +76,11 @@ export function useBatchReportsPage() {
     [pageState.barangay, reports, selectedEnterpriseIds],
   );
   const filteredByPeriod = useMemo(() => reportsForBarangay.filter((report) => reportMatchesPeriod(report, pageState.month, pageState.year)), [pageState.month, pageState.year, reportsForBarangay]);
-  const nonPeriodReports = useMemo(() => reportsForBarangay.filter((report) => !filteredByPeriod.includes(report) || report.status === "Consolidated"), [reportsForBarangay, filteredByPeriod]);
-  const readyReports = filteredByPeriod.filter((report) => report.status === "Ready to Consolidate");
-  const enterpriseRows = useMemo(
-    () => getEnterpriseReportRows(selectedReportEnterprises, filteredByPeriod, nonPeriodReports, pageState.query),
-    [filteredByPeriod, nonPeriodReports, pageState.query, selectedReportEnterprises],
-  );
-  const missingReports = enterpriseRows.filter((row) => row.status === "Missing");
-  const allReady =
-    selectedReportEnterprises.length > 0 &&
-    selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Ready to Consolidate");
-  const allConsolidated =
-    selectedReportEnterprises.length > 0 && selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Consolidated");
+  const enterpriseRows = useMemo(() => getEnterpriseReportRows(selectedReportEnterprises, filteredByPeriod), [filteredByPeriod, selectedReportEnterprises]);
+  const queues = getBatchReportQueues(enterpriseRows);
+  const isLoadingRows = enterprisesQuery.isLoading || reportsQuery.isLoading;
+  const loadError = enterprisesQuery.isError || reportsQuery.isError;
+  const allReady = !isLoadingRows && !loadError && enterpriseRows.length > 0 && queues.ready.length === enterpriseRows.length;
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ report, status, remarks }: { report: IntakeReport; status: Extract<ReportStatus, "Ready to Consolidate" | "Returned">; remarks: string }) =>
@@ -100,14 +95,17 @@ export function useBatchReportsPage() {
   });
   const consolidateMutation = useMutation({
     mutationFn: async () => {
-      if (!allReady || !readyReports.length) throw new Error("No ready reports available for consolidation.");
-      return createFinalReport({ reportIds: readyReports.map((report) => report.id), preparedBy: authUser?.displayName ?? "LGU Staff" });
+      if (!allReady) throw new Error("All required submissions must be ready before consolidation.");
+      return createFinalReport({ reportIds: queues.ready.flatMap((row) => row.currentReport?.id ?? []), preparedBy: authUser?.displayName ?? "LGU Staff" });
     },
     onSuccess: (finalReport) => {
+      const sourceIds = new Set(finalReport.sources.map((report) => report.id));
+      queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current) => current?.map((report) => (sourceIds.has(report.id) ? { ...report, status: "Consolidated" } : report)));
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
       setIsGenerateConfirmOpen(false);
-      toast.success(`${finalReport.id} generated for Final Reports Audit.`);
+      setSelectedMonthlyReport(finalReport);
+      toast.success("Monthly report generated.");
     },
     onError: (error) => toast.error(apiErrorMessage(error, "Final report could not be generated.")),
   });
@@ -118,27 +116,24 @@ export function useBatchReportsPage() {
   };
 
   return {
-    allConsolidated,
     allReady,
     availableBarangays,
     availableMonths,
     availableYears,
     consolidateMutation,
     enterpriseRows,
-    filteredByPeriod,
     isGenerateConfirmOpen,
-    isLoadingRows: enterprisesQuery.isLoading || reportsQuery.isLoading,
-    loadError: enterprisesQuery.isError || reportsQuery.isError,
-    missingReports,
-    nonPeriodReports,
+    isLoadingRows,
+    loadError,
     pageState,
-    readyReports,
+    queues,
     reports,
     reviewReport,
     selectedEnterprise,
+    selectedMonthlyReport,
     selectedReport,
-    selectedReportEnterprises,
     setIsGenerateConfirmOpen,
+    setSelectedMonthlyReport,
     setSelectedEnterprise,
     setSelectedReport,
     updatePageState,

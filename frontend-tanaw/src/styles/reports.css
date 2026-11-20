@@ -1,5 +1,12 @@
-.tanaw-document-preview {
-  color-scheme: light;
+body:has(.tanaw-report-preview) .tanaw-connection-notice {
+  z-index: 1200;
+}
+
+@media (width < 40rem) {
+  .tanaw-report-preview > footer .tanaw-button {
+    padding-inline: 10px;
+    font-size: 0.75rem;
+  }
 }
 
 /*
@@ -18,12 +25,10 @@
   font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
   padding: 24px 28px 22px;
   border: 1px solid #c8cdd2;
-  box-shadow: 0 10px 28px rgb(15 23 42 / 0.12);
 }
 
 html.dark .tanaw-var-sheet {
   border-color: #000;
-  box-shadow: 0 14px 34px rgb(0 0 0 / 0.45);
 }
 
 .tanaw-var-heading {
@@ -33,6 +38,7 @@ html.dark .tanaw-var-sheet {
 
 .tanaw-var-heading h2 {
   margin: 0;
+  padding-inline-end: 3.5rem;
   font-family: inherit;
   letter-spacing: normal;
   font-size: 15px;
@@ -87,13 +93,20 @@ html.dark .tanaw-var-sheet {
   font-weight: 700;
 }
 
-.tanaw-var-scroll {
-  overflow-x: auto;
+.tanaw-var-table-stack {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.tanaw-var-table caption {
+  padding-block-end: 4px;
+  text-align: left;
+  font-weight: 700;
 }
 
 .tanaw-var-table {
   width: 100%;
-  min-width: 960px;
   table-layout: fixed;
   border-collapse: collapse;
   border: 1px solid var(--var-ink);
@@ -143,7 +156,7 @@ html.dark .tanaw-var-sheet {
 }
 
 .tanaw-var-month-col {
-  width: 96px;
+  width: min(32%, 6rem);
 }
 
 .tanaw-var3-table tbody th,
@@ -167,13 +180,31 @@ html.dark .tanaw-var-sheet {
   font-size: 11px;
 }
 
-@media (max-width: 640px) {
+.tanaw-var-compact-name {
+  width: 40%;
+}
+
+@media (width < 48rem) {
   .tanaw-var-sheet {
-    padding: 16px;
+    padding: 12px;
   }
 
   .tanaw-var-fields {
     margin-left: 0;
+  }
+
+  .tanaw-var-fields > div {
+    grid-template-columns: fit-content(45%) minmax(0, 1fr);
+    align-items: start;
+    gap: 6px;
+  }
+
+  .tanaw-var-fields dd {
+    overflow-wrap: anywhere;
+  }
+
+  .tanaw-var3-fields dt {
+    min-width: 0;
   }
 }
 

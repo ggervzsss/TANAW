@@ -37,7 +37,7 @@ export const routes = {
     root: "/staff",
     generalSettings: "/staff/settings",
     batchReports: "/staff/batch-reports",
-    finalReportsAudit: "/staff/final-reports-audit",
+    generatedReports: "/staff/generated-reports",
     analytics: "/staff/analytics",
     notifications: "/staff/notifications",
     profile: "/staff/settings/profile",

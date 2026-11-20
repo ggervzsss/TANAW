@@ -1,4 +1,4 @@
-import type { FinalReport, FinalReportSource } from "@/shared/types";
+import type { FinalReport, IntakeReport } from "@/shared/types";
 
 /**
  * The DOT Tourism Attraction Visitor Record templates the LGU reports with.
@@ -17,6 +17,7 @@ export const VAR_SUBTITLE = "( This recording form can be used instead of just c
 export const VAR_NOTE = "Note: *Total number must be recorded,  ** Sex & ***Residence entries are optional.   Total number of this month must be reported.";
 export const VAR2M_RESIDENCES = ["This Municipality", "This Province", "Other Province"] as const;
 export const VAR_SEX_COLUMNS = ["Male", "Female", "Total"] as const;
+export const VAR3_GROUPS_PER_PAGE = 4;
 export const VAR3_MEASURES = ["Domestic", "Foreign", "Total"] as const;
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
 
@@ -113,10 +114,14 @@ export function buildVar2m(period: string, sources: readonly Var2mSource[]): Var
   };
 }
 
+export function var2mFromIntakeReport(report: IntakeReport): Var2mForm {
+  return buildVar2m(report.period, [{ id: report.id, name: report.enterprise, unique: report.metrics.unique, demographics: report.demographics ?? report.payload?.demo }]);
+}
+
 export function var2mFromFinalReport(report: Pick<FinalReport, "period" | "sources">): Var2mForm {
   return buildVar2m(
     report.period,
-    report.sources.map((source: FinalReportSource) => ({ id: source.id, name: source.enterprise, unique: source.unique, demographics: source.demographics })),
+    report.sources.map((source) => ({ id: source.id, name: source.enterprise, unique: source.unique, demographics: source.demographics })),
   );
 }
 
@@ -133,7 +138,7 @@ export function var3Cells(unique: number, demographics: DemographicInput): VarCe
 }
 
 export type Var3Attraction = { key: string; name: string; code: string };
-export type Var3Month = { month: string; finalized: boolean; reportIds: string[]; cells: VarCell[][]; grand: VarCell[] };
+export type Var3Month = { month: string; finalized: boolean; cells: VarCell[][]; grand: VarCell[] };
 export type Var3Form = {
   year: number;
   municipality: string;
@@ -173,7 +178,7 @@ export function buildVar3(reports: readonly FinalReport[], year: number): Var3Fo
       const values = sources.map((source) => var3Cells(source.unique, source.demographics));
       return sumColumns(values, 3);
     });
-    return { month, finalized: monthReports.length > 0, reportIds: monthReports.map((report) => report.id), cells, grand: sumColumns(cells, 3) };
+    return { month, finalized: monthReports.length > 0, cells, grand: sumColumns(cells, 3) };
   });
   const totals = attractions.map((_, index) =>
     sumColumns(
@@ -207,7 +212,7 @@ function listMonths(months: string[]) {
   return months.length === 1 ? months[0] : `${months.slice(0, -1).join(", ")} and ${months.at(-1)}`;
 }
 
-export function attractionLabel(attraction: Var3Attraction) {
+export function attractionLabel(attraction: Pick<Var3Attraction, "name" | "code">) {
   return attraction.code ? `${attraction.name} - ${attraction.code}` : attraction.name;
 }
 
