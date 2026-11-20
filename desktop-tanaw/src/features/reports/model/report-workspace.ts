@@ -1,9 +1,11 @@
+import { formatReportAttraction } from "../../../utils/attractions";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
+import { MlServiceRequestError } from "../../camera/services/ml-service.types";
 import type { EnterpriseIntakeReport } from "../services/report-history";
 import { getDemographicAllocationStatus } from "../utils/demographics";
-import { dailyOriginsError, originsFromPayload, type ReportDay } from "./daily-origins";
+import { dailyOriginsError, monthlyDemoFromDays, originsFromPayload, reportDays, type ReportDay } from "./daily-origins";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 import { sortReportLedgerRows } from "../utils/report-ledger";
 import type { ReportLedgerRow } from "./report-ledger";
@@ -18,6 +20,8 @@ export type PreparedReportCounts = {
   peakOccupancy: number | null;
   uniqueCount: number;
   counting?: EstablishmentSummary;
+  /** Origins already confirmed in the month's draft. */
+  origins?: DailyOrigins;
 };
 
 export function countingFromPayload(value: unknown): EstablishmentSummary | undefined {
@@ -47,6 +51,20 @@ export function validateReportDraft(
     return `A report for ${period} has already been submitted.`;
   }
   return null;
+}
+
+/**
+ * What to tell the user when saving a report on this device fails. The local service rejects a
+ * report with a plain-language reason (the counts changed, the period was already submitted), so
+ * that reason is shown; other failures can be retried.
+ */
+export function reportSubmissionErrorMessage(error: unknown) {
+  if (error instanceof MlServiceRequestError) {
+    const generic = /^Request failed with status \d+\.$/.test(error.message);
+    if (error.status !== null && error.status >= 400 && error.status < 500 && error.message && !generic) return `Report not submitted. ${error.message}`;
+    if (error.code === "service_unavailable" || error.code === "request_timeout") return `Report not submitted. ${error.message} Please try again.`;
+  }
+  return "Report submission failed. Please try again.";
 }
 
 export function validateDemographicAllocation(metrics: Metrics, demo: DemoBreakdown) {
@@ -158,6 +176,7 @@ export function buildLedgerRows({
 }
 
 function reportFromPendingCounts(counts: PreparedReportCounts): ReportRecord {
+  const metrics: Metrics = { entries: counts.entries, exits: counts.exits, peak: counts.peakOccupancy, unique: counts.uniqueCount, ...(counts.counting ? { counting: counts.counting } : {}) };
   return {
     id: counts.reportId,
     date: counts.period,
@@ -168,7 +187,8 @@ function reportFromPendingCounts(counts: PreparedReportCounts): ReportRecord {
     unique: counts.uniqueCount,
     counting: counts.counting,
     period: counts.period,
-    demo: emptyDemo(),
+    demo: counts.origins ? monthlyDemoFromDays(reportDays(counts.period, metrics, counts.origins)) : emptyDemo(),
+    origins: counts.origins,
     notes: "",
   };
 }
@@ -189,6 +209,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 
   return {
     id: submission.report_id,
+    attractionType: formatReportAttraction(payload.attractionCode, payload.attractionDescription),
     date: submission.period,
     status: payloadStatus,
     entries: metrics.entries,
@@ -243,6 +264,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
   const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   return {
     id: report.code,
+    attractionType: formatReportAttraction(report.attraction?.code, report.attractionDescription),
     date: report.period,
     status,
     entries: report.metrics.entry,
@@ -309,6 +331,7 @@ function isPendingLocalReport(report: ReportRecord) {
 function uploadStatusLabel(status: string) {
   if (status === "synced") return "Up to date";
   if (status === "pending_cloud_sync") return "Waiting to upload";
+  if (status === "upload_rejected") return "Upload rejected";
   return status.replace(/_/g, " ");
 }
 

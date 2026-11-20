@@ -104,7 +104,7 @@ async def _create_enterprise(runtime: PostgresRuntime, *, label: str) -> Account
         enterprise_profile=EnterpriseProfile(
             enterprise_id=f"attachment-test-{label}-{suffix}",
             enterprise_name=f"Attachment Test {label}",
-            category="business",
+            attraction_code="411",
             manager_name=f"Test Manager {label}",
             barangay="Poblacion",
         ),

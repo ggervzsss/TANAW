@@ -1,9 +1,18 @@
-from app.camera.stream_candidates import StreamProbe, select_stream, stream_candidates
+from collections.abc import Callable
+
+from app.camera.stream_candidates import (
+    StreamProbe,
+    StreamSelection,
+    select_stream,
+    stream_candidates,
+)
 
 HOST = "192.168.1.20"
 
 
-def probe_from(sizes: dict[str, tuple[int, int] | None]):
+def probe_from(
+    sizes: dict[str, tuple[int, int] | None],
+) -> tuple[Callable[[str], StreamProbe], list[str]]:
     calls: list[str] = []
 
     def probe(url: str) -> StreamProbe:
@@ -17,7 +26,9 @@ def probe_from(sizes: dict[str, tuple[int, int] | None]):
     return probe, calls
 
 
-def select(brand: str, sizes, preferred: str | None = None):
+def select(
+    brand: str, sizes: dict[str, tuple[int, int] | None], preferred: str | None = None
+) -> tuple[StreamSelection, list[str]]:
     probe, calls = probe_from(sizes)
     result = select_stream(
         brand=brand,

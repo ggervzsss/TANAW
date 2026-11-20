@@ -55,7 +55,7 @@ design-system/
 | Navigation | `Tabs`, `SegmentedControl` |
 | Overlays | `Dialog`, `ConfirmDialog`, `ModalPortal`, `Tooltip` |
 | Data | `Table` (`TableHead`, `TableBody`, `TableRow`, `TableHeaderCell`, `TableCell`), `DetailField`, `DetailList`, `ExpandableText`, `Avatar` |
-| Patterns | `MetricStrip`, `PageHeader`, `PasswordRequirements`, `PasswordMatchIndicator`, `TopbarLiquidGlass`, `TopbarActiveUnderline` |
+| Patterns | `MetricStrip`, `PageHeader`, `PasswordRequirements`, `PasswordMatchIndicator`, `TopbarGlassNavigation` |
 
 Every prop is documented in the source and appears in Storybook's Docs tab.
 

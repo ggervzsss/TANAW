@@ -1,79 +1,218 @@
-.dot-table th,
-.dot-table td {
-  border: 1px solid currentColor;
-  padding: 4px;
-  text-align: center;
+body:has(.tanaw-report-preview) .tanaw-connection-notice {
+  z-index: 1200;
 }
 
-.tanaw-document-preview {
+@media (width < 40rem) {
+  .tanaw-report-preview > footer .tanaw-button {
+    padding-inline: 10px;
+    font-size: 0.75rem;
+  }
+}
+
+/*
+ * Official DOT VAR forms (VAR1_Blank.xlsx, VAR2M.xlsx, VAR3_Annual.xlsx). The sheet is printed
+ * paper in both themes: black rules, yellow (#ff0) headings and a green (#92d050) monthly total.
+ */
+.tanaw-var-sheet {
+  --var-ink: #000;
+  --var-heading: #ff0;
+  --var-total: #92d050;
+  --var-muted: #333;
+  min-width: 0;
+  background: #fff;
+  color: var(--var-ink);
   color-scheme: light;
+  font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+  padding: 24px 28px 22px;
+  border: 1px solid #c8cdd2;
 }
 
-.tanaw-document-preview .dot-table {
-  color: inherit;
+html.dark .tanaw-var-sheet {
+  border-color: #000;
 }
 
-.tanaw-official-report-table :where(th, td) {
-  background-color: transparent;
+.tanaw-var-heading {
+  position: relative;
+  min-height: 20px;
 }
 
-.tanaw-official-report-table thead :where(th) {
-  background-color: #e9eef3;
-}
-
-.tanaw-official-report-table .tanaw-report-code-cell {
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-.tanaw-official-report-table .tanaw-report-total-cell {
-  background-color: #e8edf3;
+.tanaw-var-heading h2 {
+  margin: 0;
+  padding-inline-end: 3.5rem;
+  font-family: inherit;
+  letter-spacing: normal;
+  font-size: 15px;
   font-weight: 700;
 }
 
-.tanaw-official-report-table .tanaw-report-final-total-cell {
-  background-color: #d4dde8;
-  font-weight: 800;
+.tanaw-var-heading p {
+  margin: 2px 0 0;
+  font-size: 11px;
 }
 
-.tanaw-official-report-table .tanaw-report-consolidated-row > * {
-  background-color: #dfe6ee;
+.tanaw-var-code {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 13px;
 }
 
-.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
-  background-color: #d4dde8;
+.tanaw-var3-heading .tanaw-var-code {
+  position: static;
+  font-size: 14px;
 }
 
-.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
-  background-color: #c4d0dd;
+.tanaw-var-fields {
+  display: grid;
+  gap: 5px;
+  margin: 16px 0 16px 18%;
+  font-size: 13px;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table :where(tbody th, tbody td) {
-  background-color: transparent;
+.tanaw-var3-fields {
+  margin-left: 0;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table thead :where(th) {
-  background-color: var(--tanaw-surface-raised);
+.tanaw-var-fields > div {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 26rem);
+  align-items: end;
+  gap: 10px;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-total-cell {
-  background-color: var(--tanaw-control-hover);
+.tanaw-var3-fields dt {
+  min-width: 7rem;
+  font-weight: 700;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-final-total-cell {
-  background-color: var(--tanaw-control-hover);
+.tanaw-var-fields dd {
+  margin: 0;
+  min-height: 18px;
+  padding-inline: 4px;
+  border-bottom: 1px solid var(--var-ink);
+  font-weight: 700;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > * {
-  background-color: var(--tanaw-control-hover);
+.tanaw-var-table-stack {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
-  background-color: var(--tanaw-control-hover);
+.tanaw-var-table caption {
+  padding-block-end: 4px;
+  text-align: left;
+  font-weight: 700;
 }
 
-html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
-  background-color: #344a64;
+.tanaw-var-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid var(--var-ink);
+  color: var(--var-ink);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tanaw-var-table :where(th, td) {
+  border: 1px solid var(--var-ink);
+  padding: 4px 3px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.tanaw-var-table thead th {
+  background: var(--var-heading);
+  font-weight: 700;
+}
+
+.tanaw-var-table tbody tr {
+  height: 26px;
+}
+
+.tanaw-var-table tbody th {
+  font-weight: 400;
+  text-align: left;
+}
+
+.tanaw-var-table tfoot :where(th, td) {
+  font-weight: 700;
+}
+
+.tanaw-var2m-table tfoot :where(th, td) {
+  height: 40px;
+  background: var(--var-total);
+}
+
+.tanaw-var-name-col {
+  width: 15%;
+}
+
+.tanaw-var-code-col {
+  width: 7%;
+}
+
+.tanaw-var-month-col {
+  width: min(32%, 6rem);
+}
+
+.tanaw-var3-table tbody th,
+.tanaw-var3-table tfoot th {
+  background: var(--var-heading);
+  font-weight: 700;
+}
+
+.tanaw-var3-table tbody tr[data-finalized="false"] td {
+  background: repeating-linear-gradient(135deg, #fff 0 6px, #f1f1f1 6px 7px);
+}
+
+.tanaw-var-empty {
+  padding-block: 18px;
+  color: var(--var-muted);
+  font-style: italic;
+}
+
+.tanaw-var-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.tanaw-var-compact-name {
+  width: 40%;
+}
+
+@media (width < 48rem) {
+  .tanaw-var-sheet {
+    padding: 12px;
+  }
+
+  .tanaw-var-fields {
+    margin-left: 0;
+  }
+
+  .tanaw-var-fields > div {
+    grid-template-columns: fit-content(45%) minmax(0, 1fr);
+    align-items: start;
+    gap: 6px;
+  }
+
+  .tanaw-var-fields dd {
+    overflow-wrap: anywhere;
+  }
+
+  .tanaw-var3-fields dt {
+    min-width: 0;
+  }
+}
+
+.tanaw-var-data-note {
+  margin: 4px 0 0;
+  color: var(--var-muted);
+  font-size: 11px;
+  font-style: italic;
 }
 
 @keyframes fadeIn {

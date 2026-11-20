@@ -10,9 +10,9 @@ export function CameraValidationWarnings({ warnings }: CameraValidationWarningsP
   return (
     <div className="space-y-2">
       {warnings.map((warning) => (
-        <div key={warning} className="flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 p-2.5 shadow-inner dark:border-orange-300/20 dark:bg-orange-300/8 dark:text-orange-100">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-orange-600" />
-          <p className="text-[11px] leading-relaxed font-medium text-orange-800">{warning}</p>
+        <div key={warning} className="flex items-start gap-2 rounded-tanaw-md border border-(--tanaw-warning-line) bg-(--tanaw-warning-bg) p-2.5 text-(--tanaw-warning-text)">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-xs leading-relaxed font-medium">{warning}</p>
         </div>
       ))}
     </div>

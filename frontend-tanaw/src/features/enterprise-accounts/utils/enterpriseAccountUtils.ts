@@ -5,7 +5,7 @@ export function filterEnterpriseAccounts(accounts: AccountSummary[], query: stri
   const normalizedQuery = query.trim().toLowerCase();
 
   return accounts.filter((enterprise) => {
-    const haystack = `${enterprise.enterpriseName ?? enterprise.displayName} ${enterprise.managerName ?? ""} ${enterprise.category ?? ""} ${enterprise.barangay ?? ""}`.toLowerCase();
+    const haystack = `${enterprise.enterpriseName ?? enterprise.displayName} ${enterprise.managerName ?? ""} ${enterprise.category ?? ""} ${enterprise.attraction?.code ?? ""} ${enterprise.attraction?.ntdpCode ?? ""} ${enterprise.attraction?.type ?? ""} ${enterprise.barangay ?? ""}`.toLowerCase();
     return haystack.includes(normalizedQuery) && (status === "all" || enterprise.status === status) && (barangay === "All Barangays" || enterprise.barangay === barangay);
   });
 }

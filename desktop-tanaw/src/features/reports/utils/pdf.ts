@@ -56,7 +56,7 @@ export function createDotReportPdf(report: DotReportPdf) {
     first.push(`0 0 0 RG 0.8 w 247 ${number(y - 3)} m 768 ${number(y - 3)} l S`);
   });
   drawText(first, "Type of Tourism Attraction:", 50, 414, { size: 9 });
-  drawCell(first, 174, 426, 200, 17, [report.attractionType ?? ""], { align: "left", size: 9 });
+  drawCell(first, 174, 426, 594, 17, [report.attractionType ?? ""], { align: "left", size: 9 });
   const bodyTop = drawHeader(first, 402);
   drawDays(first, days.slice(0, 14), bodyTop, detailed);
   const pages = [first];

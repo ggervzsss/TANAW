@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password, verify_password
+from app.features.accounts.attractions import ATTRACTION_CLASSIFICATIONS, attraction_category
 from app.features.accounts.models import (
     Account,
     AccountEmailChangeRequest,
@@ -17,7 +18,6 @@ from app.features.accounts.models import (
     AccountStatus,
     EnterpriseProfile,
 )
-from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.schemas import (
     AccountProfileChangeRequest,
     AccountSummary,
@@ -113,7 +113,11 @@ def to_auth_user(account: Account) -> AuthUser:
         lastName=account.last_name,
         enterpriseId=profile.enterprise_id if profile else None,
         enterpriseName=profile.enterprise_name if profile else None,
-        category=format_enterprise_category(profile.category) if profile else None,
+        category=attraction_category(profile.attraction_code, profile.attraction_description)
+        if profile
+        else None,
+        attraction=ATTRACTION_CLASSIFICATIONS[profile.attraction_code] if profile else None,
+        attractionDescription=profile.attraction_description if profile else None,
         managerName=profile.manager_name if profile else None,
         barangay=profile.barangay if profile else None,
         address=profile.address if profile else None,
@@ -137,7 +141,11 @@ def to_account_summary(
         firstName=account.first_name,
         lastName=account.last_name,
         enterpriseName=profile.enterprise_name if profile else None,
-        category=format_enterprise_category(profile.category) if profile else None,
+        category=attraction_category(profile.attraction_code, profile.attraction_description)
+        if profile
+        else None,
+        attraction=ATTRACTION_CLASSIFICATIONS[profile.attraction_code] if profile else None,
+        attractionDescription=profile.attraction_description if profile else None,
         managerName=profile.manager_name if profile else None,
         barangay=profile.barangay if profile else None,
         address=profile.address if profile else None,

@@ -5,7 +5,7 @@ import type { Camera } from "../../../types/enterprise";
 import { CAMERA_IP_CONFLICT_MESSAGE } from "../utils/camera-ip-uniqueness";
 import { useCameraManagement } from "../hooks/useCameraManagement";
 import { CameraAddModal } from "./CameraAddModal";
-import { CameraList, CameraSidebarToggle, CollapsedCameraListRail } from "./CameraList";
+import { CameraList } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
 import { PerformanceStatus } from "./PerformanceStatus";
 
@@ -62,6 +62,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     streamUrl,
     warnings,
   } = useCameraManagement({ cameras, setCameras, storageKey });
+  const showingSettings = Boolean(isEditMode && activeCam && editForm);
 
   return (
     <div className="camera-management animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-sans duration-500">
@@ -126,49 +127,36 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </CameraDialog>
       )}
 
-      <div className="camera-page-heading mb-4 flex shrink-0 items-end justify-between gap-4 px-1">
-        <div className="min-w-0">
-          <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Monitoring</h2>
-          <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">View camera status and check if the counting is working properly.</p>
+      {!showingSettings && (
+        <div className="camera-page-heading mb-4 flex shrink-0 items-end justify-between gap-4 px-1">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold tracking-tight text-(--tanaw-text)">Camera Monitoring</h2>
+            <p className="text-xs font-medium text-(--tanaw-text-secondary)">Monitor live video, visitor counts, and camera health.</p>
+          </div>
+          <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
         </div>
-        <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
-      </div>
+      )}
 
       <div
+        data-camera-view={showingSettings ? "settings" : "monitoring"}
         data-camera-sidebar={isCameraListCollapsed ? "collapsed" : "expanded"}
-        className={`grid min-h-0 flex-1 transition-[grid-template-columns,gap] duration-300 ease-tanaw motion-reduce:transition-none ${
-          isCameraListCollapsed ? "grid-cols-[30px_minmax(0,1fr)] gap-3" : "grid-cols-[minmax(190px,230px)_minmax(0,1fr)] gap-4 max-[900px]:grid-cols-[176px_minmax(0,1fr)] max-[900px]:gap-3"
-        }`}
+        className="camera-workspace"
       >
-        <div id="configured-cameras-panel" className="relative min-h-0 min-w-0 overflow-visible">
-          <div className="h-full min-h-0 overflow-hidden rounded-tanaw-xl">
-            <div
-              {...(isCameraListCollapsed ? { inert: "" } : {})}
-              aria-hidden={isCameraListCollapsed}
-              className={`h-full w-57.5 origin-left transition-[opacity,filter] duration-150 motion-reduce:transition-none max-[900px]:w-44 ${isCameraListCollapsed ? "pointer-events-none opacity-0 blur-[2px]" : "blur-0 opacity-100 delay-100"}`}
-            >
-              <CameraList
-                cameras={cameras}
-                activeCamId={activeCamId}
-                cameraLimit={configuredCameraLimit}
-                onAdd={openAddModal}
-                onSelect={(cameraId) => {
-                  setActiveCamId(cameraId);
-                  setIsEditMode(false);
-                }}
-              />
-            </div>
-            <div
-              {...(!isCameraListCollapsed ? { inert: "" } : {})}
-              aria-hidden={!isCameraListCollapsed}
-              className={`absolute inset-0 transition-opacity duration-150 motion-reduce:transition-none ${isCameraListCollapsed ? "opacity-100 delay-150" : "pointer-events-none opacity-0"}`}
-            >
-              <CollapsedCameraListRail cameraCount={cameras.length} />
-            </div>
-          </div>
-          <CameraSidebarToggle collapsed={isCameraListCollapsed} onToggle={() => setIsCameraListCollapsed((current) => !current)} />
-        </div>
-        <div className="min-h-0">
+        {!showingSettings && (
+          <CameraList
+            cameras={cameras}
+            activeCamId={activeCamId}
+            cameraLimit={configuredCameraLimit}
+            collapsed={isCameraListCollapsed}
+            onAdd={openAddModal}
+            onToggle={() => setIsCameraListCollapsed((current) => !current)}
+            onSelect={(cameraId) => {
+              setActiveCamId(cameraId);
+              setIsEditMode(false);
+            }}
+          />
+        )}
+        <div className="camera-workspace-main">
           <CameraPreviewPanel
             runtimeReady={runtimeReady}
             storageKey={storageKey}

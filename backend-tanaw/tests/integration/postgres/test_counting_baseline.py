@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 from uuid import uuid4
 
-import asyncpg
+import asyncpg  # type: ignore[import-untyped]
 import pytest
 import pytest_asyncio
 from alembic.config import Config

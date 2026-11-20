@@ -1,6 +1,6 @@
+import { formatReportAttraction } from "../../../utils/attractions";
 import type { LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { getDemographicTotals } from "../../reports/utils/demographics";
 import { countingFromPayload } from "../../reports/model/report-workspace";
 
 export function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
@@ -11,6 +11,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 
   return {
     id: submission.report_id,
+    attractionType: formatReportAttraction(payload.attractionCode, payload.attractionDescription),
     date: submission.period,
     status: payloadStatus,
     entries: metrics.entries,
@@ -68,10 +69,6 @@ export function metricsFromReport(report: ReportRecord): Metrics {
     unique: report.unique,
     counting: report.counting,
   };
-}
-
-export function hasDemographics(report: ReportRecord) {
-  return getDemographicTotals(report.demo ?? emptyDemo()).grandTotal > 0;
 }
 
 export function sortReportsBySubmittedAt(reports: ReportRecord[]) {

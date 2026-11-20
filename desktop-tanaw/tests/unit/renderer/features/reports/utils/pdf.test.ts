@@ -4,6 +4,7 @@ import { createDotReportPdf } from "../../../../../../src/features/reports/utils
 describe("enterprise DOT PDF generation", () => {
   it("always generates an official light PDF with valid text positioning", () => {
     const pdf = createDotReportPdf({
+      attractionType: "411 - Parks",
       enterpriseName: "Archie's Event Place",
       reportId: "REP-260501",
       period: "May 2026",
@@ -20,6 +21,7 @@ describe("enterprise DOT PDF generation", () => {
     });
 
     expect(pdf.startsWith("%PDF-1.4")).toBe(true);
+    expect(pdf).toContain("411 - Parks");
     expect(pdf).toContain("Tourism Attraction Visitor Record");
     expect(pdf).toContain("VAR 1");
     expect(pdf).not.toContain("VAR 2");

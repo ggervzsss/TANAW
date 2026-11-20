@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Pencil } from "lucide-react";
+import { Check, Eye, EyeOff, Pencil } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 
 type AccountFieldProps = {
@@ -78,15 +78,15 @@ export function AccountField({
       readOnly={isReadOnly}
       aria-readonly={isReadOnly}
       tabIndex={isProfileReadOnly ? -1 : undefined}
-      className={`focus:ring-tanaw-green/20 w-full rounded-lg border p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 dark:text-slate-100 ${
-        isProfileReadOnly ? "cursor-default border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)" : "border-tanaw-green bg-(--tanaw-control-bg) shadow-sm"
-      } ${isPassword || canEdit ? "pr-12" : ""} ${isPassword ? "tanaw-sensitive-input" : ""} ${error ? "border-red-400" : ""}`}
+      className={`rounded-tanaw-sm w-full min-w-0 border px-3 py-2.5 text-sm font-medium text-(--tanaw-text) outline-none focus:border-(--tanaw-accent-ink) focus:ring-2 focus:ring-(--tanaw-focus-ring)/30 ${
+        isProfileReadOnly ? "cursor-default border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)" : "border-(--tanaw-control-border) bg-(--tanaw-control-bg)"
+      } ${isPassword || canEdit ? "pr-12" : ""} ${isPassword ? "tanaw-sensitive-input" : ""} ${error ? "border-(--tanaw-danger)" : ""}`}
     />
   );
 
   return (
     <div data-field-name={name} className="block">
-      <label htmlFor={inputId} className="mb-2 block text-xs font-bold tracking-wide text-(--tanaw-text-muted) uppercase">
+      <label htmlFor={inputId} className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">
         {label}
       </label>
       <span className="relative block">
@@ -94,12 +94,11 @@ export function AccountField({
         {isPassword ? (
           <button
             type="button"
-            tabIndex={-1}
             disabled={!canRevealPassword}
             onClick={() => {
               if (canRevealPassword) setIsPasswordVisible((current) => !current);
             }}
-            className="hover:text-tanaw-green focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-tanaw-green focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-(--tanaw-text-muted) transition hover:bg-(--tanaw-selected-bg) focus-visible:ring-2 focus-visible:outline-none"
             aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
           >
             {isPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -123,12 +122,12 @@ function EditFieldButton({ isEditing, label, onClick }: { isEditing: boolean; la
       type="button"
       onClick={onClick}
       className={`focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:outline-none ${
-        isEditing ? "text-tanaw-green bg-emerald-50" : "hover:text-tanaw-green text-slate-400 hover:bg-emerald-50"
+        isEditing ? "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)" : "hover:text-tanaw-green text-(--tanaw-text-muted) hover:bg-(--tanaw-selected-bg)"
       }`}
       aria-label={isEditing ? `Lock ${label.toLowerCase()}` : `Edit ${label.toLowerCase()}`}
       aria-pressed={isEditing}
     >
-      <Pencil size={16} />
+      {isEditing ? <Check size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
     </button>
   );
 }

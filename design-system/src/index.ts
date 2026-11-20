@@ -35,7 +35,7 @@ export { Tooltip, type TooltipProps } from "./components/Tooltip";
 export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProps, type MetricTone } from "./patterns/MetricStrip";
 export { PageHeader, type PageHeaderProps } from "./patterns/PageHeader";
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
-export { TopbarActiveUnderline, TopbarLiquidGlass, type TopbarGlassSignal, type TopbarGlassTarget } from "./patterns/TopbarGlassIndicator";
+export { TopbarNavigation } from "./patterns/TopbarNavigation";
 
 // Helpers
 export { cn } from "./lib/cn";

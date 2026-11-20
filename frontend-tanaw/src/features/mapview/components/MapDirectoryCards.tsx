@@ -1,25 +1,58 @@
-import { Activity, Building2, Camera, ChevronRight, MapPin } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, Building2, ChevronRight, CircleAlert, CircleCheck, CircleDotDashed, CircleGauge, CirclePause, MapPinOff } from "lucide-react";
+import { useId, type ReactNode } from "react";
 import type { AccountSummary } from "@/shared/types";
-import type { MapEnterprise } from "@/shared/types";
-import { getDarkMonitoringBadgeClass, getOccupancyBadgeClass, monitoringStatusLegend } from "../utils";
+import type { MapEnterprise, MonitoringStatus } from "@/shared/types";
+import { getMonitoringStatusPresentation, getMonitoringStatusLabel, getOccupancyBadgeClass, monitoringStatusLegend, type MonitoringStatusTone } from "../utils";
 
-export function EnterpriseList({ children, count, title }: { children: ReactNode; count: ReactNode; title: string }) {
+const statusIcons: Record<MonitoringStatusTone, typeof CircleCheck> = {
+  running: CircleCheck,
+  partial: CircleGauge,
+  inactive: CirclePause,
+  fault: CircleAlert,
+  unconfigured: CircleDotDashed,
+};
+
+export function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
+  const { badgeClass, tone } = getMonitoringStatusPresentation(status);
+  const Icon = statusIcons[tone];
   return (
-    <div className="tanaw-map-directory__results flex min-h-0 flex-1 flex-col">
-      <div className="tanaw-map-directory__results-header mb-2 flex shrink-0 items-center justify-between gap-3 px-1 pb-2">
-        <h3 className="tanaw-map-directory__section-title flex min-w-0 items-center gap-2 text-sm font-bold">
-          <Building2 size={16} aria-hidden="true" /> {title}
-        </h3>
-        <span className="tanaw-map-directory__count shrink-0 rounded-full px-2.5 py-1 text-right font-mono text-[10px] leading-tight font-bold">{count}</span>
+    <span className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-1 text-left text-[11px] leading-tight font-semibold ${badgeClass}`}>
+      <Icon size={13} className="shrink-0" aria-hidden="true" />
+      {getMonitoringStatusLabel(status)}
+    </span>
+  );
+}
+
+export function EnterpriseList({ children, count, title, onBack }: { children: ReactNode; count: number; title: string; onBack?: () => void }) {
+  return (
+    <section className="tanaw-map-directory__results flex min-h-0 flex-1 flex-col" aria-labelledby="spatial-enterprise-title">
+      <div className="tanaw-map-directory__results-header">
+        <div className="min-w-0">
+          {onBack && <p className="tanaw-map-directory__result-caption">Enterprises in this barangay</p>}
+          <h3 id="spatial-enterprise-title" className="tanaw-map-directory__section-title font-display font-bold">
+            {title}
+          </h3>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="tanaw-map-directory__count" aria-live="polite">
+            {count} {count === 1 ? "enterprise" : "enterprises"}
+          </span>
+          {onBack && (
+            <button type="button" onClick={onBack} className="tanaw-map-directory__back" title="Back to Barangay Directory">
+              <ArrowLeft size={13} aria-hidden="true" /> All Barangays
+            </button>
+          )}
+        </div>
       </div>
-      <div className="tanaw-map-directory__list min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1.5 pb-2">{children}</div>
-    </div>
+      <div tabIndex={0} role="region" aria-label="Enterprise results" className="tanaw-map-directory__list min-h-0 flex-1 overflow-y-auto">
+        <ul className="tanaw-map-directory__records">{children}</ul>
+      </div>
+    </section>
   );
 }
 
 export function DirectoryEmptyMessage({ children }: { children: ReactNode }) {
-  return <div className="tanaw-map-directory__empty rounded-xl border p-5 text-center text-xs leading-relaxed font-medium">{children}</div>;
+  return <li className="tanaw-map-directory__empty p-5 text-center text-sm leading-relaxed font-medium">{children}</li>;
 }
 
 export function EnterpriseMapCard({
@@ -33,68 +66,86 @@ export function EnterpriseMapCard({
   onClick: () => void;
   onHoverChange: (enterpriseId: string | null) => void;
 }) {
+  const addressId = useId();
+  const detailsId = useId();
+  const { cameraMonitoring, occupancyStatus, totalLiveOccupancy } = enterprise;
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       onPointerEnter={() => onHoverChange(enterprise.id)}
       onPointerLeave={() => onHoverChange(null)}
-      onFocus={() => onHoverChange(enterprise.id)}
-      onBlur={() => onHoverChange(null)}
-      aria-pressed={selected}
       data-selected={selected}
-      className="tanaw-map-enterprise-card relative w-full overflow-hidden rounded-2xl border p-3 text-left"
+      className="tanaw-map-enterprise-card"
     >
-      <span className="tanaw-map-enterprise-card__selection absolute inset-y-3 left-0 w-0.75 rounded-r-full" aria-hidden="true" />
-      <div className="flex items-start justify-between gap-2.5">
-        <div className="min-w-0 flex-1">
-          <h4 className="tanaw-map-enterprise-card__title text-sm leading-snug font-bold">{enterprise.name}</h4>
-          <div className="tanaw-map-enterprise-card__address mt-1 flex items-center gap-1.5 text-xs leading-snug">
-            <MapPin size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate" title={enterprise.fullAddress}>
-              {enterprise.fullAddress}
-            </span>
-          </div>
-        </div>
-        <span
-          className={`flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-center text-[11px] leading-tight font-semibold ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}`}
+      <span className="tanaw-map-enterprise-card__identity">
+        <button
+          type="button"
+          className="tanaw-map-enterprise-card__title tanaw-map-enterprise-card__select"
+          aria-pressed={selected}
+          aria-describedby={`${addressId} ${detailsId}`}
+          onClick={onClick}
+          onFocus={() => onHoverChange(enterprise.id)}
+          onBlur={() => onHoverChange(null)}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-current opacity-70" aria-hidden="true" />
-          {enterprise.monitoringStatus}
+          {enterprise.name}
+        </button>
+        <span id={addressId} className="tanaw-map-enterprise-card__address" title={enterprise.fullAddress}>
+          {enterprise.fullAddress}
         </span>
-      </div>
-      <div className="tanaw-map-enterprise-card__operations mt-2.5 flex items-center justify-between gap-2 border-t pt-2.5">
-        <span className="tanaw-map-enterprise-card__camera flex min-w-0 items-center gap-1.5 text-xs font-medium">
-          <Camera size={13} className="shrink-0" aria-hidden="true" />
-          <span className="truncate">
-            {enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras reporting` : "No camera telemetry"}
+      </span>
+      <span id={detailsId} className="tanaw-map-enterprise-card__details">
+        <span className="tanaw-map-enterprise-card__status">
+          <MonitoringStatusBadge status={enterprise.monitoringStatus} />
+        </span>
+        <span className="tanaw-map-enterprise-card__telemetry">
+          <span>
+            <span className="tanaw-map-enterprise-card__metric-label">Cameras</span>
+            {cameraMonitoring ? (
+              <span className="tanaw-map-enterprise-card__measure">
+                <strong>
+                  {cameraMonitoring.healthyCameraCount}/{cameraMonitoring.configuredCameraCount}
+                </strong>{" "}
+                <span>cameras reporting</span>
+              </span>
+            ) : (
+              <span className="tanaw-map-enterprise-card__missing">No camera telemetry</span>
+            )}
+          </span>
+          <span>
+            <span className="tanaw-map-enterprise-card__metric-label">Live Occupancy</span>
+            <span className="tanaw-map-enterprise-card__measure">
+              {totalLiveOccupancy === null ? "No live data" : <strong>{totalLiveOccupancy.toLocaleString()}</strong>}
+              {(totalLiveOccupancy !== null || occupancyStatus !== "No Data") && (
+                <span className={`rounded-full border px-1.5 text-[10px] font-semibold ${getOccupancyBadgeClass(occupancyStatus)}`}>{occupancyStatus}</span>
+              )}
+            </span>
           </span>
         </span>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getOccupancyBadgeClass(enterprise.occupancyStatus)}`}>{enterprise.occupancyStatus}</span>
-      </div>
-      <dl className="tanaw-map-enterprise-card__metrics mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
-        <dt className="flex items-center gap-1.5"><Activity size={15} aria-hidden="true" /> Live Occupancy</dt>
-        <dd className="flex items-center gap-1.5 font-semibold tabular-nums">
-          {enterprise.totalLiveOccupancy?.toLocaleString() ?? "Unavailable"}
-          <ChevronRight className="tanaw-map-enterprise-card__arrow" size={14} aria-hidden="true" />
-        </dd>
-      </dl>
-    </button>
+      </span>
+      <ChevronRight className="tanaw-map-enterprise-card__arrow" size={17} aria-hidden="true" />
+    </div>
   );
 }
 
 export function MonitoringLegend() {
   return (
-    <div className="tanaw-map-directory__legend mt-3" aria-label="Camera monitoring status legend">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] font-semibold">
-        {monitoringStatusLegend.map(({ tone, label }) => (
-          <span key={label} className="inline-flex items-center gap-1.5">
-            <span className="tanaw-map-directory__legend-dot h-2.5 w-2.5 rounded-full" data-tone={tone} aria-hidden="true" />
-            {label}
-          </span>
-        ))}
+    <div className="tanaw-map-directory__legend" role="group" aria-label="Camera monitoring status legend">
+      <div className="tanaw-map-directory__legend-heading">
+        <span className="inline-flex items-center gap-1.5">
+          <Building2 size={14} aria-hidden="true" /> Map markers
+        </span>
+        <span className="tanaw-map-directory__legend-note">
+          <span className="tanaw-map-directory__legend-ring" aria-hidden="true" />
+          Ring indicates an occupancy alert
+        </span>
       </div>
-      <p className="tanaw-map-directory__legend-note mt-1 text-[10px] font-medium">Outer ring shows an occupancy alert</p>
+      <ul className="tanaw-map-directory__legend-list">
+        {monitoringStatusLegend.map(({ tone, label, color }) => (
+          <li key={tone} className="inline-flex items-center gap-1.5">
+            <span className="tanaw-map-directory__legend-dot" style={{ backgroundColor: color }} aria-hidden="true" />
+            {label}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -102,25 +153,17 @@ export function MonitoringLegend() {
 export function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) {
   const status = enterprise.latitude === null || enterprise.longitude === null ? "Not Pinned" : "Needs Correction";
   return (
-    <div className="tanaw-map-enterprise-card tanaw-map-enterprise-card--unpinned w-full rounded-2xl border border-dashed p-3.5 text-left">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h4 className="tanaw-map-enterprise-card__title text-[13px] leading-snug font-bold">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
-          <div className="tanaw-map-enterprise-card__address mt-1.5 flex items-center gap-1.5 text-[10px] font-medium">
-            <MapPin size={12} aria-hidden="true" />
-            <span className="truncate" title={enterprise.address ?? "Address not provided"}>
-              {enterprise.address ?? "Address not provided"}
-            </span>
-          </div>
-        </div>
-        <span className="flex max-w-[46%] shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-center text-[9px] leading-tight font-bold text-amber-800 dark:border-amber-300/25 dark:bg-amber-400/10 dark:text-amber-200">
-          {status}
+    <article className="tanaw-map-enterprise-card tanaw-map-enterprise-card--unpinned">
+      <div className="tanaw-map-enterprise-card__identity">
+        <h4 className="tanaw-map-enterprise-card__title">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
+        <p className="tanaw-map-enterprise-card__address">{enterprise.address ?? "Address not provided"}</p>
+      </div>
+      <div className="tanaw-map-enterprise-card__details">
+        <span className="tanaw-map-enterprise-card__unpinned-status">
+          <MapPinOff size={13} aria-hidden="true" /> {status}
         </span>
+        <p className="tanaw-map-enterprise-card__missing">{[enterprise.category ?? "Uncategorized", enterprise.barangay ?? "Unassigned"].join(" · ")}</p>
       </div>
-      <div className="tanaw-map-enterprise-card__operations mt-3 grid grid-cols-2 gap-x-2 border-t pt-3 font-mono text-[10px]">
-        <span className="truncate">{enterprise.category ?? "Uncategorized"}</span>
-        <span className="tanaw-map-enterprise-card__title truncate text-right font-bold">{enterprise.barangay ?? "Unassigned"}</span>
-      </div>
-    </div>
+    </article>
   );
 }

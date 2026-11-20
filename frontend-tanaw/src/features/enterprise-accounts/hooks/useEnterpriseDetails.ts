@@ -102,7 +102,16 @@ export function useEnterpriseDetails(enterprise: AccountSummary, onEnterpriseUpd
       ["Contact Email", enterprise.email],
       ["Contact Number", enterprise.phone ?? "Not provided"],
       ["Contact Manager", enterprise.managerName ?? "Not provided"],
-      ["Category", enterprise.category ?? "Not provided"],
+      ["DOT category", enterprise.attraction?.category ?? "Not assigned"],
+      ...(enterprise.attractionDescription ? [["Attraction description", enterprise.attractionDescription]] : []),
+      ...(enterprise.attraction
+        ? [
+            ["Attraction code", enterprise.attraction.code],
+            ["Attraction type", `${enterprise.attraction.typeCode} · ${enterprise.attraction.type}`],
+            ["NTDP portfolio", enterprise.attraction.portfolioCategory],
+            ["NTDP code", enterprise.attraction.ntdpCode],
+          ]
+        : []),
       ["Barangay", enterprise.barangay ?? "Not provided"],
       ["Building Capacity", `${enterprise.buildingCapacity.toLocaleString()} people`],
       ["Enterprise ID", enterprise.enterpriseId ?? "Pending"],

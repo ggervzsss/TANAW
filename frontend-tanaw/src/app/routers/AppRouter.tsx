@@ -6,13 +6,12 @@ import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { routes } from "./routes";
 import {
-  AccountProfilePage,
-  AccountSecurityPage,
-  DisplayPreferencesPage,
+  GeneralSettingsPage,
   HelpCenterPage,
   ActivateAccountPage,
   AdminActivityHistoryPage,
   AdminMapViewPage,
+  AdminVisitorInsightsPage,
   AdminOperationsCenterPage,
   EnterpriseAccessPage,
   ITDashboardPage,
@@ -20,13 +19,12 @@ import {
   ITEnterpriseAccountsPage,
   ITLguAccountsPage,
   ITSystemLogsPage,
-  ITSystemSettingsPage,
   ITWorkCenterPage,
   LoginPage,
   NotificationsPage,
   StaffAnalyticsPage,
   StaffBatchReportsPage,
-  StaffFinalReportsAuditPage,
+  StaffGeneratedReportsPage,
   VerifyEmailChangePage,
 } from "./routeModules";
 
@@ -67,10 +65,11 @@ export function AppRouter() {
           <Route path="notifications" element={<NotificationsPage role="it" />} />
           <Route path="system-logs" element={<ITSystemLogsPage />} />
           {import.meta.env.DEV && ITDevLogPage ? <Route path="dev-log" element={<ITDevLogPage />} /> : null}
-          <Route path="system-settings" element={<ITSystemSettingsPage />} />
-          <Route path="profile" element={<AccountProfilePage role="it" />} />
-          <Route path="security" element={<AccountSecurityPage />} />
-          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="settings/:section?" element={<GeneralSettingsPage role="it" />} />
+          <Route path="profile" element={<Navigate to={routes.it.profile} replace />} />
+          <Route path="security" element={<Navigate to={routes.it.security} replace />} />
+          <Route path="display-preferences" element={<Navigate to={routes.it.displayPreferences} replace />} />
+          <Route path="system-settings" element={<Navigate to={routes.it.systemSettings} replace />} />
           <Route path="help" element={<HelpCenterPage role="it" />} />
           <Route path="help/:articleId" element={<HelpCenterPage role="it" />} />
         </Route>
@@ -85,12 +84,14 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.admin.mapview} replace />} />
           <Route path="mapview" element={<AdminMapViewPage />} />
+          <Route path="visitor-insights" element={<AdminVisitorInsightsPage />} />
           <Route path="activity-history" element={<AdminActivityHistoryPage />} />
           <Route path="operations" element={<AdminOperationsCenterPage />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
-          <Route path="profile" element={<AccountProfilePage role="admin" />} />
-          <Route path="security" element={<AccountSecurityPage />} />
-          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="settings/:section?" element={<GeneralSettingsPage role="admin" />} />
+          <Route path="profile" element={<Navigate to={routes.admin.profile} replace />} />
+          <Route path="security" element={<Navigate to={routes.admin.security} replace />} />
+          <Route path="display-preferences" element={<Navigate to={routes.admin.displayPreferences} replace />} />
           <Route path="help" element={<HelpCenterPage role="admin" />} />
           <Route path="help/:articleId" element={<HelpCenterPage role="admin" />} />
         </Route>
@@ -105,12 +106,14 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.staff.analytics} replace />} />
           <Route path="batch-reports" element={<StaffBatchReportsPage />} />
-          <Route path="final-reports-audit" element={<StaffFinalReportsAuditPage />} />
+          <Route path="generated-reports" element={<StaffGeneratedReportsPage />} />
+          <Route path="final-reports-audit" element={<Navigate to={routes.staff.generatedReports} replace />} />
           <Route path="analytics" element={<StaffAnalyticsPage />} />
           <Route path="notifications" element={<NotificationsPage role="staff" />} />
-          <Route path="profile" element={<AccountProfilePage role="staff" />} />
-          <Route path="security" element={<AccountSecurityPage />} />
-          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="settings/:section?" element={<GeneralSettingsPage role="staff" />} />
+          <Route path="profile" element={<Navigate to={routes.staff.profile} replace />} />
+          <Route path="security" element={<Navigate to={routes.staff.security} replace />} />
+          <Route path="display-preferences" element={<Navigate to={routes.staff.displayPreferences} replace />} />
           <Route path="help" element={<HelpCenterPage role="staff" />} />
           <Route path="help/:articleId" element={<HelpCenterPage role="staff" />} />
         </Route>

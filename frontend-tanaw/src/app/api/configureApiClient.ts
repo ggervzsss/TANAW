@@ -4,6 +4,7 @@ import { publishSessionEvent } from "@/shared/utils/sessionSync";
 
 export function configureWebApiClientAuthentication() {
   return configureApiClientAuthentication({
+    getAccountId: () => useAuthStore.getState().user?.id,
     getAccessToken: () => useAuthStore.getState().token,
     onAuthenticationFailure: () => {
       const authState = useAuthStore.getState();

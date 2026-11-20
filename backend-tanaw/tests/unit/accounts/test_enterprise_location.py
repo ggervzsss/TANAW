@@ -14,7 +14,7 @@ from app.main import app
 def enterprise_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "enterpriseName": "Crismor Test Enterprise",
-        "category": "business",
+        "attractionCode": "411",
         "managerName": "Alex Santos",
         "email": "enterprise@example.com",
         "barangay": "San Antonio",

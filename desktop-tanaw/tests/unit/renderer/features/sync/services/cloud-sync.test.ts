@@ -1,3 +1,4 @@
+import { AxiosError, type AxiosResponse } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { staffApi } from "../../../../../../src/lib/axios";
 import {
@@ -12,10 +13,11 @@ import {
   getLocalMetricsSummary,
   listLocalReportSubmissions,
   markLocalReportSynced,
+  markLocalReportUploadRejected,
   prepareLocalSampleCounts,
   type LocalReportSubmissionRecord,
 } from "../../../../../../src/features/camera/services/ml-service";
-import { syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
+import { DESKTOP_SAMPLE_PREPARED_EVENT, isRefusedUpload, syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
 
 vi.mock("../../../../../../src/lib/axios", () => ({
   staffApi: {
@@ -37,6 +39,7 @@ vi.mock("../../../../../../src/features/camera/services/ml-service", () => ({
   listLocalReportSubmissions: vi.fn(),
   markLocalEventsSynced: vi.fn(),
   markLocalReportSynced: vi.fn(),
+  markLocalReportUploadRejected: vi.fn(),
   prepareLocalSampleCounts: vi.fn(),
   purgeLocalReportRawEvents: vi.fn(),
 }));
@@ -81,16 +84,70 @@ describe("desktop report cloud idempotency", () => {
     vi.mocked(listLocalReportSubmissions).mockImplementation(async () => [current]);
     vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
 
-    await syncDesktopReportSubmission(current.report_id);
+    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
     current = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
-    await syncDesktopReportSubmission(current.report_id);
+    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
 
     expect(vi.mocked(staffApi.post).mock.calls.map((call) => call[1])).toEqual([
       expect.objectContaining({ submissionId: "11111111-1111-4111-8111-111111111111" }),
       expect.objectContaining({ submissionId: "22222222-2222-4222-8222-222222222222" }),
     ]);
   });
+
+  it("requires the submitted revision and recognizes a background upload already confirmed", async () => {
+    const submission = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([{ ...submission, sync_status: "synced" }]);
+
+    await expect(syncDesktopReportSubmission(submission.report_id, "older-submission")).resolves.toBe(false);
+    await expect(syncDesktopReportSubmission(submission.report_id, submission.submission_id)).resolves.toBe(true);
+    expect(staffApi.post).not.toHaveBeenCalled();
+  });
+
+  it("shares an in-flight upload between manual submission and background sync", async () => {
+    const submission = localSubmission("11111111-1111-4111-8111-111111111111");
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([submission]);
+    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
+
+    await Promise.all([syncDesktopReportSubmission(submission.report_id, submission.submission_id), syncDesktopReportSubmissions()]);
+
+    expect(staffApi.post).toHaveBeenCalledTimes(1);
+    expect(markLocalReportSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks a refused report and still uploads the reports after it", async () => {
+    const refused = localSubmission("11111111-1111-4111-8111-111111111111");
+    const next = { ...localSubmission("33333333-3333-4333-8333-333333333333"), report_id: "REP-002" };
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([refused, next]);
+    vi.mocked(staffApi.post).mockRejectedValueOnce(httpError(409)).mockResolvedValueOnce({ data: {} });
+
+    await expect(syncDesktopReportSubmissions()).resolves.toBe(1);
+
+    expect(markLocalReportUploadRejected).toHaveBeenCalledWith("http://127.0.0.1:8765", refused.report_id, refused.submission_id);
+    expect(markLocalReportSynced).toHaveBeenCalledWith("http://127.0.0.1:8765", next.report_id, next.submission_id);
+  });
+
+  it("does not upload a report the backend already refused", async () => {
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([{ ...localSubmission("11111111-1111-4111-8111-111111111111"), sync_status: "upload_rejected" }]);
+
+    await expect(syncDesktopReportSubmissions()).resolves.toBe(0);
+    expect(staffApi.post).not.toHaveBeenCalled();
+  });
+
+  it("keeps retrying after an expired sign-in or a server error", async () => {
+    vi.mocked(listLocalReportSubmissions).mockResolvedValue([localSubmission("11111111-1111-4111-8111-111111111111")]);
+    vi.mocked(staffApi.post).mockRejectedValueOnce(httpError(401));
+
+    await expect(syncDesktopReportSubmissions()).rejects.toBeInstanceOf(AxiosError);
+    expect(markLocalReportUploadRejected).not.toHaveBeenCalled();
+    expect([400, 409, 413, 422].map((status) => isRefusedUpload(httpError(status)))).toEqual([true, true, true, true]);
+    expect([401, 403, 404, 408, 429, 500, 503].map((status) => isRefusedUpload(httpError(status)))).toEqual(Array(7).fill(false));
+    expect(isRefusedUpload(new Error("offline"))).toBe(false);
+  });
 });
+
+function httpError(status: number) {
+  return new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_REQUEST", undefined, undefined, { status } as AxiosResponse);
+}
 
 function localSubmission(submissionId: string, status: "Submitted" | "Resubmitted" = "Submitted"): LocalReportSubmissionRecord {
   return {
@@ -125,7 +182,7 @@ describe("establishment telemetry", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("window", { localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
+    vi.stubGlobal("window", { dispatchEvent: vi.fn(), localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
     vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
     vi.mocked(getLocalMetricsSummary).mockResolvedValue({ entries: 12, exits: 7, current_occupancy: 5, unique_count: 3, unsynced_events: 0, unsubmitted_events: 0 } as Awaited<ReturnType<typeof getLocalMetricsSummary>>);
     const areaSession = {
@@ -196,6 +253,7 @@ describe("establishment telemetry", () => {
 
     await expect(prepareDesktopSampleCounts()).resolves.toBe(60);
     expect(prepareLocalSampleCounts).toHaveBeenCalledTimes(2);
+    expect(window.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: DESKTOP_SAMPLE_PREPARED_EVENT }));
     expect(prepareLocalSampleCounts).toHaveBeenCalledWith("http://127.0.0.1:8765", {
       enterpriseId: "ENT-SAMPLE",
       enterpriseName: "Sample Park",

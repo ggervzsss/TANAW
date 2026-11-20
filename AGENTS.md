@@ -2,9 +2,6 @@
 
 ## Testing Policy
 
-Fast checks protect everyday work; Playwright end-to-end suites run at specific
-points instead of after every change.
-
 ### After every change
 
 Run the fast checks for each area the change touches:
@@ -23,23 +20,28 @@ they are generated from `design-system/`.
 
 Put logic checks in unit tests (Vitest or pytest), not in Playwright.
 
-### During implementation: targeted Playwright only
+### Playwright during implementation
 
-Do not run the full Playwright suites while implementing. Run only the specs
-for the affected area, and only when the change touches a screen, a user
-workflow, or a request or response that a spec mocks or asserts on, for example:
+During implementation, run only the relevant Playwright specs when a change
+affects a screen, a user workflow, or a request or response that a spec mocks
+or asserts on. For shared UI changes, run representative specs in each affected
+app. Review visual changes on the affected screens in light and dark mode
+where supported.
+
+Skip Playwright for changes that leave screens and tested workflows
+unaffected, such as documentation, internal service work, or stylesheet moves
+that preserve contents and load order.
+
+For a targeted desktop browser test, use a command such as the following.
 
 ```shell
 npx playwright test tests/e2e/browser/unified-reporting.spec.ts
 ```
 
-Skip Playwright entirely for backend-only, ML-service-internal, script, and
-documentation changes.
+### Before filing a pull request
 
-### Before filing a pull request: full suites
-
-Before opening any pull request, run the complete end-to-end suites for each
-client the branch changes:
+Run the full end-to-end suites for each affected client before opening a pull
+request.
 
 - desktop-tanaw: `npm run test:e2e`, then `npm run test:electron`
 - frontend-tanaw: `npm run test:e2e`
@@ -48,10 +50,28 @@ client the branch changes:
 Electron config directly after the browser suite reuses a renderer-only build
 and stalls at login.
 
-Every suite is expected to pass. Do not file a pull request with a failing
-test. Run the same spec on the base branch to find out whether the branch
-caused the failure; either way, fix it or report it instead of filing. A
-flaky test is a defect to fix, not a failure to rerun until it passes.
+Run a failing spec on the base branch to see whether the failure predates the
+change. Treat flaky tests as defects to investigate and fix. Open the pull
+request once the required checks pass. Report unresolved failures to the user.
+
+### Pull request testing summary
+
+Summarize the checks that ran and their results in the pull request
+description. If Playwright did not apply, state why it was skipped.
+
+## Commit Messages
+
+When an implementation is done, always provide a ready-to-use commit message
+for it at the end of the response.
+
+- Base the message on the actual uncommitted changes (`git status` and
+  `git diff`), not only on the most recent task.
+- If several changes are still uncommitted, write one message that covers all
+  of them; the subject summarizes the whole set and the body lists each change.
+- Follow the repository's existing style: a Conventional Commits subject with a
+  scope (for example `fix(desktop): ...`), and a body that explains what changed
+  and why.
+- Only generate the message. Do not commit unless the user asks.
 
 ## Database Schema And Migration Policy
 

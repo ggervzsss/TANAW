@@ -30,13 +30,22 @@ const clientDirectories = [
   resolve(repositoryRoot, "desktop-tanaw/src/contracts/generated"),
 ];
 
-let stale = false;
+const generatedFiles = new Map([
+  [
+    "attractions.ts",
+    `${generatedHeader}import type { components } from "./api";\n\nexport const otherAttractionCode = ${JSON.stringify(bundle.otherAttractionCode)};\nexport const attractionClassifications = ${JSON.stringify(bundle.attractionClassifications, null, 2)} as const satisfies readonly components["schemas"]["AttractionClassification"][];\n`,
+  ],
+]);
 for (const [filename, schema] of outputs) {
   const eventTypes = schema.components?.schemas?.RealtimeEventType?.enum;
   const runtimeContract = Array.isArray(eventTypes)
     ? `export const realtimeEventTypes = ${JSON.stringify(eventTypes, null, 2)} as const;\n\n`
     : "";
-  const generated = `${generatedHeader}${runtimeContract}${astToString(await openapiTS(schema))}`;
+  generatedFiles.set(filename, `${generatedHeader}${runtimeContract}${astToString(await openapiTS(schema))}`);
+}
+
+let stale = false;
+for (const [filename, generated] of generatedFiles) {
   for (const directory of clientDirectories) {
     const outputPath = resolve(directory, filename);
     if (checkOnly) {

@@ -1,224 +1,85 @@
-import { Download, X } from "lucide-react";
-import { motion } from "motion/react";
 import { useState } from "react";
-import { ModalPortal } from "@/shared/components/ui";
-import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { Button, Textarea } from "@/design-system";
 import type { IntakeReport } from "@/shared/types";
-import { CountingSummary } from "./CountingSummary";
-import { measuredCount } from "../utils/counting";
-import { DotSingleReportTable } from "./DotReportTable";
+import { var2mFromIntakeReport } from "../model/varForms";
+import { downloadIntakeReportPdf } from "../utils/pdf";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
+import { ReportPreviewDialog } from "./ReportPreviewDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
-import { downloadIntakeReportPdf, formatReportSubmittedDate } from "../utils/pdf";
+import { Var2mSheet } from "./VarSheets";
 
 type ReportReviewModalProps = {
   report: IntakeReport;
-  isUpdating?: boolean;
+  isUpdating: boolean;
   onClose: () => void;
   onAccept: (report: IntakeReport, remarks: string) => void;
   onReturn: (report: IntakeReport, remarks: string) => void;
 };
 
-type ReviewConfirmAction = "accept" | "return" | null;
-
-export function ReportReviewModal({ report, isUpdating = false, onClose, onAccept, onReturn }: ReportReviewModalProps) {
-  const { timeFormat } = useSystemDisplayPreferences();
-  const [confirmAction, setConfirmAction] = useState<ReviewConfirmAction>(null);
-  const [remarksDraft, setRemarksDraft] = useState(() => ({
-    reportId: report.id,
-    value: report.remarks ?? "",
-  }));
-  const remarks = remarksDraft.reportId === report.id ? remarksDraft.value : (report.remarks ?? "");
+export function ReportReviewModal({ report, isUpdating, onClose, onAccept, onReturn }: ReportReviewModalProps) {
+  const [confirmAction, setConfirmAction] = useState<"accept" | "return" | null>(null);
+  const [remarks, setRemarks] = useState(report.remarks ?? "");
   const canReview = report.status === "Pending Review";
-  const statusMessage = reviewStatusMessage(report.status);
-  const confirmDetails = [
-    { label: "Report", value: report.code },
-    { label: "Enterprise", value: report.enterprise },
-    { label: "Period", value: report.period },
-    { label: "Remarks", value: remarks.trim() || "Default workflow remarks will be used." },
-  ];
-  const confirmCopy = confirmAction ? reviewConfirmCopy(confirmAction) : null;
+  const savedRemarks = Array.from(new Set([report.notes, canReview ? undefined : report.remarks].filter((value) => value?.trim())));
 
-  return (
-    <>
-      <ModalPortal>
-        <motion.div
-          className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] p-4 backdrop-blur-[6px]"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.section
-            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-          >
-            <div className="flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-5 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
-              <div>
-                <div className="mb-2 flex items-center gap-3">
-                  <h3 className="text-(--tanaw-text) text-lg font-bold">Review DOT Form Generation</h3>
-                  <ReportStatusBadge status={report.status} />
-                </div>
-                <p className="text-xs font-semibold text-gray-500">
-                  {report.enterprise} - {report.period}
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => downloadIntakeReportPdf(report, timeFormat)}
-                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
-                >
-                  <Download size={15} /> Download PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close report review"
-                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div className="grow overflow-y-auto bg-gray-100 p-6 dark:bg-[#0f172a]">
-              <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm">
-                <div className="mb-6 border-b-2 border-current pb-4">
-                  <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.code}</p>
-                  <h1 className="mt-1 text-xl font-bold">TANAW - DOT Visitor Attraction Report</h1>
-                  <div className="mt-4 grid gap-x-8 gap-y-2 text-xs sm:grid-cols-2">
-                    <DocumentDetail label="Enterprise" value={report.enterprise} />
-                    <DocumentDetail label="Category" value={report.category} />
-                    <DocumentDetail label="Barangay" value={report.barangay} />
-                    <DocumentDetail label="Municipality" value="City of San Pedro, Laguna" />
-                    <DocumentDetail label="Reporting Period" value={report.period} />
-                    <DocumentDetail label="Submitted" value={formatReportSubmittedDate(report.submittedAt ?? report.submitted, timeFormat)} />
-                    <DocumentDetail label="Review Status" value={report.status} />
-                    <DocumentDetail label="Report Code" value={report.code} />
-                  </div>
-                </div>
-                <DotSingleReportTable report={report} />
-                <div className="mt-6 border-t border-current/30 pt-4 text-xs leading-6">
-                  <h2 className="text-sm font-bold">Saved Establishment Summary</h2>
-                  <p>
-                    Entries: {measuredCount(report.metrics.entry)} | Exits: {measuredCount(report.metrics.exit)} | Peak Occupancy: {measuredCount(report.metrics.peak)}
-                  </p>
-                  <p>Remarks: {report.remarks || report.notes || "None recorded."}</p>
-                </div>
-              </section>
-
-              <CountingSummary snapshot={report.payload?.counting} />
-
-              <div className="mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="text-(--tanaw-text) mb-2 text-sm font-semibold">Data Protection & Remarks</h4>
-                <p className="mb-4 text-xs text-gray-500">{statusMessage}</p>
-                <textarea
-                  value={remarks}
-                  onChange={(event) => setRemarksDraft({ reportId: report.id, value: event.target.value })}
-                  disabled={!canReview || isUpdating}
-                  className="focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-900 transition outline-none focus:ring-2"
-                  rows={3}
-                  placeholder={canReview ? "Add remarks for revision or consolidation notes..." : "No further review remarks can be added in this state."}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 bg-white p-5 dark:border-slate-700 dark:bg-[#121c31]">
-              <p className="max-w-xl text-xs font-semibold text-slate-500">{canReview ? "Choose a review decision for this submitted report." : reviewLockedMessage(report.status)}</p>
-              <div className="flex flex-wrap justify-end gap-3">
-                <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-                  Close
-                </button>
-                {canReview && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmAction("return")}
-                      disabled={isUpdating}
-                      className="rounded-xl border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isUpdating ? "Updating..." : "Return for Revision"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmAction("accept")}
-                      disabled={isUpdating}
-                      className="bg-tanaw-green hover:bg-tanaw-green/90 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isUpdating ? "Updating..." : "Accept & Mark Ready"}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </motion.section>
-        </motion.div>
-      </ModalPortal>
-
-      {confirmCopy && (
-        <ReportActionConfirmDialog
-          title={confirmCopy.title}
-          eyebrow={confirmCopy.eyebrow}
-          message={confirmCopy.message}
-          tone={confirmCopy.tone}
-          confirmLabel={confirmCopy.confirmLabel}
-          pendingLabel="Updating..."
-          isPending={isUpdating}
-          onCancel={() => setConfirmAction(null)}
-          onConfirm={() => {
-            if (confirmAction === "accept") onAccept(report, remarks);
-            if (confirmAction === "return") onReturn(report, remarks);
-          }}
-          details={confirmDetails}
-        />
-      )}
-    </>
-  );
-}
-
-function DocumentDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
-      <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
-    </div>
-  );
-}
-
-function reviewStatusMessage(status: IntakeReport["status"]) {
-  if (status === "Pending Review") return "Values in the DOT form are read-only and populated directly from local camera records.";
-  if (status === "Ready to Consolidate") return "This report has already been accepted and is waiting for final report generation.";
-  if (status === "Returned") return "This report has been returned to the enterprise. Wait for a revised submission before reviewing again.";
-  if (status === "Consolidated") return "This report has already been included in a final batch report and is locked.";
-  return "This record is not available for review actions.";
-}
-
-function reviewLockedMessage(status: IntakeReport["status"]) {
-  if (status === "Ready to Consolidate") return "No further intake review action is available. Generate the final report once all required submissions are ready.";
-  if (status === "Returned") return "No Staff action is available until the enterprise submits a revision.";
-  if (status === "Consolidated") return "This intake report is part of a generated final report.";
-  return "This report cannot be changed from this modal.";
-}
-
-function reviewConfirmCopy(action: Exclude<ReviewConfirmAction, null>) {
-  if (action === "accept") {
-    return {
-      title: "Accept report?",
-      eyebrow: "Review decision",
-      message: "This will mark the enterprise submission as Ready to Consolidate and make it eligible for final batch report generation.",
-      tone: "emerald" as const,
-      confirmLabel: "Accept Report",
-    };
+  if (confirmAction) {
+    const returning = confirmAction === "return";
+    return (
+      <ReportActionConfirmDialog
+        title={returning ? "Return report for revision?" : "Accept report?"}
+        message={returning ? `Send the ${report.period} report back to ${report.enterprise} for correction.` : `Mark the ${report.period} report from ${report.enterprise} ready for consolidation.`}
+        confirmLabel={returning ? "Return report" : "Accept report"}
+        pendingLabel="Updating..."
+        destructive={returning}
+        isPending={isUpdating}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => (returning ? onReturn : onAccept)(report, remarks)}
+      />
+    );
   }
 
-  return {
-    title: "Return report for revision?",
-    eyebrow: "Review decision",
-    message: "This will send the report back to the enterprise for correction and remove it from final batch report eligibility until it is resubmitted.",
-    tone: "red" as const,
-    confirmLabel: "Return Report",
-  };
+  return (
+    <ReportPreviewDialog
+      title="Establishment report"
+      description={`${report.enterprise} · ${report.period}`}
+      onClose={onClose}
+      onDownload={() => downloadIntakeReportPdf(report)}
+      actions={
+        canReview && (
+          <>
+            <Button variant="danger" onClick={() => setConfirmAction("return")}>
+              Return for revision
+            </Button>
+            <Button onClick={() => setConfirmAction("accept")}>Accept &amp; mark ready</Button>
+          </>
+        )
+      }
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <ReportStatusBadge status={report.status} />
+        <span className="text-xs wrap-anywhere text-(--tanaw-text-muted)">{report.code}</span>
+      </div>
+      <Var2mSheet form={var2mFromIntakeReport(report)} label={`${report.enterprise} VAR 2M`} />
+      {(canReview || savedRemarks.length > 0) && (
+        <section className="space-y-2 px-2 pb-2 text-sm text-(--tanaw-text-secondary)">
+          {savedRemarks.length > 0 && (
+            <div className="space-y-1">
+              <h3 className="font-semibold text-(--tanaw-text)">{canReview ? "Submission notes" : "Remarks"}</h3>
+              {savedRemarks.map((value) => (
+                <p key={value} className="wrap-anywhere whitespace-pre-wrap">
+                  {value}
+                </p>
+              ))}
+            </div>
+          )}
+          {canReview && (
+            <label className="block max-w-2xl font-semibold text-(--tanaw-text)">
+              Review remarks <span className="font-normal text-(--tanaw-text-muted)">(optional)</span>
+              <Textarea className="mt-2 font-normal" rows={2} value={remarks} onChange={(event) => setRemarks(event.target.value)} />
+            </label>
+          )}
+        </section>
+      )}
+    </ReportPreviewDialog>
+  );
 }

@@ -1,0 +1,607 @@
+:root {
+  --theme-transition-duration: 220ms;
+  --theme-transition-easing: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Component color roles only. All geometry/type/interaction motion stays in its existing stylesheet. */
+html.dark body,
+html.dark .enterprise-shell,
+html.dark .enterprise-shell .enterprise-content {
+  background: var(--theme-canvas);
+  color: var(--theme-text);
+}
+html.dark .enterprise-shell .enterprise-topbar {
+  background: var(--theme-topbar);
+  border-color: var(--theme-border-soft);
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .enterprise-topbar__overlay {
+  background: var(--theme-topbar-overlay);
+}
+html.dark .enterprise-shell :is(.text-emerald-700, .text-emerald-900, .text-green-600, .text-\[\#065f46\], .text-\[\#055b25\]) {
+  color: var(--theme-accent) !important;
+}
+html.dark .enterprise-shell :is(.bg-green-50, .bg-emerald-50, .bg-emerald-50\/70, .bg-emerald-50\/80, .bg-emerald-50\/90) {
+  background-color: var(--theme-accent-tint) !important;
+}
+html.dark .enterprise-shell :is(.bg-red-50, .bg-red-50\/60) {
+  background-color: var(--theme-danger-bg) !important;
+}
+html.dark .enterprise-shell :is(.text-red-600, .text-red-700, .text-red-800, .text-red-900) {
+  color: var(--theme-danger-text) !important;
+}
+html.dark .enterprise-shell :is(.text-amber-800, .text-amber-700) {
+  color: var(--theme-warning-text) !important;
+}
+html.dark .enterprise-shell :is(.shadow-lg, .shadow-xl, .shadow-2xl) {
+  box-shadow: var(--theme-shadow-raised) !important;
+}
+html.dark .enterprise-shell :is(input, select, textarea):focus {
+  border-color: var(--theme-focus) !important;
+  box-shadow: 0 0 0 2px var(--theme-focus-halo);
+}
+html.dark :is(input, textarea)::placeholder {
+  color: var(--theme-muted);
+}
+html.dark
+  :is(.enterprise-shell, .camera-dialog, .tanaw-var1-modal, .tanaw-dropdown-menu, .report-floating-layer)
+  :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline-color: var(--theme-focus);
+}
+html.dark .enterprise-shell :is(.hover\:bg-gray-50, .hover\:bg-gray-100, .hover\:bg-gray-200):hover {
+  background-color: var(--theme-hover) !important;
+}
+html.dark :is(.bg-tanaw-green, [class~="bg-(--tanaw-green)"]) {
+  background-color: var(--theme-action);
+  color: var(--theme-on-action);
+}
+html.dark :is(.bg-tanaw-green, [class~="bg-(--tanaw-green)"]):hover:not(:disabled) {
+  background-color: var(--theme-action-hover);
+}
+
+/* Dashboard: a neutral surface ramp, restrained chart colors and no outlined card grid. */
+html.dark .overview-layout,
+html.dark .overview-main {
+  --enterprise-text: var(--theme-text);
+  --enterprise-muted: var(--theme-secondary);
+  --dashboard-focus: var(--theme-focus);
+  --dashboard-focus-halo: var(--theme-focus-halo);
+  --dashboard-chart-hover: var(--theme-hover);
+  --dashboard-chart-baseline: var(--theme-divider);
+  --dashboard-entry-highlight: var(--theme-accent-strong);
+  --dashboard-exit-base: var(--theme-chart-exit);
+  --dashboard-surface-border: var(--theme-border-soft);
+  --dashboard-surface-shadow: var(--theme-shadow);
+  --dashboard-surface-hover-shadow: var(--theme-shadow-raised);
+  --dashboard-demographic-female: var(--theme-chart-entry);
+  --dashboard-demographic-male: var(--theme-chart-blue);
+  --dashboard-demographic-others: var(--theme-chart-third);
+  --dashboard-donut-separator: var(--theme-surface);
+}
+html.dark .enterprise-shell .overview-layout :is(.design-card, .tanaw-assistant, .overview-date, .assistant-launcher) {
+  background: var(--theme-surface);
+  border-color: transparent;
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .overview-layout :is(.overview-date, .assistant-launcher, .tanaw-assistant) {
+  background: var(--theme-raised);
+}
+html.dark .enterprise-shell .overview-layout .overview-metric-icon {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+  box-shadow: none;
+  border-color: transparent;
+}
+html.dark .enterprise-shell .overview-layout .overview-metric:hover .overview-metric-icon {
+  background: var(--theme-accent-hover);
+}
+html.dark .enterprise-shell .overview-layout .recent-report-row {
+  background: var(--theme-inset);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .overview-layout .recent-report-row:hover {
+  background: var(--theme-accent-tint);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .overview-layout :is(.residence-legend, .peak-content > div + div, .tanaw-assistant > header) {
+  border-color: var(--theme-divider);
+}
+html.dark .enterprise-shell .overview-layout :is(.peak-content strong, .peak-content svg, .assistant-launcher svg, .demographic-legend svg) {
+  color: var(--theme-accent);
+}
+html.dark .enterprise-shell .overview-layout .assistant-message > div {
+  background: var(--theme-surface);
+}
+html.dark .enterprise-shell .overview-layout .assistant-message button {
+  background: var(--theme-accent-tint);
+  color: var(--theme-text);
+}
+html.dark .enterprise-shell .overview-layout .assistant-message button:hover {
+  background: var(--theme-accent-hover);
+}
+html.dark .enterprise-shell .overview-layout .assistant-message > svg {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+}
+html.dark .enterprise-shell .overview-layout .assistant-user-message {
+  background: var(--theme-accent-tint);
+  color: var(--theme-text);
+}
+html.dark .enterprise-shell .overview-layout .assistant-language {
+  color: var(--theme-muted);
+}
+html.dark .enterprise-shell .overview-layout .assistant-language button {
+  border-color: var(--theme-outline);
+  color: var(--theme-text);
+}
+html.dark .enterprise-shell .overview-layout .assistant-language button[aria-pressed="true"] {
+  border-color: var(--theme-action);
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+}
+html.dark .enterprise-shell .overview-layout :is(.assistant-basis, .assistant-pending) {
+  color: var(--theme-muted);
+}
+html.dark .enterprise-shell .overview-layout .assistant-note {
+  border-color: var(--theme-warning-text);
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant form {
+  background: var(--theme-inset);
+  border-color: var(--theme-outline);
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant form:focus-within {
+  border-color: var(--theme-focus);
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant form input {
+  background: transparent !important;
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant form button {
+  color: var(--theme-accent);
+}
+html.dark .enterprise-shell .overview-layout :is(.dashboard-chart-tooltip, .donut-tooltip) {
+  background: var(--theme-raised);
+  border-color: var(--theme-border-soft);
+  color: var(--theme-text);
+  box-shadow: var(--theme-shadow-raised);
+}
+html.dark .enterprise-shell :is(.assistant-conversation, .recent-report-list) {
+  scrollbar-color: var(--theme-scrollbar) transparent;
+}
+html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--theme-raised) !important;
+  border-color: var(--theme-border-soft) !important;
+}
+
+html.dark :is(.settings-field em, .settings-field .required) {
+  color: var(--theme-danger-text);
+}
+
+/* Camera: decorative separators are distinct from accessible control boundaries. */
+html.dark :is(.camera-management, .camera-settings, .camera-dialog) {
+  --camera-green: var(--theme-accent);
+  --camera-tint: var(--theme-accent-tint);
+  --camera-border: var(--theme-outline);
+  --camera-muted: var(--theme-secondary);
+  --enterprise-text: var(--theme-text);
+  --enterprise-muted: var(--theme-secondary);
+}
+html.dark .enterprise-shell .camera-settings,
+html.dark .camera-dialog {
+  background: var(--theme-surface-low);
+  color: var(--theme-text);
+  border-color: var(--theme-border-soft);
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .camera-settings {
+  border-color: transparent;
+}
+html.dark .enterprise-shell :is(.camera-settings-identity, .camera-settings-footer, .camera-settings-body > nav) {
+  border-color: var(--theme-divider);
+}
+html.dark .enterprise-shell :is(.camera-settings-identity, .camera-settings-footer) {
+  background: var(--theme-surface);
+}
+html.dark .enterprise-shell .camera-status {
+  background: var(--theme-neutral-bg);
+  color: var(--theme-neutral-text);
+}
+html.dark .enterprise-shell .camera-status.is-live {
+  background: var(--theme-success-bg);
+  color: var(--theme-success-text);
+}
+html.dark .enterprise-shell .camera-settings-body [role="tab"] {
+  color: var(--theme-secondary);
+}
+html.dark .enterprise-shell .camera-settings-body [role="tab"][aria-selected="true"] {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+  border-color: transparent;
+  box-shadow: inset 2px 0 var(--theme-accent);
+}
+html.dark .enterprise-shell .camera-settings-body [role="tab"]:hover {
+  background: var(--theme-hover);
+}
+html.dark .enterprise-shell .camera-settings-body [role="tab"][aria-selected="true"]:hover {
+  background: var(--theme-accent-hover);
+}
+html.dark .enterprise-shell [data-camera-process-control] {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+}
+html.dark .enterprise-shell [data-camera-process-control][aria-pressed="true"] {
+  background: var(--theme-danger-bg);
+  color: var(--theme-danger-text);
+}
+html.dark .enterprise-shell [data-camera-process-control]:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--theme-action-hover);
+}
+html.dark .enterprise-shell [data-camera-process-control][aria-pressed="true"]:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--theme-danger-border);
+}
+
+html.dark .enterprise-shell .camera-settings-content {
+  scrollbar-color: var(--theme-scrollbar) var(--theme-surface-low);
+}
+html.dark .enterprise-shell .camera-settings-content::-webkit-scrollbar-track {
+  background: var(--theme-surface-low);
+}
+html.dark .enterprise-shell .camera-settings-content::-webkit-scrollbar-thumb {
+  background: var(--theme-scrollbar);
+}
+html.dark .enterprise-shell .camera-settings-content::-webkit-scrollbar-button {
+  background: var(--theme-surface-low);
+  color: var(--theme-secondary);
+}
+html.dark :is(.camera-settings, .camera-dialog) .settings-field :is(input, select, button[aria-haspopup]),
+html.dark .camera-dialog .camera-add-connection :is(input, [role="combobox"], details) {
+  background: var(--theme-inset);
+  color: var(--theme-text);
+  border-color: var(--theme-border-soft);
+  border-bottom-color: var(--theme-outline);
+}
+html.dark :is(.camera-settings, .camera-dialog) .settings-field button[aria-haspopup] svg {
+  color: var(--theme-accent);
+}
+html.dark .enterprise-shell .camera-settings :is(.design-switch-row, .maintenance-status > div, details) {
+  border-color: var(--theme-divider);
+}
+html.dark .enterprise-shell .camera-settings .counting-method {
+  background: var(--theme-surface);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .camera-settings .counting-method.selected {
+  background: var(--theme-accent-tint);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .camera-settings .counting-method input {
+  accent-color: var(--theme-accent);
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button {
+  background: var(--theme-raised);
+  color: var(--theme-text);
+  border-color: transparent;
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button:hover:not(:disabled) {
+  background: var(--theme-hover);
+  border-color: transparent;
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button.primary {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+  border-color: transparent;
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button.primary:hover:not(:disabled) {
+  background: var(--theme-action-hover);
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button.danger-button {
+  background: var(--theme-danger-bg);
+  color: var(--theme-danger-text);
+  border-color: transparent;
+}
+html.dark :is(.camera-settings, .camera-dialog) .design-button.danger-button:hover:not(:disabled) {
+  border-color: var(--theme-danger-border);
+}
+html.dark .enterprise-shell .camera-settings .camera-danger-zone {
+  background: var(--theme-danger-bg);
+  color: var(--theme-danger-text);
+  border-color: transparent;
+}
+html.dark :is(.camera-settings-error, .camera-field-error) {
+  color: var(--theme-danger-text);
+}
+html.dark .camera-settings-error {
+  background: var(--theme-danger-bg);
+}
+html.dark .camera-settings-success {
+  background: var(--theme-success-bg);
+  color: var(--theme-success-text);
+  border-color: var(--theme-border-soft);
+}
+html.dark .camera-diagnostics {
+  border-color: var(--theme-divider);
+}
+html.dark .camera-preview-state {
+  background: radial-gradient(ellipse at 50% 45%, var(--theme-accent-tint), var(--theme-canvas));
+}
+
+/* Reports: nested tonal surfaces, quiet table rules and paired state colors. */
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-system-count p, .report-history-filters > label > span) {
+  color: var(--theme-secondary);
+}
+html.dark .tanaw-reports-workspace {
+  --reports-text: var(--theme-text);
+  --reports-muted: var(--theme-secondary);
+  --reports-border: var(--theme-divider);
+  --reports-green: var(--theme-accent);
+  --reports-focus: var(--theme-focus);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-create-card, .report-ledger) {
+  background: var(--theme-surface-low);
+  border-color: transparent;
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-visitor-card, .report-next-steps) {
+  background: var(--theme-surface);
+  border-color: transparent;
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-tabs > button {
+  color: var(--theme-secondary);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-tabs > button[aria-selected="true"] {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-tabs > button svg {
+  color: var(--theme-accent);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-system-count, .report-origin-table tfoot) {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+  box-shadow: none;
+}
+html.dark
+  .enterprise-shell
+  .tanaw-reports-workspace
+  :is(.report-information-fields > div, .report-system-count > div, .report-origin-table td, .report-origin-table th, .report-origin-table tfoot td, .report-ledger td, .report-ledger th) {
+  border-color: var(--theme-divider);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table thead, .report-ledger table thead) {
+  background: var(--theme-raised) !important;
+  color: var(--theme-text) !important;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table-scroll, .report-history-table-scroll) {
+  border-color: transparent;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-origin-table {
+  background: var(--theme-surface);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table input, .report-history-filters [role="combobox"]) {
+  background: var(--theme-inset);
+  color: var(--theme-text);
+  border-color: var(--theme-border-soft);
+  border-bottom-color: var(--theme-outline);
+  box-shadow: none;
+}
+html.dark
+  .enterprise-shell
+  .tanaw-reports-workspace
+  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .reports-text-button) {
+  color: var(--theme-accent) !important;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-button {
+  background: var(--theme-raised);
+  color: var(--theme-text);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-primary {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-primary:hover:not(:disabled) {
+  background: var(--theme-action-hover);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .reports-button:disabled {
+  background: var(--theme-raised);
+  color: var(--theme-muted);
+  border-color: transparent;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover {
+  background: var(--theme-hover);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] {
+  background: var(--theme-accent-tint);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-readonly::before {
+  background: var(--theme-divider);
+}
+html.dark .enterprise-shell .report-step-indicator {
+  border-color: var(--theme-outline);
+}
+html.dark .enterprise-shell .report-next-steps li[data-complete="true"] .report-step-indicator {
+  background: var(--theme-action);
+  border-color: var(--theme-accent);
+}
+html.dark .enterprise-shell .report-next-steps li[aria-current="step"] .report-step-indicator {
+  border-color: var(--theme-focus);
+  box-shadow: 0 0 0 3px var(--theme-focus-halo);
+}
+html.dark .enterprise-shell .report-next-steps li:not(:last-child)::after {
+  background: var(--theme-divider);
+}
+html.dark .report-status {
+  background: var(--theme-neutral-bg);
+  color: var(--theme-neutral-text);
+  box-shadow: none;
+}
+html.dark .report-status[data-tone="pending"] {
+  background: var(--theme-warning-bg);
+  color: var(--theme-warning-text);
+}
+html.dark .report-status[data-tone="submitted"] {
+  background: var(--theme-info-bg);
+  color: var(--theme-info-text);
+}
+html.dark .report-status[data-tone="consolidated"] {
+  background: var(--theme-success-bg);
+  color: var(--theme-success-text);
+}
+html.dark .report-status[data-tone="returned"] {
+  background: var(--theme-returned-bg);
+  color: var(--theme-returned-text);
+}
+html.dark .enterprise-shell .tanaw-status-badge--success {
+  background: var(--theme-success-bg) !important;
+  color: var(--theme-success-text) !important;
+  border-color: transparent !important;
+}
+html.dark .enterprise-shell .tanaw-status-badge--warning {
+  background: var(--theme-warning-bg) !important;
+  color: var(--theme-warning-text) !important;
+  border-color: transparent !important;
+}
+html.dark .enterprise-shell .tanaw-status-badge--info {
+  background: var(--theme-info-bg) !important;
+  color: var(--theme-info-text) !important;
+  border-color: transparent !important;
+}
+
+/* Portals inherit the document's semantic roles; no separate popup palette. */
+html.dark :is(.tanaw-dropdown-menu, .report-floating-layer .report-day-popover, .report-floating-layer .report-search-popover) {
+  background: var(--theme-raised) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text);
+  box-shadow: var(--theme-shadow-raised) !important;
+}
+html.dark .tanaw-dropdown-menu [role="option"] {
+  background: transparent;
+  color: var(--theme-secondary);
+}
+html.dark .tanaw-dropdown-menu [role="option"]:is([aria-selected="true"], [data-active="true"], :hover) {
+  background: var(--theme-accent-tint);
+  color: var(--theme-accent-strong);
+}
+html.dark .tanaw-dropdown-menu :is(input, label),
+html.dark .report-floating-layer :is(input, textarea, select) {
+  background: var(--theme-inset);
+  border-color: var(--theme-outline);
+  color: var(--theme-text);
+}
+html.dark .tanaw-dropdown-menu svg {
+  color: var(--theme-accent);
+}
+html.dark .report-floating-layer button {
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  border-color: var(--theme-border-soft);
+}
+html.dark .report-floating-layer .report-day-grid button {
+  background: transparent;
+  border-color: transparent;
+}
+html.dark .report-floating-layer .report-day-grid button[aria-pressed="true"] {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+}
+html.dark .tanaw-reports-workspace {
+  --reports-missing: var(--theme-danger-text);
+  --reports-missing-bg: var(--theme-danger-bg);
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-day-picker > button {
+  background: var(--theme-inset);
+  border-color: var(--theme-border-soft);
+  color: var(--theme-accent);
+  box-shadow: none;
+}
+html.dark .enterprise-shell .tanaw-reports-workspace .report-origin-locked {
+  background: var(--theme-raised);
+  border-color: transparent;
+}
+html.dark :is(.camera-dialog, .tanaw-var1-modal) {
+  background: var(--theme-raised);
+  color: var(--theme-text);
+  border-color: var(--theme-border-soft);
+  box-shadow: var(--theme-shadow-raised);
+}
+html.dark .tanaw-var1-modal :is(.var1-viewer-header, .var1-viewer-footer, .var1-close) {
+  border-color: var(--theme-divider);
+}
+html.dark .tanaw-var1-modal .var1-viewer-canvas {
+  background: var(--theme-inset);
+  border-color: var(--theme-divider);
+  scrollbar-color: var(--theme-scrollbar) var(--theme-inset);
+}
+html.dark .tanaw-var1-modal .var1-viewer-header p {
+  color: var(--theme-secondary);
+}
+html.dark .tanaw-var1-modal :is(.var1-viewer-icon, .var1-close, .reports-button svg) {
+  color: var(--theme-accent);
+}
+html.dark .tanaw-var1-modal .var1-close:hover {
+  background: var(--theme-hover);
+}
+html.dark .tanaw-var1-modal .reports-button {
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  border-color: transparent;
+}
+html.dark .tanaw-var1-modal .reports-primary {
+  background: var(--theme-action);
+  color: var(--theme-on-action);
+}
+/* The official .var1-document remains white and is excluded from color remapping. */
+html:not(.dark) :is(.camera-dialog-backdrop, .tanaw-var1-viewer) {
+  background: rgb(244 248 246 / 56%);
+  backdrop-filter: blur(2.5px);
+}
+html.dark :is(.camera-dialog-backdrop, .tanaw-var1-viewer) {
+  background: var(--theme-scrim);
+  backdrop-filter: blur(2.5px);
+}
+html:not(.dark) .camera-dialog {
+  box-shadow:
+    0 16px 52px rgb(26 57 40 / 17%),
+    0 2px 8px rgb(26 57 40 / 9%);
+}
+html .camera-dialog-backdrop,
+html .camera-dialog {
+  animation: none;
+}
+
+/* A single root snapshot dissolves in 220ms. Per-element color/gradient/opacity
+   tweens are suppressed only during capture, then normal interaction motion resumes. */
+html[data-theme-commit] *,
+html[data-theme-commit] *::before,
+html[data-theme-commit] *::after {
+  transition: none !important;
+}
+html[data-theme-transition="snapshot"]::view-transition {
+  pointer-events: none;
+}
+html[data-theme-transition="snapshot"]::view-transition-group(root) {
+  animation: none;
+}
+html[data-theme-transition="snapshot"]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-theme-transition="snapshot"]::view-transition-new(root) {
+  animation: tanaw-theme-dissolve var(--theme-transition-duration) var(--theme-transition-easing) both;
+  mix-blend-mode: normal;
+}
+@keyframes tanaw-theme-dissolve {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html::view-transition-group(root),
+  html::view-transition-old(root),
+  html::view-transition-new(root) {
+    animation: none !important;
+  }
+}

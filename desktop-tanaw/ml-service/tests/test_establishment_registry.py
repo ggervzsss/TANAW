@@ -2,11 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 
 from app.identity.establishment_registry import EstablishmentRegistry
+from app.identity.models import VisitorDecision
 from app.storage.repositories.establishment_repository import day_bounds
 
 NOW = datetime(2026, 11, 10, 2, tzinfo=UTC)
@@ -14,7 +16,9 @@ VECTOR = np.array([1, 0, 0], dtype=np.float32)
 LATER = NOW + timedelta(minutes=5)
 
 
-def observe(service: EstablishmentRegistry, key: str, camera: int = 1, **changes):
+def observe(
+    service: EstablishmentRegistry, key: str, camera: int = 1, **changes: Any
+) -> VisitorDecision:
     at = changes.pop("observed_at", NOW)
     args = dict(
         observation_id=key,
@@ -30,7 +34,7 @@ def observe(service: EstablishmentRegistry, key: str, camera: int = 1, **changes
     return service.observe(**{**args, **changes})
 
 
-def summary(service: EstablishmentRegistry, date: str = "2026-11-10"):
+def summary(service: EstablishmentRegistry, date: str = "2026-11-10") -> dict[str, Any]:
     start, end = (datetime.fromisoformat(value) for value in day_bounds(date))
     return service.repository.summary(start, end)
 
@@ -40,7 +44,7 @@ def test_one_hundred_door_visitors_and_forty_zone_observations(
     tmp_path: Path,
     additional: int,
     expected: int,
-):
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     vectors = np.eye(115, dtype=np.float32)
     for index in range(100):
@@ -57,7 +61,7 @@ def test_one_hundred_door_visitors_and_forty_zone_observations(
     assert result["exits"] == 0
 
 
-def test_shared_identity_survives_restart_and_zone_revision(tmp_path: Path):
+def test_shared_identity_survives_restart_and_zone_revision(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     visitor = observe(service, "door")
     restored = EstablishmentRegistry(str(tmp_path), "park")
@@ -69,7 +73,7 @@ def test_shared_identity_survives_restart_and_zone_revision(tmp_path: Path):
         assert db.execute("select count(*) from visitor_sightings").fetchone()[0] == 0
 
 
-def test_repeated_observation_updates_are_idempotent(tmp_path: Path):
+def test_repeated_observation_updates_are_idempotent(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     for _ in range(4):
         observe(service, "door")
@@ -78,7 +82,7 @@ def test_repeated_observation_updates_are_idempotent(tmp_path: Path):
     assert result["qualified_observations"] == 1
 
 
-def test_same_person_returns_after_an_observed_departure(tmp_path: Path):
+def test_same_person_returns_after_an_observed_departure(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "entry", track_key="person")
     observe(
@@ -91,7 +95,7 @@ def test_same_person_returns_after_an_observed_departure(tmp_path: Path):
     assert result["repeat_entry_count"] == 1
 
 
-def test_similar_people_in_one_view_cannot_share_an_identity(tmp_path: Path):
+def test_similar_people_in_one_view_cannot_share_an_identity(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     first = observe(service, "person-1")
     second = observe(service, "person-2")
@@ -99,7 +103,9 @@ def test_similar_people_in_one_view_cannot_share_an_identity(tmp_path: Path):
     assert summary(service)["unique_count"] == 2
 
 
-def test_replaced_physical_track_can_match_when_previous_track_is_no_longer_present(tmp_path: Path):
+def test_replaced_physical_track_can_match_when_previous_track_is_no_longer_present(
+    tmp_path: Path,
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.update_present_tracks(1, {"original"}, NOW)
     first = observe(service, "original")
@@ -110,14 +116,14 @@ def test_replaced_physical_track_can_match_when_previous_track_is_no_longer_pres
     assert summary(service)["unique_count"] == 1
 
 
-def test_short_zone_observation_does_not_create_unique_visitor(tmp_path: Path):
+def test_short_zone_observation_does_not_create_unique_visitor(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     decision = observe(service, "short", 2, qualified=False)
     assert decision.visitor_id is None
     assert summary(service)["unique_count"] == 0
 
 
-def test_unidentified_visit_is_explicitly_unresolved(tmp_path: Path):
+def test_unidentified_visit_is_explicitly_unresolved(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "no-model", 2, embedding=None)
     result = summary(service)
@@ -129,7 +135,7 @@ def test_unidentified_visit_is_explicitly_unresolved(tmp_path: Path):
 
 def test_late_appearance_enriches_original_crossing_without_creating_another_arrival(
     tmp_path: Path,
-):
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "late", embedding=None)
     assert summary(service)["unresolved_observations"] == 1
@@ -149,14 +155,16 @@ def test_late_appearance_enriches_original_crossing_without_creating_another_arr
 @pytest.mark.parametrize(
     "vector", [np.array([float("nan"), 0, 0]), np.array([float("inf"), 0, 0]), np.zeros(3)]
 )
-def test_invalid_descriptors_cannot_create_confirmed_identities(tmp_path: Path, vector):
+def test_invalid_descriptors_cannot_create_confirmed_identities(
+    tmp_path: Path, vector: np.ndarray
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "invalid", embedding=vector)
     assert summary(service)["unique_count"] == 0
     assert summary(service)["unresolved_observations"] == 1
 
 
-def test_descriptor_spaces_are_not_compared_or_claimed_reconciled(tmp_path: Path):
+def test_descriptor_spaces_are_not_compared_or_claimed_reconciled(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     first = observe(service, "first", model_name="model-a")
     second = observe(service, "second", 2, model_name="model-b")
@@ -164,14 +172,14 @@ def test_descriptor_spaces_are_not_compared_or_claimed_reconciled(tmp_path: Path
     assert summary(service)["reconciliation_state"] == "partial"
 
 
-def test_shape_changes_do_not_crash_identity_matching(tmp_path: Path):
+def test_shape_changes_do_not_crash_identity_matching(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "first")
     observe(service, "second", 2, embedding=np.array([1, 0, 0, 0]))
     assert summary(service)["reconciliation_state"] == "partial"
 
 
-def test_enterprise_isolation(tmp_path: Path):
+def test_enterprise_isolation(tmp_path: Path) -> None:
     first = EstablishmentRegistry(str(tmp_path), "park")
     observe(first, "first")
     second = EstablishmentRegistry(str(tmp_path), "other")
@@ -179,7 +187,7 @@ def test_enterprise_isolation(tmp_path: Path):
     assert summary(second)["reconciliation_state"] == "not_collected"
 
 
-def test_appearance_expiry_preserves_daily_summaries(tmp_path: Path):
+def test_appearance_expiry_preserves_daily_summaries(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "first")
     service.cleanup(NOW + timedelta(days=2))
@@ -189,7 +197,7 @@ def test_appearance_expiry_preserves_daily_summaries(tmp_path: Path):
         assert db.execute("select count(*) from visitor_identities").fetchone()[0] == 0
 
 
-def test_details_expire_after_thirty_days_but_summaries_remain(tmp_path: Path):
+def test_details_expire_after_thirty_days_but_summaries_remain(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "first")
     service.cleanup(NOW + timedelta(days=31))
@@ -198,7 +206,7 @@ def test_details_expire_after_thirty_days_but_summaries_remain(tmp_path: Path):
     assert summary(service)["unique_count"] == 1
 
 
-def test_midnight_does_not_repeat_arrival_or_create_month_wide_identity(tmp_path: Path):
+def test_midnight_does_not_repeat_arrival_or_create_month_wide_identity(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     first = observe(service, "continuing")
     second = observe(service, "continuing", first_at=NOW, observed_at=NOW + timedelta(days=1))
@@ -208,14 +216,14 @@ def test_midnight_does_not_repeat_arrival_or_create_month_wide_identity(tmp_path
     assert summary(service, "2026-11-11")["unique_count"] == 1
 
 
-def test_departures_can_exceed_period_arrivals(tmp_path: Path):
+def test_departures_can_exceed_period_arrivals(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "departure", kind="exit")
     result = summary(service)
     assert result["exits"] == 1 and result["entries"] == 0
 
 
-def test_coverage_records_zero_and_does_not_fill_an_outage(tmp_path: Path):
+def test_coverage_records_zero_and_does_not_fill_an_outage(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     snapshot = {
         "occupancy": 0,
@@ -234,7 +242,7 @@ def test_coverage_records_zero_and_does_not_fill_an_outage(tmp_path: Path):
     assert result["movement_state"] == "available"
 
 
-def test_establishment_peak_uses_simultaneous_measurements(tmp_path: Path):
+def test_establishment_peak_uses_simultaneous_measurements(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.repository.checkpoint_occupancy({"occupancy": 10, "state": "estimated"}, NOW)
     service.repository.checkpoint_occupancy(
@@ -246,7 +254,7 @@ def test_establishment_peak_uses_simultaneous_measurements(tmp_path: Path):
     assert summary(service)["peak_occupancy"] == 10
 
 
-def test_late_provisional_reconciliation_updates_linked_contributions_once(tmp_path: Path):
+def test_late_provisional_reconciliation_updates_linked_contributions_once(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     first = observe(service, "first")
     uncertain = observe(
@@ -270,7 +278,7 @@ def test_late_provisional_reconciliation_updates_linked_contributions_once(tmp_p
     assert summary(service)["unresolved_observations"] == 0
 
 
-def test_reusing_an_observation_for_another_source_rolls_back(tmp_path: Path):
+def test_reusing_an_observation_for_another_source_rolls_back(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "event")
     with pytest.raises(ValueError, match="reassigned"):
@@ -279,7 +287,7 @@ def test_reusing_an_observation_for_another_source_rolls_back(tmp_path: Path):
     assert summary(service)["qualified_observations"] == 1
 
 
-def test_monthly_summary_accepts_thirty_one_day_month(tmp_path: Path):
+def test_monthly_summary_accepts_thirty_one_day_month(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     result = service.repository.summary(
         datetime(2026, 10, 31, 16, tzinfo=UTC), datetime(2026, 11, 30, 16, tzinfo=UTC)
@@ -291,7 +299,9 @@ def test_monthly_summary_accepts_thirty_one_day_month(tmp_path: Path):
     assert result["days_requested"] == 31
 
 
-def door(service: EstablishmentRegistry, key: str, camera: int, kind: str, at: datetime):
+def door(
+    service: EstablishmentRegistry, key: str, camera: int, kind: str, at: datetime
+) -> VisitorDecision:
     """An unidentified doorway crossing, which keeps large scenarios fast."""
     return observe(
         service,
@@ -304,7 +314,7 @@ def door(service: EstablishmentRegistry, key: str, camera: int, kind: str, at: d
     )
 
 
-def test_doors_share_one_establishment_balance(tmp_path: Path):
+def test_doors_share_one_establishment_balance(tmp_path: Path) -> None:
     """Visitors may enter by one door and leave by another."""
     service = EstablishmentRegistry(str(tmp_path), "park")
     for index in range(50):
@@ -320,7 +330,7 @@ def test_doors_share_one_establishment_balance(tmp_path: Path):
     assert (breakdown[2]["entries"], breakdown[2]["exits"]) == (0, 45)
 
 
-def test_counting_needs_no_camera_setup_beyond_the_mode(tmp_path: Path):
+def test_counting_needs_no_camera_setup_beyond_the_mode(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "door")
     observe(service, "zone", 2, embedding=np.array([0, 1, 0]), observed_at=LATER)
@@ -329,14 +339,14 @@ def test_counting_needs_no_camera_setup_beyond_the_mode(tmp_path: Path):
     assert result["unique_count"] == 2
 
 
-def test_exit_with_nobody_inside_keeps_the_balance_at_zero(tmp_path: Path):
+def test_exit_with_nobody_inside_keeps_the_balance_at_zero(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     door(service, "early-exit", 2, "exit", NOW)
     door(service, "entry", 1, "entry", NOW + timedelta(seconds=10))
     assert service.repository.today_balance(NOW + timedelta(seconds=20)) == 1
 
 
-def test_balance_starts_from_zero_each_business_day(tmp_path: Path):
+def test_balance_starts_from_zero_each_business_day(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     for index in range(3):
         door(service, f"in:{index}", 1, "entry", NOW + timedelta(seconds=index))
@@ -344,7 +354,7 @@ def test_balance_starts_from_zero_each_business_day(tmp_path: Path):
     assert service.repository.today_balance(NOW + timedelta(days=1)) == 0
 
 
-def test_visitor_entering_at_one_door_and_leaving_by_another_is_one_visitor(tmp_path: Path):
+def test_visitor_entering_at_one_door_and_leaving_by_another_is_one_visitor(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     entered = observe(service, "front-entry", 1)
     left = observe(
@@ -356,7 +366,7 @@ def test_visitor_entering_at_one_door_and_leaving_by_another_is_one_visitor(tmp_
     assert result["entries"] == result["exits"] == 1
 
 
-def test_person_in_view_on_another_camera_is_someone_else(tmp_path: Path):
+def test_person_in_view_on_another_camera_is_someone_else(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.update_present_tracks(1, {"front"}, NOW)
     first = observe(service, "front", 1)
@@ -364,7 +374,7 @@ def test_person_in_view_on_another_camera_is_someone_else(tmp_path: Path):
     assert first.visitor_id != second.visitor_id
 
 
-def test_correction_sets_the_shared_balance(tmp_path: Path):
+def test_correction_sets_the_shared_balance(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     door(service, "first", 1, "entry", NOW)
     correction = service.repository.record_occupancy_correction(

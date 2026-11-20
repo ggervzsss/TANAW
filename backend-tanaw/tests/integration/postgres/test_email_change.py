@@ -181,7 +181,7 @@ async def _create_account(
             EnterpriseProfile(
                 enterprise_id=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
                 enterprise_name=f"Test {label}",
-                category="business",
+                attraction_code="411",
                 manager_name=f"Test {label}",
                 barangay="Poblacion",
             )

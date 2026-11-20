@@ -7,7 +7,7 @@ describe("enterprise form model", () => {
 
     expect(errors).toMatchObject({
       enterpriseName: "Enterprise name is required.",
-      category: "Choose a valid enterprise type.",
+      attractionCode: "Choose a DOT attraction category.",
       email: "Email address is required.",
       barangay: "Choose a valid barangay.",
       buildingCapacity: "Building capacity is required.",
@@ -19,7 +19,7 @@ describe("enterprise form model", () => {
     const form = {
       ...createEmptyEnterpriseForm(),
       enterpriseName: "  Lakeside Hotel  ",
-      category: "tourism",
+      attractionCode: "413",
       managerFirstName: "Ana",
       managerLastName: "Santos",
       email: "  ANA@EXAMPLE.COM ",
@@ -32,6 +32,8 @@ describe("enterprise form model", () => {
 
     expect(toCreateEnterprisePayload(form, { latitude: 14.34, longitude: 121.05 })).toMatchObject({
       enterpriseName: "Lakeside Hotel",
+      attractionCode: "413",
+      attractionDescription: null,
       managerName: "Ana Santos",
       email: "ana@example.com",
       contactNumber: "+639171234567",
@@ -43,11 +45,18 @@ describe("enterprise form model", () => {
     });
   });
 
+  it("requires a description for Others and sends only the selected code and description", () => {
+    const form = { ...createEmptyEnterpriseForm(), attractionCode: "901" };
+    expect(validateEnterpriseForm(form).attractionDescription).toBe("Specify the attraction.");
+    expect(toCreateEnterprisePayload({ ...form, attractionDescription: "  Heritage   well  " }, { latitude: 14.34, longitude: 121.05 }))
+      .toMatchObject({ attractionCode: "901", attractionDescription: "Heritage well" });
+  });
+
   it("enforces whole-number building capacity limits", () => {
     const base = {
       ...createEmptyEnterpriseForm(),
       enterpriseName: "Lakeside Hotel",
-      category: "tourism",
+      attractionCode: "413",
       managerFirstName: "Ana",
       managerLastName: "Santos",
       email: "ana@example.com",

@@ -1,6 +1,6 @@
 import { selectDashboardPeriod } from "./support/dashboard";
 import { expect, test, type Page } from "@playwright/test";
-import { mlResponse, mockMlRequest } from "./support/preload";
+import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 
 const enterpriseUser = {
   id: "enterprise-unified-metrics",
@@ -162,7 +162,7 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await page.setViewportSize({ width: 1440, height: 1024 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await signIn(page);
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await switchTheme(page, "light");
   const header = page.locator("[data-unified-metrics-header]");
   await expect(header).toHaveCount(1);
   await expect(header.locator("[data-metric-segment]")).toHaveCount(4);

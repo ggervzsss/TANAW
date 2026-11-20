@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.features.accounts.attractions import attraction_category
 from app.features.accounts.dependencies import get_current_operational_account, require_roles
 from app.features.accounts.enterprise import (
     enterprise_identifier,
@@ -13,7 +14,6 @@ from app.features.accounts.enterprise import (
     require_enterprise_profile,
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
-from app.features.accounts.options import format_enterprise_category
 from app.features.activity_logs.service import record_activity_log as record_operational_log
 from app.features.notifications.service import (
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
@@ -311,17 +311,21 @@ async def list_report_enterprises(
         statement = statement.where(Account.id == account.id)
 
     result = await db.scalars(statement)
-    return [
-        {
-            "id": require_enterprise_profile(account).enterprise_id,
-            "name": require_enterprise_profile(account).enterprise_name,
-            "category": format_enterprise_category(require_enterprise_profile(account).category)
-            or "Uncategorized",
-            "barangay": require_enterprise_profile(account).barangay or "Unassigned",
-            "complianceOwner": require_enterprise_profile(account).manager_name or account.email,
-        }
-        for account in result
-    ]
+    enterprises = []
+    for account in result:
+        profile = require_enterprise_profile(account)
+        enterprises.append(
+            {
+                "id": profile.enterprise_id,
+                "name": profile.enterprise_name,
+                "category": attraction_category(
+                    profile.attraction_code, profile.attraction_description
+                ),
+                "barangay": profile.barangay or "Unassigned",
+                "complianceOwner": profile.manager_name or account.email,
+            }
+        )
+    return enterprises
 
 
 async def notify_staff_report_submission(

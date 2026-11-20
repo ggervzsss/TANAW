@@ -151,7 +151,7 @@ html.dark {
 }
 
 /* A single crossfade covers the entire Admin workspace, including portalled controls. */
-html[data-portal-theme-transition="snapshot"] *:not(#admin-enterprise-map .leaflet-zoom-animated, .tanaw-map-panel),
+html[data-portal-theme-transition="snapshot"] *:not(#admin-enterprise-map .leaflet-zoom-animated),
 html[data-portal-theme-transition="snapshot"] *::before,
 html[data-portal-theme-transition="snapshot"] *::after {
   transition: none !important;
@@ -166,7 +166,7 @@ html[data-portal-theme-transition="snapshot"]::view-transition-group(root) {
   animation-timing-function: ease-in-out;
 }
 
-html[data-portal-theme-transition="fallback"] *:not(#admin-enterprise-map .leaflet-zoom-animated, .tanaw-map-panel),
+html[data-portal-theme-transition="fallback"] *:not(#admin-enterprise-map .leaflet-zoom-animated),
 html[data-portal-theme-transition="fallback"] *::before,
 html[data-portal-theme-transition="fallback"] *::after {
   transition:
@@ -240,53 +240,4 @@ html[data-portal-theme-transition="fallback"] *::after {
   ) {
     cursor: not-allowed;
   }
-}
-
-@layer components {
-  .profile-menu-button {
-    @apply flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200;
-    transition:
-      background-color 160ms ease,
-      color 160ms ease;
-  }
-
-  .profile-menu-button:hover,
-  .profile-menu-button:focus-visible {
-    background: var(--tanaw-control-hover);
-  }
-
-  .profile-menu-danger {
-    background: transparent;
-    color: #b91c1c;
-  }
-
-  .profile-menu-danger:hover,
-  .profile-menu-danger:focus-visible {
-    background: color-mix(in srgb, var(--tanaw-danger-surface) 92%, var(--tanaw-surface));
-    color: #991b1b;
-  }
-
-  .profile-menu-danger:active {
-    background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, #fecaca);
-  }
-
-  .profile-menu-danger:disabled {
-    background: transparent;
-    color: var(--tanaw-interactive-disabled-text);
-  }
-}
-
-html.dark .profile-menu-danger {
-  background: transparent;
-  color: #fca5a5;
-}
-
-html.dark .profile-menu-danger:hover,
-html.dark .profile-menu-danger:focus-visible {
-  background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, var(--tanaw-surface));
-  color: #fecaca;
-}
-
-html.dark .profile-menu-danger:active {
-  background: color-mix(in srgb, var(--tanaw-danger-surface) 90%, #3f1d24);
 }

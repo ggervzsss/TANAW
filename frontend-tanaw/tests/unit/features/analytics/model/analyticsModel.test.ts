@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
-import { getCompliancePercentage, getEnterpriseTrafficRows, type EnterpriseReportRow } from "../../../../../src/features/analytics/model/analyticsModel";
+import { getAnalyticsPeriods, getCompliancePercentage, getCurrentAnalyticsPeriod, getEnterpriseReportRows, getEnterpriseTrafficRows, type EnterpriseReportRow } from "../../../../../src/features/analytics/model/analyticsModel";
 
 const enterprises: ReportEnterprise[] = [
   { id: "enterprise-b", name: "Balon ni Lolo Uweng", category: "Attraction", barangay: "Landayan", complianceOwner: "Owner B" },
@@ -13,6 +13,7 @@ function report(id: string, enterprise: ReportEnterprise, entry: number, unique:
     enterpriseId: enterprise.id,
     enterprise: enterprise.name,
     category: enterprise.category,
+    attraction: { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" },
     barangay: enterprise.barangay,
     month: "June",
     period: "June 2026",
@@ -41,5 +42,18 @@ describe("staff analytics presentation model", () => {
     expect(getCompliancePercentage(1, 3)).toBe(33);
     expect(getCompliancePercentage(0, 0)).toBe(0);
     expect(getCompliancePercentage(4, 3)).toBe(100);
+  });
+
+  it("groups the current month's reports without changing the caller's period", () => {
+    const current = getCurrentAnalyticsPeriod(new Date(2026, 5, 19));
+    const reports = [report("report-b", enterprises[0], 420, 280), report("report-a", enterprises[1], 300, 200)];
+
+    const first = getAnalyticsPeriods(reports, current);
+    const refetched = getAnalyticsPeriods(reports, current);
+
+    expect(current.reports).toEqual([]);
+    expect(refetched[0].reports).toHaveLength(2);
+    expect(refetched[0].reports).not.toBe(first[0].reports);
+    expect(getEnterpriseReportRows(enterprises, refetched[0].reports).map((row) => row.submitted)).toEqual([true, true]);
   });
 });

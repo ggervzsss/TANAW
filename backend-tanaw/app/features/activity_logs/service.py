@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import ColumnElement, Select, and_, case, delete, false, func, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,10 @@ from app.features.activity_logs.schemas import (
     ActivityLogActorRole,
     ActivityLogCreate,
     ActivityLogSummary,
+    ActivityResolutionStatus,
 )
+from app.features.monitoring.models import OperationalAlert
+from app.features.support.models import SupportTicket
 
 ROLE_LABELS: dict[AccountRole, ActivityLogActorRole] = {
     AccountRole.ADMIN: "Admin",
@@ -25,6 +28,8 @@ SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
+IMPORTANT_TICKET_ACTIONS = frozenset({"Submit Support Ticket", "Submit Important Support Request"})
+IT_ISSUE_ACTIONS = frozenset({"Alert Created", "Desktop Application Problem"})
 ADMIN_ACTIVITY_CATEGORIES = frozenset({"Admin Operation", "Staff Submission", "Staff Operation"})
 ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
     {
@@ -69,6 +74,8 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
                 category == "System"
                 and (severity in {"Warning", "Critical"} or action.startswith("Alert "))
             )
+            or (action in IMPORTANT_TICKET_ACTIONS and severity == "Warning")
+            or (action == "Desktop Application Problem" and severity == "Warning")
             or severity == "Critical"
         )
     if role == AccountRole.IT.value:
@@ -79,20 +86,130 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
     return False
 
 
+def role_visibility_clause(role: str) -> ColumnElement[bool]:
+    """``can_role_view_log`` as a SQL condition, so a listing limit counts only visible logs."""
+    if role == AccountRole.ADMIN.value:
+        return or_(
+            ActivityLog.category.in_(ADMIN_ACTIVITY_CATEGORIES),
+            and_(
+                ActivityLog.category == "IT Activity",
+                or_(
+                    ActivityLog.action.in_(ADMIN_IT_ACTIVITY_ACTIONS),
+                    ActivityLog.action.startswith("Alert "),
+                ),
+            ),
+            and_(
+                ActivityLog.category == "System",
+                or_(
+                    ActivityLog.severity.in_({"Warning", "Critical"}),
+                    ActivityLog.action.startswith("Alert "),
+                ),
+            ),
+            and_(
+                ActivityLog.action.in_(IMPORTANT_TICKET_ACTIONS), ActivityLog.severity == "Warning"
+            ),
+            and_(
+                ActivityLog.action == "Desktop Application Problem",
+                ActivityLog.severity == "Warning",
+            ),
+            ActivityLog.severity == "Critical",
+        )
+    if role == AccountRole.IT.value:
+        return or_(
+            ActivityLog.category.in_({"System", "IT Activity", "Enterprise Activity"}),
+            ActivityLog.actor_role == "IT Personnel",
+        )
+    return false()
+
+
 async def list_activity_logs_for_account(
     db: AsyncSession, account: Account, limit: int = 250
 ) -> list[ActivityLogSummary]:
     retention_days = await get_activity_log_retention_days(db)
     cutoff = activity_log_retention_cutoff(retention_days)
+    if account.role == AccountRole.ADMIN:
+        visible = activity_resolution_records().where(role_visibility_clause(account.role.value))
+        activity = visible.cte("activity_resolution")
+        active = select(activity.c.id, activity.c.resolution).where(
+            activity.c.resolution == "Unresolved"
+        )
+        history = (
+            select(activity.c.id, activity.c.resolution)
+            .where(
+                activity.c.retention_timestamp >= cutoff,
+                activity.c.resolution.is_distinct_from("Unresolved"),
+            )
+            .order_by(activity.c.retention_timestamp.desc(), activity.c.id.desc())
+            .limit(limit)
+        )
+        records = active.union_all(history).subquery()
+        result_rows = await db.execute(
+            select(ActivityLog, records.c.resolution)
+            .join(records, records.c.id == ActivityLog.id)
+            .order_by(ActivityLog.timestamp.desc(), ActivityLog.id.desc())
+        )
+        return [
+            to_activity_log_summary(log, cast(ActivityResolutionStatus | None, state))
+            for log, state in result_rows
+            if can_role_view_log(account.role.value, log)
+        ]
+
     result = await db.scalars(
         select(ActivityLog)
-        .where(ActivityLog.timestamp >= cutoff)
+        .where(ActivityLog.timestamp >= cutoff, role_visibility_clause(account.role.value))
         .order_by(ActivityLog.timestamp.desc())
         .limit(limit)
     )
     return [
         to_activity_log_summary(log) for log in result if can_role_view_log(account.role.value, log)
     ]
+
+
+def activity_resolution_records() -> Select[tuple[str, str | None, datetime]]:
+    # Keep the original audit timestamp and read current state from Work Center.
+    issue_matches = and_(
+        ActivityLog.action.in_(IT_ISSUE_ACTIONS),
+        OperationalAlert.owner == "IT",
+        ActivityLog.severity.in_({"Warning", "Critical"}),
+        or_(
+            OperationalAlert.id == ActivityLog.source_id,
+            OperationalAlert.alert_code == ActivityLog.source_id,
+            func.concat("sample:activity:technical:", OperationalAlert.id) == ActivityLog.source_id,
+        ),
+    )
+    ticket_matches = and_(
+        ActivityLog.action.in_(IMPORTANT_TICKET_ACTIONS),
+        SupportTicket.priority.in_({"High", "Urgent"}),
+        or_(
+            SupportTicket.id == ActivityLog.source_id,
+            func.concat("sample:activity:ticket:", SupportTicket.id) == ActivityLog.source_id,
+        ),
+    )
+    status = func.coalesce(OperationalAlert.status, SupportTicket.status)
+    resolution = case(
+        (status == "Resolved", "Resolved"),
+        (status.is_not(None), "Unresolved"),
+        else_=None,
+    )
+    # A long-running issue remains visible for the retention window after it closes.
+    retention_timestamp = case(
+        (
+            status == "Resolved",
+            func.greatest(
+                ActivityLog.timestamp, OperationalAlert.updated_at, SupportTicket.updated_at
+            ),
+        ),
+        else_=ActivityLog.timestamp,
+    )
+    return (
+        select(
+            ActivityLog.id,
+            resolution.label("resolution"),
+            retention_timestamp.label("retention_timestamp"),
+        )
+        .outerjoin(OperationalAlert, issue_matches)
+        .outerjoin(SupportTicket, ticket_matches)
+    )
 
 
 async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> ActivityLogSummary:
@@ -154,9 +271,14 @@ async def purge_expired_activity_logs(
     db: AsyncSession, retention_days: int, now: datetime | None = None
 ) -> int:
     cutoff = activity_log_retention_cutoff(retention_days, now)
+    activity = activity_resolution_records().where(ActivityLog.timestamp < cutoff).subquery()
+    expired = select(activity.c.id).where(
+        activity.c.retention_timestamp < cutoff,
+        activity.c.resolution.is_distinct_from("Unresolved"),
+    )
     result = cast(
         CursorResult[Any],
-        await db.execute(delete(ActivityLog).where(ActivityLog.timestamp < cutoff)),
+        await db.execute(delete(ActivityLog).where(ActivityLog.id.in_(expired))),
     )
     return result.rowcount or 0
 
@@ -191,7 +313,9 @@ def load_system_settings_values(record: SystemConfiguration | None) -> dict[str,
     }
 
 
-def to_activity_log_summary(log: ActivityLog) -> ActivityLogSummary:
+def to_activity_log_summary(
+    log: ActivityLog, resolution: ActivityResolutionStatus | None = None
+) -> ActivityLogSummary:
     return ActivityLogSummary(
         id=log.id,
         timestamp=log.timestamp,
@@ -203,5 +327,6 @@ def to_activity_log_summary(log: ActivityLog) -> ActivityLogSummary:
         target=log.target,
         summary=log.summary,
         sourceId=log.source_id,
+        resolutionStatus=resolution,
         metadata=json.loads(log.metadata_json) if log.metadata_json else None,
     )

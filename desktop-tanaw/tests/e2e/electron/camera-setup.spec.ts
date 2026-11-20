@@ -116,8 +116,29 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
       window?.maximize();
       window?.show();
     });
+    await page.getByRole("button", { name: "Collapse configured cameras" }).click();
+    await expect(page.getByRole("img", { name: "1 configured camera" })).toBeVisible();
+    await page.getByRole("button", { name: "Expand configured cameras" }).click();
+    await expect(page.getByRole("button", { name: /Tapo Camera/, pressed: true })).toBeVisible();
+    await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("camera-preview-surface"))).toBe(true);
+    await page.getByRole("button", { name: "Exit Fullscreen", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((value) => value.webContents.getURL().startsWith("tanaw-app://desktop"));
+      if (!window) throw new Error("Camera window not found");
+      window.unmaximize();
+      // Leave room for native window sizing and renderer zoom rounding across platforms.
+      window.setContentSize(1000, 612);
+      window.webContents.setZoomFactor(1.25);
+    });
+    await expect.poll(() => page.evaluate(() => window.innerHeight)).toBeLessThanOrEqual(500);
     await page.getByRole("button", { name: "Edit configuration" }).click();
-    await expect(page.getByRole("tab")).toHaveCount(5);
+    const settings = page.getByRole("region", { name: "Camera Settings", exact: true });
+    await expect(settings.getByRole("tab")).toHaveCount(5);
+    await expect(page.getByRole("region", { name: "My Cameras" })).toHaveCount(0);
+    await expect(settings.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(settings.getByRole("button", { name: "Save Changes", exact: true })).toBeInViewport({ ratio: 1 });
     await page.getByRole("tab", { name: "Connection", exact: true }).click();
     await expect(page.getByLabel("Camera Username", { exact: true })).toHaveValue("saved-user");
     await page.getByLabel("Camera Username", { exact: true }).fill("draft-user");

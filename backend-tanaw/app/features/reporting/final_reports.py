@@ -343,7 +343,9 @@ def final_report_summary(
         sources=[
             FinalReportSourceSummary(
                 id=source.intake_report_id,
+                enterpriseProfileId=source.enterprise_profile_id,
                 enterprise=source.enterprise,
+                attractionCode=source.attraction_code,
                 code=source.code,
                 unique=source.unique_count,
                 entry=source.entries,
@@ -370,7 +372,13 @@ def source_demographics(
     if any(value is None for value in values.values()):
         return None
     return ReportDemographicsSummary.model_validate(
-        {**values, "thisProvUnspecified": source.this_prov_unspecified or 0}
+        {
+            **values,
+            "thisProvUnspecified": source.this_prov_unspecified or 0,
+            "thisCityMale": source.this_city_male,
+            "thisCityFemale": source.this_city_female,
+            "thisCityUnspecified": source.this_city_unspecified,
+        }
     )
 
 
@@ -380,7 +388,9 @@ def final_report_source_snapshot(
     snapshot = FinalReportSource(
         final_report_id=final_report_id,
         intake_report_id=source.id,
+        enterprise_profile_id=source.enterprise_profile_id,
         enterprise=source.enterprise_name,
+        attraction_code=source.attraction_code,
         code=source.report_id,
         unique_count=source.unique_count,
         entries=source.entries,
@@ -394,6 +404,7 @@ def update_final_report_source_snapshot(
     snapshot: FinalReportSource, source: EnterpriseReportSubmission
 ) -> None:
     snapshot.enterprise = source.enterprise_name
+    snapshot.attraction_code = source.attraction_code
     snapshot.code = source.report_id
     snapshot.unique_count = source.unique_count
     snapshot.entries = source.entries
@@ -408,6 +419,9 @@ def update_final_report_source_snapshot(
     snapshot.other_prov_female = demographics.otherProvFemale if demographics else None
     snapshot.foreign_male = demographics.foreignMale if demographics else None
     snapshot.foreign_female = demographics.foreignFemale if demographics else None
+    snapshot.this_city_male = demographics.thisCityMale if demographics else None
+    snapshot.this_city_female = demographics.thisCityFemale if demographics else None
+    snapshot.this_city_unspecified = demographics.thisCityUnspecified if demographics else None
 
 
 def mark_source_consolidated(source: EnterpriseReportSubmission) -> None:

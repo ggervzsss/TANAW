@@ -1,7 +1,6 @@
 """The same frozen desktop fixture is accepted and retained by Staff reporting."""
 
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -10,8 +9,9 @@ from app.features.reporting.counting import complete_sum, snapshot_digest
 from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import DesktopReportSubmissionIngest
+from tests.support.counting import REPORT_FIXTURES
 
-FIXTURE = Path(__file__).resolve().parents[4] / "test-fixtures/open-space-establishment-report.json"
+FIXTURE = REPORT_FIXTURES / "open-space-establishment-report.json"
 
 
 def submission():
@@ -36,6 +36,8 @@ def test_actual_desktop_open_space_snapshot_preserves_null_movement_and_one_tota
     assert report.peakOccupancy == 2
     source = EnterpriseReportSubmission(
         id="source-id",
+        enterprise_profile_id="park-profile",
+        attraction_code="411",
         enterprise_name="Park",
         report_id=report.reportId,
         entries=report.entries,
@@ -45,6 +47,8 @@ def test_actual_desktop_open_space_snapshot_preserves_null_movement_and_one_tota
     )
     snapshot = final_report_source_snapshot("final-id", source)
     assert snapshot.unique_count == 2
+    assert snapshot.attraction_code == "411"
+    assert snapshot.enterprise_profile_id == "park-profile"
     assert snapshot.entries is snapshot.exits is None
     assert snapshot.counting_json == report.payload["counting"]
     assert snapshot.this_prov_male == snapshot.this_prov_female == 1

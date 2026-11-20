@@ -1,13 +1,21 @@
 ﻿import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useReducedMotion } from "motion/react";
 import { useId } from "react";
-import type { EstablishmentSummary } from "../../camera/services/ml-service";
+import type { EstablishmentHourly, EstablishmentSummary } from "../../camera/services/ml-service";
+import type { SystemTimeFormat } from "../../../utils/date-time";
 import type { TrendFilter } from "../types/dashboard";
-import { establishmentTrend } from "../utils/establishment";
+import { establishmentTrend, hourlyOccupancyTrend } from "../utils/establishment";
 import { DashboardChartTooltip } from "./DashboardChartTooltip";
 
-type Props = { summary: EstablishmentSummary | null; range: { start: string; end: string }; filter: TrendFilter; unavailable: boolean };
-export function EstablishmentTrendChart({ summary, range, filter, unavailable }: Props) {
+type Props = {
+  summary: EstablishmentSummary | null;
+  hourly: EstablishmentHourly | null;
+  range: { start: string; end: string };
+  filter: TrendFilter;
+  timeFormat: SystemTimeFormat;
+  unavailable: boolean;
+};
+export function EstablishmentTrendChart({ summary, hourly, range, filter, timeFormat, unavailable }: Props) {
   const reduceMotion = useReducedMotion();
   const gradientId = useId().replace(/:/g, "");
   const data = establishmentTrend(summary, range).map((point) => {
@@ -16,7 +24,10 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable }:
     return { ...point, entries: measured ? day.entries : null, exits: measured ? day.exits : null };
   });
   const trafficData: Array<{ label: string; entries: number | null; exits: number | null }> = data;
-  const occupancyData: Array<{ label: string; occupancy: number | null }> = data;
+  // A single day reads better hour by hour than as one daily point.
+  const hourlyOccupancy = filter === "Today" ? hourlyOccupancyTrend(hourly, timeFormat) : [];
+  const byHour = hourlyOccupancy.length > 0;
+  const occupancyData: Array<{ label: string; occupancy: number | null }> = byHour ? hourlyOccupancy : data;
   const hasOccupancy = occupancyData.some((point) => point.occupancy !== null);
   const hasMovement = trafficData.some((point) => point.entries != null || point.exits != null);
   const observedZero = hasOccupancy && data.every((point) => (point.visitors === null || point.visitors === 0) && (point.occupancy === null || point.occupancy === 0));
@@ -105,7 +116,7 @@ export function EstablishmentTrendChart({ summary, range, filter, unavailable }:
       <section className="design-card overview-chart">
         <header>
           <h3>Occupancy Trend</h3>
-          <p>Highest observed occupancy by day</p>
+          <p>Highest observed occupancy by {byHour ? "hour" : "day"}</p>
           {observedZero && <p role="status">Available observations recorded no visitor activity. Gaps remain unavailable.</p>}
         </header>
         {hasOccupancy ? (

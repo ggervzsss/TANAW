@@ -74,14 +74,14 @@ test(development ? "development shortcut opens Dev Log and copies its link" : "p
   );
 
   await page.goto("/it/profile");
-  await expect(page).toHaveURL(/\/it\/profile$/);
-  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect(page).toHaveURL(/\/it\/settings\/profile$/);
+  await expect(page.getByRole("heading", { name: "Profile Information" })).toBeVisible();
 
   await page.keyboard.type("devlog");
 
   if (!development) {
-    await expect(page).toHaveURL(/\/it\/profile$/);
-    await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+    await expect(page).toHaveURL(/\/it\/settings\/profile$/);
+    await expect(page.getByRole("heading", { name: "Profile Information" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Development Email", exact: true })).toHaveCount(0);
     await page.goto("/it/dev-log");
     await expect(page).not.toHaveURL(/\/it\/dev-log$/);

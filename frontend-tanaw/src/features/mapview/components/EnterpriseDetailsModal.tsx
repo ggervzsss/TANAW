@@ -2,10 +2,12 @@ import { Activity, BarChart3, Building2, Camera, Clock, MapPin, Phone, Radio, Us
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import type { GatewayStatus, MonitoringStatus, OccupancyStatus } from "@/shared/types";
+import type { GatewayStatus, OccupancyStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { Badge, type BadgeTone } from "../../../design-system";
+
+import { MonitoringStatusBadge } from "./MapDirectoryCards";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
@@ -35,8 +37,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy?.toLocaleString() ?? "Unavailable"} />
-            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount?.toLocaleString() ?? "Unavailable"} />
+            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy?.toLocaleString() ?? "No live data"} />
+            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount?.toLocaleString() ?? "No live data"} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Camera Monitoring" value={<MonitoringStatusBadge status={enterprise.monitoringStatus} />} />
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Occupancy Alert" value={<OccupancyStatusBadge status={enterprise.occupancyStatus} />} />
           </div>
@@ -79,7 +81,7 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
         {icon}
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
       </div>
-      <div className="mt-2 text-lg leading-tight font-black text-slate-950 max-sm:text-base">{value}</div>
+      <div className="mt-2 text-lg leading-tight font-black text-(--tanaw-text) max-sm:text-base">{value}</div>
     </div>
   );
 }
@@ -87,26 +89,17 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
     <div
-      className={`flex min-w-0 items-start gap-3 rounded-tanaw-xl border border-slate-200 bg-slate-50/80 p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
+      className={`rounded-tanaw-xl flex min-w-0 items-start gap-3 border border-slate-200 bg-slate-50/80 p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
     >
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
-        <p className="mt-1 text-sm leading-relaxed font-bold wrap-break-word text-slate-900">{value}</p>
+        <p className="mt-1 text-sm leading-relaxed font-bold wrap-break-word text-(--tanaw-text)">{value}</p>
       </div>
     </div>
   );
 }
 
-const monitoringTones: Record<MonitoringStatus, BadgeTone> = {
-  "Fully Monitoring": "success",
-  "Partially Monitoring": "warning",
-  "Updates Delayed": "warning",
-  Fault: "danger",
-  Stopped: "neutral",
-  Offline: "neutral",
-  "Not Configured": "neutral",
-};
 const occupancyTones: Record<OccupancyStatus, BadgeTone> = { Normal: "info", Warning: "warning", "High Occupancy": "danger", "No Data": "neutral" };
 const gatewayTones: Record<GatewayStatus, BadgeTone> = { Connected: "success", "Sync Delayed": "warning", Offline: "neutral", "Not Linked": "neutral", Closed: "neutral" };
 const gatewayLabels: Record<GatewayStatus, string> = {
@@ -116,10 +109,6 @@ const gatewayLabels: Record<GatewayStatus, string> = {
   "Not Linked": "No Desktop App Linked",
   Closed: "Closed",
 };
-
-function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
-  return <Badge tone={monitoringTones[status]}>{status}</Badge>;
-}
 
 function OccupancyStatusBadge({ status }: { status: OccupancyStatus }) {
   return <Badge tone={occupancyTones[status]}>{status}</Badge>;

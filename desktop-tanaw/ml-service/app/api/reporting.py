@@ -110,6 +110,19 @@ def mark_local_report_synced(
     )
 
 
+@router.post(
+    "/reports/local/{report_id}/submissions/{submission_id}/upload-rejected",
+    response_model=SyncMarkResponse,
+)
+def mark_local_report_upload_rejected(
+    report_id: str, submission_id: str, request: Request
+) -> SyncMarkResponse:
+    """Stop retrying a submission the backend refused; the report stays saved on this device."""
+    return SyncMarkResponse(
+        updated=1 if registry(request).mark_report_upload_rejected(report_id, submission_id) else 0
+    )
+
+
 @router.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)
 def purge_local_report_raw_events(report_id: str, request: Request) -> ReportRawDataPurgeResponse:
     return ReportRawDataPurgeResponse(**registry(request).purge_report_raw_events(report_id))

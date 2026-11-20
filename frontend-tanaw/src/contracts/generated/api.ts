@@ -1255,6 +1255,9 @@ export interface components {
         AccountSummary: {
             /** Address */
             address: string | null;
+            attraction?: components["schemas"]["AttractionClassification"] | null;
+            /** Attractiondescription */
+            attractionDescription?: string | null;
             /** Barangay */
             barangay: string | null;
             /** Buildingcapacity */
@@ -1339,6 +1342,8 @@ export interface components {
             metadata?: {
                 [key: string]: string | number | boolean | null;
             } | null;
+            /** Resolutionstatus */
+            resolutionStatus?: ("Unresolved" | "Resolved") | null;
             /**
              * Severity
              * @enum {string}
@@ -1356,10 +1361,28 @@ export interface components {
              */
             timestamp: string;
         };
+        /** AttractionClassification */
+        AttractionClassification: {
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            /** Ntdpcode */
+            ntdpCode: string;
+            /** Portfoliocategory */
+            portfolioCategory: string;
+            /** Type */
+            type: string;
+            /** Typecode */
+            typeCode: string;
+        };
         /** AuthUser */
         AuthUser: {
             /** Address */
             address?: string | null;
+            attraction?: components["schemas"]["AttractionClassification"] | null;
+            /** Attractiondescription */
+            attractionDescription?: string | null;
             /** Barangay */
             barangay?: string | null;
             /**
@@ -1691,6 +1714,13 @@ export interface components {
         EnterpriseAccountCreate: {
             /** Address */
             address: string;
+            /**
+             * Attractioncode
+             * @description Three-digit DOT attraction code from the April 2021 Annex B catalog.
+             */
+            attractionCode: string;
+            /** Attractiondescription */
+            attractionDescription?: string | null;
             /** Barangay */
             barangay: string;
             /**
@@ -1698,8 +1728,6 @@ export interface components {
              * @default 100
              */
             buildingCapacity: number;
-            /** Category */
-            category: string;
             /** Contactnumber */
             contactNumber?: string | null;
             /**
@@ -1722,6 +1750,13 @@ export interface components {
         EnterpriseAccountUpdate: {
             /** Address */
             address: string;
+            /**
+             * Attractioncode
+             * @description Three-digit DOT attraction code from the April 2021 Annex B catalog.
+             */
+            attractionCode: string;
+            /** Attractiondescription */
+            attractionDescription?: string | null;
             /** Barangay */
             barangay: string;
             /**
@@ -1729,8 +1764,6 @@ export interface components {
              * @default 100
              */
             buildingCapacity: number;
-            /** Category */
-            category: string;
             /** Contactnumber */
             contactNumber?: string | null;
             /**
@@ -1812,6 +1845,8 @@ export interface components {
         };
         /** FinalReportSourceSummary */
         FinalReportSourceSummary: {
+            /** Attractioncode */
+            attractionCode: string;
             /** Code */
             code: string;
             /** Counting */
@@ -1821,6 +1856,8 @@ export interface components {
             demographics?: components["schemas"]["ReportDemographicsSummary"] | null;
             /** Enterprise */
             enterprise: string;
+            /** Enterpriseprofileid */
+            enterpriseProfileId: string;
             /** Entry */
             entry: number | null;
             /** Exit */
@@ -1917,6 +1954,9 @@ export interface components {
         };
         /** IntakeReportSummary */
         IntakeReportSummary: {
+            attraction: components["schemas"]["AttractionClassification"];
+            /** Attractiondescription */
+            attractionDescription?: string | null;
             /** Barangay */
             barangay: string;
             /** Category */
@@ -2153,6 +2193,21 @@ export interface components {
             otherProvFemale: number;
             /** Otherprovmale */
             otherProvMale: number;
+            /**
+             * Thiscityfemale
+             * @description This City/Municipality share of thisProvFemale; null when not recorded.
+             */
+            thisCityFemale?: number | null;
+            /**
+             * Thiscitymale
+             * @description This City/Municipality share of thisProvMale; null when not recorded.
+             */
+            thisCityMale?: number | null;
+            /**
+             * Thiscityunspecified
+             * @description This City/Municipality share of thisProvUnspecified; null when not recorded.
+             */
+            thisCityUnspecified?: number | null;
             /** Thisprovfemale */
             thisProvFemale: number;
             /** Thisprovmale */

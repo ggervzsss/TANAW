@@ -3,7 +3,7 @@ import { useThemePreference } from "../../features/security/hooks/useThemePrefer
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
 /** Theme updates repaint CSS and this small header, without rerendering page charts or camera previews. */
-export function ThemedEnterpriseTopbar(props: Omit<ComponentProps<typeof EnterpriseTopbar>, "resolvedTheme" | "onToggleTheme">) {
-  const { resolvedTheme, toggleTheme } = useThemePreference();
-  return <EnterpriseTopbar {...props} resolvedTheme={resolvedTheme} onToggleTheme={toggleTheme} />;
+export function ThemedEnterpriseTopbar(props: Omit<ComponentProps<typeof EnterpriseTopbar>, "resolvedTheme">) {
+  const { resolvedTheme } = useThemePreference();
+  return <EnterpriseTopbar {...props} resolvedTheme={resolvedTheme} />;
 }

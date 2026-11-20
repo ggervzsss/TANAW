@@ -1,7 +1,7 @@
 import L from "leaflet";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MapEnterprise } from "@/shared/types";
-import { createTooltipHtml, getMonitoringStatusPresentation, getOccupancyRingColor } from "../utils";
+import { createTooltipHtml, getMonitoringStatusLabel, getMonitoringStatusPresentation, getOccupancyRingColor } from "../utils";
 
 type MutableRef<T> = { current: T };
 
@@ -71,7 +71,7 @@ export function useEnterpriseMarkers({
         if (statusChanged || before?.occupancyStatus !== enterprise.occupancyStatus) marker.setIcon(makeIcon());
         if (marker.getTooltip()?.getContent() !== tooltip) marker.setTooltipContent(tooltip);
       }
-      marker.getElement()?.setAttribute("aria-label", [enterprise.name, enterprise.barangay, enterprise.monitoringStatus].filter(Boolean).join(", "));
+      marker.getElement()?.setAttribute("aria-label", [enterprise.name, enterprise.barangay, getMonitoringStatusLabel(enterprise.monitoringStatus)].filter(Boolean).join(", "));
       previous.current.set(enterprise.id, enterprise);
     });
   }, [mapRef, markersRef, visibleEnterprises]);

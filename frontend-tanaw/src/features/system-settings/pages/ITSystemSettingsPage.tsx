@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { PageHeader } from "@/shared/components/layout";
-import { ModalFrame, PageMotion } from "@/shared/components/ui";
+import { ModalFrame } from "@/shared/components/ui";
 import { SettingsDetailPanel } from "../components";
 import { settingSections } from "../data";
 import type { SettingField, SettingValue } from "../types";
@@ -42,22 +41,28 @@ export function ITSystemSettingsPage() {
   };
 
   return (
-    <PageMotion>
-      <PageHeader title="System Settings" description="Manage account safety, activity history, Philippine time display, and technical issue notifications." />
-
+    <>
       <div>
-        {settingsQuery.isPending && <div className="grid min-h-52 place-items-center text-sm font-semibold text-slate-500" role="status">Loading system settings…</div>}
-        {settingsQuery.isError && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-800">Unable to load System Settings. Refresh the page to try again.</div>}
+        {settingsQuery.isPending && (
+          <div className="grid min-h-52 place-items-center text-sm font-semibold text-slate-500" role="status">
+            Loading system settings…
+          </div>
+        )}
+        {settingsQuery.isError && (
+          <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-800">
+            Unable to load System Settings. Refresh the page to try again.
+          </div>
+        )}
         {systemSettings && (
-        <SettingsDetailPanel
-          sections={settingSections}
-          storedValues={storedValues}
-          metadataLabel={metadataLabel}
-          additionalContentBySectionId={{
-            logs: <PurgeLogsSettingCard isPending={purgeMutation.isPending} onOpenConfirm={() => setIsPurgeConfirmOpen(true)} />,
-          }}
-          onPersist={persistSettings}
-        />
+          <SettingsDetailPanel
+            sections={settingSections}
+            storedValues={storedValues}
+            metadataLabel={metadataLabel}
+            additionalContentBySectionId={{
+              logs: <PurgeLogsSettingCard isPending={purgeMutation.isPending} onOpenConfirm={() => setIsPurgeConfirmOpen(true)} />,
+            }}
+            onPersist={persistSettings}
+          />
         )}
       </div>
       {isPurgeConfirmOpen && (
@@ -88,7 +93,7 @@ export function ITSystemSettingsPage() {
           </div>
         </ModalFrame>
       )}
-    </PageMotion>
+    </>
   );
 }
 

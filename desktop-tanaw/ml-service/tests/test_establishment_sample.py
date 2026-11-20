@@ -21,13 +21,15 @@ NOW = datetime(2026, 11, 16, 4, tzinfo=UTC)
 COUNTS = {"entries": 120, "exits": 108, "unique_count": 90}
 
 
-def prepare(service: EstablishmentRegistry, period: str, report_id: str = "SAMPLE-REP-1"):
+def prepare(
+    service: EstablishmentRegistry, period: str, report_id: str = "SAMPLE-REP-1"
+) -> dict[str, Any]:
     return prepare_sample_period(
         service.repository, report_id=report_id, period=period, now=NOW, **COUNTS
     )
 
 
-def test_completed_month_matches_prepared_totals_and_is_report_ready(tmp_path: Path):
+def test_completed_month_matches_prepared_totals_and_is_report_ready(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
 
     assert prepare(service, "October 2026") == {
@@ -55,7 +57,7 @@ def test_completed_month_matches_prepared_totals_and_is_report_ready(tmp_path: P
         } == {1}
 
 
-def test_preparation_is_idempotent_and_deterministic(tmp_path: Path):
+def test_preparation_is_idempotent_and_deterministic(tmp_path: Path) -> None:
     first = EstablishmentRegistry(str(tmp_path / "first"), "park")
     second = EstablishmentRegistry(str(tmp_path / "second"), "park")
     prepare(first, "September 2026")
@@ -81,7 +83,7 @@ def today_summary(service: EstablishmentRegistry) -> tuple[dict, int]:
     return json.loads(row[0]), row[1]
 
 
-def test_current_month_includes_today_up_to_now_and_keeps_up(tmp_path: Path):
+def test_current_month_includes_today_up_to_now_and_keeps_up(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
 
     assert prepare(service, "November 2026")["days"] == 16
@@ -103,7 +105,7 @@ def test_current_month_includes_today_up_to_now_and_keeps_up(tmp_path: Path):
     assert evening["entries"] >= midday["entries"]
 
 
-def test_sample_day_closed_mid_day_is_completed_on_the_next_day(tmp_path: Path):
+def test_sample_day_closed_mid_day_is_completed_on_the_next_day(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     prepare(service, "November 2026")
     partial, _ = today_summary(service)
@@ -122,7 +124,7 @@ def test_sample_day_closed_mid_day_is_completed_on_the_next_day(tmp_path: Path):
     assert complete["qualified_observations"] > partial["qualified_observations"]
 
 
-def test_camera_activity_today_replaces_sample_visits(tmp_path: Path):
+def test_camera_activity_today_replaces_sample_visits(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     prepare(service, "November 2026")
     service.observe(
@@ -144,7 +146,7 @@ def test_camera_activity_today_replaces_sample_visits(tmp_path: Path):
     assert today["reconciliation_state"] == "estimated"
 
 
-def test_days_with_camera_data_and_submitted_periods_are_left_alone(tmp_path: Path):
+def test_days_with_camera_data_and_submitted_periods_are_left_alone(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed = datetime(2026, 10, 10, 2, tzinfo=UTC)
     service.observe(
@@ -178,7 +180,7 @@ def test_days_with_camera_data_and_submitted_periods_are_left_alone(tmp_path: Pa
     assert prepare(service, "September 2026")["days"] == 0
 
 
-def test_sample_population_does_not_change_live_enterprise_occupancy(tmp_path: Path):
+def test_sample_population_does_not_change_live_enterprise_occupancy(tmp_path: Path) -> None:
     pipelines = CameraPipelineRegistry(str(tmp_path))
     pipelines.bind_enterprise("park")
     try:
@@ -194,7 +196,7 @@ def test_sample_population_does_not_change_live_enterprise_occupancy(tmp_path: P
         pipelines.close()
 
 
-def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path):
+def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path) -> None:
     pipelines = CameraPipelineRegistry(str(tmp_path))
     pipelines.bind_enterprise("park", "Park")
     client = TestClient(create_app(pipelines))
@@ -244,6 +246,14 @@ def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path):
         )
         assert submitted.status_code == 200, submitted.text
         assert submitted.json()["unique_count"] == 90
+
+        submission_id = submitted.json()["submission_id"]
+        refused = client.post(f"/reports/local/REP-OCT/submissions/{submission_id}/upload-rejected")
+        assert refused.json() == {"updated": 1}
+        listed = client.get("/reports/local").json()
+        assert [(item["report_id"], item["sync_status"]) for item in listed] == [
+            ("REP-OCT", "upload_rejected")
+        ]
     finally:
         pipelines.close()
 
@@ -318,3 +328,26 @@ def test_months_where_recent_days_reach_back_get_no_origins_for_those_days(tmp_p
     origins = sample_origins(service, "November 2026")
     assert max(origins) == "2026-11-28"
     assert ReportDraftRepository(service.database).get("period:December 2026") is None
+
+
+def test_each_month_holds_only_its_own_days(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    drafts = ReportDraftRepository(service.database)
+    entered = {
+        "otherCity": {"male": 1, "female": 0},
+        "otherProvince": {"male": 0, "female": 0},
+        "foreign": {"male": 0, "female": 0},
+    }
+    # A draft written before the fill was limited to its month.
+    drafts.save(
+        "period:October 2026",
+        "October 2026",
+        {"origins": {"2026-10-02": entered, "2026-11-02": entered}, "version": 2},
+    )
+    prepare(service, "November 2026", "SAMPLE-REP-NOV")
+    prepare(service, "October 2026", "SAMPLE-REP-OCT")
+
+    october = sample_origins(service, "October 2026")
+    assert sorted(october) == [f"2026-10-{day:02d}" for day in range(1, 32)]
+    assert october["2026-10-02"] == entered
+    assert max(sample_origins(service, "November 2026")) == "2026-11-12"

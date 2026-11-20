@@ -26,7 +26,8 @@ const enterprise = {
   firstName: null,
   lastName: null,
   enterpriseName: "Lolo Uwenger Pilgrim Church",
-  category: "tourism",
+  category: "Golf",
+  attraction: { code: "401", typeCode: "4", type: "Sports and Recreational Facilities", category: "Golf", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD404" },
   managerName: "Enterprise Manager",
   barangay: "San Antonio",
   address: "Mahogany Street",
@@ -86,7 +87,7 @@ async function restoreItSession(page: Page) {
   await page.route("**/activity-logs", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([activity]) }));
 }
 
-test("keeps the enterprise review queue compact and reveals the first invalid custom select inside its modal", async ({ page }) => {
+test("keeps the enterprise review queue compact and reveals the first invalid custom select inside its modal", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await restoreItSession(page);
   await page.goto("/it/enterprise-accounts");
@@ -123,12 +124,12 @@ test("keeps the enterprise review queue compact and reveals the first invalid cu
   const windowScrollBefore = await page.evaluate(() => window.scrollY);
   await dialog.getByRole("button", { name: "Register Enterprise" }).click();
 
-  const category = dialog.getByRole("combobox", { name: "Enterprise Type / Category" });
+  const category = dialog.getByRole("combobox", { name: "DOT attraction category" });
   await expect(category).toBeFocused();
   await expect(category).toBeInViewport();
   await expect(category).toHaveAttribute("aria-invalid", "true");
-  await expect(category).toHaveAttribute("aria-describedby", "category-description");
-  await expect(dialog.getByText("Choose a valid enterprise type.")).toBeVisible();
+  await expect(category).toHaveAttribute("aria-describedby", "attractionCode-description");
+  await expect(dialog.getByText("Choose a DOT attraction category.")).toBeVisible();
   await expect(page.getByText("Please complete the highlighted required field.")).toHaveCount(1);
   await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
   await expect(dialog.getByLabel("Contact Email")).toHaveValue("new-enterprise@example.test");
@@ -136,8 +137,12 @@ test("keeps the enterprise review queue compact and reveals the first invalid cu
   expect(await page.evaluate(() => window.scrollY)).toBe(windowScrollBefore);
 
   await category.press("Enter");
-  await category.press("Enter");
-  await expect(category).toContainText("Events Venue");
+  await page.getByPlaceholder("Search category, type, or code").fill("TD404");
+  await page.getByRole("option", { name: /Golf/ }).click();
+  await expect(category).toContainText("Golf");
+  await expect(category).toContainText("401");
+  await expect(dialog.getByText("NTDP portfolio", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("enterprise-dot-classification-dark.png"), animations: "disabled" });
   await expect(category).toBeFocused();
 
   await dialog.getByRole("button", { name: "Register Enterprise" }).click();

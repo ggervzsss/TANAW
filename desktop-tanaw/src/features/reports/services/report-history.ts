@@ -1,3 +1,4 @@
+import type { ApiSchemas } from "../../../contracts/api";
 import { staffApi } from "../../../lib/axios";
 
 export type EnterpriseIntakeReport = {
@@ -5,6 +6,8 @@ export type EnterpriseIntakeReport = {
   enterpriseId: string;
   enterprise: string;
   category: string;
+  attraction?: ApiSchemas["AttractionClassification"];
+  attractionDescription?: string | null;
   barangay: string;
   month: string;
   period: string;

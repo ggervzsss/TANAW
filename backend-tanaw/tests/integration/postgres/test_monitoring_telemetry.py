@@ -319,7 +319,7 @@ def _enterprise(label: str) -> Account:
             account_id=account_id,
             enterprise_id=f"F08-{label}-{suffix}",
             enterprise_name=f"F08 {label}",
-            category="Accommodation",
+            attraction_code="413",
             manager_name="F08 Manager",
             barangay="Nueva",
             building_capacity=100,

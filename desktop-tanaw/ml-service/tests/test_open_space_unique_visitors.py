@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -8,21 +9,28 @@ import numpy as np
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
 from app.config.camera_config import CameraStartRequest
-from app.config.open_space_config import OpenSpaceConfig
+from app.config.open_space_config import OpenSpaceConfig, ZonePoint
 from app.counting.geometry import Centroid
+from app.identity.models import VisitorDecision
 from app.identity.unique_visitor_registry import UniqueVisitorRegistry
 from app.reid.async_worker import ReIdResult
 from app.storage.local_database import LocalDatabase
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack
 
-POLYGON = [{"x": 0.2, "y": 0.2}, {"x": 0.8, "y": 0.2}, {"x": 0.8, "y": 0.8}, {"x": 0.2, "y": 0.8}]
+POLYGON = [ZonePoint(x=x, y=y) for x, y in ((0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8))]
 VECTOR = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+
+
+def _area_state(manager: CameraProcessingManager) -> dict[str, Any]:
+    state = manager.area_state()
+    assert state is not None
+    return state
 
 
 def resolve(
     registry: UniqueVisitorRegistry, track: int, now: datetime, embedding: np.ndarray = VECTOR
-):
+) -> VisitorDecision:
     return registry.resolve_entry(
         track_id=track,
         camera_id=1,
@@ -33,7 +41,9 @@ def resolve(
     )
 
 
-def test_zone_gallery_is_persistent_deduplicated_and_separate_from_doorway_counts(tmp_path: Path):
+def test_zone_gallery_is_persistent_deduplicated_and_separate_from_doorway_counts(
+    tmp_path: Path,
+) -> None:
     store = SessionStore(str(tmp_path))
     now = datetime(2026, 10, 29, 10, tzinfo=UTC)
     door = UniqueVisitorRegistry(store)
@@ -60,7 +70,7 @@ def test_zone_gallery_is_persistent_deduplicated_and_separate_from_doorway_count
     assert store.metrics_summary()["unique_count"] == 0
 
 
-def test_uncertain_identity_is_excluded_from_the_zone_unique_estimate(tmp_path: Path):
+def test_uncertain_identity_is_excluded_from_the_zone_unique_estimate(tmp_path: Path) -> None:
     registry = UniqueVisitorRegistry(
         SessionStore(str(tmp_path)), identity_namespace="open_space:r1", record_sightings=False
     )
@@ -76,7 +86,7 @@ def test_uncertain_identity_is_excluded_from_the_zone_unique_estimate(tmp_path: 
         assert db.execute("select count(*) from visitor_sightings").fetchone()[0] == 0
 
 
-def test_people_observed_together_cannot_share_one_visitor_identity(tmp_path: Path):
+def test_people_observed_together_cannot_share_one_visitor_identity(tmp_path: Path) -> None:
     registry = UniqueVisitorRegistry(
         SessionStore(str(tmp_path)), identity_namespace="open_space:r1", record_sightings=False
     )
@@ -99,7 +109,7 @@ def test_people_observed_together_cannot_share_one_visitor_identity(tmp_path: Pa
 
 def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwell_visits(
     tmp_path: Path,
-):
+) -> None:
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
     manager.bind_enterprise("park", restore_session=False)
     config = CameraStartRequest(
@@ -177,7 +187,7 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
                     )
                 if second == 2:
                     first_visit = tracker.active_records()[0]["visit_id"]
-                    assert manager.area_state()["unique_visitors"] == 0
+                    assert _area_state(manager)["unique_visitors"] == 0
                 if second == 4:
                     assert tracker.snapshot()["temporarily_missing"] == 1
                     assert tracker.snapshot()["presence"] == 0
@@ -185,7 +195,7 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
                     assert tracker.active_records()[0]["visit_id"] == first_visit
                     assert tracker.active_records()[0]["uncertain_gap_count"] == 1
                     assert manager._appearance_buffer.sample_count_for_track(1) == 2
-            assert manager.area_state()["unique_visitors"] == 1
+            assert _area_state(manager)["unique_visitors"] == 1
             # The zone figure comes from the same establishment gallery Reports counts.
             establishment, zone = manager._establishment_registry, manager.area_state()
             assert establishment is not None and zone is not None
@@ -204,13 +214,13 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
             assert result["median_dwell_ms"] == 4000
             with patch("app.camera.camera_manager.datetime") as clock:
                 clock.now.return_value = tracker.wall_anchor + timedelta(days=1)
-                assert manager.area_state()["unique_visitors"] is None
+                assert _area_state(manager)["unique_visitors"] is None
             with manager._area_repo.database.connection() as db:
                 assert db.execute("select count(*) from count_events").fetchone()[0] == 0
                 assert db.execute("select count(*) from visitor_sightings").fetchone()[0] == 0
             manager._effective_reid_mode = "off"
             manager._publish_area_snapshot()
-            assert manager.area_state()["unique_visitors"] is None
+            assert _area_state(manager)["unique_visitors"] is None
         manager.bind_enterprise("other", restore_session=False)
         assert manager.area_state() is None
     finally:

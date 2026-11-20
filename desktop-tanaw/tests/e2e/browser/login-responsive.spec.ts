@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockRememberedSession } from "./support/preload";
-import { token } from "../support/theme-and-filters";
+import { selectLightThemeInSettings, token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-brand-test",
@@ -265,7 +265,7 @@ test("keeps the theme through Enterprise authentication and renders the Portal l
   await expect(page.locator("html")).toHaveClass(/dark/);
   expect(await page.evaluate(() => window.localStorage.getItem("tanaw-enterprise-theme"))).toBe("dark");
 
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await selectLightThemeInSettings(page);
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 
   await page.reload();

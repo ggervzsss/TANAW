@@ -4,9 +4,15 @@ import json
 from calendar import monthrange
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.features.reporting.counting import snapshot_digest
+
+# The desktop ML service produces these saved reports, so it owns the samples.
+REPORT_FIXTURES = (
+    Path(__file__).resolve().parents[3] / "desktop-tanaw/ml-service/tests/fixtures/reports"
+)
 
 
 def counting_snapshot(
@@ -17,11 +23,9 @@ def counting_snapshot(
     exits: int = 7,
     peak: int = 5,
     unique: int = 6,
-) -> dict:
-    path = (
-        Path(__file__).resolve().parents[3] / "test-fixtures/open-space-establishment-report.json"
-    )
-    snapshot = json.loads(path.read_text())["counting"]
+) -> dict[str, Any]:
+    path = REPORT_FIXTURES / "open-space-establishment-report.json"
+    snapshot: dict[str, Any] = json.loads(path.read_text())["counting"]
     begin = datetime.strptime(period, "%B %Y").replace(tzinfo=ZoneInfo("Asia/Manila"))
     end = begin.replace(
         year=begin.year + (begin.month == 12), month=1 if begin.month == 12 else begin.month + 1

@@ -725,6 +725,24 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(report["sync_status"], "synced")
             self.assertIsNotNone(report["synced_at"])
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 0)
+            # A synced report is never marked as refused afterwards.
+            self.assertFalse(
+                store.mark_report_upload_rejected("REP-001", str(submission["submission_id"]))
+            )
+
+    def test_refused_upload_is_kept_and_not_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
+            submission = store.record_report_submission("REP-002", "Current Period")
+
+            self.assertFalse(store.mark_report_upload_rejected("REP-002", str(uuid4())))
+            self.assertTrue(
+                store.mark_report_upload_rejected("REP-002", str(submission["submission_id"]))
+            )
+
+            report = store.list_report_submissions()[0]
+            self.assertEqual(report["sync_status"], "upload_rejected")
+            self.assertIsNone(report["synced_at"])
 
     def test_monitoring_states_are_isolated_by_camera(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

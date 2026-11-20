@@ -128,16 +128,17 @@ def prepare_sample_period(
 def _fill_sample_origins(
     repository: EstablishmentRepository, report_id: str, period: str, today: date
 ) -> None:
-    """Confirm origins for sample days older than the recent days left for the user.
+    """Confirm origins for the period's sample days older than the recent days left for the user.
 
     Days already in the draft keep the user's entries, and days with camera data are
-    left for the user, so only sample-only days the draft lacks are added.
+    left for the user, so only sample-only days the draft lacks are added. Days outside
+    the period are dropped from the draft.
     """
-    last_filled = today - timedelta(days=UNFILLED_RECENT_DAYS + 1)
-    begin, _ = period_bounds(period)
+    begin, end = period_bounds(period)
     first_day = begin.date()
-    if last_filled < first_day:
-        return
+    last_filled = min(
+        today - timedelta(days=UNFILLED_RECENT_DAYS + 1), end.date() - timedelta(days=1)
+    )
     with repository.database.connection() as db:
         rows = db.execute(
             "select business_date,metrics_json from establishment_daily_summaries "
@@ -153,13 +154,18 @@ def _fill_sample_origins(
     draft_key = f"{DRAFT_KEY_PREFIX}{period}"
     existing = drafts.get(draft_key)
     payload = dict(existing["payload"]) if existing else {}
-    origins = dict(payload.get("origins") or {})
+    stored = dict(payload.get("origins") or {})
+    origins = {
+        business_date: value
+        for business_date, value in stored.items()
+        if first_day.isoformat() <= business_date < end.date().isoformat()
+    }
     added = {
         business_date: sample_day_origins(report_id, business_date, unique)
         for business_date, unique in sorted(unique_by_day.items())
         if unique > 0 and business_date not in origins
     }
-    if not added:
+    if not added and len(origins) == len(stored):
         return
     drafts.save(
         draft_key,

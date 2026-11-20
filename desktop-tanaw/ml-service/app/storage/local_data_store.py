@@ -675,6 +675,19 @@ class LocalDataStore:
             )
         return result.rowcount > 0
 
+    def mark_report_upload_rejected(self, report_id: str, submission_id: str) -> bool:
+        """The backend refused this submission, so it is not uploaded again; a resubmission is."""
+        with self._connection() as connection:
+            result = connection.execute(
+                """
+                update report_submissions
+                set sync_status = 'upload_rejected'
+                where report_id = ? and submission_id = ? and sync_status != 'synced'
+                """,
+                (report_id, submission_id),
+            )
+        return result.rowcount > 0
+
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
         purged_at = _utc_now()
         with self._connection() as connection:

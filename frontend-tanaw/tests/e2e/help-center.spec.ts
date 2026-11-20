@@ -37,7 +37,7 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
   await mockPortal(page, "staff");
   await page.goto("/staff/help");
   await expect(page.getByRole("heading", { name: "Help Center" })).toBeVisible();
-  await expect(page.getByText("Submit reports for a reporting period")).toBeVisible();
+  await expect(page.getByText("Review submissions for a reporting period")).toBeVisible();
   await expect(page.getByText("Navigate enterprises on the city map")).toHaveCount(0);
 
   const search = page.getByRole("searchbox", { name: "Search help articles" });
@@ -50,9 +50,9 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
   await expect(page.getByText("No help articles found")).toBeVisible();
   await page.getByRole("button", { name: "Clear help search" }).click();
 
-  await page.getByText("Submit reports for a reporting period").click();
+  await page.getByText("Review submissions for a reporting period").click();
   await expect(page).toHaveURL(/\/staff\/help\/staff-submit-reports$/);
-  await expect(page.getByRole("heading", { name: "Before submitting" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review submissions", exact: true })).toBeVisible();
   await page.getByText("Resolve a returned report").click();
   await expect(page).toHaveURL(/\/staff\/help\/staff-returned-reports$/);
   await page.goBack();
@@ -62,7 +62,9 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
 test("offers the existing Support Tickets path from Admin help", async ({ page }) => {
   await mockPortal(page, "admin");
   await page.goto("/admin/help/admin-operations-center");
-  await expect(page.getByRole("heading", { name: "Investigate an issue in Operations Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Investigate an issue in Alerts & Requests" })).toBeVisible();
   await page.getByRole("link", { name: "Open Support Tickets" }).click();
-  await expect(page).toHaveURL(/\/admin\/operations\?view=support$/);
+  await expect(page).toHaveURL(/\/admin\/settings\/support$/);
+  await page.getByRole("button", { name: "Back from General Settings" }).click();
+  await expect(page).toHaveURL(/\/admin\/help\/admin-operations-center$/);
 });

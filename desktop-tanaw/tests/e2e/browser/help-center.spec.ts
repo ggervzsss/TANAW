@@ -42,5 +42,7 @@ test("searches Enterprise guidance, opens related articles, and links to Support
   await expect(page).toHaveURL(/article=camera-troubleshooting/);
   await expect(page.getByRole("heading", { name: "What to check" })).toBeVisible();
   await page.getByRole("button", { name: "Open Support Tickets" }).click();
-  await expect(page).toHaveURL(/#\/enterprise\/tickets$/);
+  await expect(page).toHaveURL(/#\/enterprise\/settings\/support$/);
+  await page.getByRole("button", { name: "Back from General Settings" }).click();
+  await expect(page).toHaveURL(/#\/enterprise\/help\?article=camera-troubleshooting$/);
 });

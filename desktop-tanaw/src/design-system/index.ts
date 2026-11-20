@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/index.ts instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: 90c7597a2a612b49486fb0b814b70dc3ebc4b7b347730ce516774f8397c2cd75
+ * Source SHA-256: 13f07cf2801e8681f2c9fc004b835b0fcd81c17a24ea9c8e215f7f2e89f2b977
  */
 /*
  * TANAW design system. Import from the synced copy in each app, for example:
@@ -40,7 +40,7 @@ export { Tooltip, type TooltipProps } from "./components/Tooltip";
 export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProps, type MetricTone } from "./patterns/MetricStrip";
 export { PageHeader, type PageHeaderProps } from "./patterns/PageHeader";
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
-export { TopbarActiveUnderline, TopbarLiquidGlass, type TopbarGlassSignal, type TopbarGlassTarget } from "./patterns/TopbarGlassIndicator";
+export { TopbarNavigation } from "./patterns/TopbarNavigation";
 
 // Helpers
 export { cn } from "./lib/cn";

@@ -47,7 +47,7 @@ export function PersistentIssueViewport({ issues }: { issues: PersistentIssue[] 
 
   return (
     <div
-      className="pointer-events-none fixed right-4 bottom-4 z-3000 flex max-h-[calc(100vh-var(--tanaw-topbar-height)-2rem)] w-[min(360px,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto"
+      className="tanaw-connection-notice pointer-events-none fixed right-4 bottom-4 z-3000 flex max-h-[calc(100vh-var(--tanaw-topbar-height)-2rem)] w-[min(360px,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto"
       aria-label="Current system issues"
     >
       {issues.map((issue) => (

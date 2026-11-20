@@ -1,3 +1,5 @@
+import type { ApiSchemas } from "@/contracts/api";
+
 export type ProfileChangeRequestType = "businessEmail" | "contactNumber";
 
 export type AccountProfileChangeRequest = {
@@ -20,6 +22,8 @@ export type AccountSummary = {
   lastName: string | null;
   enterpriseName: string | null;
   category: string | null;
+  attraction?: ApiSchemas["AttractionClassification"] | null;
+  attractionDescription?: string | null;
   managerName: string | null;
   barangay: string | null;
   address: string | null;

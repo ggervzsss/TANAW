@@ -4,12 +4,13 @@ import { describe, expect, it } from "vitest";
 import type { FinalReport, IntakeReport } from "@/shared/types";
 import { createFinalReportPdf, createIntakeReportPdf } from "../../../../../src/features/reports/utils/pdf";
 
-const saved = JSON.parse(readFileSync(new URL("../../../../../../test-fixtures/open-space-establishment-report.json", import.meta.url), "utf8"));
+const saved = JSON.parse(readFileSync(new URL("../../../../../../desktop-tanaw/ml-service/tests/fixtures/reports/open-space-establishment-report.json", import.meta.url), "utf8"));
 const intake: IntakeReport = {
   id: "frozen-source",
   enterpriseId: "park-fixture",
   enterprise: "Park",
-  category: "Tourism",
+  category: "Parks",
+  attraction: { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" },
   barangay: "Poblacion",
   month: "October",
   period: saved.period,
@@ -36,6 +37,8 @@ const final: FinalReport = {
     {
       id: intake.id,
       enterprise: intake.enterprise,
+      enterpriseProfileId: "park-profile",
+      attractionCode: intake.attraction.code,
       code: intake.code,
       unique: saved.unique_count,
       entry: null,
@@ -47,19 +50,18 @@ const final: FinalReport = {
 };
 
 describe("Staff exports of the saved unified desktop snapshot", () => {
-  it("retains the visitor baseline, unknown movement, counting basis and snapshot version", () => {
+  it("uses the saved visitor total and excludes counting evidence from both exports", () => {
     const intakePdf = createIntakeReportPdf(intake);
     const finalPdf = createFinalReportPdf(final);
     for (const pdf of [intakePdf, finalPdf]) {
-      const text = [...pdf.matchAll(/\((.*)\) Tj/g)].map((match) => match[1]).join(" ");
-      expect(pdf).toContain(saved.counting.snapshot_version);
-      expect(pdf).toContain("Not measured");
-      expect(text).toContain("daily estimates");
-      expect(pdf).toContain("Camera 1: 2 daily visitor observations");
-      expect(pdf).not.toContain("Zone A - Main Entrance");
+      expect(pdf).toContain(`(${saved.unique_count}) Tj`);
+      expect(pdf).toContain("Total of this Month ****");
+      expect(pdf).toContain("/Count 1");
+      expect(pdf).not.toContain(saved.counting.snapshot_version);
+      expect(pdf).not.toContain("Not measured");
+      expect(pdf).not.toContain("daily estimates");
+      expect(pdf).not.toContain("daily visitor observations");
     }
-    expect(finalPdf).toContain("Citywide Consolidated Total");
-    expect(finalPdf).toContain("Each establishment total contributes once");
     const output = process.env.TANAW_PDF_REVIEW_DIR;
     if (output) {
       mkdirSync(output, { recursive: true });

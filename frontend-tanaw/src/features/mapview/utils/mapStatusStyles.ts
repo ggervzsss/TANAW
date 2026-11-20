@@ -1,6 +1,6 @@
 import type { MonitoringStatus, OccupancyStatus } from "@/shared/types";
 
-export type MonitoringStatusTone = "running" | "partial" | "stopped" | "fault" | "unavailable";
+export type MonitoringStatusTone = "running" | "partial" | "inactive" | "fault" | "unconfigured";
 
 export type MonitoringStatusPresentation = {
   badgeClass: string;
@@ -15,41 +15,50 @@ const monitoringStatusPresentations: Record<MonitoringStatusTone, MonitoringStat
     tone: "running",
   },
   partial: {
-    badgeClass: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-400/25 dark:bg-orange-400/10 dark:text-orange-200",
-    color: "#ea580c",
+    badgeClass: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/35 dark:bg-amber-400/15 dark:text-amber-200",
+    color: "#9f6508",
     tone: "partial",
   },
-  stopped: {
-    badgeClass: "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-200",
-    color: "#64748b",
-    tone: "stopped",
+  inactive: {
+    badgeClass: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-300/35 dark:bg-sky-400/15 dark:text-sky-200",
+    color: "#266993",
+    tone: "inactive",
   },
   fault: {
-    badgeClass: "border-red-200 bg-red-50 text-red-800 dark:border-red-400/25 dark:bg-red-400/10 dark:text-red-200",
-    color: "#dc2626",
+    badgeClass: "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/35 dark:bg-rose-400/15 dark:text-rose-200",
+    color: "#ae274d",
     tone: "fault",
   },
-  unavailable: {
-    badgeClass: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-400/25 dark:bg-slate-400/5 dark:text-slate-300",
-    color: "#394858",
-    tone: "unavailable",
+  unconfigured: {
+    badgeClass: "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-300/35 dark:bg-violet-400/15 dark:text-violet-200",
+    color: "#665090",
+    tone: "unconfigured",
   },
 };
 
-export const monitoringStatusLegend: { label: string; tone: MonitoringStatusTone }[] = [
-  { label: "All Running", tone: "running" },
-  { label: "Partial", tone: "partial" },
-  { label: "Inactive", tone: "stopped" },
-  { label: "Fault", tone: "fault" },
-  { label: "Unavailable", tone: "unavailable" },
-];
+const legendLabels: Record<MonitoringStatusTone, string> = {
+  running: "All Running",
+  partial: "Partial / Delayed",
+  inactive: "Stopped / Offline",
+  fault: "Needs Attention",
+  unconfigured: "Not Configured",
+};
+
+export const monitoringStatusLegend = Object.values(monitoringStatusPresentations).map((status) => ({ ...status, label: legendLabels[status.tone] }));
+
+export function getMonitoringStatusLabel(status: MonitoringStatus): string {
+  if (status === "Fully Monitoring") return "All Running";
+  if (status === "Partially Monitoring") return "Partial";
+  if (status === "Fault") return "Needs Attention";
+  return status;
+}
 
 export function getMonitoringStatusPresentation(status: MonitoringStatus): MonitoringStatusPresentation {
   if (status === "Fully Monitoring") return monitoringStatusPresentations.running;
   if (status === "Partially Monitoring" || status === "Updates Delayed") return monitoringStatusPresentations.partial;
   if (status === "Fault") return monitoringStatusPresentations.fault;
-  if (status === "Not Configured") return monitoringStatusPresentations.unavailable;
-  return monitoringStatusPresentations.stopped;
+  if (status === "Not Configured") return monitoringStatusPresentations.unconfigured;
+  return monitoringStatusPresentations.inactive;
 }
 
 export function getMonitoringStatusColor(status: MonitoringStatus) {

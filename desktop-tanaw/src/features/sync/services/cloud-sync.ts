@@ -1,4 +1,5 @@
 import { apiPaths, type ApiDesktopReportSubmission, type ApiDesktopTelemetry, type ApiSchemas } from "../../../contracts/api";
+import { isAxiosError } from "axios";
 import { staffApi } from "../../../lib/axios";
 import { DAY_MS, philippineDayStart } from "../../../utils/date-time";
 import { useAuthStore } from "../../login/stores/auth-store";
@@ -15,6 +16,7 @@ import {
   listLocalReportSubmissions,
   markLocalEventsSynced,
   markLocalReportSynced,
+  markLocalReportUploadRejected,
   prepareLocalSampleCounts,
   purgeLocalReportRawEvents,
   type LocalReportSubmissionRecord,
@@ -28,6 +30,8 @@ import { isSameReportingMonth } from "../../reports/utils/reporting-period";
 import { buildCameraMonitoringSummary } from "./camera-monitoring";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
+/** Sample preparation finished; open reports re-read the origins it may have confirmed. */
+export const DESKTOP_SAMPLE_PREPARED_EVENT = "tanaw:desktop-sample-prepared";
 
 const DEVICE_ID_STORAGE_KEY = "tanaw-desktop-device-id";
 
@@ -73,6 +77,8 @@ export async function prepareDesktopSampleCounts() {
     preparedSamplePeriods.add(`${preparation.enterpriseId}|${counts.reportId}|${today}`);
     preparedDays += result.days;
   }
+  // Origins can be confirmed even when no day changed, so notify after every run.
+  window.dispatchEvent(new Event(DESKTOP_SAMPLE_PREPARED_EVENT));
   return preparedDays;
 }
 
@@ -135,33 +141,62 @@ export async function syncDesktopTelemetry() {
   return payload;
 }
 
+/** Backend answers that will not change on retry: the report itself was refused. */
+const REFUSED_UPLOAD_STATUSES = new Set([400, 409, 413, 422]);
+
+/**
+ * Whether the backend refused a report upload for good. An expired sign-in (401, 403), a
+ * missing route, a timeout or rate limit, and server errors are worth retrying instead.
+ */
+export function isRefusedUpload(error: unknown) {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+  return status !== undefined && REFUSED_UPLOAD_STATUSES.has(status);
+}
+
 export async function syncDesktopReportSubmissions(limit = 100) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const submissions = (await listLocalReportSubmissions(baseUrl, limit)).filter((submission) => submission.sync_status !== "synced");
+  const submissions = (await listLocalReportSubmissions(baseUrl, limit)).filter((submission) => submission.sync_status !== "synced" && submission.sync_status !== "upload_rejected");
   let syncedCount = 0;
 
   for (const submission of submissions) {
-    await syncReportSubmission(baseUrl, submission);
-    syncedCount += 1;
+    try {
+      await syncReportSubmission(baseUrl, submission);
+      syncedCount += 1;
+    } catch (error) {
+      // A refused report must not hold back the reports after it; any other failure retries later.
+      if (!isRefusedUpload(error)) throw error;
+    }
   }
 
   await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
   return syncedCount;
 }
 
-export async function syncDesktopReportSubmission(reportId: string) {
+export async function syncDesktopReportSubmission(reportId: string, submissionId: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.sync_status !== "synced");
-  if (!submission) return 0;
+  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.submission_id === submissionId);
+  if (!submission) return false;
+  if (submission.sync_status === "synced") return true;
 
   await syncReportSubmission(baseUrl, submission);
   await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
-  return 1;
+  return true;
 }
 
-async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+const reportUploads = new Map<string, Promise<void>>();
+
+function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+  const key = submission.submission_id;
+  const existing = reportUploads.get(key);
+  if (existing) return existing;
+  const upload = uploadReportSubmission(baseUrl, submission).finally(() => reportUploads.delete(key));
+  reportUploads.set(key, upload);
+  return upload;
+}
+
+async function uploadReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
   const metrics = reportMetricsFromSubmission(submission);
   const payload = {
     submissionId: submission.submission_id,
@@ -183,7 +218,12 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
       },
     },
   } satisfies ApiDesktopReportSubmission;
-  await staffApi.post(apiPaths.desktopReportSubmissions, payload);
+  try {
+    await staffApi.post(apiPaths.desktopReportSubmissions, payload);
+  } catch (error) {
+    if (isRefusedUpload(error)) await resolveOptional(() => markLocalReportUploadRejected(baseUrl, submission.report_id, submission.submission_id));
+    throw error;
+  }
   await markLocalReportSynced(baseUrl, submission.report_id, submission.submission_id);
 }
 

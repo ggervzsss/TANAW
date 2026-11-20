@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.date_time import ensure_aware
 from app.core.json_values import parse_json_object
+from app.features.accounts.attractions import ATTRACTION_CLASSIFICATIONS, attraction_category
 from app.features.accounts.enterprise import require_enterprise_profile
 from app.features.accounts.models import Account, AccountRole
-from app.features.accounts.options import format_enterprise_category
 from app.features.reporting.errors import (
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
@@ -37,6 +37,12 @@ REPORT_DEMOGRAPHIC_FIELDS = (
     "foreignFemale",
 )
 OPTIONAL_REPORT_DEMOGRAPHIC_FIELDS = ("thisProvUnspecified",)
+# This City/Municipality is a subset of This Province, so it is not part of the total.
+CITY_DEMOGRAPHIC_FIELDS = (
+    ("thisCityMale", "thisProvMale"),
+    ("thisCityFemale", "thisProvFemale"),
+    ("thisCityUnspecified", "thisProvUnspecified"),
+)
 
 
 async def ingest_report_submission(
@@ -76,6 +82,14 @@ async def ingest_report_submission(
 
     report_status = status_from_payload(payload.payload)
     month = month_from_submission(payload.period)
+    report_payload_json = json.dumps(
+        {
+            **payload.payload,
+            "attractionCode": profile.attraction_code,
+            "attractionDescription": profile.attraction_description,
+        },
+        sort_keys=True,
+    )
 
     if existing is None:
         validate_new_report_submission(report_status)
@@ -83,7 +97,8 @@ async def ingest_report_submission(
             report_id=payload.reportId,
             enterprise_profile_id=profile.account_id,
             enterprise_name=profile.enterprise_name,
-            category=format_enterprise_category(profile.category) or "Uncategorized",
+            attraction_code=profile.attraction_code,
+            attraction_description=profile.attraction_description,
             barangay=profile.barangay or "Unassigned",
             period=payload.period,
             month=month,
@@ -96,7 +111,7 @@ async def ingest_report_submission(
             review_status="Pending Review",
             notes=payload.notes,
             sync_status=payload.syncStatus,
-            payload_json=json.dumps(payload.payload or {}, sort_keys=True),
+            payload_json=report_payload_json,
         )
         db.add(report)
         try:
@@ -110,7 +125,8 @@ async def ingest_report_submission(
         validate_report_resubmission(existing.review_status, report_status)
         report = existing
         report.enterprise_name = profile.enterprise_name
-        report.category = format_enterprise_category(profile.category) or "Uncategorized"
+        report.attraction_code = profile.attraction_code
+        report.attraction_description = profile.attraction_description
         report.barangay = profile.barangay or "Unassigned"
         report.month = month
         report.submitted_at = ensure_aware(payload.submittedAt)
@@ -121,7 +137,7 @@ async def ingest_report_submission(
         report.status = report_status
         report.notes = payload.notes
         report.sync_status = payload.syncStatus
-        report.payload_json = json.dumps(payload.payload or {}, sort_keys=True)
+        report.payload_json = report_payload_json
         report.review_status = "Pending Review"
         report.remarks = None
 
@@ -183,7 +199,9 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
         id=report.id,
         enterpriseId=report.enterprise_profile.enterprise_id,
         enterprise=report.enterprise_name,
-        category=report.category or "Uncategorized",
+        category=attraction_category(report.attraction_code, report.attraction_description),
+        attraction=ATTRACTION_CLASSIFICATIONS[report.attraction_code],
+        attractionDescription=report.attraction_description,
         barangay=report.barangay or "Unassigned",
         month=report.month,
         period=report.period,
@@ -231,7 +249,22 @@ def report_demographics_from_payload(
     if sum(values.values()) != unique_count:
         return None
 
-    return ReportDemographicsSummary(**values)
+    return ReportDemographicsSummary(**values, **city_demographics(demo, values))
+
+
+def city_demographics(demo: Mapping[str, object], province: Mapping[str, int]) -> dict[str, int]:
+    """The This City/Municipality split, or nothing when it is missing or exceeds This Province."""
+    city: dict[str, int] = {}
+    for field, province_field in CITY_DEMOGRAPHIC_FIELDS:
+        raw = demo.get(field)
+        if raw in (None, "") and field == "thisCityUnspecified":
+            value: int | None = 0
+        else:
+            value = report_non_negative_int(raw)
+        if value is None or value > province[province_field]:
+            return {}
+        city[field] = value
+    return city
 
 
 def report_non_negative_int(value: object) -> int | None:

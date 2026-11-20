@@ -3,14 +3,14 @@ import { applyStoredCameraMetadata, normalizeCamera } from "../../features/camer
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalCameras, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
-import { notifySuccess } from "../../features/toasts/services/toast-service";
+import { notifySuccess, notifyWarning } from "../../features/toasts/services/toast-service";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -23,19 +23,15 @@ import {
   CameraManagementView,
   DashboardView,
   NotificationsView,
-  ProfileView,
   ReportsView,
-  SecurityView,
-  TicketsView,
-  DisplayPreferencesView,
-  DeveloperSettingsView,
+  GeneralSettingsView,
   HelpCenterView,
   preloadEnterpriseView,
   scheduleEnterpriseViewPreload,
 } from "../router/enterprise-view-modules";
 
 type EnterpriseShellProps = {
-  initialView?: EnterpriseView;
+  activeView: EnterpriseView;
 };
 
 const viewRouteById: Record<EnterpriseView, string> = {
@@ -46,13 +42,13 @@ const viewRouteById: Record<EnterpriseView, string> = {
   security: routePaths.enterpriseSecurity,
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
-  "display-preferences": routePaths.enterpriseDisplayPreferences,
-  "developer-settings": routePaths.enterpriseDeveloperSettings,
+  settings: routePaths.enterpriseSettings,
   help: routePaths.enterpriseHelp,
 };
 
-export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
+export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   const navigate = useNavigate();
+  const { pathname, search, hash, state } = useLocation();
   const queryClient = useQueryClient();
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
@@ -60,7 +56,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const updateUser = useAuthStore((state) => state.updateUser);
   const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
   const activeViewRef = useRef(activeView);
   activeViewRef.current = activeView;
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -68,17 +63,17 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [cameras, setCameras] = useState<EnterpriseCamera[]>(EMPTY_CAMERAS);
   const notificationStorageKey = `tanaw-enterprise-notifications-read:${user?.id ?? "anonymous"}`;
   const [readNotificationIds, setReadNotificationIds] = useState<Set<number>>(() => readStoredNotificationIds(notificationStorageKey));
-  const [toasts, setToasts] = useState<EnterpriseNotification[]>([]);
+  const [dismissedCriticalIds, setDismissedCriticalIds] = useState<ReadonlySet<number>>(() => new Set());
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
   const [mlContextAttempt, setMlContextAttempt] = useState(0);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
-  const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
+  const scrollPath = activeView === "settings" ? pathname : viewRouteById[activeView];
   const scrollStateKey = useMemo(
-    () => createPageStateKey({ portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" }, viewRouteById[activeView], "scroll"),
-    [activeView, user?.id, user?.role],
+    () => createPageStateKey({ portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" }, scrollPath, "scroll"),
+    [scrollPath, user?.id, user?.role],
   );
 
   useDesktopCloudSync(mlContextReady);
@@ -98,6 +93,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
   useEffect(() => {
     setReadNotificationIds(readStoredNotificationIds(notificationStorageKey));
+    setDismissedCriticalIds(new Set());
   }, [notificationStorageKey]);
 
   useEffect(() => {
@@ -106,10 +102,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       navigate(routePaths.login, { replace: true });
     }
   }, [currentUserQuery.error, currentUserQuery.isError, logout, navigate]);
-
-  useEffect(() => {
-    setActiveView(initialView);
-  }, [initialView]);
 
   useEffect(() => scheduleEnterpriseViewPreload(activeView), [activeView]);
 
@@ -206,19 +198,25 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const handleLogout = async () => {
     try {
       await logoutRequest();
+      notifySuccess("Signed out of TANAW.");
+    } catch {
+      notifyWarning("Signed out on this device. TANAW could not confirm sign-out with the server.");
     } finally {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       logout();
-      notifySuccess("Logout complete");
       navigate(routePaths.login, { replace: true });
     }
   };
 
   const navigateToView = (view: EnterpriseView) => {
-    setActiveView(view);
     setIsNotificationsOpen(false);
     void preloadEnterpriseView(view);
-    navigate(viewRouteById[view]);
+    const path = viewRouteById[view];
+    if (path.startsWith(routePaths.enterpriseSettings)) {
+      navigate(path, { state: activeView === "settings" ? state : { returnTo: pathname + search + hash } });
+    } else {
+      navigate(path);
+    }
   };
 
   const notifications = useMemo(
@@ -227,16 +225,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
-  useEffect(() => {
-    const unreadCriticalNotifications = notifications.filter((notification) => notification.type === "critical" && !notification.read);
-    if (unreadCriticalNotifications.length === 0) return;
-
-    setToasts((currentToasts) => {
-      const currentIds = new Set(currentToasts.map((toast) => toast.id));
-      const nextToasts = [...currentToasts, ...unreadCriticalNotifications.filter((notification) => !currentIds.has(notification.id))];
-      return nextToasts.length === currentToasts.length ? currentToasts : nextToasts;
-    });
-  }, [notifications]);
+  const criticalToasts = notifications.filter((notification) => notification.type === "critical" && !notification.read && !dismissedCriticalIds.has(notification.id));
 
   const markNotificationsRead = (notificationsToMark: EnterpriseNotification[]) => {
     notificationsToMark.forEach((notification) => {
@@ -257,7 +246,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       <ThemedEnterpriseTopbar
         activeView={activeView}
         displayName={displayName}
-        initials={initials}
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
         unreadCount={unreadCount}
@@ -265,6 +253,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         onLogout={handleLogout}
         onMarkAllRead={() => markNotificationsRead(notifications)}
         onNavigate={navigateToView}
+        onOpenSettings={(profile) => navigateToView(profile ? "profile" : "settings")}
         onNavigateIntent={(view) => void preloadEnterpriseView(view)}
         onNotificationSelect={(notification) => {
           markNotificationsRead([notification]);
@@ -274,67 +263,67 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
       />
 
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div
-          ref={contentScrollRef}
-          data-form-scroll-container
-          data-density-adjustable={activeView !== "cameras"}
-          className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
-        >
-          <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
-            {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
-              <section className="mx-auto mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900" role={mlContextError ? "alert" : "status"}>
-                <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
-                {mlContextError && (
-                  <>
-                    <p className="mt-2 text-sm wrap-break-word">{mlContextError}</p>
-                    <button
-                      type="button"
-                      className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-                      onClick={() => setMlContextAttempt((attempt) => attempt + 1)}
-                    >
-                      Try again
-                    </button>
-                  </>
+      <main className={activeView === "settings" ? "tanaw-settings-page overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"}>
+        {activeView === "settings" ? (
+          <Suspense fallback={<EnterpriseViewLoadingFallback />}>
+            {user?.role === "enterprise" && <GeneralSettingsView />}
+          </Suspense>
+        ) : (
+          <div
+            ref={contentScrollRef}
+            data-form-scroll-container
+            data-density-adjustable={activeView !== "cameras"}
+            className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
+          >
+            <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
+              {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
+                <section className="mx-auto mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900" role={mlContextError ? "alert" : "status"}>
+                  <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
+                  {mlContextError && (
+                    <>
+                      <p className="mt-2 text-sm wrap-break-word">{mlContextError}</p>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                        onClick={() => setMlContextAttempt((attempt) => attempt + 1)}
+                      >
+                        Try again
+                      </button>
+                    </>
+                  )}
+                </section>
+              )}
+              <Suspense fallback={<EnterpriseViewLoadingFallback />}>
+                {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
+                {activeView === "cameras" && mlContextReady && (
+                  <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
                 )}
-              </section>
-            )}
-            <Suspense fallback={<EnterpriseViewLoadingFallback />}>
-              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
-              {activeView === "cameras" && mlContextReady && (
-                <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
-              )}
-              {activeView === "reports" && mlContextReady && <ReportsView cameras={cameras} enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
-              {activeView === "profile" && <ProfileView />}
-              {activeView === "security" && <SecurityView />}
-              {activeView === "tickets" && <TicketsView />}
-              {activeView === "display-preferences" && <DisplayPreferencesView />}
-              {activeView === "developer-settings" && <DeveloperSettingsView />}
-              {activeView === "help" && <HelpCenterView />}
-              {activeView === "notifications" && (
-                <NotificationsView
-                  notifications={notifications}
-                  unreadCount={unreadCount}
-                  onMarkAllRead={() => markNotificationsRead(notifications)}
-                  onSelectNotification={(notification) => {
-                    markNotificationsRead([notification]);
-                    navigateToView(notification.target);
-                  }}
-                />
-              )}
-            </Suspense>
+                {activeView === "reports" && mlContextReady && <ReportsView cameras={cameras} enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
+                {activeView === "help" && <HelpCenterView />}
+                {activeView === "notifications" && (
+                  <NotificationsView
+                    notifications={notifications}
+                    unreadCount={unreadCount}
+                    onMarkAllRead={() => markNotificationsRead(notifications)}
+                    onSelectNotification={(notification) => {
+                      markNotificationsRead([notification]);
+                      navigateToView(notification.target);
+                    }}
+                  />
+                )}
+              </Suspense>
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       <CriticalAlertToasts
-        toasts={toasts}
+        toasts={criticalToasts}
         onReview={(toast) => {
           navigateToView(toast.target);
-          setToasts(toasts.filter((current) => current.id !== toast.id));
           markNotificationsRead([toast]);
         }}
-        onDismiss={(toastId) => setToasts(toasts.filter((toast) => toast.id !== toastId))}
+        onDismiss={(toastId) => setDismissedCriticalIds((current) => new Set([...current, toastId]))}
       />
     </div>
   );
@@ -346,18 +335,6 @@ function EnterpriseViewLoadingFallback() {
       Loading view…
     </div>
   );
-}
-
-function getInitials(value: string) {
-  const initials = value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-
-  return initials || "EU";
 }
 
 function getEnterpriseCameraStorageKey(user: ReturnType<typeof useAuthStore.getState>["user"]) {

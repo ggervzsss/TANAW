@@ -1,4 +1,4 @@
-import { BarChart3, Bell, Building2, FileCheck2, FileText, Layers, LayoutDashboard, MapPinned, Settings, Users, Wrench } from "lucide-react";
+import { BarChart3, Building2, ChartNoAxesCombined, ClipboardList, FileCheck2, FileText, Layers, LayoutDashboard, MapPinned, Settings, Users, Wrench } from "lucide-react";
 import type { ComponentType } from "react";
 import { routes } from "@/app/routers/routes";
 import type { UserRole } from "@/shared/types/role.types";
@@ -26,9 +26,15 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
     },
     {
       id: "operations",
-      label: "Operations Center",
+      label: "Alerts & Requests",
       path: routes.admin.operations,
-      icon: Bell,
+      icon: ClipboardList,
+    },
+    {
+      id: "visitor-insights",
+      label: "Visitor Insights",
+      path: routes.admin.visitorInsights,
+      icon: ChartNoAxesCombined,
     },
   ],
   staff: [
@@ -45,9 +51,9 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: Layers,
     },
     {
-      id: "final-reports-audit",
-      label: "Final Reports Audit",
-      path: routes.staff.finalReportsAudit,
+      id: "generated-reports",
+      label: "Generated Reports",
+      path: routes.staff.generatedReports,
       icon: FileCheck2,
     },
   ],

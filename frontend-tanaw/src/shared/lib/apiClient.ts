@@ -2,15 +2,21 @@ import axios from "axios";
 import { API_BASE_URL } from "@/shared/config/api.config";
 
 type ApiClientAuthentication = {
+  getAccountId: () => string | undefined;
   getAccessToken: () => string | null;
   onAuthenticationFailure: () => void;
 };
 
 const anonymousAuthentication: ApiClientAuthentication = {
+  getAccountId: () => undefined,
   getAccessToken: () => null,
   onAuthenticationFailure: () => undefined,
 };
 let authentication = anonymousAuthentication;
+
+export function getApiAccountId() {
+  return authentication.getAccountId();
+}
 
 export function configureApiClientAuthentication(next: ApiClientAuthentication) {
   authentication = next;

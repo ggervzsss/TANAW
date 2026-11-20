@@ -1,8 +1,8 @@
-﻿import { readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import type { Camera } from "../../../src/types/enterprise";
 
 export const themeUser = { id: "theme-operator", email: "theme@example.test", role: "enterprise", name: "Theme Operator", enterpriseId: "enterprise-1", enterpriseName: "TANAW Theme Review" };
-const source = JSON.parse(readFileSync(new URL("../../../../test-fixtures/mixed-establishment-report.json", import.meta.url), "utf8"));
+const source = JSON.parse(readFileSync(new URL("../../../ml-service/tests/fixtures/reports/mixed-establishment-report.json", import.meta.url), "utf8"));
 const camera: Camera = {
   id: 1,
   name: "Park Camera",
@@ -87,6 +87,24 @@ export function themeServiceFixture() {
         ],
       });
     if (endpoint === "/metrics/establishment/summary") return reply(counting);
+    // The fixture's activity falls in one local hour (10 AM); the Dashboard reads it for Busiest Hour.
+    if (endpoint === "/metrics/establishment/hourly")
+      return reply({
+        enterprise_id: themeUser.enterpriseId,
+        from_at: url.searchParams.get("start"),
+        to_at: url.searchParams.get("end"),
+        timezone: "Asia/Manila",
+        days_requested: 1,
+        days_retained: 1,
+        state: "available",
+        hours: Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          entries: hour === 10 ? counting.entries : 0,
+          area_visits: 0,
+          peak_occupancy: hour === 10 ? counting.peak_occupancy : null,
+          covered_ms: hour === 10 ? counting.covered_ms : 0,
+        })),
+      });
     if (endpoint === "/metrics/establishment/live")
       return reply({ enterprise_id: themeUser.enterpriseId, occupancy: 2, partial_occupancy: 2, state: "estimated", contributions: [], missing_camera_ids: [], excluded_camera_ids: [] });
     if (endpoint === "/metrics/establishment/periods") return reply([{ period: "September 2026", metrics: { entries: 12, exits: 7, unique_count: 12, peak_occupancy: 5 }, counting }]);

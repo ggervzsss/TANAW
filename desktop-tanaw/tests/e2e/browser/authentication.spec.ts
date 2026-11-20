@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { token } from "../support/theme-and-filters";
+import { selectLightThemeInSettings, token } from "../support/theme-and-filters";
 
 const enterpriseUser = {
   id: "enterprise-account-1",
@@ -58,7 +58,7 @@ test("applies the complete Enterprise night topbar and preserves the daytime var
   await expect(dayImage).toHaveCSS("opacity", "0");
   await expect(nightImage).toHaveCSS("opacity", "0.5");
   await expect(nightImage).toHaveCSS("background-image", /enterprise-topbar-building-night\.png/);
-  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await selectLightThemeInSettings(page);
   await expect(page.locator('[data-topbar-theme="light"]')).toBeVisible();
   await expect(dayImage).toHaveCSS("opacity", "0.55");
   await expect(nightImage).toHaveCSS("opacity", "0");

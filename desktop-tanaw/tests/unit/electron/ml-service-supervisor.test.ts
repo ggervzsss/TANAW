@@ -50,10 +50,19 @@ describe("ML service startup recovery", () => {
     return { child, service };
   }
 
+  async function advanceStartupClock(elapsedMs: number) {
+    // Let the first probe set its deadline, then exercise the next poll at
+    // the requested time without replaying hundreds of timer callbacks.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.spawn).toHaveBeenCalledOnce();
+    vi.setSystemTime(Date.now() + elapsedMs);
+    await vi.advanceTimersByTimeAsync(200);
+  }
+
   it("allows a cold launch taking longer than twenty seconds", async () => {
     const { service } = await setup(35_000);
     const starting = service.startMlService();
-    await vi.advanceTimersByTimeAsync(36_000);
+    await advanceStartupClock(35_000);
     await starting;
     expect(await service.getMlServiceStatusPayload()).toMatchObject({ running: true, error: null });
     expect(mocks.write).toHaveBeenCalledWith("ML service is ready.");
@@ -82,7 +91,7 @@ describe("ML service startup recovery", () => {
   it("recovers automatically when the service becomes healthy after the startup deadline", async () => {
     const { service } = await setup(95_000);
     const starting = service.startMlService();
-    await vi.advanceTimersByTimeAsync(91_000);
+    await advanceStartupClock(91_000);
     await starting;
     expect((await service.getMlServiceStatusPayload()).error).toContain("did not expose");
     await vi.advanceTimersByTimeAsync(5000);

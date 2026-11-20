@@ -1,18 +1,20 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../../../../src/types/enterprise";
-import { CameraList, CameraSidebarToggle } from "../../../../../../src/features/camera/components/CameraList";
+import { CameraList } from "../../../../../../src/features/camera/components/CameraList";
+
+const actions = { onAdd: () => undefined, onSelect: () => undefined, onToggle: () => undefined };
 
 describe("CameraList", () => {
-  it("keeps one Add Camera action above an empty camera list", () => {
-    const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />);
-    expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("No cameras registered."));
+  it("keeps one Add Camera action available for an empty camera list", () => {
+    const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed={false} {...actions} />);
+    expect(markup).toContain("No cameras registered.");
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
   });
 
-  it("keeps an accessible edge control for both sidebar states", () => {
-    const expanded = renderToStaticMarkup(<CameraSidebarToggle collapsed={false} onToggle={() => undefined} />);
-    const collapsed = renderToStaticMarkup(<CameraSidebarToggle collapsed onToggle={() => undefined} />);
+  it("keeps an accessible toggle for both sidebar states", () => {
+    const expanded = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed={false} {...actions} />);
+    const collapsed = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed {...actions} />);
     expect(expanded).toContain('aria-label="Collapse configured cameras"');
     expect(expanded).toContain('aria-expanded="true"');
     expect(collapsed).toContain('aria-label="Expand configured cameras"');
@@ -20,19 +22,31 @@ describe("CameraList", () => {
   });
 
   it("shows independent running cards and retains one sidebar action", () => {
-    const markup = renderToStaticMarkup(<CameraList cameras={[camera(1), camera(2)]} activeCamId={2} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />);
-    expect(markup.match(/Status: running/g)).toHaveLength(2);
+    const markup = renderToStaticMarkup(<CameraList cameras={[camera(1), camera(2)]} activeCamId={2} cameraLimit={6} collapsed={false} {...actions} />);
+    expect(markup.match(/>Running<\/span>/g)).toHaveLength(2);
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
-    expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("Camera 1"));
+    expect(markup).toContain('aria-pressed="true"');
   });
 
   it("renders six independent cards and disables registration at the policy limit", () => {
     const markup = renderToStaticMarkup(
-      <CameraList cameras={Array.from({ length: 6 }, (_, index) => camera(index + 1))} activeCamId={6} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />,
+      <CameraList cameras={Array.from({ length: 6 }, (_, index) => camera(index + 1))} activeCamId={6} cameraLimit={6} collapsed={false} {...actions} />,
     );
 
-    expect(markup.match(/Status: running/g)).toHaveLength(6);
+    expect(markup.match(/>Running<\/span>/g)).toHaveLength(6);
     expect(markup).toContain("This Enterprise account can register up to 6 cameras.");
+    expect(markup).toContain("disabled");
+  });
+
+  it("keeps camera names, status and selection accessible in compact mode", () => {
+    const markup = renderToStaticMarkup(
+      <CameraList cameras={[camera(1), { ...camera(2), status: "stopped" }]} activeCamId={2} cameraLimit={2} collapsed {...actions} />,
+    );
+
+    expect(markup).toContain('aria-label="2 configured cameras"');
+    expect(markup).toMatch(/aria-label="Camera 2, Zone 2, Entry \/ Exit, stopped"[^>]*aria-pressed="true"/);
+    expect(markup).toContain('aria-label="Camera 1, Zone 1, Entry / Exit, running"');
+    expect(markup).toContain('aria-label="Add Camera"');
     expect(markup).toContain("disabled");
   });
 });

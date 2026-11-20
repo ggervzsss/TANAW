@@ -1,3 +1,4 @@
+import { matchPath, parsePath } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import type { UserRole } from "@/shared/types/role.types";
 
@@ -8,22 +9,25 @@ export function getRoleDashboardPath(role: UserRole): string {
   return routes.it.dashboard;
 }
 
-export function getRoleProfilePath(role: UserRole): string {
-  if (role === "admin") return routes.admin.profile;
-  if (role === "staff") return routes.staff.profile;
-  return routes.it.profile;
+export function getRoleSettingsPath(role: UserRole): string {
+  if (role === "admin") return routes.admin.generalSettings;
+  if (role === "staff") return routes.staff.generalSettings;
+  return routes.it.generalSettings;
 }
 
-export function getRoleSecurityPath(role: UserRole): string {
-  if (role === "admin") return routes.admin.security;
-  if (role === "staff") return routes.staff.security;
-  return routes.it.security;
+export function isRoleSettingsPath(role: UserRole, pathname: string): boolean {
+  return matchPath(`${getRoleSettingsPath(role)}/*`, pathname) !== null;
 }
 
-export function getRoleDisplayPreferencesPath(role: UserRole): string {
-  if (role === "admin") return routes.admin.displayPreferences;
-  if (role === "staff") return routes.staff.displayPreferences;
-  return routes.it.displayPreferences;
+export function getRoleSettingsBackPath(role: Exclude<UserRole, "enterprise">, returnTo: unknown): string {
+  if (typeof returnTo === "string") {
+    const { pathname } = parsePath(returnTo);
+    const portal = routes[role];
+    if (pathname && !isRoleSettingsPath(role, pathname) && (Object.values(portal).some((path) => matchPath(path, pathname)) || matchPath(`${portal.help}/:articleId`, pathname))) {
+      return returnTo;
+    }
+  }
+  return getRoleDashboardPath(role);
 }
 
 export function getRoleHelpPath(role: UserRole): string {
