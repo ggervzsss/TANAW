@@ -1,19 +1,20 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/lib/focus-trap.ts instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: c78043b06d43db487462acdca29c1d6a970349f7d5776b8263128cf23c2b3b32
+ * Source SHA-256: 63321680ededdebc90ce17a7f44dddae2124f643df068b304300c0285bfc6e57
  */
 import { useEffect, useRef } from "react";
 
 type ElementRef = { readonly current: HTMLElement | null };
 
-const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
+const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 
 /**
  * Keeps keyboard focus inside a dialog while it is open, closes it on Escape, and returns focus
- * to the element that opened it.
+ * to the element that opened it. The panel must be programmatically focusable
+ * and may provide a selector for a preferred initial focus target.
  */
-export function useDialogFocus(container: ElementRef, onEscape: () => void, enabled = true): void {
+export function useDialogFocus(container: ElementRef, onEscape: () => void, enabled = true, initialFocusSelector?: string): void {
   const onEscapeRef = useRef(onEscape);
   useEffect(() => {
     onEscapeRef.current = onEscape;
@@ -24,11 +25,13 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
     const previous = document.activeElement as HTMLElement | null;
     const frame = requestAnimationFrame(() => {
       const node = container.current;
-      if (node && !node.contains(document.activeElement)) node.focus();
+      if (!node || node.contains(document.activeElement)) return;
+      const preferred = initialFocusSelector ? node.querySelector<HTMLElement>(initialFocusSelector) : null;
+      (preferred ?? node).focus();
     });
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
-        if (event.defaultPrevented) return;
         event.preventDefault();
         event.stopPropagation();
         onEscapeRef.current();
@@ -36,26 +39,30 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
       }
       if (event.key !== "Tab") return;
       const node = container.current;
-      const nodes = Array.from(node?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter((element) => element.getClientRects().length > 0);
+      const nodes = Array.from(node?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter(
+        (element) => element.tabIndex >= 0 && !element.matches(":disabled") && element.getClientRects().length > 0,
+      );
       const first = nodes[0];
       const last = nodes[nodes.length - 1];
       if (!first || !last) {
         event.preventDefault();
         return;
       }
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === node)) {
+      const atBoundary = document.activeElement === node || document.activeElement === document.body;
+      if (event.shiftKey && (document.activeElement === first || atBoundary)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === node)) {
+      } else if (!event.shiftKey && (document.activeElement === last || atBoundary)) {
         event.preventDefault();
         first.focus();
       }
     };
-    document.addEventListener("keydown", onKey, true);
+    // Portalled controls such as Select can consume Escape before it reaches the dialog.
+    document.addEventListener("keydown", onKey);
     return () => {
       cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("keydown", onKey);
       previous?.focus?.();
     };
-  }, [container, enabled]);
+  }, [container, enabled, initialFocusSelector]);
 }

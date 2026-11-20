@@ -149,6 +149,17 @@ test("keeps the enterprise review queue compact and reveals the first invalid cu
   await expect(dialog.getByRole("button", { name: "Full Map View" })).toBeFocused();
   await expect(dialog.getByRole("alert").filter({ hasText: "Choose a map location inside San Pedro before saving." })).toBeVisible();
   await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
+
+  await category.press("Enter");
+  await expect(page.getByRole("searchbox", { name: "Search category, type, or code" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(category).toHaveAttribute("aria-expanded", "false");
+  await expect(category).toBeFocused();
+  await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeFocused();
 });
 
 test("balances Action and Summary in Activity Details and collapses the shared grid at narrow widths", async ({ page }) => {
