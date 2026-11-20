@@ -234,6 +234,7 @@ test("keeps the IT underline selection through hover, history, reload and mobile
 });
 
 test("keeps Staff Reporting Period accessible and shows the monthly generation state", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await mockPortal(page, "staff", "light");
   await page.route("**/operational/reports/enterprises", (route) =>

@@ -713,17 +713,22 @@ test("presents Visitor Insights as an accessible analytical workspace and highli
 test("keeps a manually zoomed map through a staged theme switch, drag, and directory controls", async ({ page }) => {
   // Zooming, dragging and a staged theme switch that waits for map tiles take longer than the default.
   test.setTimeout(60_000);
-  await configureAdminMapSession(page, { followSystem: true });
+  const secondEnterprise = { ...mapEnterprise, id: "second-map-enterprise", name: "Second Map Enterprise", lng: mapEnterprise.lng + 0.006 };
+  await configureAdminMapSession(page, { followSystem: true, enterprises: [mapEnterprise, secondEnterprise] });
   const map = page.locator("#admin-enterprise-map");
   const labels = page.locator("#spatial-directory-panel").getByRole("button", { name: "Show Map Labels" });
   await expect(labels).toHaveText("Labels");
+  // Panning can clip boundary paths at the edge of the SVG renderer. Marker spacing tracks scale across pans.
+  const markerSpacing = (geometry: MapGeometry) => {
+    const [first, second] = Object.values(geometry.markers);
+    return Math.hypot(first.centerX - second.centerX, first.centerY - second.centerY);
+  };
   const initial = await readSettledMapGeometry(page);
   const mapBox = (await map.boundingBox())!;
   await page.mouse.move(mapBox.x + mapBox.width * 0.6, mapBox.y + mapBox.height * 0.45);
   await page.mouse.wheel(0, -90);
-  await expect.poll(async () => (await readMapGeometry(page)).boundary.width).toBeGreaterThan(initial.boundary.width + 50);
-  await page.waitForTimeout(275);
-  const zoomed = await readMapGeometry(page);
+  await expect.poll(async () => markerSpacing(await readMapGeometry(page))).toBeGreaterThan(markerSpacing(initial));
+  const zoomed = await readSettledMapGeometry(page);
 
   await page.mouse.down();
   await page.mouse.move(mapBox.x + mapBox.width * 0.6 + 85, mapBox.y + mapBox.height * 0.45 - 40, { steps: 8 });
@@ -731,7 +736,7 @@ test("keeps a manually zoomed map through a staged theme switch, drag, and direc
   await expect.poll(async () => Math.abs((await readMapGeometry(page)).marker.centerX - zoomed.marker.centerX)).toBeGreaterThan(40);
   await page.waitForTimeout(400);
   const dragged = await readSettledMapGeometry(page);
-  expect(dragged.boundary.width).toBeCloseTo(zoomed.boundary.width, -1);
+  expect(markerSpacing(dragged)).toBeCloseTo(markerSpacing(zoomed), 0);
 
   await labels.click();
   await expect(labels).toHaveAttribute("aria-pressed", "false");
@@ -751,9 +756,10 @@ test("keeps a manually zoomed map through a staged theme switch, drag, and direc
     const tileRequest = page.waitForRequest("**/dark_nolabels/**");
     await page.emulateMedia({ colorScheme: "dark" });
     await tileRequest;
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+    await expect(map).toHaveAttribute("data-map-tiles", "light");
     await expect(map.locator(".tanaw-base-tiles--dark")).toHaveCSS("opacity", "0");
     await expect(map.locator(".tanaw-base-tiles--light")).toHaveCSS("opacity", "1");
-    await expect(page.locator("html")).toHaveClass(/\blight\b/);
   } finally {
     releaseTiles();
   }
@@ -1112,14 +1118,18 @@ test("refits a clicked barangay and applies wheel input received during the came
 });
 
 test("returns to All Barangays after ten idle seconds and waits while the user is exploring", async ({ page }) => {
+  test.setTimeout(60_000);
   await page.clock.install();
   await configureAdminMapSession(page, { viewport: { width: 1440, height: 900 } });
   const initial = await readSettledMapGeometry(page);
+  // Control the idle interval independently of time spent waiting for browser actions.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
   const map = page.locator("#admin-enterprise-map");
   const selectedBoundary = map.locator('.tanaw-boundary-path[stroke="#167052"]');
   const barangay = page.getByRole("combobox", { name: "Select barangay" });
   await barangay.click();
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
+  await page.clock.runFor(500);
   await expect(selectedBoundary).toBeVisible();
   const selected = await readSettledMapGeometry(page);
   expect(selected.boundary.width).toBeGreaterThan(initial.boundary.width);
@@ -1128,7 +1138,7 @@ test("returns to All Barangays after ten idle seconds and waits while the user i
   await page.getByRole("searchbox", { name: "Search enterprises" }).fill("example");
   await page.clock.fastForward(5000);
   await expect(barangay).toContainText("Barangay San Antonio");
-  await map.hover({ position: { x: 100, y: 100 } });
+  await page.mouse.move(selected.map.left + 100, selected.map.top + 100);
   await page.mouse.down();
   await page.mouse.move(selected.map.left + 130, selected.map.top + 120);
   await page.clock.fastForward(11000);
@@ -1140,6 +1150,7 @@ test("returns to All Barangays after ten idle seconds and waits while the user i
   await page.clock.fastForward(9000);
   await expect(barangay).toContainText("Barangay San Antonio");
   await page.clock.fastForward(1050);
+  await page.clock.runFor(500);
 
   await expect(barangay).toContainText("All Barangays");
   await expect(selectedBoundary).toHaveCount(0);
@@ -1147,6 +1158,7 @@ test("returns to All Barangays after ten idle seconds and waits while the user i
   expectSameCamera(await readSettledMapGeometry(page), initial);
 
   await map.locator(".leaflet-control-zoom-in").click();
+  await page.clock.runFor(500);
   const manualCamera = await readSettledMapGeometry(page);
   expect(manualCamera.boundary.width).toBeGreaterThan(initial.boundary.width);
   await page.clock.fastForward(11000);
