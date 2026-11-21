@@ -1,7 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, Lock, User } from "lucide-react";
-import { motion } from "motion/react";
+import { Button } from "@/design-system";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "@/shared/utils/passwordPolicy";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";
@@ -182,17 +182,16 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
           </div>
         ) : null}
 
-        <motion.button
+        <Button
           type="submit"
           disabled={isSubmitting || lockoutSeconds > 0}
-          className="tanaw-auth-primary-action flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-75"
-          whileHover={{ y: -1 }}
-          whileTap={{ scale: 0.99 }}
-          transition={{ duration: 0.2 }}
+          size="lg"
+          fullWidth
+          className="tanaw-auth-primary-action"
+          trailingIcon={<ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />}
         >
           {lockoutSeconds > 0 ? `Try again in ${formatLockout(lockoutSeconds)}` : isSubmitting ? "Signing in..." : "Sign in"}
-          <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-        </motion.button>
+        </Button>
 
         <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
           <span className="h-px flex-1 bg-(--tanaw-border)" />

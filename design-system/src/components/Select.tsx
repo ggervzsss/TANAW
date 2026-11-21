@@ -277,7 +277,6 @@ export function Select({
                         setSearch(event.target.value);
                         setActiveIndex(0);
                       }}
-                      onKeyDown={handleKeyDown}
                       className={cn(
                         "min-w-0 flex-1 bg-transparent py-2 pr-3 pl-9 text-sm outline-none placeholder:text-(--tanaw-text-placeholder)",
                         isDirectory ? "tanaw-directory-select-value text-xs font-medium" : "text-(--tanaw-text)",

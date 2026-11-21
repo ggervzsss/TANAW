@@ -95,6 +95,11 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
   await page.goto("/#/login");
 
+  const signIn = page.getByRole("button", { name: "Sign in", exact: true });
+  await expect(signIn).toHaveCSS("background-image", "none");
+  await expect(signIn).toHaveCSS("background-color", await token(page, "--tanaw-action"));
+  await expect(signIn).toHaveCSS("color", await token(page, "--tanaw-on-action"));
+
   const identifier = page.getByPlaceholder("Enter username or registered email");
   const password = page.getByPlaceholder("Enter your password");
   const identifierShell = identifier.locator("..");
@@ -111,6 +116,31 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(identifierShell).toHaveCSS("background-color", "rgb(255, 255, 255)");
+});
+
+test("keeps keyboard focus inside sign-in dialogs and returns it on Escape", async ({ page }) => {
+  await page.goto("/#/login");
+
+  for (const { triggerName, dialogName, field, submitName } of [
+    { triggerName: "Forgot password?", dialogName: "Forgot password", field: "Enter registered email", submitName: "Continue" },
+    { triggerName: "Contact support", dialogName: "Contact support", field: "Your name", submitName: "Record support request" },
+  ]) {
+    const trigger = page.getByRole("button", { name: triggerName, exact: true });
+    await trigger.press("Enter");
+    const dialog = page.getByRole("dialog", { name: dialogName });
+    const close = dialog.getByRole("button", { name: "Close dialog" });
+    const submit = dialog.getByRole("button", { name: submitName });
+    await expect(dialog.getByPlaceholder(field)).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(submit).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  }
 });
 
 test("prepares both Enterprise login backgrounds before revealing the renderer", async ({ page }) => {

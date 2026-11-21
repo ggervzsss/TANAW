@@ -99,10 +99,12 @@ test("keeps login recovery and support dialogs centered and scrollable", async (
   await page.setViewportSize({ width: 1280, height: 640 });
   await page.goto("/login");
 
-  for (const dialogTrigger of ["Forgot password?", "Contact support"]) {
-    await page.getByRole("button", { name: dialogTrigger }).click();
+  for (const [dialogTrigger, initialField] of [["Forgot password?", "Enter registered email"], ["Contact support", "Your name"]]) {
+    const trigger = page.getByRole("button", { name: dialogTrigger });
+    await trigger.press("Enter");
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByPlaceholder(initialField)).toBeFocused();
     await expect
       .poll(async () => {
         const box = await dialog.boundingBox();
@@ -115,8 +117,9 @@ test("keeps login recovery and support dialogs centered and scrollable", async (
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(640);
 
-    await page.getByRole("button", { name: /Close (password recovery|contact support)/ }).click();
+    await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
   }
 });
 

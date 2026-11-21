@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE. Do not edit; change design-system/src/components/Select.tsx instead.
  * Update with: node design-system/scripts/sync.mjs
- * Source SHA-256: 39e154f072189c72d15494a84a4c481eaa79cf409dccb68c60e2a042a5dea411
+ * Source SHA-256: 4dc52e8c83a2315aa51609a83c36a9b7a3cd31bc0688feabc1087956c14c00da
  */
 import { Check, ChevronDown, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -282,7 +282,6 @@ export function Select({
                         setSearch(event.target.value);
                         setActiveIndex(0);
                       }}
-                      onKeyDown={handleKeyDown}
                       className={cn(
                         "min-w-0 flex-1 bg-transparent py-2 pr-3 pl-9 text-sm outline-none placeholder:text-(--tanaw-text-placeholder)",
                         isDirectory ? "tanaw-directory-select-value text-xs font-medium" : "text-(--tanaw-text)",

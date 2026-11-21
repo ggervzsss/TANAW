@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
 import { routePaths } from "../../../app/router/routePaths";
+import { Button } from "../../../design-system";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "../../../utils/password-policy";
 import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
@@ -337,14 +338,16 @@ export function LoginPage() {
           </div>
         ) : null}
 
-        <button
+        <Button
           type="submit"
           disabled={loginMutation.isPending || loginMutation.lockoutSeconds > 0}
-          className="tanaw-auth-primary-action flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] disabled:cursor-not-allowed disabled:opacity-75"
+          size="lg"
+          fullWidth
+          className="tanaw-auth-primary-action"
+          trailingIcon={<ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />}
         >
           {loginMutation.lockoutSeconds > 0 ? `Try again in ${formatLockout(loginMutation.lockoutSeconds)}` : loginMutation.isPending ? "Signing in..." : "Sign in"}
-          <ArrowRight className="h-5 w-5" strokeWidth={2} />
-        </button>
+        </Button>
 
         <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
           <span className="h-px flex-1 bg-(--tanaw-border)" />
