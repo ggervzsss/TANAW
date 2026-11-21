@@ -12,10 +12,9 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
-from app.core.config import Settings
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.features.accounts.models import (
@@ -56,7 +55,7 @@ from app.features.reporting.schemas import (
     ReportStatusUpdate,
 )
 from tests.support.counting import REPORT_FIXTURES, counting_snapshot
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-reporting-pg-%@example.com"
 TEST_PREPARED_BY_PREFIX = "Reporting PG"
@@ -80,33 +79,23 @@ class FinalListingRecord:
 
 @pytest_asyncio.fixture
 async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_rows,
         jwt_secret_key="tanaw-reporting-postgres-jwt-secret-123456789",
-    )
-    monkeypatch.setattr(security, "get_settings", lambda: settings)
-    monkeypatch.setattr(
-        reporting_router,
-        "create_role_notifications",
-        AsyncMock(return_value=[]),
-    )
-    monkeypatch.setattr(
-        reporting_router,
-        "record_operational_log",
-        AsyncMock(return_value=None),
-    )
-
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    await _clean_rows(runtime)
-    try:
+    ) as runtime:
+        settings = runtime.settings
+        monkeypatch.setattr(security, "get_settings", lambda: settings)
+        monkeypatch.setattr(
+            reporting_router,
+            "create_role_notifications",
+            AsyncMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            reporting_router,
+            "record_operational_log",
+            AsyncMock(return_value=None),
+        )
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

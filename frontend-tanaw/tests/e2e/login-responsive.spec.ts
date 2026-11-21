@@ -99,7 +99,10 @@ test("keeps login recovery and support dialogs centered and scrollable", async (
   await page.setViewportSize({ width: 1280, height: 640 });
   await page.goto("/login");
 
-  for (const [dialogTrigger, initialField] of [["Forgot password?", "Enter registered email"], ["Contact support", "Your name"]]) {
+  for (const [dialogTrigger, initialField] of [
+    ["Forgot password?", "Enter registered email"],
+    ["Contact support", "Your name"],
+  ]) {
     const trigger = page.getByRole("button", { name: dialogTrigger });
     await trigger.press("Enter");
     const dialog = page.getByRole("dialog");
@@ -256,19 +259,43 @@ test("keeps the cursor-following glow isolated without interfering with login co
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
   const target = { x: stageBox!.x + stageBox!.width * 0.35, y: stageBox!.y + stageBox!.height * 0.45 };
-  await expect(page.locator(".tanaw-auth-card")).toHaveCSS("transform", "none");
-  await stage.evaluate((element) => {
-    const mutations: string[] = [];
-    const observer = new MutationObserver((records) => {
-      for (const record of records) {
-        if (record.target instanceof Element && !record.target.closest(".tanaw-stage-glow")) {
-          mutations.push(record.target.className);
+  // The hero and card entrance animations write inline styles for up to 0.65 s.
+  // Record only after both settle, so the check covers what pointer movement changes.
+  for (const entrance of await page.locator(".tanaw-auth-hero > div, .tanaw-auth-card").all()) {
+    await expect(entrance).toHaveCSS("opacity", "1");
+    await expect(entrance).toHaveCSS("transform", "none");
+  }
+  await stage.evaluate(
+    (element) =>
+      new Promise<void>((resolve, reject) => {
+        const mutations: string[] = [];
+        let recording = false;
+        let quietTimer = window.setTimeout(startRecording, 300);
+        const giveUp = window.setTimeout(() => {
+          observer.disconnect();
+          reject(new Error(`Login styles never settled before the pointer moved: ${mutations.join(", ")}`));
+        }, 5_000);
+        function startRecording() {
+          window.clearTimeout(giveUp);
+          mutations.length = 0;
+          recording = true;
+          resolve();
         }
-      }
-    });
-    observer.observe(element, { attributes: true, attributeFilter: ["style"], subtree: true });
-    Object.assign(window, { authGlowMutations: mutations, authGlowObserver: observer });
-  });
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            if (record.target instanceof Element && !record.target.closest(".tanaw-stage-glow")) {
+              mutations.push(record.target.className);
+              if (!recording) {
+                window.clearTimeout(quietTimer);
+                quietTimer = window.setTimeout(startRecording, 300);
+              }
+            }
+          }
+        });
+        observer.observe(element, { attributes: true, attributeFilter: ["style"], subtree: true });
+        Object.assign(window, { authGlowMutations: mutations, authGlowObserver: observer });
+      }),
+  );
   await page.mouse.move(target.x, target.y);
   await expect
     .poll(async () => {

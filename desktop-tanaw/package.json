@@ -40,7 +40,9 @@
     "preview:web": "vite preview",
     "prettier": "prettier --write .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "capture:design": "node scripts/run-design-capture.mjs",
     "test:electron": "npm run build && playwright test --config=playwright.electron.config.ts",
     "type": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
@@ -67,6 +69,7 @@
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "electron": "^42.5.1",
     "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",

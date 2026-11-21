@@ -86,10 +86,12 @@ async function expectUnifiedHeader(header: Locator, titles: string[], dividerCou
 async function expectUnderlineUnder(indicator: Locator, tab: Locator) {
   await expect(indicator).toBeVisible();
   const target = (await tab.locator("[data-topbar-label]").boundingBox())!;
-  await expect.poll(async () => {
-    const underline = (await indicator.boundingBox())!;
-    return Math.abs(underline.x + underline.width / 2 - target.x - target.width / 2) + Math.abs(underline.y - target.y - target.height - 4) + Math.abs(underline.width - target.width * 0.8);
-  }).toBeLessThan(2);
+  await expect
+    .poll(async () => {
+      const underline = (await indicator.boundingBox())!;
+      return Math.abs(underline.x + underline.width / 2 - target.x - target.width / 2) + Math.abs(underline.y - target.y - target.height - 4) + Math.abs(underline.width - target.width * 0.8);
+    })
+    .toBeLessThan(2);
 }
 
 test("compactly presents Activity History metrics above its search", async ({ page }) => {
@@ -111,14 +113,62 @@ test("compactly presents Activity History metrics above its search", async ({ pa
   await expect(page.getByRole("link", { name: "Open Live Map" })).toHaveCount(0);
 });
 
-test("unifies IT summary metrics in dark mode and preserves responsive overflow", async ({ page }) => {
+const itDashboardMetrics = ["Urgent Issues", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"];
+
+async function openItPage(page: Page, path: string) {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockPortal(page, "it", "dark");
+  await page.goto(path);
+  return page.locator("[data-unified-metrics-header]");
+}
 
-  await page.goto("/it/dashboard");
-  const dashboardHeader = page.locator("[data-unified-metrics-header]");
-  await expectUnifiedHeader(dashboardHeader, ["Urgent Issues", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"]);
+async function expectMetricsReachableAtZoom(page: Page, header: Locator, zoom: string) {
+  await page.evaluate((nextZoom) => {
+    document.documentElement.style.zoom = nextZoom;
+  }, zoom);
+  const scroller = header.locator(".tanaw-unified-metrics__scroller");
+  // Scroll the way a person would. A script can scroll even overflow: hidden, a wheel cannot.
+  await scroller.hover();
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(400, 0);
+      return scroller.evaluate((element) => element.scrollWidth - element.clientWidth - element.scrollLeft);
+    }, `${zoom} zoom: the metrics scroller reaches its end`)
+    .toBeLessThanOrEqual(1);
+  const layout = await scroller.evaluate((element) => {
+    const segments = element.querySelectorAll("[data-metric-segment]");
+    const last = segments[segments.length - 1]!.getBoundingClientRect();
+    const visible = element.getBoundingClientRect();
+    const header = element.closest("[data-unified-metrics-header]")!.getBoundingClientRect();
+    return {
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      viewportWidth: window.innerWidth,
+      headerLeft: header.left,
+      headerRight: header.right,
+      visibleLeft: visible.left,
+      visibleRight: visible.right,
+      lastLeft: last.left,
+      lastRight: last.right,
+      lastWidth: last.width,
+    };
+  });
+  const context = `${zoom} zoom: ${JSON.stringify(layout)}`;
+  // The page itself never scrolls sideways; only the metrics scroller may.
+  expect(layout.pageOverflow, context).toBeLessThanOrEqual(0);
+  expect(layout.headerLeft, context).toBeGreaterThanOrEqual(-1);
+  expect(layout.headerRight, context).toBeLessThanOrEqual(layout.viewportWidth + 1);
+  // The final metric can be brought fully into the scroller's visible area
+  // (1 px allows for sub-pixel rounding at fractional zoom).
+  expect(layout.lastWidth, context).toBeGreaterThan(0);
+  expect(layout.lastLeft, context).toBeGreaterThanOrEqual(layout.visibleLeft - 1);
+  expect(layout.lastRight, context).toBeLessThanOrEqual(layout.visibleRight + 1);
+  await expect(header.getByText(itDashboardMetrics.at(-1)!, { exact: true })).toBeInViewport();
+}
+
+test("presents the IT dashboard metrics and status cards in dark mode", async ({ page }) => {
+  const dashboardHeader = await openItPage(page, "/it/dashboard");
+  await expectUnifiedHeader(dashboardHeader, itDashboardMetrics);
   await expect(dashboardHeader).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(dashboardHeader.locator(".tanaw-unified-metrics__icon").first()).toHaveCSS("transform", "none");
   await expect(page.getByRole("heading", { name: "Current Work" })).toBeVisible();
@@ -133,35 +183,32 @@ test("unifies IT summary metrics in dark mode and preserves responsive overflow"
   await expect(page.getByRole("heading", { name: "Account Directory" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open Accounts" })).toBeVisible();
   await expect(page.locator(".tanaw-it-health-card")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+});
 
-  for (const zoom of ["90%", "100%", "110%"]) {
-    await page.evaluate((nextZoom) => {
-      document.documentElement.style.zoom = nextZoom;
-    }, zoom);
-    const dimensions = await dashboardHeader.locator(".tanaw-unified-metrics__scroller").evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-    }));
-    expect(dimensions.clientWidth).toBeGreaterThan(0);
-    expect(dimensions.scrollWidth).toBeGreaterThanOrEqual(dimensions.clientWidth);
-  }
-  await page.evaluate(() => {
-    document.documentElement.style.zoom = "100%";
+for (const zoom of ["90%", "100%", "110%"]) {
+  test(`keeps the IT dashboard within the viewport with every metric reachable at ${zoom} zoom`, async ({ page }) => {
+    const dashboardHeader = await openItPage(page, "/it/dashboard");
+    await expect(dashboardHeader.locator("[data-metric-segment]")).toHaveCount(itDashboardMetrics.length);
+    await expectMetricsReachableAtZoom(page, dashboardHeader, zoom);
   });
+}
 
-  await page.goto("/it/work-center");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Needs Attention", "Urgent", "Working on It", "Resolved"]);
+test("unifies the IT Work Center issue and support metrics", async ({ page }) => {
+  const header = await openItPage(page, "/it/work-center");
+  await expectUnifiedHeader(header, ["Needs Attention", "Urgent", "Working on It", "Resolved"]);
   await expect(page.getByPlaceholder("Search issue, enterprise, person, or suggested action")).toBeVisible();
 
   await page.goto("/it/work-center?view=support");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Open Requests", "High Priority", "Working on It", "With Photos"]);
+  await expectUnifiedHeader(header, ["Open Requests", "High Priority", "Working on It", "With Photos"]);
+});
 
-  await page.goto("/it/lgu-accounts");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Active Accounts", "Admin Accounts", "IT Accounts", "Staff Accounts"]);
+test("unifies the IT account directory metrics", async ({ page }) => {
+  const header = await openItPage(page, "/it/lgu-accounts");
+  await expectUnifiedHeader(header, ["Active Accounts", "Admin Accounts", "IT Accounts", "Staff Accounts"]);
   await expect(page.getByRole("button", { name: "Create LGU Account" })).toBeVisible();
 
   await page.goto("/it/enterprise-accounts");
-  await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Enterprise Accounts", "Active Enterprises", "Inactive Enterprises", "Barangays Covered"]);
+  await expectUnifiedHeader(header, ["Enterprise Accounts", "Active Enterprises", "Inactive Enterprises", "Barangays Covered"]);
   await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeVisible();
 });
 

@@ -329,10 +329,10 @@ test("report filters, preview and responsive workspace retain the existing layou
   }
 });
 
-// Design review captures (DESIGN.md): run with TANAW_DESIGN_CAPTURE=<folder> to save screenshots.
-test("captures Reports for design review", async ({ page }) => {
+// Design review capture (DESIGN.md), tagged @design-capture: run it with `npm run capture:design`.
+test("captures Reports for design review", { tag: "@design-capture" }, async ({ page }) => {
   const folder = process.env.TANAW_DESIGN_CAPTURE;
-  test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+  test.skip(!folder, "Run design captures with npm run capture:design.");
   test.setTimeout(120_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 1000 });

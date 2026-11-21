@@ -1,0 +1,32 @@
+{
+  "report intake and consolidation": {
+    "paths": [
+      "app/features/reporting/"
+    ],
+    "min_branch_percent": 71.0
+  },
+  "sign-in and activation": {
+    "paths": [
+      "app/features/auth/"
+    ],
+    "min_branch_percent": 59.0
+  },
+  "live updates": {
+    "paths": [
+      "app/features/realtime/"
+    ],
+    "min_branch_percent": 36.5
+  },
+  "email delivery": {
+    "paths": [
+      "app/features/mail/"
+    ],
+    "min_branch_percent": 57.0
+  },
+  "desktop telemetry": {
+    "paths": [
+      "app/features/monitoring/"
+    ],
+    "min_branch_percent": 60.5
+  }
+}

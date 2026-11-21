@@ -36,6 +36,7 @@ dev = [
     "pyright>=1.1.410",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.14",
 ]
 
@@ -65,3 +66,22 @@ warn_return_any = true
 warn_unused_ignores = true
 show_error_codes = true
 pretty = true
+
+# Branch coverage of the critical workflows: report intake and consolidation, sign-in and
+# activation, live updates, email delivery and desktop telemetry. Measure it with
+# `uv run pytest --cov` and TANAW_TEST_DATABASE_URL set, since most of these paths run against
+# PostgreSQL. See docs/testing/coverage-and-replays.md.
+[tool.coverage.run]
+branch = true
+source = [
+    "app/features/reporting",
+    "app/features/auth",
+    "app/features/realtime",
+    "app/features/mail",
+    "app/features/monitoring",
+]
+
+[tool.coverage.report]
+precision = 1
+skip_empty = true
+

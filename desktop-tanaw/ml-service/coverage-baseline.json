@@ -1,0 +1,22 @@
+{
+  "entry and exit counting": {
+    "paths": [
+      "app/counting/"
+    ],
+    "min_branch_percent": 67.5
+  },
+  "visitor identity": {
+    "paths": [
+      "app/identity/"
+    ],
+    "min_branch_percent": 74.5
+  },
+  "saved reports and occupancy": {
+    "paths": [
+      "app/storage/repositories/establishment_report_repository.py",
+      "app/storage/repositories/establishment_repository.py",
+      "app/storage/repositories/occupancy_event_repository.py"
+    ],
+    "min_branch_percent": 83.5
+  }
+}

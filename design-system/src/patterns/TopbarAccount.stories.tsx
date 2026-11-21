@@ -29,7 +29,9 @@ export default meta;
 export const Closed: StoryObj<typeof meta> = {};
 export const Open: StoryObj<typeof meta> = {
   args: { activeAction: "settings" },
+  tags: ["a11y-open-menu"],
   play: async ({ canvasElement, userEvent }) => {
-    await userEvent.click(within(canvasElement).getByRole("button", { name: "Open account menu" }));
+    // The trigger names the account too: "Open account menu for <name> <role>".
+    await userEvent.click(within(canvasElement).getByRole("button", { name: /^Open account menu/ }));
   },
 };

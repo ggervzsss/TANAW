@@ -5,8 +5,8 @@ import unittest
 from typing import Any, cast
 from unittest.mock import patch
 
-from app.camera.camera_manager import CameraProcessingManager
-from app.camera.contracts import CameraCounts, CameraSessionState
+from support.cameras import FakePipeline, pipeline_config
+
 from app.camera.pipeline_manager import (
     CameraCapacityError,
     CameraConfigurationCapacityError,
@@ -15,94 +15,6 @@ from app.camera.pipeline_manager import (
     TripwireWorkerUpdateError,
 )
 from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequest
-
-
-class FakePipeline(CameraProcessingManager):
-    def __init__(self, app_data_dir: str | None = None, camera_id: int | None = None) -> None:
-        self.camera_id = camera_id
-        self.running_value = False
-        self.start_calls = 0
-        self.stop_calls = 0
-        self.close_calls = 0
-        self.counting_update_calls = 0
-        self.config: CameraStartRequest | None = None
-        self.enterprise_id: str | None = None
-
-    @property
-    def running(self) -> bool:
-        return self.running_value
-
-    @property
-    def current_config(self) -> CameraStartRequest | None:
-        return self.config
-
-    def bind_enterprise(
-        self,
-        enterprise_id: str,
-        enterprise_name: str | None = None,
-        *,
-        restore_session: bool = True,
-    ) -> dict:
-        self.enterprise_id = enterprise_id
-        return {
-            "enterprise_id": enterprise_id,
-            "enterprise_name": enterprise_name,
-            "changed": True,
-            "session_restored": False,
-        }
-
-    def start(self, config: CameraStartRequest) -> None:
-        if self.running_value:
-            self.stop()
-        self.config = config
-        self.start_calls += 1
-        self.running_value = True
-
-    def stop(self) -> None:
-        self.stop_calls += 1
-        self.running_value = False
-
-    def close(self) -> None:
-        self.close_calls += 1
-        self.stop()
-
-    def update_counting_config(self, update: CameraCountingConfigUpdate) -> dict[str, object]:
-        self.counting_update_calls += 1
-        return {
-            "camera_id": self.camera_id,
-            "session_id": 1,
-            "raw_frame_id": 10,
-            "stream_frame_id": 10,
-        }
-
-    def counts(self) -> CameraCounts:
-        return {
-            "entry": self.camera_id or 0,
-            "exit": 0,
-            "occupancy": 999,
-            "running": self.running_value,
-            "status": "running" if self.running_value else "stopped",
-            "started_at": None,
-            "error": None,
-        }
-
-    def detections(self) -> dict:
-        return {"running": self.running_value, "status": "running", "tracks": []}
-
-    def session(self) -> CameraSessionState:
-        return {
-            "running": self.running_value,
-            "status": "running",
-            "error": None,
-            "camera_id": self.camera_id,
-            "camera_name": f"Camera {self.camera_id}",
-            "camera_config": None,
-            "counts": self.counts(),
-            "updated_at": None,
-        }
-
-    def model_status(self) -> dict:
-        return {}
 
 
 class CameraPipelineRegistryTest(unittest.TestCase):
@@ -120,7 +32,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             registry.replace_camera_profiles([_profile(camera_id) for camera_id in range(1, 7)])
 
             for camera_id in range(1, 7):
-                self.assertTrue(registry.start(_config(camera_id)))
+                self.assertTrue(registry.start(pipeline_config(camera_id)))
 
             states = registry.camera_states()
             self.assertEqual(states["active_camera_count"], 6)
@@ -138,7 +50,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 CameraCapacityError, "processing limit of 6 active cameras"
             ):
-                registry.start(_config(7))
+                registry.start(pipeline_config(7))
             self.assertTrue(
                 all(registry.require_pipeline(camera_id).running for camera_id in range(1, 7))
             )
@@ -150,10 +62,10 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             )
             registry.bind_enterprise("enterprise@example.test")
             for camera_id in range(1, 7):
-                registry.start(_config(camera_id))
+                registry.start(pipeline_config(camera_id))
 
             self.assertTrue(registry.stop(3))
-            self.assertTrue(registry.start(_config(7)))
+            self.assertTrue(registry.start(pipeline_config(7)))
             self.assertEqual(registry.camera_states()["active_camera_count"], 6)
             self.assertFalse(registry.require_pipeline(3).running)
             self.assertTrue(
@@ -174,7 +86,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             ):
                 registry.replace_camera_profiles([*six_profiles, _profile(7)])
 
-            registry.start(_config(1))
+            registry.start(pipeline_config(1))
             registry.replace_camera_profiles([*six_profiles[1:], _profile(7)])
             with self.assertRaises(KeyError):
                 registry.require_pipeline(1)
@@ -198,11 +110,11 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             )
             registry.bind_enterprise("enterprise@example.test")
             for camera_id in range(1, 6):
-                registry.start(_config(camera_id))
+                registry.start(pipeline_config(camera_id))
 
             with self.assertRaisesRegex(RuntimeError, "simulated stream failure"):
-                registry.start(_config(6))
-            self.assertTrue(registry.start(_config(7)))
+                registry.start(pipeline_config(6))
+            self.assertTrue(registry.start(pipeline_config(7)))
             self.assertEqual(registry.camera_states()["active_camera_count"], 6)
             self.assertTrue(
                 all(
@@ -216,8 +128,8 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            first = _config(1)
-            second = _config(2)
+            first = pipeline_config(1)
+            second = pipeline_config(2)
 
             self.assertTrue(registry.start(first))
             self.assertFalse(registry.start(first))
@@ -238,8 +150,8 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             )
             registry.bind_enterprise("enterprise@example.test")
             registry.replace_camera_profiles([_profile(1), _profile(2)])
-            registry.start(_config(1))
-            registry.start(_config(2))
+            registry.start(pipeline_config(1))
+            registry.start(pipeline_config(2))
             first = cast(FakePipeline, registry.require_pipeline(1))
             second = cast(FakePipeline, registry.require_pipeline(2))
 
@@ -288,7 +200,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             )
             registry.bind_enterprise("enterprise@example.test")
             registry.replace_camera_profiles([_profile(1)])
-            registry.start(_config(1))
+            registry.start(pipeline_config(1))
             with self.assertRaises(TripwireWorkerUpdateError):
                 registry.update_counting_config(
                     1,
@@ -393,7 +305,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             registry.bind_enterprise("enterprise@example.test")
             registry.replace_camera_profiles([_profile(camera_id) for camera_id in range(1, 7)])
             for camera_id in range(1, 7):
-                registry.start(_config(camera_id))
+                registry.start(pipeline_config(camera_id))
 
             registry.update_counting_config(
                 3,
@@ -429,10 +341,10 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=1, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            registry.start(_config(1))
+            registry.start(pipeline_config(1))
 
             with self.assertRaisesRegex(CameraCapacityError, "processing limit"):
-                registry.start(_config(2))
+                registry.start(pipeline_config(2))
             self.assertTrue(registry.require_pipeline(1).running)
 
     def test_requested_start_returns_while_slow_initialization_continues(self) -> None:
@@ -452,7 +364,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=1, pipeline_factory=SlowPipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            first = _config(1)
+            first = pipeline_config(1)
 
             try:
                 self.assertTrue(registry.request_start(first))
@@ -461,7 +373,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 self.assertEqual(registry.camera_states()["pending_camera_ids"], [1])
                 self.assertFalse(registry.request_start(first))
                 with self.assertRaisesRegex(CameraCapacityError, "processing limit"):
-                    registry.request_start(_config(2))
+                    registry.request_start(pipeline_config(2))
             finally:
                 finish_initialization.set()
 
@@ -475,10 +387,10 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=1, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            registry.start(_config(1))
+            registry.start(pipeline_config(1))
             pipeline = cast(FakePipeline, registry.require_pipeline(1))
 
-            updated = _config(1)
+            updated = pipeline_config(1)
             updated.processing_profile = "high_accuracy"
             self.assertTrue(registry.start(updated))
 
@@ -495,9 +407,11 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            running = _config(1).model_copy(update={"username": "admin", "password": "secret"})
+            running = pipeline_config(1).model_copy(
+                update={"username": "admin", "password": "secret"}
+            )
             registry.start(running)
-            registry.start(_config(2))
+            registry.start(pipeline_config(2))
             registry.stop(2)
             first = cast(FakePipeline, registry.require_pipeline(1))
             second = cast(FakePipeline, registry.require_pipeline(2))
@@ -538,10 +452,10 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=1, pipeline_factory=SerializedPipeline
             )
             registry.bind_enterprise("enterprise@example.test")
-            registry.start(_config(1))
-            first_update = _config(1)
+            registry.start(pipeline_config(1))
+            first_update = pipeline_config(1)
             first_update.camera_name = "First update"
-            latest_update = _config(1)
+            latest_update = pipeline_config(1)
             latest_update.camera_name = "Latest update"
 
             try:
@@ -562,8 +476,8 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("first@example.test")
-            registry.start(_config(1))
-            registry.start(_config(2))
+            registry.start(pipeline_config(1))
+            registry.start(pipeline_config(2))
             first = registry.require_pipeline(1)
             second = registry.require_pipeline(2)
 
@@ -579,7 +493,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             registry = CameraPipelineRegistry(directory, pipeline_factory=FakePipeline)
             registry.bind_enterprise("enterprise@example.test")
             registry.replace_camera_profiles([_profile(1)])
-            registry.start(_config(1))
+            registry.start(pipeline_config(1))
             pipeline = cast(FakePipeline, registry.require_pipeline(1))
 
             registry.replace_camera_profiles([])
@@ -595,8 +509,8 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             )
             registry.bind_enterprise("enterprise@example.test")
             registry.replace_camera_profiles([_profile(1), _profile(2)])
-            registry.start(_config(1))
-            registry.start(_config(2))
+            registry.start(pipeline_config(1))
+            registry.start(pipeline_config(2))
             registry.record_occupancy_correction(
                 new_occupancy=7,
                 reason="Manual recount",
@@ -611,14 +525,6 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 [camera["session"]["counts"]["occupancy"] for camera in states["cameras"]],
                 [7, 7],
             )
-
-
-def _config(camera_id: int) -> CameraStartRequest:
-    return CameraStartRequest(
-        camera_id=camera_id,
-        camera_name=f"Camera {camera_id}",
-        stream_url="rtsp://192.168.1.20/stream2",
-    )
 
 
 def _profile(camera_id: int) -> dict[str, Any]:

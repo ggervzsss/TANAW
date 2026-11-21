@@ -9,6 +9,8 @@ const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 export default defineConfig({
   testDir: "./tests/e2e/browser",
   fullyParallel: false,
+  // Design review screenshots run only through `npm run capture:design`, which sets TANAW_DESIGN_CAPTURE.
+  grepInvert: process.env.TANAW_DESIGN_CAPTURE ? undefined : /@design-capture/,
   timeout: 30_000,
   expect: { timeout: 8_000 },
   reporter: [["list"]],

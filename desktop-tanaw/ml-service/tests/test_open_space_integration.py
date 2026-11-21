@@ -1,36 +1,23 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
-from typing import Any
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from support.cameras import POLYGON, open_space_configuration
 
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
 from app.camera.pipeline_manager import CameraPipelineRegistry
-from app.config.camera_config import CameraStartRequest, RegionOfInterest
+from app.config.camera_config import CameraStartRequest
 from app.config.open_space_config import OpenSpaceConfig
 from app.counting.geometry import Centroid
 from app.detection.yolo_detector import TrackResult
 from app.main import create_app
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
-
-POLYGON = [{"x": 0.2, "y": 0.2}, {"x": 0.8, "y": 0.2}, {"x": 0.8, "y": 0.8}, {"x": 0.2, "y": 0.8}]
-
-
-def configuration(**changes: Any) -> CameraStartRequest:
-    return CameraStartRequest(
-        stream_url="rtsp://192.168.1.20/stream2",
-        camera_id=1,
-        analysis_mode="open_space",
-        roi=RegionOfInterest(top=0, left=0, width=1, height=1),
-        open_space=OpenSpaceConfig.model_validate({"polygon": POLYGON}),
-        **changes,
-    )
 
 
 def test_mode_validation_and_preview_only_setup() -> None:
@@ -50,7 +37,7 @@ def test_mode_validation_and_preview_only_setup() -> None:
 def test_live_camera_path_writes_area_visits_and_never_doorway_events(tmp_path: Path) -> None:
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
     manager.bind_enterprise("park", restore_session=False)
-    config = configuration()
+    config = open_space_configuration()
     manager._config = config
     manager._begin_area(config)
     tracker = manager._area_tracker
@@ -201,7 +188,7 @@ def test_zone_calibration_preview_does_not_require_detector_assets(tmp_path: Pat
 def test_stream_interruption_rotates_run_and_never_reuses_person_timer(tmp_path: Path) -> None:
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
     manager.bind_enterprise("park", restore_session=False)
-    config = configuration()
+    config = open_space_configuration()
     manager._config = config
     manager._begin_area(config)
     tracker = manager._area_tracker

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Design review captures (design-system/DESIGN.md): run with TANAW_DESIGN_CAPTURE=<folder> to save
-// screenshots of every main web page in light and dark mode. Skipped otherwise.
+// Design review captures (design-system/DESIGN.md), tagged @design-capture: `npm run capture:design`
+// saves light and dark screenshots of every main web page. Normal test runs exclude them.
 const folder = process.env.TANAW_DESIGN_CAPTURE;
 
 type Role = "admin" | "it" | "staff";
@@ -63,8 +63,8 @@ async function mockPortal(page: Page, role: Role, theme: Theme) {
 
 test.describe.configure({ timeout: 180_000 });
 
-test("captures the web login page for design review", async ({ page }) => {
-  test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+test("captures the web login page for design review", { tag: "@design-capture" }, async ({ page }) => {
+  test.skip(!folder, "Run design captures with npm run capture:design.");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const theme of ["light", "dark"] as const) {
@@ -77,8 +77,8 @@ test("captures the web login page for design review", async ({ page }) => {
 });
 
 for (const role of Object.keys(pages) as Role[]) {
-  test(`captures ${role} pages for design review`, async ({ page }) => {
-    test.skip(!folder, "Set TANAW_DESIGN_CAPTURE to a folder to capture design screenshots.");
+  test(`captures ${role} pages for design review`, { tag: "@design-capture" }, async ({ page }) => {
+    test.skip(!folder, "Run design captures with npm run capture:design.");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     for (const theme of ["light", "dark"] as const) {

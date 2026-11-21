@@ -6,12 +6,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, or_, select
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
 
-from app.core.config import Settings
 from app.core.security import hash_password
 from app.features.accounts.models import (
     Account,
@@ -32,7 +27,7 @@ from app.features.mail.models import (
     EmailTemplateName,
 )
 from app.features.maintenance.retention import run_retention_cleanup
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_PREFIX = "tanaw-retention-pg-"
 TEST_EMAIL_PATTERN = f"{TEST_PREFIX}%@example.com"
@@ -41,12 +36,8 @@ TEST_RATE_PATTERN = f"{TEST_PREFIX}%"
 
 @pytest_asyncio.fixture
 async def postgres_runtime() -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_rows,
         retention_cleanup_batch_size=10,
         activation_token_retention_days=30,
         password_reset_retention_days=30,
@@ -54,14 +45,8 @@ async def postgres_runtime() -> AsyncIterator[PostgresRuntime]:
         account_email_change_retention_days=180,
         email_outbox_retention_days=180,
         failed_email_outbox_retention_days=365,
-    )
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    await _clean_rows(runtime)
-    try:
+    ) as runtime:
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

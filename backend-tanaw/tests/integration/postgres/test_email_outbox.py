@@ -12,11 +12,9 @@ from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
-    create_async_engine,
 )
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -40,7 +38,7 @@ from app.features.mail.service import (
     REDACTED_EMAIL_BODY,
     enqueue_email,
 )
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-pg-%@example.com"
 TEST_SOURCE_PREFIX = "tanaw-pg-"
@@ -167,12 +165,8 @@ class BlockingBrevoClient(AcceptingBrevoClient):
 
 @pytest_asyncio.fixture
 async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_outbox_state,
         email_delivery_mode="brevo",
         brevo_api_key=SecretStr("xkeysib-postgres_outbox_test_key_123456789"),
         email_from_name="TANAW PostgreSQL Test",
@@ -180,23 +174,20 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
         email_secret_derivation_key=SecretStr("postgres-outbox-test-derivation-key-123456789"),
         email_outbox_batch_size=5,
         email_outbox_max_attempts=5,
-    )
-
-    await _clean_postgres_rows(sessions)
-    clear_dev_deliveries()
-    monkeypatch.setattr(mail_worker, "AsyncSessionLocal", sessions)
-    monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
-    monkeypatch.setattr(password_recovery, "get_settings", lambda: settings)
-    monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
-
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    try:
+    ) as runtime:
+        settings = runtime.settings
+        sessions = runtime.sessions
+        monkeypatch.setattr(mail_worker, "AsyncSessionLocal", sessions)
+        monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
+        monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
+        monkeypatch.setattr(password_recovery, "get_settings", lambda: settings)
+        monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
         yield runtime
-    finally:
-        await _clean_postgres_rows(sessions)
-        clear_dev_deliveries()
-        await engine.dispose()
+
+
+async def _clean_outbox_state(runtime: PostgresRuntime) -> None:
+    await _clean_postgres_rows(runtime.sessions)
+    clear_dev_deliveries()
 
 
 async def _clean_postgres_rows(sessions: async_sessionmaker[AsyncSession]) -> None:

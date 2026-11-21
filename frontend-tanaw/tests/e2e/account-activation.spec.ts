@@ -115,23 +115,24 @@ test("shows a specific missing-token state without calling the backend", async (
   expect(validationRequests).toBe(0);
 });
 
-for (const state of ["invalid", "expired", "invalidated", "used"] as const) {
-  test(`uses the generic unavailable state for a ${state} activation link`, async ({ page }) => {
-    await page.route("**/auth/account-activation/validate", async (route) => {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ detail: "Activation link is invalid or expired." }),
-      });
+// The backend gives invalid, expired, superseded, and used links one generic answer, and its own
+// tests cover each of those states. The portal only needs to render that answer once.
+test("shows the generic unavailable state when the backend rejects an activation link", async ({ page }) => {
+  await page.route("**/auth/account-activation/validate", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Activation link is invalid or expired." }),
     });
-
-    await page.goto(`/activate-account#token=${validToken}-${state}`);
-
-    await expect(page.getByRole("heading", { name: "Activation link unavailable" })).toBeVisible();
-    await expect(page.getByText("Activation link is invalid or expired.")).toBeVisible();
-    await expect(page).toHaveURL(/\/activate-account$/);
   });
-}
+
+  await page.goto(`/activate-account#token=${validToken}-rejected`);
+
+  await expect(page.getByRole("heading", { name: "Activation link unavailable" })).toBeVisible();
+  await expect(page.getByText("Activation link is invalid or expired.")).toBeVisible();
+  await expect(page).toHaveURL(/\/activate-account$/);
+  await expect(page.getByLabel("New Password", { exact: true })).toHaveCount(0);
+});
 
 test("shows password-policy feedback and safe backend activation errors", async ({ page }) => {
   let completionRequests = 0;
@@ -211,6 +212,9 @@ test("completes Enterprise activation with browser-to-desktop instructions", asy
 });
 
 test("activates and signs in an LGU account through a real backend and PostgreSQL", async ({ page, request }) => {
+  // The integration job sets TANAW_E2E_REQUIRE_REAL_BACKEND so a missing backend fails instead of skipping.
+  const required = process.env.TANAW_E2E_REQUIRE_REAL_BACKEND === "true";
+  if (required && process.env.TANAW_E2E_REAL_BACKEND !== "true") throw new Error("TANAW_E2E_REQUIRE_REAL_BACKEND=true but TANAW_E2E_REAL_BACKEND is not true.");
   test.skip(process.env.TANAW_E2E_REAL_BACKEND !== "true", "Set TANAW_E2E_REAL_BACKEND=true with a disposable migrated PostgreSQL backend.");
   const apiUrl = process.env.TANAW_E2E_API_URL;
   const itUsername = process.env.TANAW_E2E_IT_USERNAME;

@@ -3,11 +3,17 @@ import threading
 import time
 import unittest
 from itertools import count
-from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
 import numpy as np
+from support.cameras import (
+    FakeTracker,
+    flush_pending,
+    manager_with_store,
+    processing_session,
+    track_result,
+)
 
 from app.camera.camera_manager import CameraProcessingManager, ProcessingSession
 from app.camera.runtime_math import resolve_reid_mode
@@ -15,8 +21,6 @@ from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequ
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import TrackResult
-from app.identity import UniqueVisitorRegistry
-from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack
 
@@ -60,8 +64,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_stale_session_cannot_publish_raw_frame(self) -> None:
         manager = CameraProcessingManager()
-        current_session = _session(1)
-        stale_session = _session(2)
+        current_session = processing_session(1)
+        stale_session = processing_session(2)
 
         with manager._lock:
             manager._active_session = current_session
@@ -81,8 +85,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager()
             manager._session_store = SessionStore(directory)
-            current_session = _session(1)
-            stale_session = _session(2)
+            current_session = processing_session(1)
+            stale_session = processing_session(2)
 
             with manager._lock:
                 manager._config = current_session.config
@@ -102,14 +106,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_entry_event_gets_unique_visitor_decision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -125,7 +129,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertIsNone(entry_track.is_unique_entry)
             self.assertEqual(entry_track.reid_decision, "pending")
             self.assertEqual(len(manager._pending_entry_events), 1)
-            _flush_pending(manager, session)
+            flush_pending(manager, session)
             summary = manager.metrics_summary()
             self.assertEqual(summary["entries"], 1)
             self.assertEqual(summary["unique_count"], 1)
@@ -135,14 +139,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_entry_event_with_ready_embedding_commits_unique_decision_immediately(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -168,14 +172,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_pending_entry_resolves_when_embedding_arrives_before_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -206,14 +210,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_pending_entries_are_cleared_when_session_stops(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -234,11 +238,11 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
     @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
     def test_slow_entry_crossing_is_counted_through_detection_pipeline(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
                         [_track_with_center(1, 80)],
                         [_track_with_center(1, 90)],
@@ -258,17 +262,17 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             entry_track = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual(entry_track.direction, "entry")
-            _flush_pending(manager, session)
+            flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
     def test_configured_entry_to_exit_line_sequence_counts_exit(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             session = _custom_tripwire_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
                         [_track_with_center(1, 50)],
                         [_track_with_center(1, 90)],
@@ -298,16 +302,16 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         _clock: Any,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             session = _custom_tripwire_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (20, 20, 60, 180))],
-                        [_track(1, (30, 20, 90, 180))],
-                        [_track(1, (80, 20, 120, 180))],
-                        [_track(1, (120, 20, 160, 180))],
+                        [track_result(1, (20, 20, 60, 180))],
+                        [track_result(1, (30, 20, 90, 180))],
+                        [track_result(1, (80, 20, 120, 180))],
+                        [track_result(1, (120, 20, 160, 180))],
                     ],
                 ),
             )
@@ -335,11 +339,11 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
     @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
     def test_configured_exit_to_entry_line_sequence_counts_entry(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             session = _custom_tripwire_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
                         [_track_with_center(1, 150)],
                         [_track_with_center(1, 110)],
@@ -359,7 +363,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
             self.assertIsNone(pending_track.direction)
             self.assertEqual(entry_track.direction, "entry")
-            _flush_pending(manager, session)
+            flush_pending(manager, session)
             summary = manager.metrics_summary()
             self.assertEqual(summary["entries"], 1)
             self.assertEqual(summary["exits"], 0)
@@ -368,14 +372,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 120, 90, 198))],
-                        [_track(1, (96, 120, 136, 198))],
+                        [track_result(1, (50, 120, 90, 198))],
+                        [track_result(1, (96, 120, 136, 198))],
                     ],
                 ),
             )
@@ -389,19 +393,19 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
             self.assertTrue(entry_track.inside_roi)
             self.assertEqual(entry_track.direction, "entry")
-            _flush_pending(manager, session)
+            flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     def test_exit_event_skips_unique_visitor_decision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (96, 20, 136, 180))],
-                        [_track(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
                     ],
                 ),
             )
@@ -422,16 +426,18 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_track_outside_roi_is_not_counted_or_sampled_for_reid(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1, roi={"top": 0.1, "left": 0.65, "width": 0.25, "height": 0.8})
+            manager = manager_with_store(directory)
+            session = processing_session(
+                1, roi={"top": 0.1, "left": 0.65, "width": 0.25, "height": 0.8}
+            )
             reidentifier = _SpyReIdentifier()
             manager._reidentifier = cast(Any, reidentifier)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -456,14 +462,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_raw_id_reset_during_crossing_keeps_stable_id_and_counts_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(11, (40, 20, 80, 180))],
-                        [_track(29, (88, 20, 128, 180))],
+                        [track_result(11, (40, 20, 80, 180))],
+                        [track_result(29, (88, 20, 128, 180))],
                     ],
                 ),
             )
@@ -478,18 +484,18 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(first.track_id, second.track_id)
             self.assertNotEqual(first.source_track_id, second.source_track_id)
             self.assertEqual(second.direction, "entry")
-            _flush_pending(manager, session)
+            flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     def test_appearance_id_churn_during_crossing_preserves_motion_counting_state(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             session = _custom_tripwire_session(1, unique_counting_mode="entry_only")
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
                         [_track_with_center(21, 150)],
                         [_track_with_center(21, 110)],
@@ -520,9 +526,9 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_low_confidence_track_is_kept_internal_but_not_displayed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
-            fake_tracker = _FakeTracker([[_track(1, (50, 20, 90, 180), confidence=0.15)]])
+            manager = manager_with_store(directory)
+            session = processing_session(1)
+            fake_tracker = FakeTracker([[track_result(1, (50, 20, 90, 180), confidence=0.15)]])
             manager._tracker = cast(Any, fake_tracker)
             with manager._lock:
                 manager._config = session.config
@@ -537,14 +543,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_entry_only_unique_mode_records_degraded_unique_without_reid_queue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1, unique_counting_mode="entry_only")
+            manager = manager_with_store(directory)
+            session = processing_session(1, unique_counting_mode="entry_only")
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(1, (50, 20, 90, 180))],
-                        [_track(1, (96, 20, 136, 180))],
+                        [track_result(1, (50, 20, 90, 180))],
+                        [track_result(1, (96, 20, 136, 180))],
                     ],
                 ),
             )
@@ -565,7 +571,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_manual_occupancy_correction_updates_live_count_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             manager.bind_enterprise("enterprise-a", "Enterprise A")
 
             correction = manager.record_occupancy_correction(
@@ -582,12 +588,12 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_starting_state_is_visible_while_stream_validation_is_in_flight(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             manager.bind_enterprise("enterprise-a", "Enterprise A")
             validation_started = threading.Event()
             finish_validation = threading.Event()
 
-            def delayed_validation(_config: CameraStartRequest) -> tuple[bool, str]:
+            def delayed_validation(pipeline_config: CameraStartRequest) -> tuple[bool, str]:
                 validation_started.set()
                 finish_validation.wait(timeout=2)
                 return False, "Expected test stream failure."
@@ -627,14 +633,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_unconfirmed_detection_is_visible_only_above_configured_confidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _session(1)
+            manager = manager_with_store(directory)
+            session = processing_session(1)
             manager._tracker = cast(
                 Any,
-                _FakeTracker(
+                FakeTracker(
                     [
-                        [_track(-1, (50, 20, 90, 180), confidence=0.20)],
-                        [_track(-1, (50, 20, 90, 180), confidence=0.60)],
+                        [track_result(-1, (50, 20, 90, 180), confidence=0.20)],
+                        [track_result(-1, (50, 20, 90, 180), confidence=0.60)],
                     ],
                 ),
             )
@@ -653,7 +659,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
     def test_counting_geometry_hot_update_preserves_the_active_camera_session(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
+            manager = manager_with_store(directory)
             session = _custom_tripwire_session(17, camera_id=1)
             counter = _counter_for_config(session.config)
             counter.counts.entry = 9
@@ -718,17 +724,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(manager.counts()["entry"], 9)
 
 
-def _session(session_id: int, **config_values: Any) -> ProcessingSession:
-    return ProcessingSession(
-        session_id=session_id,
-        config=CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", **config_values),
-        stop_event=threading.Event(),
-        event_scope=f"test-{session_id}",
-    )
-
-
 def _custom_tripwire_session(session_id: int, **config_values: Any) -> ProcessingSession:
-    return _session(
+    return processing_session(
         session_id,
         entry_line={"start": {"x": 0.35, "y": 0.0}, "end": {"x": 0.35, "y": 1.0}},
         exit_line={"start": {"x": 0.65, "y": 0.0}, "end": {"x": 0.65, "y": 1.0}},
@@ -757,59 +754,14 @@ def _counter_for_config(config: CameraStartRequest) -> TripwireCounter:
     return counter
 
 
-def _flush_pending(manager: CameraProcessingManager, session: ProcessingSession) -> None:
-    manager._flush_pending_entry_events(session, time.monotonic() + 1.0, force=True)
-
-
-def _manager_with_store(directory: str) -> CameraProcessingManager:
-    manager = CameraProcessingManager(directory)
-    manager._session_store = SessionStore(str(Path(directory)))
-    manager._visitor_registry = UniqueVisitorRegistry(manager._session_store, model_name="test")
-    manager._reidentifier = PersonReIdentifier(model_path=str(Path(directory) / "missing.onnx"))
-    # Keep these deterministic counting tests independent of installed real ReID assets.
-    manager._reid_worker.close()
-    manager._quality_reid_worker.close()
-    manager._quality_reidentifier = PersonReIdentifier(
-        model_path=str(Path(directory) / "missing-quality.onnx")
-    )
-    manager._reid_worker = AsyncReIdWorker(manager._reidentifier)
-    manager._quality_reid_worker = AsyncReIdWorker(manager._quality_reidentifier)
-    manager._appearance_buffer = TrackAppearanceBuffer()
-    manager._counter = TripwireCounter(tripwire_position=0.5)
-    manager._counter.reset()
-    return manager
-
-
-def _track(track_id: int, bbox: tuple[int, int, int, int], confidence: float = 0.9) -> TrackResult:
-    x1, y1, x2, y2 = bbox
-    center = Centroid((x1 + x2) / 2, (y1 + y2) / 2)
-    return TrackResult(
-        track_id=track_id,
-        bbox=bbox,
-        confidence=confidence,
-        centroid=center,
-        counting_point=center,
-    )
-
-
 def _track_with_center(track_id: int, center_x: int, confidence: float = 0.9) -> TrackResult:
-    return _track(track_id, (center_x - 20, 20, center_x + 20, 180), confidence)
+    return track_result(track_id, (center_x - 20, 20, center_x + 20, 180), confidence)
 
 
 def _embedding(values: list[float]) -> np.ndarray:
     embedding = np.array(values, dtype=np.float32)
     norm = float(np.linalg.norm(embedding))
     return embedding / max(norm, 1e-6)
-
-
-class _FakeTracker:
-    def __init__(self, responses: list[list[TrackResult]]) -> None:
-        self._responses = responses
-        self.seen_confidences: list[float] = []
-
-    def track_people(self, frame: np.ndarray, confidence: float) -> list[TrackResult]:
-        self.seen_confidences.append(confidence)
-        return self._responses.pop(0)
 
 
 class _ChurningAppearanceResolver:

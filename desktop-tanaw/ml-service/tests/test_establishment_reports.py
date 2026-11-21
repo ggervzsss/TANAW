@@ -1,65 +1,17 @@
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
 import pytest
+from support.reports import OBSERVED, SUBMITTED, observed, request
 
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.storage.local_data_store import LocalDataStore
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
 from app.storage.repositories.establishment_repository import snapshot_digest
 from app.storage.repositories.occupancy_event_repository import OccupancyEventRepository
-
-OBSERVED = datetime(2026, 10, 10, 2, tzinfo=UTC)
-SUBMITTED = datetime(2026, 11, 2, 2, tzinfo=UTC)
-
-
-def observed(
-    service: EstablishmentRegistry,
-    key: str = "first",
-    *,
-    internal: bool = False,
-    area_role: str = "internal_observation",
-    vector: np.ndarray | None = None,
-) -> None:
-    service.observe(
-        observation_id=key,
-        camera_id=1,
-        track_key=key,
-        analysis_mode="open_space" if internal else "entrance_exit",
-        kind="area_visit" if internal else "entry",
-        qualified=True,
-        first_at=OBSERVED,
-        observed_at=OBSERVED,
-        arrival_observed=internal,
-        embedding=vector if vector is not None else np.array([1, 0, 0], dtype=np.float32),
-    )
-
-
-def request(repo, count=1, **changes):
-    summary = repo.period_summary("October 2026")
-    return {
-        "report_id": "REP-ONE",
-        "period": "October 2026",
-        "now": SUBMITTED,
-        "request_id": str(uuid4()),
-        "expected_snapshot_version": summary["counting"]["snapshot_version"],
-        "metrics": summary["metrics"],
-        "payload": {
-            "status": "Submitted",
-            "demo": {
-                "thisProvMale": str(count),
-                "thisProvFemale": "0",
-                "otherProvMale": "0",
-                "otherProvFemale": "0",
-                "foreignMale": "0",
-                "foreignFemale": "0",
-            },
-        },
-        **changes,
-    }
 
 
 @pytest.mark.parametrize("area_role", ["internal_observation", "external_boundary"])

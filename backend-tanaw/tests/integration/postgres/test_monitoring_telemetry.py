@@ -5,9 +5,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.config import Settings
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -21,7 +19,7 @@ from app.features.monitoring.schemas import DesktopTelemetryIngest
 from app.features.monitoring.telemetry import ingest_telemetry, list_latest_telemetry
 from app.features.monitoring.visitor_insights import get_visitor_insights
 from app.features.realtime.models import RealtimeOutbox
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_PREFIX = "tanaw-f08-pg-"
 TEST_EMAIL_PATTERN = f"{TEST_PREFIX}%@example.com"
@@ -29,20 +27,10 @@ TEST_EMAIL_PATTERN = f"{TEST_PREFIX}%@example.com"
 
 @pytest_asyncio.fixture
 async def postgres_runtime() -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    runtime = PostgresRuntime(
-        engine=engine,
-        sessions=sessions,
-        settings=Settings(environment="development", database_url=database_url),
-    )
-    await _clean_rows(runtime)
-    try:
+    async with open_postgres_runtime(
+        _clean_rows,
+    ) as runtime:
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

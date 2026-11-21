@@ -47,3 +47,13 @@ ml-service/models/*
 !ml-service/models/sex_head_quality.npz
 !ml-service/models/sex_head_quality.json
 ml-service/build/
+
+# Design review screenshots from npm run capture:design
+design-captures
+
+# ML-service coverage output (uv run pytest --cov)
+ml-service/.coverage
+ml-service/coverage.json
+ml-service/htmlcov/
+# Renderer coverage output (npm run test:coverage)
+coverage/

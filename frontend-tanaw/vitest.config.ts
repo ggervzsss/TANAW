@@ -15,5 +15,18 @@ export default defineConfig({
   test: {
     include: ["tests/unit/**/*.test.{ts,tsx}"],
     environment: "node",
+    // `npm run test:coverage`: branch coverage of the critical portal workflows. The thresholds
+    // are the measured baseline; see docs/testing/coverage-and-replays.md.
+    coverage: {
+      provider: "v8",
+      include: ["src/features/reports/{model,utils,hooks}/**/*.ts", "src/shared/realtime/**/*.ts", "src/app/store/authStore.ts"],
+      reporter: ["text-summary", "json-summary", "html"],
+      reportsDirectory: "coverage",
+      thresholds: {
+        "src/features/reports/**": { branches: 54.5 },
+        "src/shared/realtime/**": { branches: 64.5 },
+        "src/app/store/**": { branches: 25 },
+      },
+    },
   },
 });

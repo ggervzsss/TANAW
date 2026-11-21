@@ -30,3 +30,9 @@ test-results
 
 image.png
 image2.png
+
+# Design review screenshots from npm run capture:design
+design-captures
+
+# Coverage output (npm run test:coverage)
+coverage/

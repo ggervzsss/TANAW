@@ -9,12 +9,7 @@ import pytest_asyncio
 from fastapi import HTTPException
 from pydantic import SecretStr
 from sqlalchemy import delete, or_, select
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
 
-from app.core.config import Settings
 from app.core.security import hash_password, verify_password
 from app.features.accounts.models import (
     Account,
@@ -34,7 +29,7 @@ from app.features.mail import service as mail_service
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import render_outbox_email
 from app.features.notifications.models import UserNotification
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-activation-pg-%@example.com"
 TEST_SECRET = "tanaw-activation-postgres-derivation-secret-123456789"
@@ -42,12 +37,8 @@ TEST_SECRET = "tanaw-activation-postgres-derivation-secret-123456789"
 
 @pytest_asyncio.fixture
 async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_rows,
         jwt_secret_key="tanaw-activation-postgres-jwt-secret-123456789",
         email_delivery_mode="log",
         email_from_name="TANAW Activation PostgreSQL Test",
@@ -55,18 +46,12 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
         email_secret_derivation_key=SecretStr(TEST_SECRET),
         frontend_public_url="https://tanaw.example",
         account_activation_ttl_hours=24,
-    )
-    monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
-    monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
-    monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
-
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    await _clean_rows(runtime)
-    try:
+    ) as runtime:
+        settings = runtime.settings
+        monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
+        monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
+        monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

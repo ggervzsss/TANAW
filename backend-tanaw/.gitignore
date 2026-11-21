@@ -11,3 +11,8 @@ wheels/
 .env
 .env.*
 !.env.example
+
+# Coverage output (uv run pytest --cov)
+.coverage
+coverage.json
+htmlcov/

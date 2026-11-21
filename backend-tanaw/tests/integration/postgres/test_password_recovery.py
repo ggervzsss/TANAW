@@ -11,11 +11,8 @@ from pydantic import SecretStr
 from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
 )
 
-from app.core.config import Settings
 from app.core.security import (
     create_access_token,
     decode_access_token,
@@ -52,7 +49,7 @@ from app.features.auth.schemas import (
 from app.features.auth.secret_values import derive_password_reset_code
 from app.features.mail import service as mail_service
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-recovery-pg-%@example.com"
 TEST_RATE_BUCKET_PREFIX = "tanaw-recovery-pg:"
@@ -69,12 +66,8 @@ class CreatedAccount:
 
 @pytest_asyncio.fixture
 async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_postgres_rows,
         jwt_secret_key="tanaw-recovery-postgres-jwt-secret-123456789",
         email_delivery_mode="log",
         email_from_name="TANAW Recovery PostgreSQL Test",
@@ -86,44 +79,39 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
         password_reset_global_limit=1_000,
         password_reset_resend_cooldown_seconds=60,
         password_reset_response_floor_seconds=0,
-    )
+    ) as runtime:
+        settings = runtime.settings
+        original_increment_bucket = recovery_rate_limit._increment_bucket
 
-    original_increment_bucket = recovery_rate_limit._increment_bucket
+        async def increment_isolated_test_bucket(
+            db: AsyncSession,
+            *,
+            scope: str,
+            bucket_key: str,
+            now: datetime,
+            window: timedelta,
+            counter_cap: int,
+            limit: int,
+        ) -> tuple[int, datetime, bool]:
+            return await original_increment_bucket(
+                db,
+                scope=scope,
+                bucket_key=f"{TEST_RATE_BUCKET_PREFIX}{bucket_key}",
+                now=now,
+                window=window,
+                counter_cap=counter_cap,
+                limit=limit,
+            )
 
-    async def increment_isolated_test_bucket(
-        db: AsyncSession,
-        *,
-        scope: str,
-        bucket_key: str,
-        now: datetime,
-        window: timedelta,
-        counter_cap: int,
-        limit: int,
-    ) -> tuple[int, datetime, bool]:
-        return await original_increment_bucket(
-            db,
-            scope=scope,
-            bucket_key=f"{TEST_RATE_BUCKET_PREFIX}{bucket_key}",
-            now=now,
-            window=window,
-            counter_cap=counter_cap,
-            limit=limit,
+        monkeypatch.setattr(
+            recovery_rate_limit, "_increment_bucket", increment_isolated_test_bucket
         )
+        monkeypatch.setattr(password_recovery, "get_settings", lambda: settings)
+        monkeypatch.setattr(password_router, "get_settings", lambda: settings)
+        monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
 
-    monkeypatch.setattr(recovery_rate_limit, "_increment_bucket", increment_isolated_test_bucket)
-    monkeypatch.setattr(password_recovery, "get_settings", lambda: settings)
-    monkeypatch.setattr(password_router, "get_settings", lambda: settings)
-    monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
-
-    monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
-
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    await _clean_postgres_rows(runtime)
-    try:
+        monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
         yield runtime
-    finally:
-        await _clean_postgres_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_postgres_rows(runtime: PostgresRuntime) -> None:

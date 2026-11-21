@@ -13,15 +13,16 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
-from test_camera_manager_session import (
-    _FakeTracker,
-    _flush_pending,
-    _manager_with_store,
-    _session,
-    _track,
+from support.cameras import (
+    FakePipeline,
+    FakeTracker,
+    flush_pending,
+    manager_with_store,
+    open_space_configuration,
+    pipeline_config,
+    processing_session,
+    track_result,
 )
-from test_open_space_integration import configuration
-from test_pipeline_manager import FakePipeline, _config
 
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.capture_worker import CaptureWorker
@@ -38,16 +39,16 @@ from app.storage.session_store import SessionStore
 def test_multiple_deferred_entries_are_durable_and_identity_does_not_recount(
     tmp_path: Path,
 ) -> None:
-    manager = _manager_with_store(str(tmp_path))
-    session = _session(1, camera_id=1)
+    manager = manager_with_store(str(tmp_path))
+    session = processing_session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
     manager._session_store.enterprise_occupancy()
     manager._tracker = cast(
         Any,
-        _FakeTracker(
+        FakeTracker(
             [
-                [_track(1, (50, 20, 90, 80)), _track(2, (50, 110, 90, 180))],
-                [_track(1, (96, 20, 136, 80)), _track(2, (96, 110, 136, 180))],
+                [track_result(1, (50, 20, 90, 80)), track_result(2, (50, 110, 90, 180))],
+                [track_result(1, (96, 20, 136, 80)), track_result(2, (96, 110, 136, 180))],
             ]
         ),
     )
@@ -61,8 +62,8 @@ def test_multiple_deferred_entries_are_durable_and_identity_does_not_recount(
         assert summary["pending_unique_entries"] == 2
         assert summary["unique_count"] == 0
         assert summary["current_occupancy"] == 2
-        _flush_pending(manager, session)
-        _flush_pending(manager, session)
+        flush_pending(manager, session)
+        flush_pending(manager, session)
         summary = manager.metrics_summary()
         assert summary["entries"] == summary["unique_count"] == 2
         assert summary["pending_unique_entries"] == 0
@@ -72,18 +73,18 @@ def test_multiple_deferred_entries_are_durable_and_identity_does_not_recount(
 
 
 def test_exit_cannot_overtake_an_entry_waiting_for_reid(tmp_path: Path) -> None:
-    manager = _manager_with_store(str(tmp_path))
+    manager = manager_with_store(str(tmp_path))
     manager._session_store = SessionStore(str(tmp_path), "review", camera_id=1)
     manager._session_store.enterprise_occupancy()
-    session = _session(1, camera_id=1)
+    session = processing_session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
     manager._tracker = cast(
         Any,
-        _FakeTracker(
+        FakeTracker(
             [
-                [_track(1, (70, 20, 110, 80))],
-                [_track(1, (92, 20, 132, 80))],
-                [_track(1, (70, 20, 110, 80))],
+                [track_result(1, (70, 20, 110, 80))],
+                [track_result(1, (92, 20, 132, 80))],
+                [track_result(1, (70, 20, 110, 80))],
             ]
         ),
     )
@@ -96,7 +97,7 @@ def test_exit_cannot_overtake_an_entry_waiting_for_reid(tmp_path: Path) -> None:
                 clock.return_value = 1000 + index * 0.1
                 manager._detect_and_count(session, np.zeros((200, 200, 3), dtype=np.uint8), 0.35)
         assert manager._session_store.enterprise_occupancy() == 0
-        _flush_pending(manager, session)
+        flush_pending(manager, session)
         assert manager._session_store.enterprise_occupancy() == 0
         assert manager.metrics_summary()["entries"] == manager.metrics_summary()["exits"] == 1
     finally:
@@ -224,13 +225,13 @@ def test_start_is_rejected_during_enterprise_switch(tmp_path: Path) -> None:
 
     registry = CameraPipelineRegistry(str(tmp_path), pipeline_factory=BlockingClose)
     registry.bind_enterprise("A")
-    registry.start(_config(1))
+    registry.start(pipeline_config(1))
     with ThreadPoolExecutor(max_workers=1) as pool:
         switching = pool.submit(registry.bind_enterprise, "B")
         try:
             assert closing.wait(3)
             with pytest.raises(ValueError, match="context is changing"):
-                registry.request_start(_config(2))
+                registry.request_start(pipeline_config(2))
         finally:
             release.set()
         switching.result(timeout=3)
@@ -242,7 +243,7 @@ def test_queued_start_cannot_survive_context_generation_change(tmp_path: Path) -
     registry = CameraPipelineRegistry(str(tmp_path), pipeline_factory=FakePipeline)
     registry.bind_enterprise("A")
     with patch("app.camera.pipeline_manager.threading.Thread") as thread:
-        registry.request_start(_config(1))
+        registry.request_start(pipeline_config(1))
         pending_args = thread.call_args.kwargs["args"]
     registry.bind_enterprise("B")
     registry._run_requested_start(*pending_args)
@@ -260,8 +261,8 @@ def test_cleanup_attempts_every_camera_and_can_retry_failure(tmp_path: Path) -> 
 
     registry = CameraPipelineRegistry(str(tmp_path), pipeline_factory=FailsOnce)
     registry.bind_enterprise("review")
-    registry.start(_config(1))
-    registry.start(_config(2))
+    registry.start(pipeline_config(1))
+    registry.start(pipeline_config(2))
     second = registry.require_pipeline(2)
     with patch.object(registry._reporting, "close") as reporting_close:
         with pytest.raises(ExceptionGroup):
@@ -332,7 +333,7 @@ def test_rtsp_open_times_out_when_local_server_never_answers() -> None:
 
 
 def test_capture_open_exception_uses_reconnect_policy() -> None:
-    session = _session(1, camera_id=1)
+    session = processing_session(1, camera_id=1)
     notifications = []
 
     def reconnect(*args: object) -> None:
@@ -415,17 +416,17 @@ def test_report_failure_rolls_back_events_and_pending_identity(tmp_path: Path) -
 
 
 def test_delayed_identity_cannot_reorder_occupancy_across_cameras(tmp_path: Path) -> None:
-    manager = _manager_with_store(str(tmp_path))
+    manager = manager_with_store(str(tmp_path))
     manager._session_store = SessionStore(str(tmp_path), "review", camera_id=1)
     manager._session_store.enterprise_occupancy()
-    session = _session(1, camera_id=1)
+    session = processing_session(1, camera_id=1)
     manager._config, manager._active_session = session.config, session
     manager._tracker = cast(
         Any,
-        _FakeTracker(
+        FakeTracker(
             [
-                [_track(1, (70, 20, 110, 80))],
-                [_track(1, (92, 20, 132, 80))],
+                [track_result(1, (70, 20, 110, 80))],
+                [track_result(1, (92, 20, 132, 80))],
             ]
         ),
     )
@@ -436,7 +437,7 @@ def test_delayed_identity_cannot_reorder_occupancy_across_cameras(tmp_path: Path
         other_camera = SessionStore(str(tmp_path), "review", camera_id=2)
         other_camera.append_event({**_event("exit", 2), "direction": "exit"})
         assert other_camera.enterprise_occupancy() == 0
-        _flush_pending(manager, session)
+        flush_pending(manager, session)
         assert other_camera.enterprise_occupancy() == 0
     finally:
         manager.close()
@@ -447,7 +448,7 @@ def test_live_snapshot_never_uses_full_history_summaries(tmp_path: Path) -> None
     registry.bind_enterprise("review")
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
     manager.bind_enterprise("review", restore_session=False)
-    manager._config = _config(1)
+    manager._config = pipeline_config(1)
     registry._pipelines[1] = manager
     try:
         with (
@@ -472,7 +473,7 @@ def test_live_snapshot_never_uses_full_history_summaries(tmp_path: Path) -> None
 def test_area_status_read_does_not_wait_for_counting_lock(tmp_path: Path) -> None:
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
     manager.bind_enterprise("review", restore_session=False)
-    manager._config = configuration()
+    manager._config = open_space_configuration()
     manager._begin_area(manager._config)
     acquired, release = threading.Event(), threading.Event()
 
@@ -497,7 +498,7 @@ def test_area_status_read_does_not_wait_for_counting_lock(tmp_path: Path) -> Non
 
 
 def test_capture_reconnect_uses_elapsed_time_not_ninety_failed_reads() -> None:
-    session = _session(1, camera_id=1)
+    session = processing_session(1, camera_id=1)
     capture = Mock()
     capture.read.return_value = (False, None)
     worker = CaptureWorker(

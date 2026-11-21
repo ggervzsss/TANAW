@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_establishment_reports import observed, request
+from support.reports import observed, request
 
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.storage.repositories.establishment_report_repository import (

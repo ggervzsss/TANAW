@@ -47,6 +47,7 @@ dev = [
     "pyright>=1.1.410",
     "ruff>=0.15.18",
     "httpx2>=2.9.1",
+    "pytest-cov>=7.1.0",
 ]
 
 packaging = [
@@ -97,3 +98,19 @@ module = [
     "ultralytics.*",
 ]
 ignore_missing_imports = true
+
+# Branch coverage of the critical workflows: counting, visitor identity and saved reports.
+# Measure with `uv run pytest --cov`. See docs/testing/coverage-and-replays.md.
+[tool.coverage.run]
+branch = true
+source = [
+    "app/counting",
+    "app/identity",
+    # Directories only; coverage-baseline.json picks the report and occupancy repositories.
+    "app/storage/repositories",
+]
+
+[tool.coverage.report]
+precision = 1
+skip_empty = true
+

@@ -11,6 +11,8 @@ export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: developmentDevLog ? "dev-log.spec.ts" : undefined,
   fullyParallel: false,
+  // Design review screenshots run only through `npm run capture:design`, which sets TANAW_DESIGN_CAPTURE.
+  grepInvert: process.env.TANAW_DESIGN_CAPTURE ? undefined : /@design-capture/,
   timeout: 30_000,
   expect: { timeout: 8_000 },
   reporter: [["list"]],

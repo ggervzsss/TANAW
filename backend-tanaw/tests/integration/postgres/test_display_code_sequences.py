@@ -7,9 +7,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, or_, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.config import Settings
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -22,7 +20,7 @@ from app.features.realtime.models import RealtimeOutbox
 from app.features.support.models import SupportTicket
 from app.features.support.schemas import SupportTicketCreate
 from app.features.support.service import create_support_ticket
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-display-code-pg-%@example.com"
 TEST_SUBJECT_PREFIX = "Display code sequence test"
@@ -32,24 +30,11 @@ CONCURRENT_CREATIONS = 12
 
 @pytest_asyncio.fixture
 async def postgres_runtime() -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    runtime = PostgresRuntime(
-        engine=engine,
-        sessions=sessions,
-        settings=Settings(
-            environment="development",
-            database_url=database_url,
-            jwt_secret_key="tanaw-display-code-postgres-jwt-secret-123456789",
-        ),
-    )
-    await _clean_rows(runtime)
-    try:
+    async with open_postgres_runtime(
+        _clean_rows,
+        jwt_secret_key="tanaw-display-code-postgres-jwt-secret-123456789",
+    ) as runtime:
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

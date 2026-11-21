@@ -7,9 +7,8 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.features.accounts.models import Account, AccountRole, AccountStatus
@@ -18,7 +17,7 @@ from app.features.auth.service import LoginLockoutPolicy
 from app.features.monitoring.models import OperationalAlert
 from app.features.notifications.models import UserNotification
 from app.features.realtime.models import RealtimeOutbox
-from tests.support.postgres import PostgresRuntime, postgres_test_database_url
+from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-login-lockout-pg-%@example.com"
 TEST_ACCOUNT_ID_PREFIX = "login-lockout-pg-"
@@ -26,38 +25,27 @@ TEST_ACCOUNT_ID_PREFIX = "login-lockout-pg-"
 
 @pytest_asyncio.fixture
 async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[PostgresRuntime]:
-    database_url = postgres_test_database_url()
-    engine = create_async_engine(database_url, pool_pre_ping=True)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    settings = Settings(
-        environment="development",
-        database_url=database_url,
+    async with open_postgres_runtime(
+        _clean_rows,
         jwt_secret_key="tanaw-login-lockout-postgres-jwt-secret-123456789",
-    )
+    ) as runtime:
 
-    async def default_lockout_policy(_: AsyncSession) -> LoginLockoutPolicy:
-        return LoginLockoutPolicy()
+        async def default_lockout_policy(_: AsyncSession) -> LoginLockoutPolicy:
+            return LoginLockoutPolicy()
 
-    async def lockout_notifications_enabled(
-        _: AsyncSession, __: str, *, default: bool = True
-    ) -> bool:
-        del default
-        return True
+        async def lockout_notifications_enabled(
+            _: AsyncSession, __: str, *, default: bool = True
+        ) -> bool:
+            del default
+            return True
 
-    monkeypatch.setattr(session_router, "get_login_lockout_policy", default_lockout_policy)
-    monkeypatch.setattr(
-        session_router,
-        "system_setting_enabled",
-        lockout_notifications_enabled,
-    )
-
-    runtime = PostgresRuntime(engine=engine, sessions=sessions, settings=settings)
-    await _clean_rows(runtime)
-    try:
+        monkeypatch.setattr(session_router, "get_login_lockout_policy", default_lockout_policy)
+        monkeypatch.setattr(
+            session_router,
+            "system_setting_enabled",
+            lockout_notifications_enabled,
+        )
         yield runtime
-    finally:
-        await _clean_rows(runtime)
-        await engine.dispose()
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:

@@ -334,6 +334,10 @@ uv run --directory ml-service python -m scripts.evaluate_tracking --help
 uv run --directory ml-service python -m scripts.replay_open_space --help
 ```
 
+docs/testing/coverage-and-replays.md describes the label formats and a replay
+regression check. It also covers the branch-coverage baselines and the
+disposable-stack report scenario (`node scripts/e2e-stack/run.mjs`).
+
 ## Check changes before committing
 
 From frontend-tanaw or desktop-tanaw, install dependencies with npm ci, then:

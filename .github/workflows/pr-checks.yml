@@ -1,0 +1,131 @@
+name: PR Checks
+
+# The fast checks from AGENTS.md for every area, in parallel. Integration and browser work runs in
+# integration.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend-tanaw
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - run: uv run pyright
+      # PostgreSQL tests skip here; integration.yml runs them, and the backend branch-coverage gate,
+      # against a real database.
+      - run: uv run pytest
+
+  ml-service:
+    name: Desktop ML service
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: desktop-tanaw/ml-service
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - run: uv run pyright
+      - name: Tests with the branch-coverage gate
+        run: |
+          uv run pytest --cov --cov-report=json:coverage.json
+          python3 ../../scripts/coverage/check_branch_baseline.py coverage.json coverage-baseline.json
+
+  frontend:
+    name: Web portal
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-tanaw
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend-tanaw/package-lock.json
+      - run: npm ci
+      - run: npm run type
+      - run: npm run lint
+      # Unit tests (including the design-system drift test) with the branch-coverage gate.
+      - run: npm run test:coverage
+
+  desktop:
+    name: Desktop renderer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop-tanaw
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop-tanaw/package-lock.json
+      - run: npm ci
+      - run: npm run type
+      - run: npm run lint
+      # Unit tests with the branch-coverage gate.
+      - run: npm run test:coverage
+
+  design-system:
+    name: Design system
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: design-system/package-lock.json
+      - run: npm ci
+        working-directory: design-system
+      - name: Generated copies match design-system/
+        run: node design-system/scripts/sync.mjs --check
+      - run: npm run type
+        working-directory: design-system

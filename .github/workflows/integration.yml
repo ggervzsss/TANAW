@@ -1,0 +1,242 @@
+name: Integration
+
+# Real-database and browser verification, separate from the fast checks in pr-checks.yml:
+#   postgres       PostgreSQL tests and the real-backend activation smoke test
+#   browser-e2e    the mocked browser suites of both apps against explicitly built previews
+#   stack          the disposable-stack report scenario (scripts/e2e-stack/run.mjs)
+# Each job fails, rather than skips, when a prerequisite is missing, and uploads its reports,
+# traces and service logs on failure.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres:
+    name: PostgreSQL and real-backend activation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          # A throwaway service container that exists only for this job.
+          POSTGRES_USER: tanaw
+          POSTGRES_PASSWORD: tanaw-ci
+          POSTGRES_DB: tanaw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tanaw -d tanaw_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TANAW_TEST_DATABASE_URL: postgresql+asyncpg://tanaw:tanaw-ci@127.0.0.1:5432/tanaw_test
+      E2E_DATABASE_URL: postgresql+asyncpg://tanaw:tanaw-ci@127.0.0.1:5432/tanaw_e2e
+      TANAW_REQUIRE_POSTGRES: "true"
+      API_URL: http://127.0.0.1:8011
+      WEB_URL: http://127.0.0.1:5176
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend-tanaw/package-lock.json
+
+      - name: Check prerequisites
+        run: |
+          docker exec "${{ job.services.postgres.id }}" pg_isready -U tanaw -d tanaw_test \
+            || { echo "::error::The PostgreSQL service is not ready."; exit 1; }
+          docker exec "${{ job.services.postgres.id }}" createdb -U tanaw tanaw_e2e \
+            || { echo "::error::Could not create the tanaw_e2e database."; exit 1; }
+          password="Ci-$(openssl rand -hex 16)-9a"
+          echo "::add-mask::$password"
+          echo "E2E_IT_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "E2E_JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Install backend dependencies
+        working-directory: backend-tanaw
+        run: uv sync --locked
+      - name: Apply the current schema
+        working-directory: backend-tanaw
+        run: |
+          DATABASE_URL="$TANAW_TEST_DATABASE_URL" uv run alembic upgrade head
+          DATABASE_URL="$E2E_DATABASE_URL" uv run alembic upgrade head
+      - name: Backend tests on PostgreSQL with the branch-coverage gate
+        working-directory: backend-tanaw
+        run: |
+          uv run pytest -ra --junitxml=test-results/backend.xml --cov --cov-report=json:coverage.json --cov-report=html:test-results/coverage
+          python3 ../scripts/coverage/check_branch_baseline.py coverage.json coverage-baseline.json
+
+      - name: Start the backend
+        working-directory: backend-tanaw
+        env:
+          TANAW_ENV: development
+          DATABASE_URL: ${{ env.E2E_DATABASE_URL }}
+          CORS_ORIGINS: ${{ env.WEB_URL }}
+          FRONTEND_PUBLIC_URL: ${{ env.WEB_URL }}
+          EMAIL_DELIVERY_MODE: log
+          BOOTSTRAP_IT_USERNAME: ci-it@example.test
+        run: |
+          JWT_SECRET_KEY="$E2E_JWT_SECRET" BOOTSTRAP_IT_PASSWORD="$E2E_IT_PASSWORD" \
+            nohup uv run uvicorn main:app --host 127.0.0.1 --port 8011 > backend.log 2>&1 &
+          for attempt in $(seq 60); do curl -sf "$API_URL/health" > /dev/null && exit 0; sleep 1; done
+          echo "::error::The backend did not start; see the backend log artifact."
+          exit 1
+
+      - name: Build and start the portal preview
+        working-directory: frontend-tanaw
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+          VITE_CARTO_BASEMAP_API_KEY: carto-e2e-test-key
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          nohup npm run preview -- --host 127.0.0.1 --port 5176 --strictPort > preview.log 2>&1 &
+          for attempt in $(seq 60); do curl -sf "$WEB_URL" > /dev/null && exit 0; sleep 1; done
+          echo "::error::The portal preview did not start."
+          exit 1
+      - name: Real-backend activation smoke test
+        working-directory: frontend-tanaw
+        env:
+          TANAW_E2E_REAL_BACKEND: "true"
+          TANAW_E2E_REQUIRE_REAL_BACKEND: "true"
+          TANAW_E2E_API_URL: ${{ env.API_URL }}
+          TANAW_E2E_WEB_URL: ${{ env.WEB_URL }}
+          TANAW_E2E_IT_USERNAME: ci-it@example.test
+        run: TANAW_E2E_IT_PASSWORD="$E2E_IT_PASSWORD" npx playwright test tests/e2e/account-activation.spec.ts --grep "real backend" --reporter=list,html
+
+      - name: Keep failure reports, traces and logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: postgres-integration-failure
+          retention-days: 14
+          path: |
+            backend-tanaw/test-results/
+            backend-tanaw/backend.log
+            frontend-tanaw/playwright-report/
+            frontend-tanaw/test-results/
+            frontend-tanaw/preview.log
+
+  browser-e2e:
+    name: Browser E2E (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: frontend-tanaw
+            port: 5176
+            build: VITE_API_BASE_URL=http://127.0.0.1:8011 VITE_CARTO_BASEMAP_API_KEY=carto-e2e-test-key npm run build
+            preview: npm run preview -- --host 127.0.0.1 --port 5176 --strictPort
+          - app: desktop-tanaw
+            port: 5175
+            build: TANAW_RENDERER_ONLY=true VITE_API_BASE_URL=http://127.0.0.1:8012 npm run build
+            preview: TANAW_RENDERER_ONLY=true npx vite preview --host 127.0.0.1 --port 5175 --strictPort
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build and start the preview
+        run: |
+          ${{ matrix.build }}
+          nohup ${{ matrix.preview }} > preview.log 2>&1 &
+          for attempt in $(seq 60); do curl -sf "http://127.0.0.1:${{ matrix.port }}" > /dev/null && exit 0; sleep 1; done
+          echo "::error::The ${{ matrix.app }} preview did not start."
+          exit 1
+      # The Playwright configs reuse the running preview instead of building again.
+      - run: npx playwright test --reporter=list,html
+      - name: Keep failure reports and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-e2e-${{ matrix.app }}-failure
+          retention-days: 14
+          path: |
+            ${{ matrix.app }}/playwright-report/
+            ${{ matrix.app }}/test-results/
+            ${{ matrix.app }}/preview.log
+
+  stack:
+    name: Disposable-stack report scenario
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tanaw
+          POSTGRES_PASSWORD: tanaw-ci
+          POSTGRES_DB: tanaw_stack
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tanaw -d tanaw_stack"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TANAW_STACK_DATABASE_URL: postgresql+asyncpg://tanaw:tanaw-ci@127.0.0.1:5432/tanaw_stack
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            desktop-tanaw/package-lock.json
+            frontend-tanaw/package-lock.json
+      - name: Install dependencies
+        run: |
+          (cd desktop-tanaw && npm ci && npx playwright install --with-deps chromium)
+          (cd frontend-tanaw && npm ci)
+          (cd backend-tanaw && uv sync --locked)
+          (cd desktop-tanaw/ml-service && uv sync --locked)
+      - name: Run the scenario
+        run: node scripts/e2e-stack/run.mjs
+      - name: Keep failure reports, traces and service logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stack-scenario-failure
+          retention-days: 14
+          path: |
+            desktop-tanaw/playwright-report/stack/
+            desktop-tanaw/test-results/stack/
