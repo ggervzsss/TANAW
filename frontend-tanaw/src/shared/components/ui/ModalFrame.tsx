@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Dialog } from "../../../design-system";
+import { Dialog } from "../../ui-kit";
 
 type ModalFrameProps = {
   title: string;
@@ -10,7 +10,7 @@ type ModalFrameProps = {
   eyebrow?: ReactNode;
 };
 
-/** The design-system Dialog as this app's detail modal. */
+/** The UI-kit Dialog as this app's detail modal. */
 export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-w-3xl", eyebrow }: ModalFrameProps) {
   return (
     <Dialog title={title} eyebrow={eyebrow} onClose={onClose} closeLabel="Close modal" accent="thread" size="lg" className={maxWidthClassName}>

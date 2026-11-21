@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast/headless";
 import { operationalFinalReportsQueryKey } from "@/app/hooks/useOperationalSync";
-import { Button } from "@/design-system";
+import { Button } from "@/shared/ui-kit";
 import { updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport } from "@/shared/types";
 import { var2mFromFinalReport } from "../model/varForms";

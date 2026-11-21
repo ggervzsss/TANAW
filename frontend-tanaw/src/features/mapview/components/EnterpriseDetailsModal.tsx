@@ -5,7 +5,7 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import type { GatewayStatus, OccupancyStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
-import { Badge, type BadgeTone } from "../../../design-system";
+import { Badge, type BadgeTone } from "../../../shared/ui-kit";
 
 import { MonitoringStatusBadge } from "./MapDirectoryCards";
 

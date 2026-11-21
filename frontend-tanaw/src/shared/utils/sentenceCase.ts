@@ -1,1 +1,1 @@
-export { toSentenceCase } from "../../design-system";
+export { toSentenceCase } from "../ui-kit";

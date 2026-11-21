@@ -1,1 +1,1 @@
-export { ExpandableText as ExpandableTableText } from "../../../design-system";
+export { ExpandableText as ExpandableTableText } from "../../ui-kit";

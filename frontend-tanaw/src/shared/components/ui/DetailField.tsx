@@ -1,1 +1,1 @@
-export { DetailField } from "../../../design-system";
+export { DetailField } from "../../ui-kit";

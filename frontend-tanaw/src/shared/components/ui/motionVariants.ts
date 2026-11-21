@@ -1,1 +1,1 @@
-export { fadeInDown } from "../../../design-system";
+export { fadeInDown } from "../../ui-kit";

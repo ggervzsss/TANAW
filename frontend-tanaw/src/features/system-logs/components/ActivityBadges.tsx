@@ -1,5 +1,5 @@
 import type { SystemLogCategory } from "@/shared/types";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 import { activityGroupTones, systemLogTypeTones, type ActivityCategory } from "../model";
 
 export function ActivityGroupBadge({ group }: { group: ActivityCategory }) {

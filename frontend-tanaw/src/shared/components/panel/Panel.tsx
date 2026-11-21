@@ -1,12 +1,12 @@
 import type { ComponentType, PropsWithChildren, ReactNode } from "react";
 import type { LucideProps } from "lucide-react";
-import { Card } from "../../../design-system";
+import { Card } from "../../ui-kit";
 
 type PanelProps = PropsWithChildren<{
   className?: string;
 }>;
 
-/** The design-system Card as a page section. */
+/** The UI-kit Card as a page section. */
 export function Panel({ children, className = "" }: PanelProps) {
   return (
     <Card as="section" className={className}>

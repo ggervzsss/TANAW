@@ -1,8 +1,8 @@
 import { Camera, FileText, LayoutDashboard, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { TopbarAccount } from "../../design-system/patterns/TopbarAccount";
-import { TopbarNavigation } from "../../design-system/patterns/TopbarNavigation";
+import { TopbarAccount } from "../../ui-kit/patterns/TopbarAccount";
+import { TopbarNavigation } from "../../ui-kit/patterns/TopbarNavigation";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";

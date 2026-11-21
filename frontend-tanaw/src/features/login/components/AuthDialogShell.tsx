@@ -1,7 +1,7 @@
 import { type ReactNode, useRef } from "react";
 import { X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { ModalPortal, useDialogFocus } from "@/design-system";
+import { ModalPortal, useDialogFocus } from "@/shared/ui-kit";
 
 type AuthDialogKind = "recovery" | "support";
 

@@ -1,6 +1,6 @@
 import { Building2, KeyRound, Pencil, UserCheck, XCircle } from "lucide-react";
 import type { AccountSummary } from "@/shared/types";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 type Props = {
   canChangeStatus: boolean;

@@ -83,7 +83,7 @@ jobs:
       - run: npm ci
       - run: npm run type
       - run: npm run lint
-      # Unit tests (including the design-system drift test) with the branch-coverage gate.
+      # Unit tests with the branch-coverage gate.
       - run: npm run test:coverage
 
   desktop:
@@ -109,23 +109,3 @@ jobs:
       - run: npm run lint
       # Unit tests with the branch-coverage gate.
       - run: npm run test:coverage
-
-  design-system:
-    name: Design system
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: design-system/package-lock.json
-      - run: npm ci
-        working-directory: design-system
-      - name: Generated copies match design-system/
-        run: node design-system/scripts/sync.mjs --check
-      - run: npm run type
-        working-directory: design-system

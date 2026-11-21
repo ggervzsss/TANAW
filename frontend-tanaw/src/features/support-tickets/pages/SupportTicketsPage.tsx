@@ -1,4 +1,4 @@
-import { Alert, Button } from "@/design-system";
+import { Alert, Button } from "@/shared/ui-kit";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Clock3, ImageIcon, TicketCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";

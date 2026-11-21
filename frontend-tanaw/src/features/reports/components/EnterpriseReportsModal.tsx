@@ -1,7 +1,7 @@
 import { Bell } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast/headless";
-import { Button, Dialog } from "@/design-system";
+import { Button, Dialog } from "@/shared/ui-kit";
 import { notifyEnterprise } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
 import { ReportStatusBadge } from "./ReportStatusBadge";

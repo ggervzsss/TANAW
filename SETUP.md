@@ -334,9 +334,9 @@ uv run --directory ml-service python -m scripts.evaluate_tracking --help
 uv run --directory ml-service python -m scripts.replay_open_space --help
 ```
 
-docs/testing/coverage-and-replays.md describes the label formats and a replay
-regression check. It also covers the branch-coverage baselines and the
-disposable-stack report scenario (`node scripts/e2e-stack/run.mjs`).
+To carry one report through the real ML service, desktop sync, PostgreSQL and
+Staff consolidation, run `node scripts/e2e-stack/run.mjs` from the repository
+root. Its header lists the prerequisites.
 
 ## Check changes before committing
 

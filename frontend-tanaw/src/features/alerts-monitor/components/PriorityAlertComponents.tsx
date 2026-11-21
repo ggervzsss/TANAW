@@ -2,7 +2,7 @@ import { DetailField, ExpandableTableText, ModalFrame } from "@/shared/component
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode, TechnicalIssueUrgency } from "@/shared/types";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
-import { Badge, type BadgeTone } from "../../../design-system";
+import { Badge, type BadgeTone } from "../../../shared/ui-kit";
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
   const { timeFormat } = useSystemDisplayPreferences();

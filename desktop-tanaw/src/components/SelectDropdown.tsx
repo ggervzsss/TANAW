@@ -1,4 +1,4 @@
-import { Select, type SelectOption } from "../design-system";
+import { Select, type SelectOption } from "../ui-kit";
 
 export type SelectDropdownOption = SelectOption;
 
@@ -21,7 +21,7 @@ type SelectDropdownProps = {
   reportsDismissal?: boolean;
 };
 
-/** The design-system Select with this app's prop names. Searchable lists always show search here. */
+/** The UI-kit Select with this app's prop names. Searchable lists always show search here. */
 export function SelectDropdown({ size = "default", ariaInvalid = false, reportsDismissal = false, ...props }: SelectDropdownProps) {
   return <Select {...props} size={size === "compact" ? "sm" : "md"} invalid={ariaInvalid} dismissal={reportsDismissal ? "exclusive" : "backdrop"} searchMinOptions={0} />;
 }

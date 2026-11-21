@@ -1,8 +1,8 @@
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { MailCheck } from "lucide-react";
-import { Alert } from "../../../design-system";
-import { useSettingsDraft } from "../../../design-system/lib/settingsDraft";
-import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "../../../design-system/patterns/GeneralSettings";
+import { Alert } from "../../../ui-kit";
+import { useSettingsDraft } from "../../../ui-kit/lib/settingsDraft";
+import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "../../../ui-kit/patterns/GeneralSettings";
 import { useAuthStore } from "../../login/stores/auth-store";
 import {
   type BusinessEmailChangeStatus,

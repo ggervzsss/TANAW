@@ -3,4 +3,4 @@ export {
   type Metric as UnifiedMetric,
   type MetricStripControl as UnifiedMetricsControlSegment,
   type MetricTone as UnifiedMetricTone,
-} from "../../../design-system";
+} from "../../ui-kit";

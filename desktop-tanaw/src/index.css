@@ -1,7 +1,7 @@
 @import "tailwindcss";
-/* TANAW design tokens, generated from design-system/tokens/tanaw.css (see design-system/DESIGN.md). */
-@import "./styles/tanaw-tokens.css";
-@import "./design-system/styles/components.css";
+/* TANAW design tokens (see DESIGN.md at the repository root). */
+@import "./styles/tokens.css";
+@import "./ui-kit/patterns/MetricStrip.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

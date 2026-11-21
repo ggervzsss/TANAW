@@ -5,7 +5,7 @@ import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import type { DevDelivery } from "../services";
 import { splitDevLogMessage } from "../utils/devLogMessage";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliveries: DevDelivery[]; isLoading: boolean; timeFormat: SystemTimeFormat }) {
   if (deliveries.length === 0)

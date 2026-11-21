@@ -1,7 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, Lock, User } from "lucide-react";
-import { Button } from "@/design-system";
+import { Button } from "@/shared/ui-kit";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "@/shared/utils/passwordPolicy";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";

@@ -3,7 +3,7 @@ import type { AccountSummary } from "@/shared/types";
 import { canDeactivateAccount } from "@/shared/utils/accountState";
 import type { LguStatusFilter } from "../types";
 import { lguRoleLabel } from "../utils";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 type Detail = readonly [string, string];
 type EmailRequest = AccountSummary["profileChangeRequests"][number];

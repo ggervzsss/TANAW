@@ -1,1 +1,1 @@
-export { ModalPortal } from "../../../design-system";
+export { ModalPortal } from "../../ui-kit";

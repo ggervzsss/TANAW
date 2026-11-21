@@ -35,6 +35,8 @@ A central backend connects the two applications and stores shared records.
 - [Frontend](frontend-tanaw/README.md): the LGU web portal.
 - [Backend](backend-tanaw/README.md): shared accounts, monitoring, reporting, and support.
 - [Desktop](desktop-tanaw/README.md): enterprise cameras, local records, and reports.
+- [Design guide](DESIGN.md): the fonts, colors and rules both apps share. Each app
+  keeps its own UI components and styles.
 
 ### How information moves
 

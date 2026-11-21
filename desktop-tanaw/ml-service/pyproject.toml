@@ -100,7 +100,8 @@ module = [
 ignore_missing_imports = true
 
 # Branch coverage of the critical workflows: counting, visitor identity and saved reports.
-# Measure with `uv run pytest --cov`. See docs/testing/coverage-and-replays.md.
+# Measure with `uv run pytest --cov`, then check it against coverage-baseline.json with
+# scripts/coverage/check_branch_baseline.py (--update prints the new figures).
 [tool.coverage.run]
 branch = true
 source = [

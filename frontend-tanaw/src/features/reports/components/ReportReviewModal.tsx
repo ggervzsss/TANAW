@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Textarea } from "@/design-system";
+import { Button, Textarea } from "@/shared/ui-kit";
 import type { IntakeReport } from "@/shared/types";
 import { var2mFromIntakeReport } from "../model/varForms";
 import { downloadIntakeReportPdf } from "../utils/pdf";

@@ -1,1 +1,1 @@
-export { getNextDropdownIndex } from "../design-system";
+export { getNextDropdownIndex } from "../ui-kit";

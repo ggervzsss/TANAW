@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Design review captures (design-system/DESIGN.md), tagged @design-capture: `npm run capture:design`
+// Design review captures (DESIGN.md at the repository root), tagged @design-capture: `npm run capture:design`
 // saves light and dark screenshots of every main web page. Normal test runs exclude them.
 const folder = process.env.TANAW_DESIGN_CAPTURE;
 

@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useOperationalFinalReports } from "@/app/hooks/useOperationalSync";
-import { Input } from "@/design-system";
+import { Input } from "@/shared/ui-kit";
 import { PageHeader } from "@/shared/components/layout";
 import { FilterSelect, PageMotion } from "@/shared/components/ui";
 import type { FinalReport } from "@/shared/types";

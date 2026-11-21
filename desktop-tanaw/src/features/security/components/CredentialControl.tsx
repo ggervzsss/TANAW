@@ -1,7 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
-import { useSettingsDraft } from "../../../design-system/lib/settingsDraft";
-import { SettingsActions, SettingsGroup } from "../../../design-system/patterns/GeneralSettings";
+import { useSettingsDraft } from "../../../ui-kit/lib/settingsDraft";
+import { SettingsActions, SettingsGroup } from "../../../ui-kit/patterns/GeneralSettings";
 import { PasswordMatchIndicator, PasswordRequirements } from "../../../components/PasswordRequirements";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "../../../utils/password-policy";
 

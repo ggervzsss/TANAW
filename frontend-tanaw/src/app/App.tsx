@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider, useBlocker } from "react-router-dom";
-import { hasSettingsDraft } from "@/design-system/lib/settingsDraft";
-import { SettingsDiscardDialog } from "@/design-system/patterns/SettingsDiscardDialog";
+import { hasSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
+import { SettingsDiscardDialog } from "@/shared/ui-kit/patterns/SettingsDiscardDialog";
 import { AppProviders } from "./providers/AppProviders";
 import { AppRouter } from "./routers/AppRouter";
 import { useAuthStore } from "./store/authStore";

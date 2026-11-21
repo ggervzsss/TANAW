@@ -7,7 +7,7 @@ import { enterpriseAccountsQueryKey, resolveEnterpriseProfileChangeRequest } fro
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 type EnterpriseProfileRequestsPanelProps = {
   accounts: AccountSummary[];

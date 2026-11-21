@@ -14,7 +14,7 @@ import { getRoleHelpPath, getRoleSettingsPath, isRoleSettingsPath } from "@/app/
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";
-import { TopbarAccount } from "@/design-system/patterns/TopbarAccount";
+import { TopbarAccount } from "@/shared/ui-kit/patterns/TopbarAccount";
 import type { ResolvedTheme } from "@/shared/utils/theme";
 import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
 import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";

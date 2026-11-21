@@ -348,7 +348,7 @@ describe("geographic layer integrity safeguards", () => {
   });
 
   it("does not add positional transitions to Leaflet panes, paths, markers, or popups", () => {
-    const stylesheet = readFileSync(new URL("../../../../../src/styles/map.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../../../../../src/features/mapview/map.css", import.meta.url), "utf8");
     const geographicOverride = /#admin-enterprise-map\s+\.leaflet-(?:marker-icon|popup)\b(?:,\s*[^{]+)?\s*\{[^}]*transition\s*:/;
     const unsafePaneTransform = /\.leaflet-(?:map|tile|overlay|marker|tooltip|popup)-pane[^{]*\{[^}]*(?:transition\s*:[^;}]*transform|will-change\s*:[^;}]*transform)/s;
 

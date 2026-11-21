@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge, type BadgeTone } from "../../../design-system";
+import { Badge, type BadgeTone } from "../../../ui-kit";
 import type { SupportTicket } from "../services/tickets";
 
 const statusTones: Record<SupportTicket["status"], BadgeTone> = { Open: "info", "In Review": "warning", Resolved: "success" };

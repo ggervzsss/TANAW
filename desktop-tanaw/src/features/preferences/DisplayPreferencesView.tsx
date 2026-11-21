@@ -1,4 +1,4 @@
-import { SettingsGroup } from "../../design-system/patterns/GeneralSettings";
+import { SettingsGroup } from "../../ui-kit/patterns/GeneralSettings";
 import { Check, CircleAlert, RotateCcw, Type } from "lucide-react";
 import type { ReactNode } from "react";
 import { Card } from "../../components/Card";

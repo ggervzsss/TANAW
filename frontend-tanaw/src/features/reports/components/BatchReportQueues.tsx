@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { useState } from "react";
-import { Button, Input, Tabs } from "@/design-system";
+import { Button, Input, Tabs } from "@/shared/ui-kit";
 import { Panel } from "@/shared/components/panel";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
 import { getBatchReportQueues, searchBatchReportRows } from "../model/batchReportQueues";

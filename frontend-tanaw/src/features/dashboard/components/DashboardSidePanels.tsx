@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { Panel } from "@/shared/components/panel";
 import type { DashboardOverview } from "../model";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 export function DashboardSidePanels({ overview }: { overview: DashboardOverview }) {
   const hasUnavailableApps = overview.unavailableDesktopAppCount > 0;

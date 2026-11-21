@@ -1,13 +1,13 @@
 @import "@fortawesome/fontawesome-free/css/all.min.css";
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
-/* TANAW design tokens, generated from design-system/tokens/tanaw.css. foundation.css adds
-   only the web app's own panel shadow and maps older variable names onto the tokens. */
-@import "./styles/tanaw-tokens.css";
-@import "./design-system/styles/components.css";
+/* TANAW design tokens (see DESIGN.md at the repository root). foundation.css adds only the
+   web app's own panel shadow and maps older variable names onto the tokens. */
+@import "./styles/tokens.css";
+@import "./shared/ui-kit/patterns/MetricStrip.css";
 @import "./styles/foundation.css";
 @import "./styles/components.css";
-@import "./styles/auth.css";
+@import "./features/login/auth.css";
 @import "./styles/scrollbars.css";
-@import "./styles/reports.css";
-@import "./styles/map.css";
+@import "./features/reports/reports.css";
+@import "./features/mapview/map.css";

@@ -1,4 +1,4 @@
-import { SettingsGroup } from "@/design-system/patterns/GeneralSettings";
+import { SettingsGroup } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { Check, CircleAlert, RotateCcw, Type } from "lucide-react";
 import { Panel } from "@/shared/components/panel";
 import { useSystemDisplayPreferences, type DisplayPreferences, type InterfaceScalePreference, type TextSizePreference } from "@/shared/providers/systemDisplayPreferences";

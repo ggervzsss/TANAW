@@ -1,8 +1,8 @@
-import { Select, type SelectOption, type SelectProps } from "../../../design-system";
+import { Select, type SelectOption, type SelectProps } from "../../ui-kit";
 
 export type SelectDropdownOption = SelectOption;
 
-/** The design-system Select. Search appears for lists of eight or more options. */
+/** The UI-kit Select. Search appears for lists of eight or more options. */
 export function SelectDropdown(props: Omit<SelectProps, "options"> & { options: readonly SelectDropdownOption[] }) {
   return <Select focusOnFormError {...props} />;
 }

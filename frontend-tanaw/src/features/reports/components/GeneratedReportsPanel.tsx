@@ -1,6 +1,6 @@
 import { FileSpreadsheet } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/design-system";
+import { Button } from "@/shared/ui-kit";
 import { Panel } from "@/shared/components/panel";
 import type { FinalReport } from "@/shared/types";
 import { ReportStatusBadge } from "./ReportStatusBadge";

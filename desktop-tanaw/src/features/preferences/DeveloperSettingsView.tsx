@@ -1,6 +1,6 @@
 import { Check, Code2, Gauge } from "lucide-react";
 import { useState } from "react";
-import { SettingsGroup } from "../../design-system/patterns/GeneralSettings";
+import { SettingsGroup } from "../../ui-kit/patterns/GeneralSettings";
 import { DesignSwitch } from "../../components/DesignSwitch";
 import { DEVICE_PERFORMANCE_OPTIONS, devicePerformanceLabel, readDevicePerformanceProfile, useDevicePerformanceProfile, type DevicePerformanceProfile } from "../camera/model/device-performance";
 import { applyDevicePerformanceProfile, DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus } from "../camera/services/ml-service";

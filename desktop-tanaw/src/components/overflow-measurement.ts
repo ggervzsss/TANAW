@@ -1,1 +1,1 @@
-export { hasVisualOverflow } from "../design-system";
+export { hasVisualOverflow } from "../ui-kit";

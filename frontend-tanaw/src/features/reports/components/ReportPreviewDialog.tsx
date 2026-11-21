@@ -1,6 +1,6 @@
 import { Download } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button, Dialog } from "@/design-system";
+import { Button, Dialog } from "@/shared/ui-kit";
 
 type ReportPreviewDialogProps = {
   title: string;

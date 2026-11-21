@@ -1,6 +1,6 @@
 import { Layers2, MapPinned, RefreshCw, RotateCcw, Type } from "lucide-react";
 import { useState } from "react";
-import { SearchField } from "@/design-system";
+import { SearchField } from "@/shared/ui-kit";
 import { SelectDropdown, type SelectDropdownOption } from "@/shared/components/ui";
 import type { AccountSummary } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { matchPath, NavLink } from "react-router-dom";
 import { preloadPortalRoute } from "@/app/routers/routeModules";
 import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
-import { TopbarNavigation } from "@/design-system/patterns/TopbarNavigation";
+import { TopbarNavigation } from "@/shared/ui-kit/patterns/TopbarNavigation";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import type { TopbarEntry } from "./portalNavigationModel";

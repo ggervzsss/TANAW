@@ -79,7 +79,7 @@ async function expectSameRow(left: Locator, right: Locator) {
   expect(difference).toBeLessThan(2);
 }
 
-/** Detail dialogs show their title and the design system's metric-thread accent. */
+/** Detail dialogs show their title and the metric-thread accent. */
 async function expectTitledDetailDialog(dialog: Locator, title: string) {
   await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
   await expect(dialog.locator("[data-dialog-accent='thread']")).toHaveCount(1);

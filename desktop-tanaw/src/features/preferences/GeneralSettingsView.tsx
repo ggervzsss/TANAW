@@ -1,6 +1,6 @@
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { getEnterpriseSettingsBackPath, routePaths } from "../../app/router/routePaths";
-import { GeneralSettings, ThemeSelector, type SettingsSection } from "../../design-system/patterns/GeneralSettings";
+import { GeneralSettings, ThemeSelector, type SettingsSection } from "../../ui-kit/patterns/GeneralSettings";
 import { ProfileView } from "../profile/components/ProfileView";
 import { SecurityView } from "../security/components/SecurityView";
 import { useThemePreference } from "../security/hooks/useThemePreference";

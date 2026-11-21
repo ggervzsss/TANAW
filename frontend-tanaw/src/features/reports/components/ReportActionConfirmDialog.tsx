@@ -1,4 +1,4 @@
-import { Button, Dialog } from "@/design-system";
+import { Button, Dialog } from "@/shared/ui-kit";
 
 type ReportActionConfirmDialogProps = {
   title: string;

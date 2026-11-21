@@ -8,7 +8,7 @@ import { CategoryBadge, PriorityBadge, TicketStatusBadge } from "./TicketBadges"
 import { TicketAttachments } from "./TicketAttachments";
 import { TicketConversation } from "./TicketConversation";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 type TicketDetailsModalProps = {
   mode: "admin" | "it";

@@ -3,8 +3,8 @@ import { createHashRouter, RouterProvider, useBlocker } from "react-router-dom";
 import { AppProviders } from "./app/providers/AppProviders";
 import { AppRouter } from "./app/router/AppRouter";
 import { observeThemePreference } from "./features/security/utils/theme";
-import { hasSettingsDraft } from "./design-system/lib/settingsDraft";
-import { SettingsDiscardDialog } from "./design-system/patterns/SettingsDiscardDialog";
+import { hasSettingsDraft } from "./ui-kit/lib/settingsDraft";
+import { SettingsDiscardDialog } from "./ui-kit/patterns/SettingsDiscardDialog";
 import { useAuthStore } from "./features/login/stores/auth-store";
 
 function SettingsNavigationGuard() {

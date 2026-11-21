@@ -1,5 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen, Plus, Video } from "lucide-react";
-import { Badge, Button, Card, Tooltip, initialsOf } from "../../../design-system";
+import { Badge, Button, Card, Tooltip, initialsOf } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { cameraModeName } from "../utils/camera-mode";
 

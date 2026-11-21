@@ -86,8 +86,7 @@
 }
 
 /* Fonts, type scale, brand, map and chart colors come from the design tokens
-   (styles/tanaw-tokens.css, generated from design-system/tokens/tanaw.css).
-   Below is only the web app's own panel shadow. */
+   (styles/tokens.css). Below is only the web app's own panel shadow. */
 @theme {
   --shadow-panel: 0 10px 30px rgba(15, 23, 42, 0.08);
 }

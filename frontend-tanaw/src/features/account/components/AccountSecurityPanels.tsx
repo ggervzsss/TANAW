@@ -1,8 +1,8 @@
 import type { FormEvent, RefObject } from "react";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
-import { Alert } from "@/design-system";
-import { useSettingsDraft } from "@/design-system/lib/settingsDraft";
-import { SettingsActions, SettingsGroup } from "@/design-system/patterns/GeneralSettings";
+import { Alert } from "@/shared/ui-kit";
+import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
+import { SettingsActions, SettingsGroup } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "@/shared/utils/passwordPolicy";
 import type { PasswordErrors } from "../model";
 import { AccountField } from "./AccountField";

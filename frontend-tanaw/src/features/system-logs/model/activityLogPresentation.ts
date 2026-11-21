@@ -1,6 +1,6 @@
 import type { SystemLog, SystemLogCategory } from "@/shared/types";
 import { isWithinActivityTimeRange, type ActivityTimeRange } from "@/shared/utils";
-import type { BadgeTone } from "../../../design-system";
+import type { BadgeTone } from "../../../shared/ui-kit";
 
 export type ActivityCategory = "Reports" | "Admin Activity" | "Accounts & Settings" | "Issues & Resolutions" | "Security";
 export type ActivityGroup = ActivityCategory | "All Activity" | "Important Updates";

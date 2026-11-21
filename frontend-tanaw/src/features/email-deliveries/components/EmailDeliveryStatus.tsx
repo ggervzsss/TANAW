@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 import { emailDeliveryStatusLabels } from "../model";
 import type { EmailDelivery } from "../services";
 

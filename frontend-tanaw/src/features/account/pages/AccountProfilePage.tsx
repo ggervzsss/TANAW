@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Alert } from "@/design-system";
-import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "@/design-system/patterns/GeneralSettings";
-import { useSettingsDraft } from "@/design-system/lib/settingsDraft";
+import { Alert } from "@/shared/ui-kit";
+import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "@/shared/ui-kit/patterns/GeneralSettings";
+import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { roleAccessLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import { PERSON_NAME_MAX_LENGTH } from "@/shared/utils/accountValidation";

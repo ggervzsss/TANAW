@@ -3,7 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
 import { routePaths } from "../../../app/router/routePaths";
-import { Button } from "../../../design-system";
+import { Button } from "../../../ui-kit";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "../../../utils/password-policy";
 import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";

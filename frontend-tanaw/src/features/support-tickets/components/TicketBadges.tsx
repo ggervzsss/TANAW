@@ -1,5 +1,5 @@
 import type { SupportTicketCategory, SupportTicketPriority, SupportTicketStatus } from "@/shared/services/supportTickets";
-import { Badge, type BadgeTone } from "../../../design-system";
+import { Badge, type BadgeTone } from "../../../shared/ui-kit";
 import { ticketStatusLabel } from "../model";
 
 const statusTones: Record<SupportTicketStatus, BadgeTone> = { Open: "info", "In Review": "warning", Resolved: "success" };

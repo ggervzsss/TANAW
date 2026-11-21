@@ -1,6 +1,6 @@
 import { Check, CircleAlert, Save, ShieldAlert } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { useSettingsDraft } from "@/design-system/lib/settingsDraft";
+import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { FilterSelect, ModalFrame, Switch } from "@/shared/components/ui";
 import type { SettingField, SettingSection, SettingValue } from "../types";
 

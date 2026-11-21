@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, LogIn, LogOut, Users, type LucideIcon } from "lucide-react";
-import { Card, Tooltip } from "../../../design-system";
+import { Card, Tooltip } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import type { MlAreaState, MlCounts, MlHealth } from "../services/ml-service";
 import { CameraMetricsLineField } from "./CameraMetricsLineField";

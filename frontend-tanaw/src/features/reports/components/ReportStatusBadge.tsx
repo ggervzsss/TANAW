@@ -1,5 +1,5 @@
 import type { FinalReportStatus, ReportStatus } from "@/shared/types";
-import { Badge, type BadgeTone } from "../../../design-system";
+import { Badge, type BadgeTone } from "../../../shared/ui-kit";
 
 function toneFor(status: ReportStatus | FinalReportStatus): BadgeTone {
   if (status === "Pending Review") return "warning";

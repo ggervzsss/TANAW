@@ -1,7 +1,7 @@
 import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { getRoleSettingsBackPath, getRoleSettingsPath } from "@/app/routers/roleRoutes";
 import type { usePortalThemePreference } from "@/app/layouts/portal/hooks/usePortalThemePreference";
-import { GeneralSettings, ThemeSelector, type SettingsSection } from "@/design-system/patterns/GeneralSettings";
+import { GeneralSettings, ThemeSelector, type SettingsSection } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { DisplayPreferencesPage } from "@/features/display-preferences";
 import { SupportTicketsPage } from "@/features/support-tickets";
 import { ITSystemSettingsPage } from "@/features/system-settings";

@@ -1,0 +1,293 @@
+/*
+ * TANAW design tokens for this app: color, type, shape, depth and motion, following DESIGN.md at
+ * the repository root. The other TANAW app keeps its own tokens; keep the brand colors and
+ * fonts in step with DESIGN.md when changing them.
+ *
+ * Tailwind v4: index.css imports "tailwindcss", then this file. Dark mode follows the `.dark`
+ * class on <html>.
+ */
+
+/* ---- Static palette and scales: these become Tailwind utilities (bg-tanaw-civic, text-tanaw-ledger, ...). */
+@theme {
+  /* Type */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bai Jamjuree", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 0.78125rem;
+  --text-sm: 0.90625rem;
+  --text-base: 1.03125rem;
+  --text-lg: 1.15625rem;
+  --text-xl: 1.28125rem;
+  --text-2xl: 1.5625rem;
+  --text-3xl: 1.9375rem;
+  --text-4xl: 2.375rem;
+  --text-5xl: 3.0625rem;
+  --text-6xl: 3.8125rem;
+  --tracking-label: 0.14em;
+
+  /* Brand */
+  --color-tanaw-civic: #055b25; /* Civic Green: fills for actions and "on" states only */
+  --color-tanaw-civic-deep: #044a1e; /* Civic Green Deep: hover/pressed */
+  --color-tanaw-ledger: #065f46; /* Ledger Green: green text, links, outlines, active items */
+  --color-tanaw-forest: #1b4332; /* Forest Label: uppercase figure labels, table headers */
+  --color-tanaw-canopy-start: #043817; /* Canopy: topbar gradient only */
+  --color-tanaw-canopy-mid: #075526;
+  --color-tanaw-canopy-end: #0c6a32;
+  --color-tanaw-gold: #d7b35a; /* Seal Gold: lines and marks, never text */
+  --color-tanaw-gold-ink: #8a6a12; /* Gold Ink: readable gold text (5.1:1 on white) */
+  --color-tanaw-navy: #2a3063; /* Seal Navy: the city seal only */
+  --color-tanaw-red: #a40e0e; /* Record Red: destructive actions */
+  --color-tanaw-live: #45a549; /* Live Green: the running-camera dot */
+
+  /* Map and chart palette (web map layers, chart series). Not for UI chrome. */
+  --color-tanaw-lime: #45a549;
+  --color-tanaw-yellow: #ffd200;
+  --color-tanaw-orange: #ff6204;
+  --color-tanaw-blue: #2d5eff;
+  --color-tanaw-sky: #a0bbff;
+  --color-tanaw-peach: #f5d2bd;
+
+  /* Compatibility: utilities the apps already use. Map them, don't add new greens. */
+  --color-tanaw-green: #055b25; /* = tanaw-civic */
+  --color-tanaw-green-dark: #044a1e; /* = tanaw-civic-deep */
+
+  /* Shape */
+  --radius-tanaw-sm: 6px; /* compact selects */
+  --radius-tanaw-md: 12px; /* buttons, inputs, list items */
+  --radius-tanaw-lg: 16px; /* cards, metric strip */
+  --radius-tanaw-xl: 18px; /* camera list panel */
+
+  /* Depth */
+  --shadow-tanaw-resting: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-tanaw-soft: 0 12px 30px rgb(15 23 42 / 0.08);
+  --shadow-tanaw-raised: 0 18px 42px rgb(15 23 42 / 0.12);
+  --shadow-tanaw-banner: 0 16px 40px rgb(2 20 8 / 0.34);
+
+  /* Motion */
+  --ease-tanaw: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---- Semantic tokens: what components read. Light theme. */
+:root {
+  --tanaw-page: #f4f8f5;
+  --tanaw-page-gradient: linear-gradient(145deg, #eef5f0, #f6f8f6);
+  --tanaw-surface: #ffffff;
+  --tanaw-surface-raised: #ffffff;
+  --tanaw-surface-inset: #f0f5f1;
+  --tanaw-control-bg: #ffffff;
+  --tanaw-control-hover: #edf4ef;
+  --tanaw-control-disabled: #f1f5f9;
+  --tanaw-surface-muted: #f8fafc;
+  --tanaw-surface-subtle: #f1f5f9;
+  --tanaw-surface-strong: #e2e8f0;
+
+  /* Interaction states for rows, list items, menus and selectable cards. */
+  --tanaw-interactive-hover-bg: #f0fdf4;
+  --tanaw-interactive-hover-border: rgb(5 150 105 / 0.28);
+  --tanaw-interactive-selected-bg: #ecfdf5;
+  --tanaw-interactive-active-bg: #dcfce7;
+  --tanaw-interactive-pressed-bg: #d1fae5;
+  --tanaw-interactive-disabled-bg: #f1f5f9;
+  --tanaw-interactive-disabled-text: #94a3b8;
+
+  --tanaw-text: #10241b;
+  --tanaw-text-secondary: #475569;
+  --tanaw-text-muted: #5f6f84; /* 4.6:1 or better on every light surface */
+  --tanaw-text-placeholder: #7b8492;
+  --tanaw-label: #1b4332;
+
+  --tanaw-border-soft: #d6e2d9;
+  --tanaw-border: #c6d6cb;
+  --tanaw-control-border: #cbd5d1;
+  --tanaw-control-border-hover: #9caea4;
+
+  --tanaw-action: #055b25;
+  --tanaw-action-hover: #044a1e;
+  --tanaw-on-action: #ffffff;
+  --tanaw-accent-ink: #065f46;
+  --tanaw-selected-bg: #ecfdf5;
+  --tanaw-gold-line: #d7b35a;
+  --tanaw-gold-ink: #8a6a12;
+  --tanaw-danger: #a40e0e;
+  --tanaw-error: #dc2626;
+  --tanaw-focus-ring: #0f766e;
+  --tanaw-live: #45a549;
+
+  --tanaw-metric-thread: linear-gradient(
+    90deg,
+    #1b4332 0%,
+    #c5a047 50%,
+    #5a8c46 100%
+  );
+  --tanaw-topbar-gradient: linear-gradient(
+    90deg,
+    #043817 0%,
+    #075526 44%,
+    #0c6a32 100%
+  );
+  --tanaw-topbar-overlay: linear-gradient(
+    90deg,
+    rgb(4 45 17 / 0.95) 0%,
+    rgb(5 81 37 / 0.86) 55%,
+    rgb(6 93 42 / 0.34) 100%
+  );
+
+  /* Status badges: background, text, outline. */
+  --tanaw-success-bg: #d1fae5;
+  --tanaw-success-text: #065f46;
+  --tanaw-success-line: #a7f3d0;
+  --tanaw-warning-bg: #fef3c7;
+  --tanaw-warning-text: #92400e;
+  --tanaw-warning-line: #fde68a;
+  --tanaw-danger-bg: #fee2e2;
+  --tanaw-danger-text: #991b1b;
+  --tanaw-danger-line: #fecaca;
+  --tanaw-info-bg: #dbeafe;
+  --tanaw-info-text: #1e40af;
+  --tanaw-info-line: #bfdbfe;
+  --tanaw-neutral-bg: #f1f5f9;
+  --tanaw-neutral-text: #334155;
+  --tanaw-neutral-line: #e2e8f0;
+
+  /* Status surfaces: large tinted areas (banners, panels) behind status content. */
+  --tanaw-success-surface: #ecfdf5;
+  --tanaw-warning-surface: #fffbeb;
+  --tanaw-danger-surface: #fef2f2;
+  --tanaw-information-surface: #eff6ff;
+
+  /* Charts */
+  --tanaw-chart-entry: #047857;
+  --tanaw-chart-occupancy: #c96706;
+  --tanaw-chart-peak: #9a7218;
+  --tanaw-chart-grid: #d9e2dc;
+  --tanaw-chart-axis: #64748b;
+  --tanaw-chart-primary: #047857;
+  --tanaw-chart-secondary: #2563eb;
+  --tanaw-chart-label: #334155;
+  --tanaw-chart-connector: #94a3b8;
+  --tanaw-chart-row-hover: rgb(15 118 110 / 0.055);
+  --tanaw-chart-tooltip-bg: #ffffff;
+  --tanaw-chart-tooltip-text: #1f2937;
+
+  /* Layout */
+  --tanaw-topbar-height: 5.5rem;
+  --tanaw-content-max: 1880px;
+}
+
+/* ---- Dark theme: same names, deepened surfaces, lighter greens for text. */
+.dark {
+  --tanaw-page: #0b141d;
+  --tanaw-page-gradient:
+    radial-gradient(circle at 12% 0%, rgb(31 71 60 / 0.1), transparent 35rem),
+    linear-gradient(145deg, #0b141d 0%, #0e1721 54%, #101923 100%);
+  --tanaw-surface: #151f2b;
+  --tanaw-surface-raised: #192531;
+  --tanaw-surface-inset: #101923;
+  --tanaw-control-bg: #192633;
+  --tanaw-control-hover: #202e3c;
+  --tanaw-control-disabled: #0d1625;
+  --tanaw-surface-muted: #111b25;
+  --tanaw-surface-subtle: #1a2633;
+  --tanaw-surface-strong: #1d2b38;
+
+  --tanaw-interactive-hover-bg: #1b302f;
+  --tanaw-interactive-hover-border: rgb(52 211 153 / 0.26);
+  --tanaw-interactive-selected-bg: #17382f;
+  --tanaw-interactive-active-bg: #1d4438;
+  --tanaw-interactive-pressed-bg: #153329;
+  --tanaw-interactive-disabled-bg: #131d27;
+  --tanaw-interactive-disabled-text: #71808d;
+
+  --tanaw-text: #f1f5f4;
+  --tanaw-text-secondary: #b8c2cb;
+  --tanaw-text-muted: #8f9daa;
+  --tanaw-text-placeholder: #8290a6;
+  --tanaw-label: #a7f3d0;
+
+  --tanaw-border-soft: rgb(174 188 201 / 0.14);
+  --tanaw-border: rgb(174 188 201 / 0.22);
+  --tanaw-control-border: rgb(174 188 201 / 0.28);
+  --tanaw-control-border-hover: rgb(174 188 201 / 0.4);
+
+  --tanaw-action: #055b25;
+  --tanaw-action-hover: #0a6e33;
+  --tanaw-on-action: #ffffff;
+  --tanaw-accent-ink: #6ee7b7;
+  --tanaw-selected-bg: rgb(16 185 129 / 0.11);
+  --tanaw-gold-line: #fcd34d;
+  --tanaw-gold-ink: #f3c96b;
+  --tanaw-danger: #fca5a5;
+  --tanaw-error: #f87171;
+  --tanaw-focus-ring: #5eead4;
+  --tanaw-live: #45a549;
+
+  --tanaw-metric-thread: linear-gradient(
+    90deg,
+    #3f765b 0%,
+    #d2b35a 50%,
+    #78ad65 100%
+  );
+  --tanaw-topbar-gradient: linear-gradient(
+    90deg,
+    #02090d 0%,
+    #061714 48%,
+    #0b2520 100%
+  );
+  --tanaw-topbar-overlay: linear-gradient(
+    90deg,
+    rgb(1 8 11 / 0.98) 0%,
+    rgb(4 24 20 / 0.9) 50%,
+    rgb(8 38 30 / 0.54) 100%
+  );
+
+  --tanaw-success-bg: rgb(16 185 129 / 0.15);
+  --tanaw-success-text: #a7f3d0;
+  --tanaw-success-line: rgb(110 231 183 / 0.2);
+  --tanaw-warning-bg: rgb(251 191 36 / 0.15);
+  --tanaw-warning-text: #fde68a;
+  --tanaw-warning-line: rgb(252 211 77 / 0.24);
+  --tanaw-danger-bg: rgb(239 68 68 / 0.15);
+  --tanaw-danger-text: #fecaca;
+  --tanaw-danger-line: rgb(252 165 165 / 0.24);
+  --tanaw-info-bg: rgb(59 130 246 / 0.15);
+  --tanaw-info-text: #bfdbfe;
+  --tanaw-info-line: rgb(147 197 253 / 0.24);
+  --tanaw-neutral-bg: rgb(51 65 85 / 0.7);
+  --tanaw-neutral-text: #f1f5f9;
+  --tanaw-neutral-line: #475569;
+
+  --tanaw-success-surface: rgb(6 78 59 / 0.28);
+  --tanaw-warning-surface: rgb(120 74 15 / 0.24);
+  --tanaw-danger-surface: rgb(127 29 29 / 0.24);
+  --tanaw-information-surface: rgb(30 64 112 / 0.24);
+
+  --tanaw-chart-entry: #34d399;
+  --tanaw-chart-occupancy: #f6ad55;
+  --tanaw-chart-peak: #f3c96b;
+  --tanaw-chart-grid: rgb(174 188 201 / 0.16);
+  --tanaw-chart-axis: #92a0ad;
+  --tanaw-chart-primary: #34d399;
+  --tanaw-chart-secondary: #60a5fa;
+  --tanaw-chart-label: #d7e0e6;
+  --tanaw-chart-connector: #64748b;
+  --tanaw-chart-row-hover: rgb(52 211 153 / 0.065);
+  --tanaw-chart-tooltip-bg: #1b2834;
+  --tanaw-chart-tooltip-text: #eef3f2;
+
+  --shadow-tanaw-soft: 0 14px 34px rgb(0 0 0 / 0.2);
+  --shadow-tanaw-raised: 0 20px 48px rgb(0 0 0 / 0.25);
+  --shadow-tanaw-banner: 0 16px 44px rgb(0 0 0 / 0.58);
+}
+
+html[data-interface-scale="compact"] {
+  --tanaw-topbar-height: 5rem;
+}
+
+html[data-interface-scale="comfortable"] {
+  --tanaw-topbar-height: 6rem;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --tanaw-topbar-height: 4.5rem;
+  }
+}

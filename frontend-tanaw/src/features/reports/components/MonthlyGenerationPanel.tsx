@@ -2,7 +2,7 @@ import { FileSpreadsheet } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { Button } from "@/design-system";
+import { Button } from "@/shared/ui-kit";
 import { Panel } from "@/shared/components/panel";
 import type { SubmissionPeriod } from "../utils";
 

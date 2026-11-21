@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { CircleAlert, MapPin, Maximize, Minimize, Play, RefreshCw, Settings, Square, Trash2, Video } from "lucide-react";
-import { Button, Card } from "../../../design-system";
+import { Button, Card } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import { CameraSettingsPanel } from "./CameraSettingsPanel";

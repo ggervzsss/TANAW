@@ -70,7 +70,8 @@ pretty = true
 # Branch coverage of the critical workflows: report intake and consolidation, sign-in and
 # activation, live updates, email delivery and desktop telemetry. Measure it with
 # `uv run pytest --cov` and TANAW_TEST_DATABASE_URL set, since most of these paths run against
-# PostgreSQL. See docs/testing/coverage-and-replays.md.
+# PostgreSQL, then check it against coverage-baseline.json with
+# scripts/coverage/check_branch_baseline.py (--update prints the new figures).
 [tool.coverage.run]
 branch = true
 source = [

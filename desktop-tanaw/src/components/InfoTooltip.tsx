@@ -1,1 +1,1 @@
-export { Tooltip as InfoTooltip } from "../design-system";
+export { Tooltip as InfoTooltip } from "../ui-kit";

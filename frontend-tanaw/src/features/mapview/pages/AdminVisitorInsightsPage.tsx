@@ -7,7 +7,7 @@ import { PageHeader } from "@/shared/components/layout";
 import { PageMotion, SelectDropdown } from "@/shared/components/ui";
 import { useSanPedroBoundary } from "../hooks/useSanPedroBoundary";
 import { getBarangayLabel, isBoundaryPolygonFeature } from "../utils/enterpriseMapUtils";
-import { SegmentedControl } from "@/design-system";
+import { SegmentedControl } from "@/shared/ui-kit";
 import { useVisitorInsights } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { VisitorInsightRange } from "@/shared/types";

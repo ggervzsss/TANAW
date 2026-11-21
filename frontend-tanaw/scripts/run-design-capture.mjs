@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Runs only the @design-capture Playwright tests, which save light and dark screenshots of the main
- * screens for design review (design-system/DESIGN.md). Normal test runs exclude them.
+ * screens for design review (DESIGN.md at the repository root). Normal test runs exclude them.
  *
  *   npm run capture:design                    saves to ./design-captures
  *   npm run capture:design -- --headed        extra arguments go to Playwright

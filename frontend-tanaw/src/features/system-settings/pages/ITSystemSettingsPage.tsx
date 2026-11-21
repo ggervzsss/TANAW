@@ -11,7 +11,7 @@ import { activityLogsQueryKey } from "@/features/system-logs/hooks";
 import { purgeExpiredActivityLogs } from "@/features/system-logs/services";
 import { systemSettingsQueryKey, useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, PHILIPPINE_TIME_LABEL } from "@/shared/utils/dateTime";
-import { Badge } from "../../../design-system";
+import { Badge } from "../../../shared/ui-kit";
 
 const visibleSettingKeys = new Set(settingSections.flatMap((section) => section.fields.map((field) => settingKey(section.id, field))));
 

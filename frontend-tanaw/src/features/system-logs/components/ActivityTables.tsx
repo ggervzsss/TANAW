@@ -1,5 +1,5 @@
 import { Activity, CircleUserRound, Crosshair, FileText, Pin, ShieldAlert } from "lucide-react";
-import { Badge } from "@/design-system";
+import { Badge } from "@/shared/ui-kit";
 import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { SystemLog } from "@/shared/types";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";

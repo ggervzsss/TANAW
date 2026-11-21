@@ -1,1 +1,1 @@
-export { ExpandableText } from "../design-system";
+export { ExpandableText } from "../ui-kit";

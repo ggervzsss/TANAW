@@ -16,7 +16,7 @@ export default defineConfig({
     include: ["tests/unit/**/*.test.{ts,tsx}"],
     environment: "node",
     // `npm run test:coverage`: branch coverage of the critical portal workflows. The thresholds
-    // are the measured baseline; see docs/testing/coverage-and-replays.md.
+    // are the measured baseline; raise them when tests improve, and never lower them silently.
     coverage: {
       provider: "v8",
       include: ["src/features/reports/{model,utils,hooks}/**/*.ts", "src/shared/realtime/**/*.ts", "src/app/store/authStore.ts"],
