@@ -6,9 +6,12 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.security import verify_password
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.sample_data.accounts import resolve_target_enterprise
 from app.features.sample_data.dataset import SAMPLE_ACCOUNT_EMAILS
+from app.features.sample_data.definitions import TEST_ACCOUNT_PASSWORD
+from app.features.sample_data.helpers import sample_uuid
 from app.features.sample_data.lifecycle import (
     generate_sample_data,
     remove_sample_data,
@@ -183,13 +186,20 @@ async def test_generation_and_cleanup_preserve_user_targets(
     db.add(other)
     await db.flush()
 
-    first = await generate_sample_data(db, "30d", "full-workflow", "selector-test", seed)
+    password = "Private hosted demo passphrase"
+    first = await generate_sample_data(
+        db, "30d", "full-workflow", "selector-test", seed, account_password=password
+    )
 
     assert first["target"]["accountId"] == target.id
     assert first["target"]["enterpriseId"] == f"{seed}_001@tanaw.sanpedro"
     assert first["counts"]["participatingEnterprises"] == 6
     assert len(first["counts"]["targetPreparedReportCounts"]) == 5
     assert await sample_dataset_present(db)
+    sample_account = await db.get(Account, sample_uuid("account", SAMPLE_ACCOUNT_EMAILS[0]))
+    assert sample_account is not None and sample_account.password_hash is not None
+    assert verify_password(password, sample_account.password_hash)
+    assert not verify_password(TEST_ACCOUNT_PASSWORD, sample_account.password_hash)
 
     await remove_sample_data(db)
 

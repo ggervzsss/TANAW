@@ -4,10 +4,15 @@ import json
 import os
 
 from app.core.config import get_settings
+from app.core.password_policy import validate_password_policy
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.sample_data.accounts import resolve_target_enterprise
-from app.features.sample_data.definitions import DEFAULT_SCENARIO, DEFAULT_SEED
+from app.features.sample_data.definitions import (
+    DEFAULT_SCENARIO,
+    DEFAULT_SEED,
+    TEST_ACCOUNT_PASSWORD,
+)
 from app.features.sample_data.lifecycle import (
     generate_sample_data,
     remove_sample_data,
@@ -90,13 +95,19 @@ async def run(args: argparse.Namespace) -> None:
         print(json.dumps({"removed": removed}, indent=2, sort_keys=True))
         return
 
+    account_password = sample_account_password()
     if args.command == "reset":
         async with AsyncSessionLocal() as db:
             # Cleanup commits independently, so reject invalid targets before deleting anything.
             await resolve_target_enterprise(db, args.target_enterprise)
             removed = await remove_sample_data(db)
             created = await generate_sample_data(
-                db, args.range, args.scenario, args.seed, args.target_enterprise
+                db,
+                args.range,
+                args.scenario,
+                args.seed,
+                args.target_enterprise,
+                account_password=account_password,
             )
         print(json.dumps({"removed": removed, "created": created}, indent=2, sort_keys=True))
         return
@@ -107,9 +118,27 @@ async def run(args: argparse.Namespace) -> None:
                 "Sample data already exists. Run mockdata-off or mockdata-reset first."
             )
         result = await generate_sample_data(
-            db, args.range, args.scenario, args.seed, args.target_enterprise
+            db,
+            args.range,
+            args.scenario,
+            args.seed,
+            args.target_enterprise,
+            account_password=account_password,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
+
+
+def sample_account_password() -> str:
+    value = os.environ.get("TANAW_MOCK_ACCOUNT_PASSWORD")
+    if value is None:
+        return TEST_ACCOUNT_PASSWORD
+    try:
+        password = validate_password_policy(value)
+    except ValueError as error:
+        raise SystemExit(f"Invalid TANAW_MOCK_ACCOUNT_PASSWORD. {error}") from None
+    if password == TEST_ACCOUNT_PASSWORD:
+        raise SystemExit("Set TANAW_MOCK_ACCOUNT_PASSWORD to a password unique to this demo.")
+    return password
 
 
 async def validate_schema() -> None:

@@ -1,0 +1,78 @@
+name: Manage Demo Data
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tanaw-demo-data
+  cancel-in-progress: false
+
+jobs:
+  manage:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: tanaw-demo
+    defaults:
+      run:
+        working-directory: backend-tanaw
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - name: Install backend dependencies
+        run: uv sync --locked --no-dev
+      - name: Run sample-data command
+        env:
+          SAMPLE_DATA_COMMAND: ${{ inputs.command }}
+          DEMO_SUPABASE_PROJECT_REF: ${{ vars.DEMO_SUPABASE_PROJECT_REF }}
+          DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          TANAW_MOCK_TARGET_ENTERPRISE: ${{ vars.DEMO_ENTERPRISE_ID }}
+          TANAW_MOCK_ACCOUNT_PASSWORD: ${{ secrets.DEMO_SAMPLE_ACCOUNT_PASSWORD }}
+          TANAW_ENV: development
+          PGSSLMODE: require
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          project = os.environ['DEMO_SUPABASE_PROJECT_REF'].strip()
+          try:
+              url = urlsplit(os.environ['DATABASE_URL'])
+              matches_demo_project = (
+                  project
+                  and url.scheme == 'postgresql'
+                  and (url.hostname or '').endswith('.pooler.supabase.com')
+                  and url.port == 5432
+                  and url.username == f'postgres.{project}'
+                  and url.password
+                  and url.path == '/postgres'
+                  and not url.query
+                  and not url.fragment
+              )
+          except ValueError:
+              matches_demo_project = False
+          if not matches_demo_project:
+              raise SystemExit(
+                  'Set DEMO_DATABASE_URL to the Session pooler URL for DEMO_SUPABASE_PROJECT_REF.'
+              )
+          PY
+
+          case "$SAMPLE_DATA_COMMAND" in
+            on)
+              : "${TANAW_MOCK_TARGET_ENTERPRISE:?Set the DEMO_ENTERPRISE_ID variable}"
+              : "${TANAW_MOCK_ACCOUNT_PASSWORD:?Set the DEMO_SAMPLE_ACCOUNT_PASSWORD secret}"
+              ;;
+            off) ;;
+            *) echo "Unsupported sample-data command." >&2; exit 1 ;;
+          esac
+          uv run --no-sync sample-data "$SAMPLE_DATA_COMMAND" >/dev/null
+          echo "Demo data command completed. Refresh the TANAW demo site."

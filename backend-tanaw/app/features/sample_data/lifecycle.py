@@ -22,6 +22,7 @@ from app.features.sample_data.dataset import (
     prepared_counts,
     sample_dataset_marker_email,
 )
+from app.features.sample_data.definitions import TEST_ACCOUNT_PASSWORD
 from app.features.sample_data.helpers import (
     affected_row_count,
     reporting_range,
@@ -56,7 +57,13 @@ async def sample_dataset_status(db: AsyncSession) -> dict:
 
 
 async def generate_sample_data(
-    db: AsyncSession, range_value: str, scenario: str, seed: str, target_identifier: str | None
+    db: AsyncSession,
+    range_value: str,
+    scenario: str,
+    seed: str,
+    target_identifier: str | None,
+    *,
+    account_password: str = TEST_ACCOUNT_PASSWORD,
 ) -> dict:
     rng = random.Random(seed)
     range_start, range_end = reporting_range(range_value)
@@ -64,7 +71,7 @@ async def generate_sample_data(
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
-    accounts = await create_accounts(db)
+    accounts = await create_accounts(db, account_password)
     enterprises = list(
         {enterprise.id: enterprise for enterprise in [target, *accounts["enterprises"]]}.values()
     )

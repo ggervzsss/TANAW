@@ -4,12 +4,14 @@ import pytest
 
 from app.features.sample_data import cli, lifecycle
 from app.features.sample_data.accounts import resolve_target_enterprise
+from app.features.sample_data.definitions import TEST_ACCOUNT_PASSWORD
 from app.features.sample_data.helpers import month_starts, reporting_range
 
 
 @pytest.fixture(autouse=True)
-def clear_target_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def clear_sample_data_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TANAW_MOCK_TARGET_ENTERPRISE", raising=False)
+    monkeypatch.delenv("TANAW_MOCK_ACCOUNT_PASSWORD", raising=False)
 
 
 @pytest.mark.parametrize("command", ["on", "reset"])
@@ -66,6 +68,20 @@ def test_conflicting_explicit_targets_are_rejected() -> None:
 @pytest.mark.parametrize("command", ["off", "status"])
 def test_read_and_cleanup_commands_do_not_require_a_target(command: str) -> None:
     assert cli.parse_args([command]).command == command
+
+
+def test_local_sample_accounts_keep_their_documented_password() -> None:
+    assert cli.sample_account_password() == TEST_ACCOUNT_PASSWORD
+
+
+@pytest.mark.parametrize("password", ["", "short", TEST_ACCOUNT_PASSWORD])
+def test_custom_sample_password_rejects_invalid_or_documented_passwords(
+    monkeypatch: pytest.MonkeyPatch, password: str
+) -> None:
+    monkeypatch.setenv("TANAW_MOCK_ACCOUNT_PASSWORD", password)
+
+    with pytest.raises(SystemExit, match="TANAW_MOCK_ACCOUNT_PASSWORD"):
+        cli.sample_account_password()
 
 
 @pytest.mark.asyncio

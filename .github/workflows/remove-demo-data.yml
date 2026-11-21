@@ -1,0 +1,9 @@
+name: Remove Demo Data
+
+on: workflow_dispatch
+
+jobs:
+  remove:
+    uses: ./.github/workflows/manage-demo-data.yml
+    with:
+      command: 'off'
