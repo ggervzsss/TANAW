@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from contextlib import suppress
 from datetime import UTC, datetime
 
@@ -55,16 +56,39 @@ async def realtime_websocket(websocket: WebSocket) -> None:
         ).model_dump(mode="json"),
     )
 
+    await _serve_connection(websocket, token, account)
+
+
+async def _serve_connection(websocket: WebSocket, token: str, account: Account) -> None:
+    """Keep one authenticated socket alive on a server-controlled schedule.
+
+    Every REALTIME_HEARTBEAT_SECONDS the server re-validates the session with one
+    account lookup and then sends a heartbeat. Client messages only refresh
+    liveness: a pong acknowledges the heartbeat and ends that exchange, and a
+    ping gets a heartbeat reply, so neither triggers an account lookup or moves
+    the next scheduled check. The socket closes when the access token expires,
+    when the scheduled check finds the session invalid, or when the client has
+    been silent for two heartbeat intervals.
+    """
+    loop = asyncio.get_running_loop()
+    interval = REALTIME_HEARTBEAT_SECONDS
+    last_message_at = loop.time()
+    next_check_at = last_message_at + interval
+    session_expires_at = _session_expiry_deadline(token, loop.time())
     receive_task: asyncio.Task[str] | None = asyncio.create_task(_receive_text(websocket))
-    missed_heartbeats = 0
     try:
         while True:
             if receive_task is None:
                 return
             active_receive_task = receive_task
+            wake_at = (
+                next_check_at
+                if session_expires_at is None
+                else min(next_check_at, session_expires_at)
+            )
             completed, _ = await asyncio.wait(
                 {active_receive_task},
-                timeout=REALTIME_HEARTBEAT_SECONDS,
+                timeout=max(0.0, wake_at - loop.time()),
             )
             if completed:
                 try:
@@ -72,26 +96,29 @@ async def realtime_websocket(websocket: WebSocket) -> None:
                 finally:
                     receive_task = None
                 receive_task = asyncio.create_task(_receive_text(websocket))
-                missed_heartbeats = 0
+                last_message_at = loop.time()
                 if _is_ping(message):
-                    await realtime_manager.send_protocol(
-                        websocket,
-                        RealtimeHeartbeat(occurred_at=datetime.now(UTC)).model_dump(mode="json"),
-                    )
-            else:
-                missed_heartbeats += 1
-                if missed_heartbeats >= 2:
-                    await realtime_manager.disconnect(
-                        websocket,
-                        close_code=1013,
-                        reason="heartbeat_timeout",
-                    )
-                    return
-                await realtime_manager.send_protocol(
-                    websocket,
-                    RealtimeHeartbeat(occurred_at=datetime.now(UTC)).model_dump(mode="json"),
-                )
+                    await _send_heartbeat(websocket)
 
+            # Checked after every wake-up, so a stream of client messages cannot
+            # postpone expiry, validation, or the heartbeat.
+            now = loop.time()
+            if session_expires_at is not None and now >= session_expires_at:
+                await realtime_manager.disconnect(
+                    websocket,
+                    close_code=4401,
+                    reason="session_expired",
+                )
+                return
+            if now < next_check_at:
+                continue
+            if now - last_message_at >= 2 * interval:
+                await realtime_manager.disconnect(
+                    websocket,
+                    close_code=1013,
+                    reason="heartbeat_timeout",
+                )
+                return
             async with AsyncSessionLocal() as db:
                 current_account = await authenticate_websocket_account(db, token)
             if (
@@ -105,6 +132,12 @@ async def realtime_websocket(websocket: WebSocket) -> None:
                     reason="session_invalidated",
                 )
                 return
+            await _send_heartbeat(websocket)
+            next_check_at += interval
+            if next_check_at <= now:
+                # The event loop stalled past a whole interval; resume the cadence
+                # from now instead of running the missed checks back to back.
+                next_check_at = now + interval
     except WebSocketDisconnect:
         pass
     finally:
@@ -113,6 +146,31 @@ async def realtime_websocket(websocket: WebSocket) -> None:
             with suppress(asyncio.CancelledError, WebSocketDisconnect):
                 await receive_task
         await realtime_manager.disconnect(websocket, reason="client_disconnected")
+
+
+async def _send_heartbeat(websocket: WebSocket) -> None:
+    await realtime_manager.send_protocol(
+        websocket,
+        RealtimeHeartbeat(occurred_at=datetime.now(UTC)).model_dump(mode="json"),
+    )
+
+
+def _session_expiry_deadline(token: str, now: float) -> float | None:
+    """Return the event-loop time at which the access token expires, if it says.
+
+    The token was already verified during authentication, so this only lets the
+    socket close at expiry without waiting for the next scheduled account check.
+    """
+    try:
+        payload = decode_access_token(token)
+    except jwt.ExpiredSignatureError:
+        return now
+    except jwt.PyJWTError:
+        return None
+    expires_at = payload.get("exp")
+    if not isinstance(expires_at, int | float):
+        return None
+    return now + max(0.0, float(expires_at) - time.time())
 
 
 async def _receive_text(websocket: WebSocket) -> str:
@@ -132,10 +190,9 @@ def _is_ping(message: str) -> bool:
         parsed = json.loads(message)
     except json.JSONDecodeError:
         return False
-    return isinstance(parsed, dict) and parsed.get("type") in {
-        "realtime.ping",
-        "realtime.pong",
-    }
+    # A realtime.pong only acknowledges a server heartbeat. Answering it with
+    # another heartbeat made every idle client loop as fast as the network allowed.
+    return isinstance(parsed, dict) and parsed.get("type") == "realtime.ping"
 
 
 async def authenticate_websocket_account(db: AsyncSession, token: str) -> Account | None:

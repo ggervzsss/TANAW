@@ -8,10 +8,17 @@ import asyncpg  # type: ignore[import-untyped]
 from sqlalchemy import select, text
 
 from app.core.config import Settings
+from app.db.commit_signal import (
+    IdleBackoff,
+    subscribe_to_commits,
+    unsubscribe_from_commits,
+    wait_for_wake,
+)
 from app.db.session import AsyncSessionLocal
 from app.features.realtime.constants import (
     REALTIME_BROKER_RECONNECT_SECONDS,
     REALTIME_OUTBOX_BATCH_SIZE,
+    REALTIME_OUTBOX_IDLE_POLL_MAX_SECONDS,
     REALTIME_OUTBOX_POLL_SECONDS,
 )
 from app.features.realtime.contracts import RealtimeActor, RealtimeEnvelope, RealtimeScope
@@ -80,17 +87,29 @@ class RealtimeRuntime:
         await realtime_manager.close_all()
 
     async def _outbox_loop(self, stop_event: asyncio.Event) -> None:
-        while not stop_event.is_set():
-            try:
-                processed = await self.dispatch_batch()
-            except Exception:
-                logger.exception("Realtime outbox batch failed.")
-                processed = 0
-            timeout = 0.05 if processed else REALTIME_OUTBOX_POLL_SECONDS
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=timeout)
-            except TimeoutError:
-                pass
+        # Outbox rows are inserted by database triggers on application tables, so
+        # any write commit in this process may have queued an event. The worker's
+        # own publish commit touches only realtime_outbox and does not wake it.
+        wake = subscribe_to_commits(ignore={RealtimeOutbox.__tablename__})
+        backoff = IdleBackoff(REALTIME_OUTBOX_POLL_SECONDS, REALTIME_OUTBOX_IDLE_POLL_MAX_SECONDS)
+        try:
+            while not stop_event.is_set():
+                # Clear before reading, so a commit that lands during the batch
+                # wakes the next wait instead of being missed.
+                wake.event.clear()
+                try:
+                    processed = await self.dispatch_batch()
+                except Exception:
+                    logger.exception("Realtime outbox batch failed.")
+                    processed = 0
+                if processed:
+                    backoff.reset()
+                    timeout = 0.05
+                else:
+                    timeout = backoff.next_delay()
+                await wait_for_wake(wake, stop_event, timeout)
+        finally:
+            unsubscribe_from_commits(wake)
 
     async def dispatch_batch(self) -> int:
         async with AsyncSessionLocal() as db:

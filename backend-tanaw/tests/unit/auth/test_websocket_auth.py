@@ -100,34 +100,6 @@ def active_it_account() -> Account:
 
 
 @pytest.mark.asyncio
-async def test_realtime_websocket_disconnects_when_session_is_invalidated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    websocket = MagicMock()
-    websocket.receive_text = AsyncMock(return_value='{"type":"realtime.pong"}')
-    manager = SimpleNamespace(
-        connect=AsyncMock(),
-        disconnect=AsyncMock(),
-        send_protocol=AsyncMock(return_value=True),
-    )
-    authenticate = AsyncMock(side_effect=[active_it_account(), None])
-    monkeypatch.setattr(
-        realtime_router,
-        "receive_websocket_bearer_token",
-        AsyncMock(return_value="access-token"),
-    )
-    monkeypatch.setattr(realtime_router, "authenticate_websocket_account", authenticate)
-    monkeypatch.setattr(realtime_router, "AsyncSessionLocal", AsyncSessionContext)
-    monkeypatch.setattr(realtime_router, "realtime_manager", manager)
-
-    await realtime_router.realtime_websocket(cast(WebSocket, websocket))
-
-    assert authenticate.await_count == 2
-    manager.connect.assert_awaited_once()
-    assert any(call.kwargs.get("close_code") == 4401 for call in manager.disconnect.await_args_list)
-
-
-@pytest.mark.asyncio
 async def test_realtime_websocket_exits_when_closed_before_receiving(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

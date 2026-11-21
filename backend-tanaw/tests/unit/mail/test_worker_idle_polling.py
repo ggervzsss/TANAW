@@ -1,0 +1,141 @@
+"""Idle polling of the email outbox worker.
+
+``run_email_outbox_batch`` is replaced by a fake queue, so these tests only
+exercise when the worker checks the database, not how it delivers.
+"""
+
+import asyncio
+import itertools
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import pytest
+
+from app.core.config import get_settings
+from app.db.commit_signal import notify_commit
+from app.features.mail import worker as mail_worker
+
+
+class FakeEmailQueue:
+    def __init__(self) -> None:
+        self.pending = 0
+        self.checks: list[float] = []
+
+    async def run_batch(self, _settings: object) -> int:
+        self.checks.append(asyncio.get_running_loop().time())
+        processed, self.pending = self.pending, 0
+        return processed
+
+
+@asynccontextmanager
+async def worker_loop(
+    monkeypatch: pytest.MonkeyPatch, *, initial: float, maximum: float
+) -> AsyncIterator[tuple[FakeEmailQueue, asyncio.Event, asyncio.Task[None]]]:
+    settings = get_settings().model_copy(
+        update={
+            "email_outbox_poll_interval_seconds": initial,
+            "email_outbox_idle_poll_max_seconds": maximum,
+        }
+    )
+    queue = FakeEmailQueue()
+    monkeypatch.setattr(mail_worker, "run_email_outbox_batch", queue.run_batch)
+    stop = asyncio.Event()
+    task = asyncio.create_task(mail_worker._worker_loop(settings, stop))
+    try:
+        yield queue, stop, task
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=2)
+
+
+async def check_number(queue: FakeEmailQueue, number: int, timeout: float = 2.0) -> float:
+    """Wait for the worker's ``number``-th database check (1-based) and return its time."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while len(queue.checks) < number:
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("The worker did not check the queue in time.")
+        await asyncio.sleep(0.001)
+    return queue.checks[number - 1]
+
+
+@pytest.mark.asyncio
+async def test_idle_email_worker_backs_off_to_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    async with worker_loop(monkeypatch, initial=0.02, maximum=0.16) as (queue, _, _):
+        await asyncio.sleep(0.75)
+
+    gaps = [later - earlier for earlier, later in itertools.pairwise(queue.checks)]
+    assert len(queue.checks) <= 9
+    assert gaps[:3] == pytest.approx([0.02, 0.04, 0.08], abs=0.015)
+    assert all(gap == pytest.approx(0.16, abs=0.03) for gap in gaps[4:])
+
+
+@pytest.mark.asyncio
+async def test_queued_email_wakes_idle_worker_and_resets_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with worker_loop(monkeypatch, initial=0.02, maximum=5.0) as (queue, _, _):
+        await asyncio.sleep(0.5)
+        seen = len(queue.checks)
+        queue.pending = 1
+        loop = asyncio.get_running_loop()
+        queued_at = loop.time()
+        notify_commit({"email_outbox"})
+        claimed_at = await check_number(queue, seen + 1)
+
+        assert claimed_at - queued_at < 0.1
+        # Work found: the worker claims again immediately, then backs off afresh.
+        follow_up = await check_number(queue, seen + 2)
+        reset_poll = await check_number(queue, seen + 3)
+        assert follow_up - claimed_at < 0.02
+        assert reset_poll - follow_up == pytest.approx(0.02, abs=0.015)
+
+
+@pytest.mark.asyncio
+async def test_unrelated_commits_do_not_wake_the_email_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with worker_loop(monkeypatch, initial=0.02, maximum=5.0) as (queue, _, _):
+        await asyncio.sleep(0.5)
+        checks_before = len(queue.checks)
+        notify_commit({"enterprise_telemetry_snapshots"})
+        await asyncio.sleep(0.1)
+
+        assert len(queue.checks) == checks_before
+
+
+@pytest.mark.asyncio
+async def test_failed_batch_backs_off_instead_of_spinning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checks: list[float] = []
+
+    async def failing_batch(_settings: object) -> int:
+        checks.append(asyncio.get_running_loop().time())
+        raise RuntimeError("database unavailable")
+
+    settings = get_settings().model_copy(
+        update={
+            "email_outbox_poll_interval_seconds": 0.02,
+            "email_outbox_idle_poll_max_seconds": 0.16,
+        }
+    )
+    monkeypatch.setattr(mail_worker, "run_email_outbox_batch", failing_batch)
+    stop = asyncio.Event()
+    task = asyncio.create_task(mail_worker._worker_loop(settings, stop))
+    await asyncio.sleep(0.5)
+    stop.set()
+    await asyncio.wait_for(task, timeout=2)
+
+    assert 3 <= len(checks) <= 8
+
+
+@pytest.mark.asyncio
+async def test_stop_interrupts_a_long_idle_email_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    async with worker_loop(monkeypatch, initial=5.0, maximum=10.0) as (queue, stop, task):
+        await check_number(queue, 1)
+        loop = asyncio.get_running_loop()
+        stopped_at = loop.time()
+        stop.set()
+        await asyncio.wait_for(task, timeout=2)
+
+        assert loop.time() - stopped_at < 0.2

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     email_request_timeout_seconds: float = Field(default=10.0, ge=0.5, le=60.0)
     email_secret_derivation_key: SecretStr | None = None
     email_outbox_poll_interval_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
+    # The worker wakes as soon as this process queues an email; while idle its
+    # fallback poll backs off from the interval above to this cap.
+    email_outbox_idle_poll_max_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     email_outbox_lease_seconds: int = Field(default=120, ge=30, le=600)
     email_outbox_batch_size: int = Field(default=5, ge=1, le=25)
     email_outbox_max_attempts: int = Field(default=5, ge=1, le=10)

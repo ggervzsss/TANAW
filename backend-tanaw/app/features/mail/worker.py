@@ -11,6 +11,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.db.commit_signal import (
+    IdleBackoff,
+    subscribe_to_commits,
+    unsubscribe_from_commits,
+    wait_for_wake,
+)
 from app.db.session import AsyncSessionLocal
 from app.features.accounts.models import AccountRole
 from app.features.mail.client import BrevoAPIError
@@ -89,21 +95,28 @@ async def run_email_outbox_batch(settings: Settings) -> int:
 
 
 async def _worker_loop(settings: Settings, stop_event: asyncio.Event) -> None:
-    while not stop_event.is_set():
-        try:
-            processed = await run_email_outbox_batch(settings)
-        except Exception:
-            processed = 0
-            logger.exception("Email outbox worker batch failed.")
-        if processed > 0:
-            continue
-        try:
-            await asyncio.wait_for(
-                stop_event.wait(),
-                timeout=settings.email_outbox_poll_interval_seconds,
-            )
-        except TimeoutError:
-            pass
+    # Queueing an email commits an email_outbox row in this process, which wakes
+    # the worker at once. The backoff only bounds how late it notices due
+    # retries, expired leases, and rows written by another process.
+    wake = subscribe_to_commits({EmailOutbox.__tablename__})
+    initial = settings.email_outbox_poll_interval_seconds
+    backoff = IdleBackoff(initial, max(initial, settings.email_outbox_idle_poll_max_seconds))
+    try:
+        while not stop_event.is_set():
+            # Clear before claiming, so a commit that lands during the batch
+            # wakes the next wait instead of being missed.
+            wake.event.clear()
+            try:
+                processed = await run_email_outbox_batch(settings)
+            except Exception:
+                processed = 0
+                logger.exception("Email outbox worker batch failed.")
+            if processed > 0:
+                backoff.reset()
+                continue
+            await wait_for_wake(wake, stop_event, backoff.next_delay())
+    finally:
+        unsubscribe_from_commits(wake)
 
 
 async def _claim_email_batch(settings: Settings) -> list[ClaimedEmail]:

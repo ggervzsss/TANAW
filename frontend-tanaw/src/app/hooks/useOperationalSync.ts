@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   getVisitorInsights,
@@ -32,15 +32,25 @@ export function useOperationalFinalReports() {
   return useQuery({ queryKey: operationalFinalReportsQueryKey, queryFn: listFinalReports, enabled: Boolean(token) });
 }
 
+export const OPERATIONAL_MAP_REFRESH_MS = 30_000;
+
+/**
+ * The map refreshes on a 30-second fallback poll while its tab is visible, in
+ * case a live update is missed. The poll pauses in a hidden tab, and showing the
+ * tab again refetches the map once if its data is older than one interval.
+ */
+export const operationalMapEnterprisesQueryOptions = queryOptions({
+  queryKey: operationalMapEnterprisesQueryKey,
+  queryFn: listOperationalMapEnterprises,
+  refetchInterval: OPERATIONAL_MAP_REFRESH_MS,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: true,
+  staleTime: OPERATIONAL_MAP_REFRESH_MS,
+});
+
 export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({
-    queryKey: operationalMapEnterprisesQueryKey,
-    queryFn: listOperationalMapEnterprises,
-    enabled: Boolean(token),
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: true,
-  });
+  return useQuery({ ...operationalMapEnterprisesQueryOptions, enabled: Boolean(token) });
 }
 
 export function useVisitorInsights(params: VisitorInsightParams, enabled = true) {
