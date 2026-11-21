@@ -10,18 +10,14 @@ from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.service import generate_enterprise_id, normalize_enterprise_id_seed
 from app.features.sample_data.dataset import SAMPLE_ACCOUNT_EMAILS
-from app.features.sample_data.definitions import (
-    ENTERPRISES,
-    LGU_ACCOUNTS,
-    TEST_ACCOUNT_PASSWORD,
-)
+from app.features.sample_data.definitions import ENTERPRISES, LGU_ACCOUNTS
 from app.features.sample_data.helpers import (
     sample_uuid,
 )
 
 
-async def create_accounts(db: AsyncSession) -> dict[str, list[Account]]:
-    password_hash = hash_password(validate_password_policy(TEST_ACCOUNT_PASSWORD))
+async def create_accounts(db: AsyncSession, password: str) -> dict[str, list[Account]]:
+    password_hash = hash_password(validate_password_policy(password))
     lgu_accounts: list[Account] = []
     for email, role, display_name, title, first_name, last_name in LGU_ACCOUNTS:
         ensure_email_available(

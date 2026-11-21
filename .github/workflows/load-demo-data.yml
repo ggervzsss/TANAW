@@ -1,0 +1,9 @@
+name: Load Demo Data
+
+on: workflow_dispatch
+
+jobs:
+  load:
+    uses: ./.github/workflows/manage-demo-data.yml
+    with:
+      command: 'on'

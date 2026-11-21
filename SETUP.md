@@ -245,6 +245,32 @@ In the portal, sign in as the sample LGU Staff account. Review the submissions
 under **Batch Reports**, mark eligible records **Ready to Consolidate**, generate
 a final report, and inspect its sources under **Final Reports Audit**.
 
+## Load or remove data on the hosted demo
+
+After the workflows reach the default branch, open the repository's **Actions**
+tab. Select **Load Demo Data** or **Remove Demo Data**, leave the branch on
+the default, and click **Run workflow**. Wait for the green check and then
+refresh the Vercel demo site. Loading requires an activated demo enterprise
+and stops if a sample dataset already exists. Removing clears the generated
+data and preserves the original demo enterprise account.
+
+For one-time setup, point the Vercel demo at the Render API backed by the
+demo-only Supabase project. In GitHub, create the **tanaw-demo** environment
+under **Settings → Environments** and allow deployments from the default branch.
+Add these values to that environment.
+
+| Setting | Kind | Value |
+| ------- | ---- | ----- |
+| `DEMO_SUPABASE_PROJECT_REF` | Variable | Project reference from the demo Supabase dashboard. |
+| `DEMO_ENTERPRISE_ID` | Variable | Full Enterprise ID of an existing, activated demo account. |
+| `DEMO_DATABASE_URL` | Secret | The demo project's **Connect → Session pooler** URL on port `5432`, with the database password filled in. Percent-encode reserved characters in the password and use the URL without query options. |
+| `DEMO_SAMPLE_ACCOUNT_PASSWORD` | Secret | A private password for the generated demo accounts. Share it privately with the demo team. |
+
+The workflow checks the Supabase project reference before connecting and uses
+the database schema already deployed by Render. The demo account password is
+only needed for loading. Use the sample usernames listed above with that
+password when signing in to the hosted demo.
+
 ## Everyday commands
 
 From the repository root:
