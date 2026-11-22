@@ -117,7 +117,8 @@ class CameraStartRequest(BaseModel):
     event_cooldown_seconds: float = Field(default=3.6, ge=0.5, le=30.0)
     paired_line_max_gap_seconds: float = Field(default=18.0, ge=1.0, le=120.0)
     track_ttl_seconds: float = Field(default=9.0, ge=1.0, le=60.0)
-    pending_reid_wait_seconds: float = Field(default=0.6, ge=0.1, le=2.0)
+    # How long a doorway entry waits for clean appearance samples before it is identified.
+    pending_reid_wait_seconds: float = Field(default=2.0, ge=0.1, le=5.0)
 
     @model_validator(mode="before")
     @classmethod

@@ -35,6 +35,8 @@ class TrackAppearance:
     last_seen_frame: int
     last_sampled_frame: int = 0
     samples: list[AppearanceSample] = field(default_factory=list)
+    # The newest samples regardless of quality, so a long track keeps showing its current view.
+    recent: list[AppearanceSample] = field(default_factory=list)
 
 
 class TrackAppearanceBuffer:
@@ -47,6 +49,8 @@ class TrackAppearanceBuffer:
         min_bbox_height_px: int = 80,
         max_edge_clip_fraction: float = 0.30,
         stop_when_full: bool = False,
+        max_occlusion_fraction: float = 0.25,
+        recent_samples_per_track: int = 3,
     ) -> None:
         self.max_samples_per_track = max_samples_per_track
         self.sample_interval_frames = sample_interval_frames
@@ -55,6 +59,8 @@ class TrackAppearanceBuffer:
         self.min_bbox_height_px = min_bbox_height_px
         self.max_edge_clip_fraction = max_edge_clip_fraction
         self.stop_when_full = stop_when_full
+        self.max_occlusion_fraction = max_occlusion_fraction
+        self.recent_samples_per_track = max(1, recent_samples_per_track)
         self._tracks: dict[int, TrackAppearance] = {}
 
     def reset(self) -> None:
@@ -67,11 +73,19 @@ class TrackAppearanceBuffer:
                 del self._tracks[track_id]
 
     def should_sample(
-        self, track: TrackLike, frame_width: int, frame_height: int, frame_index: int
+        self,
+        track: TrackLike,
+        frame_width: int,
+        frame_height: int,
+        frame_index: int,
+        occlusion: float = 0.0,
     ) -> bool:
+        """Whether to embed this crop now; ``occlusion`` is the share another box covers."""
         if track.track_id <= 0:
             return False
         if track.confidence < self.min_detection_confidence:
+            return False
+        if occlusion > self.max_occlusion_fraction:
             return False
 
         quality = self.quality_score(track, frame_width, frame_height)
@@ -101,11 +115,11 @@ class TrackAppearanceBuffer:
         state = self._tracks.setdefault(track_id, TrackAppearance(last_seen_frame=frame_index))
         state.last_seen_frame = frame_index
         state.last_sampled_frame = frame_index
-        state.samples.append(
-            AppearanceSample(
-                embedding=embedding.astype(np.float32), quality=quality, frame_index=frame_index
-            )
+        sample = AppearanceSample(
+            embedding=embedding.astype(np.float32), quality=quality, frame_index=frame_index
         )
+        state.samples.append(sample)
+        state.recent = [*state.recent, sample][-self.recent_samples_per_track :]
         state.samples.sort(key=lambda sample: (sample.quality, sample.frame_index), reverse=True)
         state.samples = state.samples[: self.max_samples_per_track]
 
@@ -131,6 +145,9 @@ class TrackAppearanceBuffer:
         target.samples.extend(previous.samples)
         target.samples.sort(key=lambda sample: (sample.quality, sample.frame_index), reverse=True)
         target.samples = target.samples[: self.max_samples_per_track]
+        target.recent = sorted(
+            [*target.recent, *previous.recent], key=lambda sample: sample.frame_index
+        )[-self.recent_samples_per_track :]
 
     def embedding_for_track(self, track_id: int) -> np.ndarray | None:
         state = self._tracks.get(track_id)
@@ -146,6 +163,18 @@ class TrackAppearanceBuffer:
         if norm <= 1e-9:
             return None
         return (weighted / norm).astype(np.float32)
+
+    def recent_embedding_for_track(self, track_id: int) -> np.ndarray | None:
+        """The track's latest view: the mean of its newest samples."""
+        state = self._tracks.get(track_id)
+        if state is None or not state.recent:
+            return None
+        stacked = np.stack([sample.embedding for sample in state.recent]).astype(np.float32)
+        weighted = stacked.sum(axis=0)
+        norm = float(np.linalg.norm(weighted))
+        if norm <= 1e-9:
+            return None
+        return np.asarray(weighted / norm, dtype=np.float32)
 
     def samples_for_track(self, track_id: int) -> list[tuple[np.ndarray, float]]:
         """The kept embeddings with their quality scores, best first."""

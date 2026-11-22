@@ -72,7 +72,7 @@ def test_doorway_entry_is_counted_as_female_from_its_evidence(tmp_path: Path) ->
         door.bind_enterprise("park", restore_session=False)
         door.use_establishment_registry(service)
         door._sex_estimator = estimator(tmp_path, door, fast=1, quality=1)
-        for frame in (1, 2):
+        for frame in (1, 2, 3):
             door._appearance_buffer.record_sample(1, VECTOR, 0.9, frame)
         config = CameraStartRequest(camera_id=1, stream_url="rtsp://192.168.1.10/stream2")
         door._config = config

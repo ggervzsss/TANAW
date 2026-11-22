@@ -18,7 +18,7 @@ from app.attributes import SexEstimator, SexEvidence
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
 from app.camera.capture_worker import CaptureWorker
 from app.camera.contracts import CameraCounts, CameraSessionState
-from app.camera.frame_geometry import crop_track, track_inside_roi
+from app.camera.frame_geometry import crop_track, occlusion_fractions, track_inside_roi
 from app.camera.frame_renderer import CameraFrameRenderer, DisplayTrack
 from app.camera.models import (
     CameraStreamUnavailableError,
@@ -61,11 +61,23 @@ from app.storage.repositories.establishment_repository import (
     business_date_for as establishment_business_date,
 )
 from app.storage.session_store import SessionStore
-from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
+from app.tracking import (
+    EmbeddingResolution,
+    LostTrackLinker,
+    ResolvedTrack,
+    TrackIdentityResolver,
+)
 
 logger = logging.getLogger(__name__)
 FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
 QUALITY_REID_RESULT_MAX_AGE_SECONDS = 6.0
+# Clean fast-model samples a track needs before its appearance is trusted for identity.
+FAST_REID_CONSENSUS_SAMPLES = 3
+QUALITY_REID_CONSENSUS_SAMPLES = 2
+# Uncertain shared identities are settled on this cadence even when nobody is in view.
+PENDING_IDENTITY_SWEEP_SECONDS = 2.0
+# Entry / Exit physical track keys remembered so a ReID re-link can join their observations.
+MAX_REMEMBERED_TRACK_KEYS = 512
 
 
 class CameraProcessingManager:
@@ -118,6 +130,9 @@ class CameraProcessingManager:
         # identities without moving an in-progress paired-line crossing to another key.
         self._counting_track_resolver = TrackIdentityResolver(appearance_track_ttl_seconds=2.5)
         self._pending_entry_events: dict[tuple[int, str], PendingEntryEvent] = {}
+        # Stable appearance track -> the establishment key of its latest physical track.
+        self._stable_track_keys: dict[int, str] = {}
+        self._area_linker = LostTrackLinker()
         self._session_store = SessionStore(app_data_dir, camera_id=camera_id)
         self._visitor_registry = UniqueVisitorRegistry(
             self._session_store,
@@ -304,29 +319,9 @@ class CameraProcessingManager:
             self._counter.reset()
             if config.analysis_mode == "entrance_exit":
                 self._restore_saved_snapshot(saved_snapshot)
-            self._appearance_buffer = TrackAppearanceBuffer(
-                sample_interval_frames=max(1, int(round(processing_fps / 3.0)))
-            )
-            self._quality_appearance_buffer = TrackAppearanceBuffer(
-                max_samples_per_track=2,
-                sample_interval_frames=max(1, int(round(processing_fps * 4.0))),
-                track_ttl_frames=max(1, int(round(processing_fps * 15.0))),
-                min_detection_confidence=0.60,
-                min_bbox_height_px=96,
-                max_edge_clip_fraction=0.25,
-                stop_when_full=True,
-            )
-            self._identity_resolver = TrackIdentityResolver(
-                lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0),
-                appearance_track_ttl_seconds=max(config.track_ttl_seconds, 15.0),
-            )
-            counting_track_ttl_seconds = min(config.track_ttl_seconds, 3.0)
-            self._counting_track_resolver = TrackIdentityResolver(
-                motion_match_margin=0.15 if config.analysis_mode == "open_space" else 0.0,
-                lost_track_ttl_seconds=counting_track_ttl_seconds,
-                appearance_track_ttl_seconds=counting_track_ttl_seconds,
-            )
+            self._configure_tracking_locked(config, processing_fps)
             self._pending_entry_events.clear()
+            self._stable_track_keys.clear()
             if config.analysis_mode == "entrance_exit":
                 self._visitor_registry.prepare(config.camera_id)
             else:
@@ -407,6 +402,31 @@ class CameraProcessingManager:
             self._processing_thread.start()
             self._stream_thread.start()
             self._persist_session_locked()
+
+    def _configure_tracking_locked(self, config: CameraStartRequest, processing_fps: float) -> None:
+        """Appearance sampling and track continuity for one run, paced by ``processing_fps``."""
+        self._appearance_buffer = TrackAppearanceBuffer(
+            sample_interval_frames=max(1, int(round(processing_fps / 3.0)))
+        )
+        self._quality_appearance_buffer = TrackAppearanceBuffer(
+            max_samples_per_track=2,
+            sample_interval_frames=max(1, int(round(processing_fps * 4.0))),
+            track_ttl_frames=max(1, int(round(processing_fps * 15.0))),
+            min_detection_confidence=0.60,
+            min_bbox_height_px=96,
+            max_edge_clip_fraction=0.25,
+            stop_when_full=True,
+        )
+        self._identity_resolver = TrackIdentityResolver(
+            lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0),
+            appearance_track_ttl_seconds=max(config.track_ttl_seconds, 15.0),
+        )
+        counting_track_ttl_seconds = min(config.track_ttl_seconds, 3.0)
+        self._counting_track_resolver = TrackIdentityResolver(
+            motion_match_margin=0.15 if config.analysis_mode == "open_space" else 0.0,
+            lost_track_ttl_seconds=counting_track_ttl_seconds,
+            appearance_track_ttl_seconds=counting_track_ttl_seconds,
+        )
 
     def update_counting_config(self, update: CameraCountingConfigUpdate) -> dict[str, object]:
         with self._counting_lock:
@@ -868,11 +888,15 @@ class CameraProcessingManager:
             config.processing_fps, self._tracker.target_processing_fps
         )
         last_cleanup_at = time.monotonic()
+        last_identity_sweep_at = time.monotonic()
 
         try:
             if not config.preview_only:
                 self._tracker.warmup()
             while not session.stop_event.is_set() and self._is_current_session(session):
+                if time.monotonic() - last_identity_sweep_at >= PENDING_IDENTITY_SWEEP_SECONDS:
+                    self._finalize_pending_identities()
+                    last_identity_sweep_at = time.monotonic()
                 if (
                     config.analysis_mode == "entrance_exit"
                     and time.monotonic() - last_cleanup_at >= 3600
@@ -1119,6 +1143,11 @@ class CameraProcessingManager:
             source_tracks, now, frame_width, frame_height
         )
         counting_track_ids = {track.source_track_id: track.track_id for track in counting_tracks}
+        for track in tracks:
+            self._remember_track_key(
+                track.track_id, f"{session.event_scope}:{track.source_track_id}"
+            )
+        occlusion = occlusion_fractions({track.track_id: track.bbox for track in source_tracks})
         if self._establishment_registry is not None and session.config.camera_id is not None:
             self._establishment_registry.update_present_tracks(
                 session.config.camera_id,
@@ -1151,7 +1180,13 @@ class CameraProcessingManager:
             counting_track_id = counting_track_ids.get(track.source_track_id, track.source_track_id)
             if counting_eligible and _fast_reid_enabled(self._effective_reid_mode):
                 self._schedule_track_embedding(
-                    session, frame, track, frame_width, frame_height, now
+                    session,
+                    frame,
+                    track,
+                    frame_width,
+                    frame_height,
+                    now,
+                    occlusion=occlusion.get(track.source_track_id, 0.0),
                 )
                 if (
                     self._establishment_registry is not None
@@ -1172,6 +1207,9 @@ class CameraProcessingManager:
                         ),
                         quality_model_name=self._quality_reidentifier.embedding_space,
                         sex_evidence=self._sex_evidence(track.track_id),
+                        view_embedding=self._appearance_buffer.recent_embedding_for_track(
+                            track.track_id
+                        ),
                     )
             directions = (
                 self._counter.update_many(
@@ -1301,6 +1339,7 @@ class CameraProcessingManager:
         self._area_pending.clear()
         self._area_last_signature = None
         self._counting_track_resolver.reset()
+        self._area_linker.reset()
         self._area_frame_index = 0
         self._appearance_buffer.reset()
         self._quality_appearance_buffer.reset()
@@ -1478,6 +1517,17 @@ class CameraProcessingManager:
         }
         if not tracker.update(observations, observed_at):
             return []
+        self._area_linker.observe(
+            {
+                t.track_id: (
+                    t.counting_point.x / max(width, 1),
+                    t.counting_point.y / max(height, 1),
+                )
+                for t in tracks
+                if t.track_id > 0
+            },
+            observed_at,
+        )
         if self._establishment_registry is not None and session.config.camera_id is not None:
             self._establishment_registry.update_present_tracks(
                 session.config.camera_id,
@@ -1487,7 +1537,10 @@ class CameraProcessingManager:
         self._area_frame_index += 1
         self._appearance_buffer.begin_frame(self._area_frame_index)
         self._quality_appearance_buffer.begin_frame(self._area_frame_index)
-        self._update_area_visitors(session, frame, tracks, tracker, width, height, observed_at)
+        occlusion = occlusion_fractions({track.track_id: track.bbox for track in source_tracks})
+        self._update_area_visitors(
+            session, frame, tracks, tracker, width, height, observed_at, occlusion
+        )
         self._save_area(observed_at)
         return [
             DisplayTrack(
@@ -1513,6 +1566,7 @@ class CameraProcessingManager:
         width: int,
         height: int,
         now: float,
+        occlusion: dict[int, float] | None = None,
     ) -> None:
         """Collect appearance samples for tracks in the zone.
 
@@ -1547,10 +1601,63 @@ class CameraProcessingManager:
                 buffer.record_sample(
                     track.track_id, result.embedding, result.quality, self._area_frame_index
                 )
+        self._link_resumed_area_tracks(session, inside, now)
         for track in inside.values():
             self._schedule_track_embedding(
-                session, frame, track, width, height, now, frame_index=self._area_frame_index
+                session,
+                frame,
+                track,
+                width,
+                height,
+                now,
+                frame_index=self._area_frame_index,
+                occlusion=(occlusion or {}).get(track.source_track_id, 0.0),
             )
+
+    def _link_resumed_area_tracks(
+        self, session: ProcessingSession, inside: dict[int, ResolvedTrack], now: float
+    ) -> None:
+        """Join a zone track that resumed a briefly hidden person to that person's track.
+
+        Dwell visits stay with their own physical tracks; only the visitor identity is shared.
+        """
+        registry, tracker = self._establishment_registry, self._area_tracker
+        for track_id in inside:
+            if not self._track_has_reid_consensus(track_id):
+                continue
+            embedding = self._appearance_buffer.embedding_for_track(track_id)
+            self._area_linker.remember_appearance(track_id, embedding)
+            if not self._area_linker.needs_link_decision(track_id):
+                continue
+            predecessor = self._area_linker.link(track_id, embedding)
+            if (
+                predecessor is None
+                or registry is None
+                or tracker is None
+                or session.config.camera_id is None
+            ):
+                continue
+            registry.link_track(
+                camera_id=session.config.camera_id,
+                track_key=f"{self._area_run_id}:{track_id}",
+                predecessor_track_key=f"{self._area_run_id}:{predecessor}",
+                observed_at=parse_area_timestamp(tracker.timestamp(now)),
+            )
+
+    def _remember_track_key(self, stable_track_id: int, track_key: str) -> None:
+        self._stable_track_keys.pop(stable_track_id, None)
+        self._stable_track_keys[stable_track_id] = track_key
+        while len(self._stable_track_keys) > MAX_REMEMBERED_TRACK_KEYS:
+            self._stable_track_keys.pop(next(iter(self._stable_track_keys)))
+
+    def _finalize_pending_identities(self) -> None:
+        registry = self._establishment_registry
+        if registry is None:
+            return
+        try:
+            registry.finalize_pending(datetime.now(UTC))
+        except Exception:
+            logger.exception("Unable to settle pending visitor identities.")
 
     def _schedule_track_embedding(
         self,
@@ -1562,15 +1669,18 @@ class CameraProcessingManager:
         now: float,
         *,
         frame_index: int | None = None,
+        occlusion: float = 0.0,
     ) -> None:
         frame_index = self._counter.frame_index if frame_index is None else frame_index
         sample_fast = _fast_reid_enabled(
             self._effective_reid_mode
-        ) and self._appearance_buffer.should_sample(track, frame_width, frame_height, frame_index)
+        ) and self._appearance_buffer.should_sample(
+            track, frame_width, frame_height, frame_index, occlusion
+        )
         sample_quality = _quality_reid_enabled(
             self._effective_reid_mode
         ) and self._quality_appearance_buffer.should_sample(
-            track, frame_width, frame_height, frame_index
+            track, frame_width, frame_height, frame_index, occlusion
         )
         if not sample_fast and not sample_quality:
             return
@@ -1696,12 +1806,15 @@ class CameraProcessingManager:
             self._session_store.update_event_identity(
                 event.event_id, visitor_decision.as_event_fields()
             )
-            self._observe_establishment_crossing(session, event.track, "entry", event.event_id)
+            self._observe_establishment_crossing(
+                session, event.track, "entry", event.event_id, final=True
+            )
 
     def _track_has_reid_consensus(self, track_id: int) -> bool:
         return (
-            self._appearance_buffer.sample_count_for_track(track_id) >= 2
-            or self._quality_appearance_buffer.sample_count_for_track(track_id) >= 2
+            self._appearance_buffer.sample_count_for_track(track_id) >= FAST_REID_CONSENSUS_SAMPLES
+            or self._quality_appearance_buffer.sample_count_for_track(track_id)
+            >= QUALITY_REID_CONSENSUS_SAMPLES
         )
 
     def _apply_reid_results(self, session: ProcessingSession, now: float) -> None:
@@ -1783,6 +1896,7 @@ class CameraProcessingManager:
         self._appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
+        self._link_remapped_establishment_track(resolution.remap_from, resolution.remap_to)
         logger.info(
             "Reattached track to an inactive identity.",
             extra={
@@ -1790,6 +1904,28 @@ class CameraProcessingManager:
                 "previous_track_id": resolution.remap_from,
                 "target_track_id": resolution.remap_to,
             },
+        )
+
+    def _link_remapped_establishment_track(self, remap_from: int, remap_to: int) -> None:
+        """A ReID re-link means the new physical track resumed an earlier one: share its visitor."""
+        successor = self._stable_track_keys.get(remap_from)
+        predecessor = self._stable_track_keys.get(remap_to)
+        registry, config = self._establishment_registry, self._config
+        if successor is not None:
+            self._remember_track_key(remap_to, successor)
+        if (
+            successor is None
+            or predecessor is None
+            or registry is None
+            or config is None
+            or config.camera_id is None
+        ):
+            return
+        registry.link_track(
+            camera_id=config.camera_id,
+            track_key=successor,
+            predecessor_track_key=predecessor,
+            observed_at=datetime.now(UTC),
         )
 
     def _is_current_session(self, session: ProcessingSession) -> bool:
@@ -1854,15 +1990,21 @@ class CameraProcessingManager:
         track: ResolvedTrack,
         direction: str,
         event_id: str,
+        *,
+        final: bool = False,
     ) -> None:
+        """Save a doorway crossing; ``final`` uses whatever appearance the track has by then."""
         registry = self._establishment_registry
         if registry is None or session.config.camera_id is None:
             return
         now = datetime.now(UTC)
+        has_evidence = self._track_has_reid_consensus(track.track_id) or (
+            final and self._appearance_buffer.sample_count_for_track(track.track_id) > 0
+        )
         identified = (
             session.config.unique_counting_mode == "estimated_reid"
             and _fast_reid_enabled(self._effective_reid_mode)
-            and self._track_has_reid_consensus(track.track_id)
+            and has_evidence
         )
         registry.observe(
             observation_id=event_id,
@@ -1885,6 +2027,9 @@ class CameraProcessingManager:
             detection_confidence=track.confidence,
             bbox=track.bbox,
             sex_evidence=self._sex_evidence(track.track_id) if identified else None,
+            view_embedding=self._appearance_buffer.recent_embedding_for_track(track.track_id)
+            if identified
+            else None,
         )
 
     def _sex_evidence(self, track_id: int) -> SexEvidence | None:
@@ -1926,10 +2071,16 @@ class CameraProcessingManager:
             return
         for record in records:
             track_id = record["track_generation"]
+            # A finished visit uses whatever clean views it got: in a crowd some people never
+            # collect a full sample set, and leaving them unidentified would undercount.
+            has_evidence = self._track_has_reid_consensus(track_id) or (
+                record["ended_at"] is not None
+                and self._appearance_buffer.sample_count_for_track(track_id) > 0
+            )
             identified = (
                 config.unique_counting_mode == "estimated_reid"
                 and _fast_reid_enabled(self._effective_reid_mode)
-                and self._track_has_reid_consensus(track_id)
+                and has_evidence
             )
             registry.observe(
                 observation_id=record["visit_id"],
@@ -1950,6 +2101,9 @@ class CameraProcessingManager:
                 quality_model_name=self._quality_reidentifier.embedding_space,
                 revision_id=self._area_revision_id,
                 sex_evidence=self._sex_evidence(track_id) if identified else None,
+                view_embedding=self._appearance_buffer.recent_embedding_for_track(track_id)
+                if identified
+                else None,
                 ended_at=parse_area_timestamp(record["ended_at"]) if record["ended_at"] else None,
                 arrival_observed=record["arrival_observed"],
                 departure_observed=record["departure_observed"],

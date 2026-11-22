@@ -23,7 +23,7 @@ def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_pat
         for manager in (door, area):
             manager.bind_enterprise("park", restore_session=False)
             manager.use_establishment_registry(service)
-            for frame in (1, 2):
+            for frame in (1, 2, 3):
                 manager._appearance_buffer.record_sample(1, vector, 0.9, frame)
         door_config = CameraStartRequest(
             camera_id=1,
@@ -62,7 +62,7 @@ def test_doorway_and_area_camera_paths_link_to_one_establishment_visitor(tmp_pat
         area._begin_area(config)
         tracker = area._area_tracker
         assert tracker is not None
-        for frame in (1, 2):
+        for frame in (1, 2, 3):
             area._appearance_buffer.record_sample(1, vector, 0.9, frame)
         for second in range(4):
             tracker.update({1: (0.5, 0.5)}, tracker.anchor + second)

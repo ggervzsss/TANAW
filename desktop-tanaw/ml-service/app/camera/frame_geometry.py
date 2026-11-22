@@ -63,3 +63,26 @@ def _bbox_overlaps_roi(
         - max(box_top, roi.top * frame_height),
     )
     return overlap_area / box_area >= 0.25
+
+
+def occlusion_fractions(boxes: dict[int, tuple[int, int, int, int]]) -> dict[int, float]:
+    """For each box, the largest share of its area that one other box covers.
+
+    People overlap when one stands in front of another. A crop taken then mixes two
+    people's appearance, so appearance sampling skips heavily overlapped boxes.
+    """
+    fractions: dict[int, float] = {}
+    items = list(boxes.items())
+    for key, (x1, y1, x2, y2) in items:
+        area = max(0, x2 - x1) * max(0, y2 - y1)
+        covered = 0.0
+        if area > 0:
+            for other_key, (ox1, oy1, ox2, oy2) in items:
+                if other_key == key:
+                    continue
+                width = min(x2, ox2) - max(x1, ox1)
+                height = min(y2, oy2) - max(y1, oy1)
+                if width > 0 and height > 0:
+                    covered = max(covered, width * height / area)
+        fractions[key] = min(1.0, covered)
+    return fractions

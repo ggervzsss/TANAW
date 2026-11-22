@@ -19,6 +19,15 @@ from app.storage.repositories.establishment_repository import (
 )
 from app.storage.session_store import SessionStore
 
+# An uncertain identity is settled when its observation ends, or after this many seconds.
+PROVISIONAL_DECISION_SECONDS = 10.0
+# Settling compares every view the uncertain identity collected, so it may accept a slightly
+# lower score than a single direct match (0.80).
+RECONCILIATION_MATCH_THRESHOLD = 0.76
+CONSENSUS_RECONCILIATION_MATCH_THRESHOLD = 0.72
+# Links between a lost physical track and the track that resumed it are kept this long.
+TRACK_LINK_RETENTION_SECONDS = 3600.0
+
 
 class EstablishmentRegistry:
     def __init__(self, app_data_dir: str | None, enterprise_id: str) -> None:
@@ -30,6 +39,8 @@ class EstablishmentRegistry:
         self._gallery_versions: dict[UniqueVisitorRegistry, tuple[Any, ...]] = {}
         self._present_tracks: dict[int, tuple[datetime, set[str]]] = {}
         self._last_track_refresh: dict[tuple[int, str], datetime] = {}
+        # Successor physical track key -> (predecessor key, linked at).
+        self._track_links: dict[str, tuple[str, datetime]] = {}
 
     def refresh_track(
         self,
@@ -42,6 +53,7 @@ class EstablishmentRegistry:
         quality_embedding: np.ndarray | None = None,
         quality_model_name: str | None = None,
         sex_evidence: SexEvidence | None = None,
+        view_embedding: np.ndarray | None = None,
     ) -> None:
         """Enrich an existing doorway observation when usable appearance arrives late."""
         with self._lock:
@@ -78,6 +90,7 @@ class EstablishmentRegistry:
                 quality_model_name=quality_model_name,
                 sex_evidence=sex_evidence,
                 payload=json.loads(source["payload_json"]),
+                view_embedding=view_embedding,
             )
 
     def update_present_tracks(
@@ -114,7 +127,13 @@ class EstablishmentRegistry:
         bbox: tuple[int, int, int, int] | None = None,
         payload: dict[str, Any] | None = None,
         sex_evidence: SexEvidence | None = None,
+        view_embedding: np.ndarray | None = None,
     ) -> VisitorDecision:
+        """Save one physical observation and resolve which visitor it shows.
+
+        Exits may match an existing visitor but never add one: each exit is usually a new
+        physical track, so letting it create visitors would count a missed match twice.
+        """
         at = timestamp(observed_at)
         first = timestamp(first_at)
         if camera_id <= 0 or not observation_id or not track_key or first > at:
@@ -154,14 +173,22 @@ class EstablishmentRegistry:
                 identity_confidence=previous["identity_confidence"] if previous else "pending",
                 business_date=business_date,
             )
+            finalized = False
             if qualified and normalized is not None:
                 registry = self._registry(model_name, normalized.size, quality_model_name)
                 signature = self._gallery_signature(registry, business_date)
                 if self._gallery_versions.get(registry) != signature:
                     registry.refresh_gallery(None, observed_at)
                 excluded = self._excluded_visitors(track_key, at, business_date)
+                finalized = registry.finalize_due_provisionals(observed_at, frozenset(excluded))
+                physical_track = _track_id(track_key)
+                if registry.visitor_id_for_track(physical_track) is None:
+                    # A track that resumed a lost one is the same person, whatever its score.
+                    linked = self._linked_visitor(db, track_key, business_date)
+                    if linked is not None and linked not in excluded:
+                        registry.bind_track(physical_track, linked)
                 decision = registry.resolve_entry(
-                    track_id=_track_id(track_key),
+                    track_id=physical_track,
                     camera_id=None,
                     embedding=normalized,
                     quality_embedding=quality_embedding,
@@ -169,6 +196,9 @@ class EstablishmentRegistry:
                     bbox=bbox,
                     now=observed_at,
                     excluded_visitor_ids=frozenset(excluded),
+                    view_embedding=view_embedding,
+                    finalize=ended_at is not None,
+                    allow_new_identity=kind != "exit",
                 )
                 if decision.reid_decision == "track_existing" and quality_embedding is not None:
                     registry.record_quality_embedding_for_track(
@@ -206,19 +236,118 @@ class EstablishmentRegistry:
                 "sex_weight": sex_evidence.weight if sex_evidence else 0.0,
                 "sex_model": sex_evidence.model if sex_evidence else None,
             }
-            changed = self.repository.save_observation(record)
+            changed = self.repository.save_observation(record) or finalized
             if decision.visitor_id is not None and decision.identity_confidence == "high":
-                bound = db.execute(
-                    "update establishment_observations set visitor_id=?,identity_confidence='high',"
-                    "reid_decision='physical_track' where track_key=? and business_date=? "
-                    "and visitor_id is null and qualified=1",
-                    (decision.visitor_id, track_key, business_date),
+                changed |= self._bind_unidentified(
+                    db, self._link_group(track_key), decision.visitor_id, business_date
                 )
-                changed |= bound.rowcount > 0
             if changed:
                 self.repository.reconcile_identities(business_date)
                 self.repository.rebuild_day(business_date, observed_at)
             return decision
+
+    def link_track(
+        self,
+        *,
+        camera_id: int,
+        track_key: str,
+        predecessor_track_key: str,
+        observed_at: datetime,
+    ) -> str | None:
+        """Record that a new physical track resumed a lost one on the same camera.
+
+        The camera decides the link from timing, position, and appearance; both tracks then
+        share one visitor. Returns that visitor when one is already known.
+        """
+        successor = f"{camera_id}:{track_key}"
+        predecessor = f"{camera_id}:{predecessor_track_key}"
+        if successor == predecessor:
+            return None
+        at = timestamp(observed_at)
+        business_date = observed_at.astimezone(TIMEZONE).date().isoformat()
+        with self._lock, self.database.transaction() as db:
+            self._track_links[successor] = (predecessor, observed_at)
+            self._track_links = {
+                key: link
+                for key, link in self._track_links.items()
+                if (observed_at - link[1]).total_seconds() < TRACK_LINK_RETENTION_SECONDS
+            }
+            visitor = self._linked_visitor(db, successor, business_date)
+            if visitor is None or visitor in self._excluded_visitors(successor, at, business_date):
+                return None
+            for registry in self._registries.values():
+                if registry.visitor_id_for_track(_track_id(successor)) is None:
+                    registry.bind_track(_track_id(successor), visitor)
+            if self._bind_unidentified(db, self._link_group(successor), visitor, business_date):
+                self.repository.reconcile_identities(business_date)
+                self.repository.rebuild_day(business_date, observed_at)
+            return visitor
+
+    def finalize_pending(self, now: datetime | None = None) -> bool:
+        """Settle uncertain identities whose wait elapsed, even while no camera sees anyone."""
+        now = now or datetime.now(UTC)
+        business_date = now.astimezone(TIMEZONE).date().isoformat()
+        changed = False
+        with self._lock, self.database.transaction():
+            excluded = frozenset(self._excluded_visitors("", timestamp(now), business_date))
+            for registry in self._registries.values():
+                if self._gallery_versions.get(registry) != self._gallery_signature(
+                    registry, business_date
+                ):
+                    registry.refresh_gallery(None, now)
+                if registry.finalize_due_provisionals(now, excluded):
+                    changed = True
+                    self._gallery_versions[registry] = self._gallery_signature(
+                        registry, business_date
+                    )
+            if changed:
+                self.repository.reconcile_identities(business_date)
+                self.repository.rebuild_day(business_date, now)
+        return changed
+
+    def _link_group(self, track_key: str) -> set[str]:
+        """The track and every track linked to it, in either direction."""
+        group = {track_key}
+        while True:
+            grown = group | {
+                key
+                for key, (predecessor, _) in self._track_links.items()
+                if key in group or predecessor in group
+            }
+            grown |= {
+                predecessor for key, (predecessor, _) in self._track_links.items() if key in group
+            }
+            if grown == group:
+                return group
+            group = grown
+
+    def _linked_visitor(self, db: Any, track_key: str, business_date: str) -> str | None:
+        """The visitor already identified on a track linked to this one, if any."""
+        others = sorted(self._link_group(track_key) - {track_key})
+        if not others:
+            return None
+        placeholders = ",".join("?" for _ in others)
+        row = db.execute(
+            "select visitor_id from establishment_observations where business_date=? "
+            f"and track_key in ({placeholders}) and visitor_id is not null "
+            "order by identity_confidence='high' desc,last_at desc limit 1",
+            (business_date, *others),
+        ).fetchone()
+        return str(row["visitor_id"]) if row is not None else None
+
+    @staticmethod
+    def _bind_unidentified(
+        db: Any, track_keys: set[str], visitor_id: str, business_date: str
+    ) -> bool:
+        keys = sorted(track_keys)
+        placeholders = ",".join("?" for _ in keys)
+        bound = db.execute(
+            "update establishment_observations set visitor_id=?,identity_confidence='high',"
+            f"reid_decision='physical_track' where track_key in ({placeholders}) "
+            "and business_date=? and visitor_id is null and qualified=1",
+            (visitor_id, *keys, business_date),
+        )
+        return bool(bound.rowcount > 0)
 
     def _gallery_signature(
         self, registry: UniqueVisitorRegistry, business_date: str
@@ -252,6 +381,9 @@ class EstablishmentRegistry:
                 quality_model_name=quality_model_name,
                 identity_namespace=f"establishment:v1:{dimension}",
                 record_sightings=False,
+                reconciliation_match_threshold=RECONCILIATION_MATCH_THRESHOLD,
+                consensus_reconciliation_match_threshold=CONSENSUS_RECONCILIATION_MATCH_THRESHOLD,
+                provisional_decision_seconds=PROVISIONAL_DECISION_SECONDS,
             )
         return self._registries[key]
 

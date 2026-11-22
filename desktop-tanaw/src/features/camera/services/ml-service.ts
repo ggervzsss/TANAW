@@ -319,7 +319,7 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     ...devicePerformanceRuntime(readDevicePerformanceProfile()),
     runtime_backend: "auto",
     tracker_profile: "auto",
-    pending_reid_wait_seconds: 0.6,
+    pending_reid_wait_seconds: 2,
     reverse_direction: camera.config.reverse,
     roi: toMlRoi(camera.config.roi),
     stream_fps: 24,

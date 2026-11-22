@@ -40,6 +40,8 @@ class UniqueVisitorRegistry:
         prototype_update_threshold: float = 0.82,
         identity_namespace: str | None = None,
         record_sightings: bool = True,
+        view_learning_threshold: float = 0.65,
+        provisional_decision_seconds: float = 0.0,
     ) -> None:
         # A gallery signature includes its analysis scope as well as its model.
         # Open-space identities must never match the entrance/exit gallery.
@@ -80,6 +82,13 @@ class UniqueVisitorRegistry:
         self.min_provisional_observations = max(2, min_provisional_observations)
         self.max_prototypes_per_identity = max(1, max_prototypes_per_identity)
         self.prototype_update_threshold = prototype_update_threshold
+        # A bound physical track keeps teaching its visitor new views (front, back, turned)
+        # while its appearance stays consistent with that visitor.
+        self.view_learning_threshold = view_learning_threshold
+        # With a positive wait, an uncertain identity is decided once, when its observation
+        # ends or the wait elapses, from every view collected meanwhile.
+        self.provisional_decision_seconds = max(0.0, provisional_decision_seconds)
+        self._provisional_since: dict[str, datetime] = {}
         self._business_date: str | None = None
         self._camera_id: int | None = None
         self._gallery: list[VisitorIdentity] = []
@@ -165,7 +174,16 @@ class UniqueVisitorRegistry:
         quality_embedding: np.ndarray | None = None,
         now: datetime | None = None,
         excluded_visitor_ids: frozenset[str] = frozenset(),
+        view_embedding: np.ndarray | None = None,
+        finalize: bool = False,
+        allow_new_identity: bool = True,
     ) -> VisitorDecision:
+        """Match a track's appearance to today's visitors.
+
+        ``view_embedding`` is the track's latest view, learned by its bound visitor.
+        ``finalize`` marks the observation's last update, which settles an uncertain identity.
+        Without ``allow_new_identity`` an unmatched track stays unidentified.
+        """
         now = now or datetime.now(UTC)
         self.prepare(camera_id, now)
         business_date = self.business_date_for(now)
@@ -173,6 +191,7 @@ class UniqueVisitorRegistry:
         quality_normalized = (
             _normalize_embedding(quality_embedding) if quality_embedding is not None else None
         )
+        view = _normalize_embedding(view_embedding) if view_embedding is not None else None
 
         if self._track_visitors.get(track_id) in excluded_visitor_ids:
             self._track_visitors.pop(track_id)
@@ -185,9 +204,22 @@ class UniqueVisitorRegistry:
                 and normalized is not None
             ):
                 repeat_score = self._identity_score(identity, normalized)
-                if repeat_score >= self.strong_match_threshold:
-                    self._update_identity(identity, normalized, now)
+                if repeat_score >= min(self.strong_match_threshold, self.view_learning_threshold):
+                    if view is None:
+                        self._update_identity(identity, normalized, now)
+                    else:
+                        self._learn_view(identity, view, now)
                     self._update_quality_embedding_if_consistent(identity, quality_normalized, now)
+                    if not self._provisional_decision_due(identity, now, finalize):
+                        return self._provisional_pending(
+                            identity,
+                            track_id,
+                            camera_id,
+                            repeat_score,
+                            detection_confidence,
+                            bbox,
+                            now,
+                        )
                     return self._resolve_provisional_identity(
                         identity,
                         track_id=track_id,
@@ -197,7 +229,12 @@ class UniqueVisitorRegistry:
                         bbox=bbox,
                         now=now,
                         excluded_visitor_ids=excluded_visitor_ids,
+                        force=finalize,
                     )
+            elif identity is not None and identity.identity_status == "confirmed":
+                learned = view if view is not None else normalized
+                if learned is not None:
+                    self._learn_view(identity, learned, now)
 
             decision = VisitorDecision(
                 visitor_id=visitor_id,
@@ -276,6 +313,10 @@ class UniqueVisitorRegistry:
             self._update_quality_embedding_if_consistent(match, quality_normalized, now)
 
             if match.identity_status == "provisional":
+                if not self._provisional_decision_due(match, now, finalize):
+                    return self._provisional_pending(
+                        match, track_id, camera_id, score, detection_confidence, bbox, now
+                    )
                 return self._resolve_provisional_identity(
                     match,
                     track_id=track_id,
@@ -298,6 +339,16 @@ class UniqueVisitorRegistry:
             )
             self._persist_sighting(decision, track_id, camera_id, detection_confidence, bbox, now)
             return decision
+
+        if not allow_new_identity:
+            return VisitorDecision(
+                visitor_id=None,
+                is_unique_entry=False,
+                reid_score=fast_score,
+                reid_decision="unmatched",
+                identity_confidence="unmatched",
+                business_date=business_date,
+            )
 
         visitor_id = str(uuid4())
         decision_name = "new"
@@ -325,6 +376,8 @@ class UniqueVisitorRegistry:
         )
         self._gallery.append(identity)
         self._track_visitors[track_id] = visitor_id
+        if identity.identity_status == "provisional":
+            self._provisional_since[visitor_id] = now
         self._persist_identity(identity, now)
         if quality_normalized is not None:
             self._update_quality_embedding(visitor_id, quality_normalized, now)
@@ -466,9 +519,10 @@ class UniqueVisitorRegistry:
         bbox: tuple[int, int, int, int] | None,
         now: datetime,
         excluded_visitor_ids: frozenset[str] = frozenset(),
+        force: bool = False,
     ) -> VisitorDecision:
         business_date = self.business_date_for(now)
-        if provisional.embedding_count < self.min_provisional_observations:
+        if not force and provisional.embedding_count < self.min_provisional_observations:
             self._track_visitors[track_id] = provisional.visitor_id
             decision = VisitorDecision(
                 visitor_id=provisional.visitor_id,
@@ -513,6 +567,7 @@ class UniqueVisitorRegistry:
             return decision
 
         provisional.identity_status = "confirmed"
+        self._provisional_since.pop(provisional.visitor_id, None)
         self._gallery_store.resolve_identity(provisional.visitor_id, "confirmed", None, now)
         self._track_visitors[track_id] = provisional.visitor_id
         decision = VisitorDecision(
@@ -532,6 +587,85 @@ class UniqueVisitorRegistry:
             now,
         )
         return decision
+
+    def bind_track(self, track_id: int, visitor_id: str) -> bool:
+        """Attach a physical track to a known visitor, e.g. a track that resumed a lost one."""
+        if self._identity_for_visitor(visitor_id) is None:
+            return False
+        self._track_visitors[track_id] = visitor_id
+        return True
+
+    def finalize_due_provisionals(
+        self, now: datetime, excluded_visitor_ids: frozenset[str] = frozenset()
+    ) -> bool:
+        """Settle uncertain identities whose decision wait has elapsed; True if any changed."""
+        if self.provisional_decision_seconds <= 0 or self._business_date is None:
+            return False
+        changed = False
+        for identity in list(self._gallery):
+            if identity.identity_status != "provisional" or not self._provisional_decision_due(
+                identity, now, False
+            ):
+                continue
+            track_id = next(
+                (
+                    track
+                    for track, visitor in self._track_visitors.items()
+                    if visitor == identity.visitor_id
+                ),
+                0,
+            )
+            self._resolve_provisional_identity(
+                identity,
+                track_id=track_id,
+                camera_id=self._camera_id,
+                score=None,
+                detection_confidence=None,
+                bbox=None,
+                now=now,
+                excluded_visitor_ids=excluded_visitor_ids,
+                force=True,
+            )
+            if track_id == 0:
+                self._track_visitors.pop(0, None)
+            changed = True
+        return changed
+
+    def _provisional_decision_due(
+        self, identity: VisitorIdentity, now: datetime, finalize: bool
+    ) -> bool:
+        if finalize or self.provisional_decision_seconds <= 0:
+            return True
+        since = self._provisional_since.setdefault(identity.visitor_id, now)
+        return (now - since).total_seconds() >= self.provisional_decision_seconds
+
+    def _provisional_pending(
+        self,
+        identity: VisitorIdentity,
+        track_id: int,
+        camera_id: int | None,
+        score: float | None,
+        detection_confidence: float | None,
+        bbox: tuple[int, int, int, int] | None,
+        now: datetime,
+    ) -> VisitorDecision:
+        self._track_visitors[track_id] = identity.visitor_id
+        decision = VisitorDecision(
+            visitor_id=identity.visitor_id,
+            is_unique_entry=False,
+            reid_score=score,
+            reid_decision="provisional_pending",
+            identity_confidence="low",
+            business_date=self.business_date_for(now),
+        )
+        self._persist_sighting(decision, track_id, camera_id, detection_confidence, bbox, now)
+        return decision
+
+    def _learn_view(self, identity: VisitorIdentity, view: np.ndarray, now: datetime) -> None:
+        """Add a consistent new view to a visitor; inconsistent views suggest a track switch."""
+        if self._identity_score(identity, view) < self.view_learning_threshold:
+            return
+        self._update_identity(identity, view, now)
 
     def _best_match(
         self, embedding: np.ndarray, excluded_visitor_ids: frozenset[str] = frozenset()
@@ -736,6 +870,7 @@ class UniqueVisitorRegistry:
 
         provisional.identity_status = "merged"
         provisional.canonical_visitor_id = canonical.visitor_id
+        self._provisional_since.pop(provisional.visitor_id, None)
         self._gallery_store.resolve_identity(
             provisional.visitor_id, "merged", canonical.visitor_id, now
         )

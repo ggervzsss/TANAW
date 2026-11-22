@@ -216,8 +216,11 @@ class EstablishmentRepository:
                 for row in rows
                 if row["visitor_id"] is not None and row["identity_confidence"] == "high"
             }
+            # Exits only match visitors already counted, so they never need an identity.
+            identifiable = [row for row in rows if row["kind"] != "exit"]
             unresolved = sum(
-                row["visitor_id"] is None or row["identity_confidence"] != "high" for row in rows
+                row["visitor_id"] is None or row["identity_confidence"] != "high"
+                for row in identifiable
             )
             movement = daily_movements(rows, business_date, corrections)
             begin, end = day_bounds(business_date)
@@ -325,7 +328,9 @@ class EstablishmentRepository:
                 "occupancy_corrections": corrections,
                 "unresolved_observations": unresolved,
                 "qualified_observations": len(rows),
-                "identification_coverage": (len(rows) - unresolved) / len(rows) if rows else None,
+                "identification_coverage": (len(identifiable) - unresolved) / len(identifiable)
+                if identifiable
+                else None,
                 "identification_state": (
                     "unavailable"
                     if not identification_possible

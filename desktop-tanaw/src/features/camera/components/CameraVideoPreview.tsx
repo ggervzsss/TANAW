@@ -8,6 +8,7 @@ import { Video, Wifi, WifiOff, CircleAlert, RefreshCw } from "lucide-react";
 
 import { DEFAULT_CAMERA_DISPLAY, type CameraDisplayPreferences } from "../model/camera-display";
 import { trackLabelLines } from "../model/track-labels";
+import { useHeldTracks } from "../hooks/useHeldTracks";
 import { useDeveloperSettings } from "../../preferences/developer-settings";
 
 type CameraVideoPreviewProps = {
@@ -104,7 +105,9 @@ export function CameraVideoPreview({
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
   const imageAspectRatio = decodedAspectRatio ?? (frameWidth > 0 && frameHeight > 0 ? frameWidth / frameHeight : null);
-  const visibleTracks = detections.tracks.filter((track) => track.confidence >= activeCam.confidence);
+  const confidentTracks = useMemo(() => detections.tracks.filter((track) => track.confidence >= activeCam.confidence), [activeCam.confidence, detections.tracks]);
+  // Boxes glide between detection updates and survive a brief miss instead of jumping or blinking.
+  const visibleTracks = useHeldTracks(confidentTracks, activeCam.id);
   const developer = useDeveloperSettings();
   const showsTrackLabels = developer.detectionLabels || developer.demographics;
 
@@ -337,7 +340,8 @@ export function CameraVideoPreview({
               <div key={track.track_id} className="contents">
                 <div
                   data-track-id={track.track_id}
-                  className={`absolute bg-transparent ${displayPreferences.people || labelLines.length > 0 ? `border ${tone.boxClass}` : ""}`}
+                  data-track-held={track.held ? "true" : undefined}
+                  className={`absolute bg-transparent ${track.track_id > 0 ? "transition-[left,top,width,height,opacity] duration-200 ease-linear motion-reduce:transition-none" : ""} ${track.held ? "opacity-60" : ""} ${displayPreferences.people || labelLines.length > 0 ? `border ${tone.boxClass}` : ""}`}
                   style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}
                 >
                   {labelLines.length > 0 && (
@@ -354,7 +358,7 @@ export function CameraVideoPreview({
                 <span
                   hidden={!displayPreferences.people}
                   aria-hidden="true"
-                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_10px_rgba(34,211,238,0.42)] transition-[left,top] duration-75 ease-linear ${tone.triggerClass}`}
+                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_10px_rgba(34,211,238,0.42)] transition-[left,top] duration-200 ease-linear motion-reduce:transition-none ${tone.triggerClass}`}
                   style={{ left: `${triggerLeft}%`, top: `${triggerTop}%` }}
                 />
               </div>

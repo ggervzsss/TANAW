@@ -9,6 +9,7 @@ import numpy as np
 
 from app.analytics.visitor_sex import daily_sex_counts
 from app.attributes import SexEstimator, TrackSexTally
+from app.camera.frame_geometry import occlusion_fractions
 from app.counting.tripwire_counter import TripwireCounter
 from app.reid import (
     PersonReIdentifier,
@@ -160,12 +161,14 @@ class ReplayReIdCoordinator:
         if self.fast is None:
             return
 
+        occlusion = occlusion_fractions({track.track_id: track.bbox for track in tracks})
         for track in tracks:
+            covered = occlusion.get(track.track_id, 0.0)
             sample_fast = self.fast_buffer.should_sample(
-                track, frame_width, frame_height, frame_index
+                track, frame_width, frame_height, frame_index, covered
             )
             sample_quality = self.quality is not None and self.quality_buffer.should_sample(
-                track, frame_width, frame_height, frame_index
+                track, frame_width, frame_height, frame_index, covered
             )
             if not sample_fast and not sample_quality:
                 continue

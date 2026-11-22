@@ -142,18 +142,18 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
             anchor = tracker.anchor
             first_visit = None
             for second, track_id, x, embedding in [
-                (0, 1, 0.1, False),
-                (1, 1, 0.5, False),
-                (2, 1, 0.5, True),
-                (3, 1, 0.5, True),
-                (4, 1, None, False),
-                (5, 1, 0.5, False),
-                (6, 1, 0.9, False),
-                (7, 1, 0.9, False),
-                (8, 2, 0.1, False),
-                (9, 2, 0.5, False),
-                (10, 2, 0.5, True),
-                (11, 2, 0.5, True),
+                (0, 1, 0.1, 0),
+                (1, 1, 0.5, 0),
+                (2, 1, 0.5, 1),
+                (3, 1, 0.5, 2),
+                (4, 1, None, 0),
+                (5, 1, 0.5, 0),
+                (6, 1, 0.9, 0),
+                (7, 1, 0.9, 0),
+                (8, 2, 0.1, 0),
+                (9, 2, 0.5, 0),
+                (10, 2, 0.5, 1),
+                (11, 2, 0.5, 2),
             ]:
                 at = anchor + second
                 track = ResolvedTrack(
@@ -168,11 +168,10 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
                     "motion",
                 )
                 motion.return_value = [track] if x is not None else []
-                fast.return_value = (
-                    [ReIdResult(1, track_id, track_id, VECTOR, 0.9, at - 0.1, at)]
-                    if embedding
-                    else []
-                )
+                # Each zone frame may deliver several finished embeddings for one track.
+                fast.return_value = [
+                    ReIdResult(1, track_id, track_id, VECTOR, 0.9, at - 0.1, at)
+                ] * embedding
                 if second == 5:
                     fast.return_value = [
                         ReIdResult(1, track_id, track_id, VECTOR, 0.9, anchor - 1, at)
@@ -194,7 +193,7 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
                 if second == 5:
                     assert tracker.active_records()[0]["visit_id"] == first_visit
                     assert tracker.active_records()[0]["uncertain_gap_count"] == 1
-                    assert manager._appearance_buffer.sample_count_for_track(1) == 2
+                    assert manager._appearance_buffer.sample_count_for_track(1) == 3
             assert _area_state(manager)["unique_visitors"] == 1
             # The zone figure comes from the same establishment gallery Reports counts.
             establishment, zone = manager._establishment_registry, manager.area_state()

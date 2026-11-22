@@ -174,6 +174,18 @@ replayed recording (`scripts.replay_tracking --summary-output`) with the known
 number of men and women in it, so estimates can be tested without mounted
 cameras.
 
+`scripts.evaluate_unique_visitors` replays a detection cache and its clip
+through the live Open Space pipeline and reports the estimated unique visitors.
+Run it with `--label-sheet <folder>` to get one crop per detector track and a
+`labels.template.json` to fill in with the real person behind each track. Run
+it again with `--labels <file>` to score duplicates (one person counted twice)
+and false merges (two people counted once). `--legacy` approximates counting
+before the occlusion fixes, for comparison.
+
+```bash
+uv run python -m scripts.evaluate_unique_visitors --cache evaluation/cache/cctv-controlled-occlusion-balanced-5fps.jsonl --video evaluation/clips/cctv-controlled-occlusion-40s.mp4 --label-sheet evaluation/ground-truth/cctv-controlled-occlusion
+```
+
 ### Privacy and local storage
 
 Raw camera video is processed on the device and is not uploaded to the central
