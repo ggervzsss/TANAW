@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MlDetectionTrack } from "../../../../../../src/features/camera/services/ml-service.types";
-import { holdRecentTracks, nextHoldExpiry } from "../../../../../../src/features/camera/model/track-hold";
+import { detectionsAreFresh, holdRecentTracks, nextHoldExpiry } from "../../../../../../src/features/camera/model/track-hold";
 
 function track(trackId: number, changes: Partial<MlDetectionTrack> = {}): MlDetectionTrack {
   return {
@@ -53,5 +53,13 @@ describe("held person boxes", () => {
     expect(later.map((item) => item.track_id)).toEqual([3]);
     expect(nextHoldExpiry(later, 100, 700)).toBe(600);
     expect(nextHoldExpiry(holdRecentTracks([], [track(3)], 0), 0)).toBeNull();
+  });
+
+  it("treats detections from stalled processing as stale", () => {
+    expect(detectionsAreFresh(null)).toBe(true);
+    expect(detectionsAreFresh(200)).toBe(true);
+    expect(detectionsAreFresh(1499, 1500)).toBe(true);
+    expect(detectionsAreFresh(1500, 1500)).toBe(false);
+    expect(detectionsAreFresh(3000)).toBe(false);
   });
 });

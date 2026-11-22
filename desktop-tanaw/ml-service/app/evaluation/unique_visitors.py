@@ -6,6 +6,9 @@ matter, and they pull in opposite directions:
 
 * a *duplicate* is one person counted as more than one visitor (over-counting);
 * a *false merge* is one visitor that covers more than one person (under-counting).
+
+The true count is every labelled person, not only those the replay counted, so a person the
+pipeline missed entirely shows up as an error instead of vanishing from the comparison.
 """
 
 from collections import Counter, defaultdict
@@ -23,7 +26,8 @@ def score_unique_visitors(
 
     ``track_visitors`` maps each counted physical track to its visitor (None when it was
     never identified). ``track_sources`` lists the detector source IDs each physical track
-    covered, and ``source_people`` labels those source IDs. Unlabelled sources are ignored.
+    covered, and ``source_people`` labels those source IDs; every person named there should
+    be counted. Unlabelled (None) sources are ignored.
     """
     person_visitors: dict[str, set[str]] = defaultdict(set)
     visitor_people: dict[str, set[str]] = defaultdict(set)
@@ -45,10 +49,11 @@ def score_unique_visitors(
         person_visitors[person].add(visitor)
         visitor_people[visitor].add(person)
 
-    people = set(person_visitors) | unidentified
+    people = {person for person in source_people.values() if person is not None}
     duplicates = sum(len(visitors) - 1 for visitors in person_visitors.values())
     false_merges = sum(len(persons) - 1 for persons in visitor_people.values())
     never_identified = sorted(unidentified - set(person_visitors))
+    missed = sorted(people - set(person_visitors) - unidentified)
     return {
         "true_unique": len(people),
         "predicted_unique": predicted_unique,
@@ -60,5 +65,7 @@ def score_unique_visitors(
             v for v, persons in visitor_people.items() if len(persons) > 1
         ),
         "people_never_identified": never_identified,
+        # Labelled people whose tracks were never counted as their own visit.
+        "people_missed": missed,
         "unlabelled_tracks": unlabelled_tracks,
     }

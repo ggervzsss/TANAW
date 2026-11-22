@@ -15,7 +15,17 @@ def test_scoring_separates_duplicates_from_false_merges() -> None:
     assert result["people_split"] == ["ann"]
     assert result["visitors_merging_people"] == ["v3"]
     assert result["people_never_identified"] == ["di"]
+    assert result["people_missed"] == []
     assert result["unlabelled_tracks"] == 1
+
+
+def test_people_the_replay_never_counted_are_still_part_of_the_true_count() -> None:
+    result = score_unique_visitors(
+        {"1": "v1"}, {"1": {10}}, {10: "ann", 11: "ben"}, predicted_unique=1
+    )
+    assert result["true_unique"] == 2
+    assert result["unique_error"] == -1
+    assert result["people_missed"] == ["ben"]
 
 
 def test_a_track_follows_the_person_most_of_its_sources_show() -> None:
@@ -25,5 +35,7 @@ def test_a_track_follows_the_person_most_of_its_sources_show() -> None:
         {10: "ann", 11: "ann", 12: "ben", 13: "ann"},
         predicted_unique=1,
     )
-    assert result["true_unique"] == 1
+    # Ben appears only inside Ann's track, so he was never counted on his own.
+    assert result["true_unique"] == 2
+    assert result["people_missed"] == ["ben"]
     assert result["duplicate_visitors"] == 0 and result["false_merges"] == 0

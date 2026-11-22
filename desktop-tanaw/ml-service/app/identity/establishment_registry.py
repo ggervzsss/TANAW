@@ -27,6 +27,9 @@ RECONCILIATION_MATCH_THRESHOLD = 0.76
 CONSENSUS_RECONCILIATION_MATCH_THRESHOLD = 0.72
 # Links between a lost physical track and the track that resumed it are kept this long.
 TRACK_LINK_RETENTION_SECONDS = 3600.0
+# Every camera asks for the pending-identity sweep; it runs at most this often in total.
+MIN_SWEEP_INTERVAL_SECONDS = 1.0
+IDENTITY_NAMESPACE = "establishment:v1:"
 
 
 class EstablishmentRegistry:
@@ -41,6 +44,7 @@ class EstablishmentRegistry:
         self._last_track_refresh: dict[tuple[int, str], datetime] = {}
         # Successor physical track key -> (predecessor key, linked at).
         self._track_links: dict[str, tuple[str, datetime]] = {}
+        self._last_sweep_at: datetime | None = None
 
     def refresh_track(
         self,
@@ -142,6 +146,35 @@ class EstablishmentRegistry:
             )
         if ended_at is not None and not first <= timestamp(ended_at) <= at:
             raise ValueError("A visit endpoint must fall within its observation range.")
+        crossing = (
+            self._unidentified_crossing_day(observation_id, observed_at)
+            if analysis_mode == "entrance_exit" and kind == "entry" and embedding is not None
+            else None
+        )
+        if crossing is not None:
+            # Identification that finishes after midnight still identifies the entry on the
+            # day it crossed; the continuing observation then counts on the new day as well.
+            self.observe(
+                observation_id=observation_id,
+                camera_id=camera_id,
+                track_key=track_key,
+                analysis_mode=analysis_mode,
+                kind=kind,
+                qualified=qualified,
+                first_at=crossing[0],
+                observed_at=crossing[1],
+                embedding=embedding,
+                model_name=model_name,
+                quality_embedding=quality_embedding,
+                quality_model_name=quality_model_name,
+                revision_id=revision_id,
+                arrival_observed=arrival_observed,
+                detection_confidence=detection_confidence,
+                bbox=bbox,
+                payload=payload,
+                sex_evidence=sex_evidence,
+                view_embedding=view_embedding,
+            )
         track_key = f"{camera_id}:{track_key}"
         business_date = observed_at.astimezone(TIMEZONE).date().isoformat()
         normalized = normalize_embedding(embedding) if embedding is not None else None
@@ -176,11 +209,11 @@ class EstablishmentRegistry:
             finalized = False
             if qualified and normalized is not None:
                 registry = self._registry(model_name, normalized.size, quality_model_name)
-                signature = self._gallery_signature(registry, business_date)
-                if self._gallery_versions.get(registry) != signature:
-                    registry.refresh_gallery(None, observed_at)
+                self._refresh_registry(registry, business_date, observed_at)
                 excluded = self._excluded_visitors(track_key, at, business_date)
-                finalized = registry.finalize_due_provisionals(observed_at, frozenset(excluded))
+                # Each uncertain identity excludes the people seen beside it, whoever this
+                # observation's track is.
+                finalized = registry.finalize_due_provisionals(observed_at)
                 physical_track = _track_id(track_key)
                 if registry.visitor_id_for_track(physical_track) is None:
                     # A track that resumed a lost one is the same person, whatever its score.
@@ -246,6 +279,24 @@ class EstablishmentRegistry:
                 self.repository.rebuild_day(business_date, observed_at)
             return decision
 
+    def _unidentified_crossing_day(
+        self, observation_id: str, observed_at: datetime
+    ) -> tuple[datetime, datetime] | None:
+        """The span of an entry still unidentified on an earlier day than ``observed_at``."""
+        with self.database.connection() as db:
+            row = db.execute(
+                "select business_date,first_at,last_at,visitor_id from establishment_observations "
+                "where observation_id=? order by business_date limit 1",
+                (observation_id,),
+            ).fetchone()
+        if (
+            row is None
+            or row["visitor_id"] is not None
+            or row["business_date"] == observed_at.astimezone(TIMEZONE).date().isoformat()
+        ):
+            return None
+        return datetime.fromisoformat(row["first_at"]), datetime.fromisoformat(row["last_at"])
+
     def link_track(
         self,
         *,
@@ -257,7 +308,8 @@ class EstablishmentRegistry:
         """Record that a new physical track resumed a lost one on the same camera.
 
         The camera decides the link from timing, position, and appearance; both tracks then
-        share one visitor. Returns that visitor when one is already known.
+        share one visitor. When each already has its own visitor, the two visitors are merged,
+        unless they were ever seen at the same time. Returns the shared visitor when known.
         """
         successor = f"{camera_id}:{track_key}"
         predecessor = f"{camera_id}:{predecessor_track_key}"
@@ -272,30 +324,64 @@ class EstablishmentRegistry:
                 for key, link in self._track_links.items()
                 if (observed_at - link[1]).total_seconds() < TRACK_LINK_RETENTION_SECONDS
             }
+            for registry in self._registries.values():
+                self._refresh_registry(registry, business_date, observed_at)
             visitor = self._linked_visitor(db, successor, business_date)
-            if visitor is None or visitor in self._excluded_visitors(successor, at, business_date):
+            if visitor is None:
+                return None
+            changed = False
+            own = self._track_visitor(db, successor, business_date)
+            if own is not None and own != visitor:
+                merged = self._merge_visitors(own, visitor, observed_at)
+                if merged is None:
+                    return None
+                visitor, changed = merged, True
+            if visitor in self._excluded_visitors(successor, at, business_date):
                 return None
             for registry in self._registries.values():
                 if registry.visitor_id_for_track(_track_id(successor)) is None:
                     registry.bind_track(_track_id(successor), visitor)
-            if self._bind_unidentified(db, self._link_group(successor), visitor, business_date):
+            changed |= self._bind_unidentified(
+                db, self._link_group(successor), visitor, business_date
+            )
+            if changed:
                 self.repository.reconcile_identities(business_date)
                 self.repository.rebuild_day(business_date, observed_at)
             return visitor
 
     def finalize_pending(self, now: datetime | None = None) -> bool:
-        """Settle uncertain identities whose wait elapsed, even while no camera sees anyone."""
+        """Settle uncertain identities whose wait elapsed, even while no camera sees anyone.
+
+        Registries for today's uncertain identities are created on demand, so identities left
+        waiting when the service stopped are settled after a restart too.
+        """
         now = now or datetime.now(UTC)
         business_date = now.astimezone(TIMEZONE).date().isoformat()
-        changed = False
-        with self._lock, self.database.transaction():
-            excluded = frozenset(self._excluded_visitors("", timestamp(now), business_date))
-            for registry in self._registries.values():
-                if self._gallery_versions.get(registry) != self._gallery_signature(
-                    registry, business_date
-                ):
-                    registry.refresh_gallery(None, now)
-                if registry.finalize_due_provisionals(now, excluded):
+        with self._lock, self.database.transaction() as db:
+            if (
+                self._last_sweep_at is not None
+                and 0 <= (now - self._last_sweep_at).total_seconds() < MIN_SWEEP_INTERVAL_SECONDS
+            ):
+                return False
+            self._last_sweep_at = now
+            spaces = {
+                str(row["model_name"])
+                for row in db.execute(
+                    "select distinct model_name from visitor_identities "
+                    "where business_date=? and identity_status='provisional'",
+                    (business_date,),
+                )
+            }
+            if not spaces:
+                return False
+            for space in spaces:
+                self._registry_for_space(db, space, business_date)
+            changed = False
+            for registry in list(self._registries.values()):
+                if registry.model_name not in spaces:
+                    continue
+                self._refresh_registry(registry, business_date, now)
+                if registry.finalize_due_provisionals(now):
                     changed = True
                     self._gallery_versions[registry] = self._gallery_signature(
                         registry, business_date
@@ -304,6 +390,97 @@ class EstablishmentRegistry:
                 self.repository.reconcile_identities(business_date)
                 self.repository.rebuild_day(business_date, now)
         return changed
+
+    def _refresh_registry(
+        self, registry: UniqueVisitorRegistry, business_date: str, now: datetime
+    ) -> None:
+        """Reload a registry's gallery when the database changed, keeping its wait clocks."""
+        if self._gallery_versions.get(registry) == self._gallery_signature(registry, business_date):
+            return
+        registry.refresh_gallery(None, now)
+        with self.database.connection() as db:
+            for row in db.execute(
+                "select visitor_id,first_seen_at from visitor_identities where business_date=? "
+                "and model_name=? and identity_status='provisional'",
+                (business_date, registry.model_name),
+            ):
+                registry.note_provisional_since(
+                    str(row["visitor_id"]), datetime.fromisoformat(row["first_seen_at"])
+                )
+        self._gallery_versions[registry] = self._gallery_signature(registry, business_date)
+
+    def _registry_for_space(self, db: Any, space: str, business_date: str) -> None:
+        """The registry for a stored identity space, e.g. after a restart."""
+        model_name, separator, dimension = space.rpartition(f"@{IDENTITY_NAMESPACE}")
+        if not separator or not dimension.isdigit():
+            return
+        if any(registry.model_name == space for registry in self._registries.values()):
+            return
+        row = db.execute(
+            "select m.model_name from visitor_model_embeddings m join visitor_identities v "
+            "on v.visitor_id=m.visitor_id where v.business_date=? and v.model_name=? limit 1",
+            (business_date, space),
+        ).fetchone()
+        quality = str(row["model_name"]).rpartition("@")[0] if row is not None else None
+        self._registry(model_name, int(dimension), quality)
+
+    def _track_visitor(self, db: Any, track_key: str, business_date: str) -> str | None:
+        """The visitor a physical track is already counted as, if any."""
+        for registry in self._registries.values():
+            visitor = registry.visitor_id_for_track(_track_id(track_key))
+            if visitor is not None:
+                return visitor
+        row = db.execute(
+            "select visitor_id from establishment_observations where business_date=? "
+            "and track_key=? and visitor_id is not null order by last_at desc limit 1",
+            (business_date, track_key),
+        ).fetchone()
+        return str(row["visitor_id"]) if row is not None else None
+
+    def _merge_visitors(self, alias: str, canonical: str, now: datetime) -> str | None:
+        """Merge two visitors shown by linked tracks; returns the surviving visitor."""
+        if canonical in self._co_visible_visitors(alias):
+            return None
+        for registry in self._registries.values():
+            merged = registry.merge_visitors(alias, canonical, now)
+            if merged is not None:
+                return merged
+        return None
+
+    def _co_visible_visitors(self, visitor_id: str) -> frozenset[str]:
+        """Visitors observed while this visitor was in view, on any camera: other people."""
+        with self.database.connection() as db:
+            own = db.execute(
+                "select business_date,track_key,first_at,last_at from establishment_observations "
+                "where visitor_id=?",
+                (visitor_id,),
+            ).fetchall()
+            if not own:
+                return frozenset()
+            dates = sorted({str(row["business_date"]) for row in own})
+            placeholders = ",".join("?" for _ in dates)
+            others = db.execute(
+                "select visitor_id,track_key,first_at,last_at from establishment_observations "
+                f"where business_date in ({placeholders}) and visitor_id is not null "
+                "and visitor_id!=?",
+                (*dates, visitor_id),
+            ).fetchall()
+        own_keys = {row["track_key"] for row in own}
+        spans = [
+            (datetime.fromisoformat(row["first_at"]), datetime.fromisoformat(row["last_at"]))
+            for row in own
+        ]
+        co_visible: set[str] = set()
+        for row in others:
+            if row["track_key"] in own_keys or row["visitor_id"] in co_visible:
+                continue
+            first, last = (
+                datetime.fromisoformat(row["first_at"]),
+                datetime.fromisoformat(row["last_at"]),
+            )
+            if any(first <= own_last and own_first <= last for own_first, own_last in spans):
+                co_visible.add(str(row["visitor_id"]))
+        return frozenset(co_visible)
 
     def _link_group(self, track_key: str) -> set[str]:
         """The track and every track linked to it, in either direction."""
@@ -339,13 +516,21 @@ class EstablishmentRegistry:
     def _bind_unidentified(
         db: Any, track_keys: set[str], visitor_id: str, business_date: str
     ) -> bool:
+        """Give linked tracks' unidentified observations this visitor.
+
+        They count only once the visitor is confirmed; an uncertain one stays low confidence.
+        """
+        status = db.execute(
+            "select identity_status from visitor_identities where visitor_id=?", (visitor_id,)
+        ).fetchone()
+        confidence = "high" if status is not None and status[0] == "confirmed" else "low"
         keys = sorted(track_keys)
         placeholders = ",".join("?" for _ in keys)
         bound = db.execute(
-            "update establishment_observations set visitor_id=?,identity_confidence='high',"
+            "update establishment_observations set visitor_id=?,identity_confidence=?,"
             f"reid_decision='physical_track' where track_key in ({placeholders}) "
             "and business_date=? and visitor_id is null and qualified=1",
-            (visitor_id, *keys, business_date),
+            (visitor_id, confidence, *keys, business_date),
         )
         return bool(bound.rowcount > 0)
 
@@ -375,16 +560,23 @@ class EstablishmentRegistry:
     ) -> UniqueVisitorRegistry:
         key = (model_name, dimension, quality_model_name)
         if key not in self._registries:
-            self._registries[key] = UniqueVisitorRegistry(
+            # A registry recreated after a restart may not know the quality space; a camera's
+            # request supersedes it. It holds no track bindings, so nothing is lost.
+            placeholder = (model_name, dimension, None)
+            if quality_model_name is not None and placeholder in self._registries:
+                self._gallery_versions.pop(self._registries.pop(placeholder), None)
+            registry = UniqueVisitorRegistry(
                 self._store,
                 model_name=model_name,
                 quality_model_name=quality_model_name,
-                identity_namespace=f"establishment:v1:{dimension}",
+                identity_namespace=f"{IDENTITY_NAMESPACE}{dimension}",
                 record_sightings=False,
                 reconciliation_match_threshold=RECONCILIATION_MATCH_THRESHOLD,
                 consensus_reconciliation_match_threshold=CONSENSUS_RECONCILIATION_MATCH_THRESHOLD,
                 provisional_decision_seconds=PROVISIONAL_DECISION_SECONDS,
             )
+            registry.co_visible_visitors = self._co_visible_visitors
+            self._registries[key] = registry
         return self._registries[key]
 
     def _excluded_visitors(self, track_key: str, at: str, business_date: str) -> set[str]:

@@ -52,7 +52,7 @@ def resolve(registry: UniqueVisitorRegistry, track: int, embedding: np.ndarray, 
 def test_a_bound_track_teaches_its_visitor_new_views(tmp_path: Path) -> None:
     registry = UniqueVisitorRegistry(SessionStore(str(tmp_path)))
     first = resolve(registry, 1, PERSON)
-    turned = at_cosine(0.70)
+    turned = at_cosine(0.76)
     # Before learning, the turned view alone is only an uncertain match.
     assert registry._best_match(turned)[1] is not None
     assert float(registry._best_match(turned)[1] or 0) < 0.80
@@ -69,6 +69,27 @@ def test_an_inconsistent_view_is_not_learned(tmp_path: Path) -> None:
     identity = registry._gallery[0]
     assert len(identity.prototypes) == 1
     assert float(identity.embedding @ PERSON) > 0.99
+
+
+def test_an_unchanged_view_is_learned_once(tmp_path: Path) -> None:
+    registry = UniqueVisitorRegistry(SessionStore(str(tmp_path)))
+    resolve(registry, 1, PERSON)
+    turned = at_cosine(0.76)
+    for second in range(1, 8):
+        resolve(registry, 1, PERSON, view_embedding=turned, now=NOW + timedelta(seconds=second))
+    assert registry._gallery[0].embedding_count == 2
+
+
+def test_another_person_after_a_tracker_id_switch_is_not_learned(tmp_path: Path) -> None:
+    registry = UniqueVisitorRegistry(SessionStore(str(tmp_path)))
+    first = resolve(registry, 1, PERSON)
+    # The track now shows someone else who looks a little like the visitor.
+    other = at_cosine(0.70)
+    for second in range(1, 4):
+        resolve(registry, 1, PERSON, view_embedding=other, now=NOW + timedelta(seconds=second))
+    assert len(registry._gallery[0].prototypes) == 1
+    later = resolve(registry, 2, other, now=NOW + timedelta(hours=1))
+    assert later.visitor_id != first.visitor_id
 
 
 def test_match_only_observations_never_add_visitors(tmp_path: Path) -> None:
@@ -233,7 +254,7 @@ def test_open_space_person_hidden_long_enough_to_get_a_new_track_stays_one_visit
     session = ProcessingSession(1, config, Event(), "session")
     manager._active_session = session
     # Visible, hidden for three seconds (the visit ends), then back as a new track whose
-    # appearance alone scores only 0.70 against the first.
+    # appearance alone scores only 0.72 against the first.
     timeline = [
         (0, 1, PERSON),
         (1, 1, PERSON),
@@ -242,10 +263,10 @@ def test_open_space_person_hidden_long_enough_to_get_a_new_track_stays_one_visit
         (4, None, None),
         (5, None, None),
         (6, None, None),
-        (7, 2, at_cosine(0.70)),
-        (8, 2, at_cosine(0.70)),
-        (9, 2, at_cosine(0.70)),
-        (10, 2, at_cosine(0.70)),
+        (7, 2, at_cosine(0.72)),
+        (8, 2, at_cosine(0.72)),
+        (9, 2, at_cosine(0.72)),
+        (10, 2, at_cosine(0.72)),
     ]
     try:
         with (

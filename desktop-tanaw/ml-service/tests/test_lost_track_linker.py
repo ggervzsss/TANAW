@@ -12,8 +12,11 @@ def unit(*values: float) -> np.ndarray:
 
 
 PERSON = unit(1, 0, 0)
-# Cosine 0.70 to PERSON: below the daily match bar (0.80), above the resume bar (0.65).
-SAME_PERSON_LATER = unit(0.70, np.sqrt(1 - 0.70**2), 0)
+# Cosine 0.72 to PERSON: below the daily match bar (0.80), above the single-candidate
+# resume bar (0.70).
+SAME_PERSON_LATER = unit(0.72, np.sqrt(1 - 0.72**2), 0)
+# Cosine 0.67: enough to beat a rival, not enough as the only candidate.
+WEAK_LIKENESS = unit(0.67, np.sqrt(1 - 0.67**2), 0)
 SOMEONE_ELSE = unit(0, 0, 1)
 
 
@@ -27,9 +30,47 @@ def test_track_resuming_a_briefly_hidden_person_links_to_their_track() -> None:
     seen(linker, 1, 1.0)
     linker.remember_appearance(1, PERSON)
     seen(linker, 2, 4.0, x=0.55)
-    assert linker.needs_link_decision(2)
+    assert linker.needs_link_decision(2, 4.0)
     assert linker.link(2, SAME_PERSON_LATER) == 1
-    assert not linker.needs_link_decision(2)
+    assert not linker.needs_link_decision(2, 4.5)
+
+
+def test_a_failed_link_is_retried_with_a_better_view_while_the_track_is_new() -> None:
+    linker = LostTrackLinker(decision_window_seconds=5.0)
+    seen(linker, 1, 0.0)
+    linker.remember_appearance(1, PERSON)
+    seen(linker, 2, 2.0)
+    assert linker.link(2, SOMEONE_ELSE) is None
+    assert linker.needs_link_decision(2, 4.0)
+    assert linker.link(2, SAME_PERSON_LATER) == 1
+    assert not linker.needs_link_decision(2, 4.0)
+    late = LostTrackLinker(decision_window_seconds=5.0)
+    seen(late, 1, 0.0)
+    seen(late, 2, 2.0)
+    assert not late.needs_link_decision(2, 7.5)
+
+
+def test_people_leaving_or_entering_at_the_frame_edge_are_not_linked() -> None:
+    leaving = LostTrackLinker()
+    leaving.observe({1: (0.98, 0.5)}, 0.0, at_edge={1})
+    leaving.remember_appearance(1, PERSON)
+    leaving.observe({2: (0.97, 0.5)}, 2.0)
+    assert leaving.link(2, PERSON) is None
+
+    entering = LostTrackLinker()
+    seen(entering, 1, 0.0)
+    entering.remember_appearance(1, PERSON)
+    entering.observe({2: (0.5, 0.5)}, 2.0, at_edge={2})
+    assert not entering.needs_link_decision(2, 2.0)
+    assert entering.link(2, PERSON) is None
+
+
+def test_a_lone_candidate_needs_a_stronger_likeness() -> None:
+    linker = LostTrackLinker()
+    seen(linker, 1, 0.0)
+    linker.remember_appearance(1, PERSON)
+    seen(linker, 2, 2.0)
+    assert linker.link(2, WEAK_LIKENESS) is None
 
 
 def test_tracks_visible_together_are_never_linked() -> None:

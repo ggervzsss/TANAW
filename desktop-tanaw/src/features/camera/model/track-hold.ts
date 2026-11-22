@@ -3,6 +3,14 @@ import type { MlDetectionTrack } from "../services/ml-service.types";
 /** How long a box stays on screen after its person is briefly missed by the detector. */
 export const TRACK_HOLD_MS = 700;
 
+/** Detections older than this no longer describe the live video, so their boxes are hidden. */
+export const DETECTION_STALE_MS = 1500;
+
+/** Whether the latest detections are recent enough to draw over the live video. */
+export function detectionsAreFresh(processedFrameStaleMs: number | null | undefined, staleMs: number = DETECTION_STALE_MS): boolean {
+  return processedFrameStaleMs == null || processedFrameStaleMs < staleMs;
+}
+
 export type DisplayedTrack = MlDetectionTrack & {
   /** Shown from its last position because the latest update missed it. */
   held: boolean;

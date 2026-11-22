@@ -3,6 +3,7 @@ import os
 import threading
 import time
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
@@ -1527,6 +1528,7 @@ class CameraProcessingManager:
                 if t.track_id > 0
             },
             observed_at,
+            at_edge={t.track_id for t in tracks if _touches_frame_edge(t.bbox, width, height)},
         )
         if self._establishment_registry is not None and session.config.camera_id is not None:
             self._establishment_registry.update_present_tracks(
@@ -1627,7 +1629,7 @@ class CameraProcessingManager:
                 continue
             embedding = self._appearance_buffer.embedding_for_track(track_id)
             self._area_linker.remember_appearance(track_id, embedding)
-            if not self._area_linker.needs_link_decision(track_id):
+            if not self._area_linker.needs_link_decision(track_id, now):
                 continue
             predecessor = self._area_linker.link(track_id, embedding)
             if (
@@ -1897,6 +1899,7 @@ class CameraProcessingManager:
         self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
         self._link_remapped_establishment_track(resolution.remap_from, resolution.remap_to)
+        self._follow_remap_in_pending_entries(resolution.remap_from, resolution.remap_to)
         logger.info(
             "Reattached track to an inactive identity.",
             extra={
@@ -1905,6 +1908,15 @@ class CameraProcessingManager:
                 "target_track_id": resolution.remap_to,
             },
         )
+
+    def _follow_remap_in_pending_entries(self, remap_from: int, remap_to: int) -> None:
+        """A queued entry follows its track when a re-link moves the track's samples."""
+        with self._lock:
+            for key, event in list(self._pending_entry_events.items()):
+                if event.track.track_id == remap_from:
+                    self._pending_entry_events[key] = replace(
+                        event, track=replace(event.track, track_id=remap_to)
+                    )
 
     def _link_remapped_establishment_track(self, remap_from: int, remap_to: int) -> None:
         """A ReID re-link means the new physical track resumed an earlier one: share its visitor."""
@@ -2212,3 +2224,12 @@ class CameraProcessingManager:
             model_name=self._reidentifier.model_name,
             quality_model_name=self._quality_reidentifier.model_name,
         )
+
+
+def _touches_frame_edge(
+    bbox: tuple[int, int, int, int], width: int, height: int, margin: float = 0.02
+) -> bool:
+    """Whether a box reaches the frame border, where people walk in and out of view."""
+    x1, y1, x2, y2 = bbox
+    mx, my = width * margin, height * margin
+    return x1 <= mx or y1 <= my or x2 >= width - mx or y2 >= height - my

@@ -9,7 +9,11 @@ import { Video, Wifi, WifiOff, CircleAlert, RefreshCw } from "lucide-react";
 import { DEFAULT_CAMERA_DISPLAY, type CameraDisplayPreferences } from "../model/camera-display";
 import { trackLabelLines } from "../model/track-labels";
 import { useHeldTracks } from "../hooks/useHeldTracks";
+import { detectionsAreFresh, type DisplayedTrack } from "../model/track-hold";
 import { useDeveloperSettings } from "../../preferences/developer-settings";
+
+const NO_TRACKS: MlDetections["tracks"] = [];
+const NO_DISPLAYED_TRACKS: DisplayedTrack[] = [];
 
 type CameraVideoPreviewProps = {
   displayPreferences?: CameraDisplayPreferences;
@@ -105,9 +109,12 @@ export function CameraVideoPreview({
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
   const imageAspectRatio = decodedAspectRatio ?? (frameWidth > 0 && frameHeight > 0 ? frameWidth / frameHeight : null);
-  const confidentTracks = useMemo(() => detections.tracks.filter((track) => track.confidence >= activeCam.confidence), [activeCam.confidence, detections.tracks]);
+  // Boxes from stalled processing would sit still over live video, so they are hidden.
+  const freshDetections = detectionsAreFresh(health?.processed_frame_stale_ms);
+  const confidentTracks = useMemo(() => (freshDetections ? detections.tracks.filter((track) => track.confidence >= activeCam.confidence) : NO_TRACKS), [activeCam.confidence, detections.tracks, freshDetections]);
   // Boxes glide between detection updates and survive a brief miss instead of jumping or blinking.
-  const visibleTracks = useHeldTracks(confidentTracks, activeCam.id);
+  const heldTracks = useHeldTracks(confidentTracks, activeCam.id);
+  const visibleTracks = freshDetections ? heldTracks : NO_DISPLAYED_TRACKS;
   const developer = useDeveloperSettings();
   const showsTrackLabels = developer.detectionLabels || developer.demographics;
 

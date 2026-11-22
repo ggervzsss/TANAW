@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import UTC, datetime, time, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -40,7 +41,7 @@ class UniqueVisitorRegistry:
         prototype_update_threshold: float = 0.82,
         identity_namespace: str | None = None,
         record_sightings: bool = True,
-        view_learning_threshold: float = 0.65,
+        view_learning_threshold: float = 0.72,
         provisional_decision_seconds: float = 0.0,
     ) -> None:
         # A gallery signature includes its analysis scope as well as its model.
@@ -83,12 +84,19 @@ class UniqueVisitorRegistry:
         self.max_prototypes_per_identity = max(1, max_prototypes_per_identity)
         self.prototype_update_threshold = prototype_update_threshold
         # A bound physical track keeps teaching its visitor new views (front, back, turned)
-        # while its appearance stays consistent with that visitor.
+        # while each view stays consistent with both the visitor and the track's own
+        # appearance. A tracker ID switch shows another person, who must not be learned.
         self.view_learning_threshold = view_learning_threshold
         # With a positive wait, an uncertain identity is decided once, when its observation
         # ends or the wait elapses, from every view collected meanwhile.
         self.provisional_decision_seconds = max(0.0, provisional_decision_seconds)
         self._provisional_since: dict[str, datetime] = {}
+        # Visitors seen at the same time as a given visitor, who are therefore other people.
+        # An uncertain identity can be settled long after its person left, so the people
+        # present at decision time say nothing about who stood beside it.
+        self.co_visible_visitors: Callable[[str], frozenset[str]] = lambda _visitor_id: frozenset()
+        # The last view each physical track taught its visitor; an unchanged view is not news.
+        self._track_learned_views: dict[int, np.ndarray] = {}
         self._business_date: str | None = None
         self._camera_id: int | None = None
         self._gallery: list[VisitorIdentity] = []
@@ -106,11 +114,13 @@ class UniqueVisitorRegistry:
         self._business_date = business_date
         self._camera_id = camera_id
         self._track_visitors.clear()
+        self._track_learned_views.clear()
         self._gallery = self._load_gallery(business_date, camera_id, now)
         self._quality_gallery = self._load_quality_gallery(business_date, camera_id, now)
 
     def reset_session_tracks(self) -> None:
         self._track_visitors.clear()
+        self._track_learned_views.clear()
 
     def refresh_gallery(self, camera_id: int | None, now: datetime) -> None:
         """Reload persisted identities without discarding current physical-track bindings."""
@@ -126,6 +136,7 @@ class UniqueVisitorRegistry:
 
     def forget_session_track(self, track_id: int) -> None:
         self._track_visitors.pop(track_id, None)
+        self._track_learned_views.pop(track_id, None)
 
     def confirmed_visitor_count(self, camera_id: int | None, now: datetime | None = None) -> int:
         now = now or datetime.now(UTC)
@@ -204,11 +215,8 @@ class UniqueVisitorRegistry:
                 and normalized is not None
             ):
                 repeat_score = self._identity_score(identity, normalized)
-                if repeat_score >= min(self.strong_match_threshold, self.view_learning_threshold):
-                    if view is None:
-                        self._update_identity(identity, normalized, now)
-                    else:
-                        self._learn_view(identity, view, now)
+                if repeat_score >= self.strong_match_threshold:
+                    self._learn_from_track(identity, track_id, normalized, view, now)
                     self._update_quality_embedding_if_consistent(identity, quality_normalized, now)
                     if not self._provisional_decision_due(identity, now, finalize):
                         return self._provisional_pending(
@@ -231,10 +239,12 @@ class UniqueVisitorRegistry:
                         excluded_visitor_ids=excluded_visitor_ids,
                         force=finalize,
                     )
-            elif identity is not None and identity.identity_status == "confirmed":
-                learned = view if view is not None else normalized
-                if learned is not None:
-                    self._learn_view(identity, learned, now)
+            elif (
+                identity is not None
+                and identity.identity_status == "confirmed"
+                and normalized is not None
+            ):
+                self._learn_from_track(identity, track_id, normalized, view, now)
 
             decision = VisitorDecision(
                 visitor_id=visitor_id,
@@ -543,7 +553,7 @@ class UniqueVisitorRegistry:
             return decision
 
         canonical, reconciliation_score = self._best_reconciliation_match(
-            provisional, excluded_visitor_ids
+            provisional, excluded_visitor_ids | self.co_visible_visitors(provisional.visitor_id)
         )
         if canonical is not None:
             self._merge_identity(provisional, canonical, now)
@@ -594,6 +604,24 @@ class UniqueVisitorRegistry:
             return False
         self._track_visitors[track_id] = visitor_id
         return True
+
+    def note_provisional_since(self, visitor_id: str, since: datetime) -> None:
+        """When an uncertain identity began waiting, e.g. one loaded after a restart."""
+        self._provisional_since.setdefault(visitor_id, since)
+
+    def merge_visitors(self, alias_id: str, canonical_id: str, now: datetime) -> str | None:
+        """Fold one visitor into another known to be the same person; returns the survivor.
+
+        A confirmed visitor survives an uncertain one; otherwise ``canonical_id`` does.
+        """
+        alias = self._identity_for_visitor(alias_id)
+        canonical = self._identity_for_visitor(canonical_id)
+        if alias is None or canonical is None or alias is canonical:
+            return None
+        if canonical.identity_status == "provisional" and alias.identity_status == "confirmed":
+            alias, canonical = canonical, alias
+        self._merge_identity(alias, canonical, now)
+        return canonical.visitor_id
 
     def finalize_due_provisionals(
         self, now: datetime, excluded_visitor_ids: frozenset[str] = frozenset()
@@ -661,11 +689,37 @@ class UniqueVisitorRegistry:
         self._persist_sighting(decision, track_id, camera_id, detection_confidence, bbox, now)
         return decision
 
-    def _learn_view(self, identity: VisitorIdentity, view: np.ndarray, now: datetime) -> None:
-        """Add a consistent new view to a visitor; inconsistent views suggest a track switch."""
-        if self._identity_score(identity, view) < self.view_learning_threshold:
+    def _learn_from_track(
+        self,
+        identity: VisitorIdentity,
+        track_id: int,
+        track_embedding: np.ndarray,
+        view: np.ndarray | None,
+        now: datetime,
+    ) -> None:
+        """Teach a visitor its bound track's latest view, when that view is new and consistent.
+
+        The view is compared with the visitor's overall appearance, not its best single view,
+        so learned views cannot lead it step by step towards someone else. It must also agree
+        with the track's own samples: a view unlike both is another person after a tracker
+        ID switch, and learning it would let that person match this visitor later.
+        """
+        learned = view if view is not None else track_embedding
+        previous = self._track_learned_views.get(track_id)
+        if previous is not None and previous.shape == learned.shape:
+            if float(previous @ learned) >= 0.9999:
+                return
+        if view is not None and float(view @ track_embedding) < self.view_learning_threshold:
             return
-        self._update_identity(identity, view, now)
+        if (
+            identity.embedding.shape != learned.shape
+            or float(identity.embedding @ learned) < self.view_learning_threshold
+        ):
+            return
+        self._track_learned_views[track_id] = learned
+        if len(self._track_learned_views) > 1024:
+            self._track_learned_views.pop(next(iter(self._track_learned_views)))
+        self._update_identity(identity, learned, now)
 
     def _best_match(
         self, embedding: np.ndarray, excluded_visitor_ids: frozenset[str] = frozenset()

@@ -43,9 +43,14 @@ from app.camera.models import ProcessingSession
 from app.config.camera_config import CameraStartRequest, RegionOfInterest
 from app.config.open_space_config import OpenSpaceConfig, ZonePoint
 from app.detection.yolo_detector import TrackResult
-from app.evaluation.detection_cache import CachedDetectionFrame, load_detection_cache
+from app.evaluation.detection_cache import (
+    CachedDetectionFrame,
+    load_detection_cache,
+    sha256_file,
+)
 from app.evaluation.unique_visitors import score_unique_visitors
 from app.identity import establishment_registry as establishment_module
+from app.identity.models import VisitorIdentity
 from app.identity.unique_visitor_registry import UniqueVisitorRegistry
 from app.reid import PersonReIdentifier
 from app.reid.async_worker import ReIdResult
@@ -116,9 +121,22 @@ def legacy_counting() -> Iterator[None]:
             patch.object(establishment_module, "CONSENSUS_RECONCILIATION_MATCH_THRESHOLD", 0.75)
         )
         stack.enter_context(
-            patch.object(UniqueVisitorRegistry, "_learn_view", lambda *_args, **_kwargs: None)
+            patch.object(UniqueVisitorRegistry, "_learn_from_track", _legacy_learning)
         )
         yield
+
+
+def _legacy_learning(
+    registry: UniqueVisitorRegistry,
+    identity: VisitorIdentity,
+    track_id: int,
+    track_embedding: np.ndarray,
+    view: np.ndarray | None,
+    now: datetime,
+) -> None:
+    """Before view learning, only an uncertain identity absorbed its own track's samples."""
+    if identity.identity_status == "provisional":
+        registry._update_identity(identity, track_embedding, now)
 
 
 def video_frames(
@@ -160,6 +178,10 @@ def replay(
     collect_crops: bool = False,
 ) -> dict[str, Any]:
     metadata, cached_frames = load_detection_cache(cache)
+    if metadata.video_sha256 != sha256_file(video):
+        raise ValueError(f"{video} is not the clip {cache} was recorded from.")
+    if metadata.crop_normalized is not None:
+        raise ValueError("Replaying a detection cache recorded from a cropped clip is unsupported.")
     frames = [cached_frames[index] for index in sorted(cached_frames)]
     fps = metadata.source_fps / max(metadata.sample_every, 1)
     track_sources: dict[int, set[int]] = defaultdict(set)
@@ -319,8 +341,9 @@ def write_label_sheet(result: dict[str, Any], output: Path) -> None:
         "cache": result["cache"],
         "instructions": (
             "Give every detector track (#ID in label-sheet.jpg) the name of the real person it "
-            "shows, using the same name for the same person. Use null for a track that is not "
-            "a person or shows several people."
+            "shows, using the same name for the same person. Every named person is expected "
+            "in the count, so use null for a track that is not a person, shows several people, "
+            "or shows someone who should not count (for example, passing too briefly)."
         ),
         "source_people": {str(source): None for source in sorted(crops)},
         "source_spans": result["source_spans"],
