@@ -135,6 +135,14 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    create table server_backup_state (
+        singleton_id integer primary key check (singleton_id = 1),
+        reconciled integer not null default 0 check (reconciled in (0, 1)),
+        server_revision integer check (server_revision is null or server_revision >= 1),
+        updated_at text not null
+    )
+    """,
+    """
     create table report_camera_totals (
         report_id text not null,
         camera_id integer,

@@ -429,6 +429,15 @@ class EnterpriseContextResponse(BaseModel):
     session_restored: bool
 
 
+class LocalDataResetRequest(BaseModel):
+    enterprise_id: str = Field(..., min_length=1, max_length=160)
+
+
+class LocalDataResetResponse(BaseModel):
+    enterprise_id: str
+    set_aside_path: str
+
+
 class CameraProfilesRequest(BaseModel):
     cameras: list[dict[str, Any]] = Field(default_factory=list, max_length=32)
 

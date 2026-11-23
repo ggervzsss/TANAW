@@ -55,9 +55,14 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 19
+    assert len(relationships) == 20
     assert {
         ("enterprise_profiles", ("account_id",), ("accounts.id",)),
+        (
+            "desktop_local_backups",
+            ("enterprise_profile_id",),
+            ("enterprise_profiles.account_id",),
+        ),
         (
             "enterprise_report_submissions",
             ("enterprise_profile_id",),

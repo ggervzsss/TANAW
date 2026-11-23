@@ -2,6 +2,11 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.api.dependencies import registry
 from app.config.report_config import (
+    LocalBackupResponse,
+    LocalBackupRestoreRequest,
+    LocalBackupRestoreResponse,
+    LocalBackupRevisionRequest,
+    LocalBackupState,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
     ReportDraftRequest,
@@ -131,6 +136,52 @@ def purge_local_report_raw_events(report_id: str, request: Request) -> ReportRaw
 @router.post("/metrics/mark-synced", response_model=SyncMarkResponse)
 def mark_local_events_synced(request: Request) -> SyncMarkResponse:
     return SyncMarkResponse(updated=registry(request).mark_events_synced())
+
+
+@router.get("/backup/local", response_model=LocalBackupResponse)
+def export_local_backup(request: Request) -> LocalBackupResponse:
+    try:
+        return LocalBackupResponse(**registry(request).export_local_backup())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/backup/local/restore", response_model=LocalBackupRestoreResponse)
+def restore_local_backup(
+    payload: LocalBackupRestoreRequest, request: Request
+) -> LocalBackupRestoreResponse:
+    """Merge the server backup into this computer's local data, keeping what is already here."""
+    try:
+        return LocalBackupRestoreResponse(
+            **registry(request).restore_local_backup(
+                enterprise_id=payload.enterprise_id,
+                expected_revision=payload.expected_revision,
+                server_revision=payload.server_revision,
+                days=[day.model_dump(mode="json") for day in payload.days],
+                drafts=[draft.model_dump(mode="json") for draft in payload.drafts],
+                submissions=[item.model_dump(mode="json") for item in payload.submissions],
+                cameras=payload.cameras,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/backup/local/revision", response_model=LocalBackupState)
+def record_local_backup_revision(
+    payload: LocalBackupRevisionRequest, request: Request
+) -> LocalBackupState:
+    """Record that local data is reconciled with a server backup revision."""
+    try:
+        return LocalBackupState(
+            **registry(request).record_backup_revision(
+                enterprise_id=payload.enterprise_id,
+                expected_revision=payload.expected_revision,
+                server_revision=payload.server_revision,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sample/prepare", response_model=SamplePrepareResponse)

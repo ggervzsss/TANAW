@@ -20,7 +20,11 @@ from app.features.mail.models import (
     EmailOutboxStatus,
     EmailTemplateName,
 )
-from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
+from app.features.monitoring.models import (
+    DesktopLocalBackup,
+    EnterpriseTelemetrySnapshot,
+    OperationalAlert,
+)
 from app.features.notifications.models import UserNotification
 from app.features.realtime.models import RealtimeOutbox
 from app.features.reporting.models import (
@@ -40,6 +44,7 @@ __all__ = [
     "AccountStatus",
     "ActivityLog",
     "Base",
+    "DesktopLocalBackup",
     "EnterpriseReportSubmission",
     "EnterpriseProfile",
     "EnterpriseTelemetrySnapshot",

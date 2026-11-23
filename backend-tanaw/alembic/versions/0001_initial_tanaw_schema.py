@@ -865,6 +865,32 @@ def upgrade() -> None:
         ["received_at"],
         unique=False,
     )
+    op.create_table(
+        "desktop_local_backups",
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("device_id", sa.String(length=120), nullable=True),
+        sa.Column("revision", sa.Integer(), nullable=False),
+        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "received_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("schema_version", sa.Integer(), nullable=False),
+        sa.Column("day_count", sa.Integer(), nullable=False),
+        sa.Column("draft_count", sa.Integer(), nullable=False),
+        sa.Column("submission_count", sa.Integer(), nullable=False),
+        sa.Column("camera_count", sa.Integer(), nullable=False),
+        sa.Column("payload_json", sa.Text(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_desktop_local_backups_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("enterprise_profile_id"),
+    )
     op.execute("CREATE SEQUENCE support_ticket_code_sequence START WITH 1")
     op.create_table(
         "support_tickets",
@@ -1445,6 +1471,7 @@ def downgrade() -> None:
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_table("enterprise_telemetry_snapshots")
+    op.drop_table("desktop_local_backups")
     op.drop_index(
         op.f("ix_report_submission_operations_intake_report_id"),
         table_name="report_submission_operations",

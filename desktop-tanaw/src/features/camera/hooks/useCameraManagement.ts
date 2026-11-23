@@ -25,6 +25,7 @@ import { deleteCameraCredential, getCameraPasswordReplacement, loadCameraCredent
 import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useCameraRuntimeController } from "./useCameraRuntimeController";
 import { createBackoffPoller } from "../../../utils/backoff-poller";
+import { useBackupRestoreGeneration } from "../../sync/hooks/useBackupRestoreGeneration";
 
 type CameraManagementOptions = {
   cameras: Camera[];
@@ -73,6 +74,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const [configurationError, setConfigurationError] = useState<string | null>(null);
   const cameraProfilesForStorageRef = useRef<Camera[]>([]);
   const lastPersistedCameraFingerprintRef = useRef<string | null>(null);
+  // Cameras restored from the server backup replace the empty list loaded before the restore.
+  const backupRestoreGeneration = useBackupRestoreGeneration();
 
   const activeCam = cameras.find((camera) => camera.id === activeCamId);
   const {
@@ -174,7 +177,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       disposed = true;
       hydration.dispose();
     };
-  }, [adoptServiceStatus, resetRuntimeState, setCameras, setServiceError, storageKey]);
+  }, [adoptServiceStatus, resetRuntimeState, setCameras, setServiceError, storageKey, backupRestoreGeneration]);
 
   useEffect(() => {
     if (!hydratedFromStorage) return;

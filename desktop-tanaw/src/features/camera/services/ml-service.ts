@@ -9,6 +9,11 @@ import { assertUniqueCameraIps, canonicalizeCameraIp } from "../utils/camera-ip-
 import {
   MlServiceRequestError,
   type CameraTestResult,
+  type LocalBackup,
+  type LocalBackupRestoreRequest,
+  type LocalBackupRestoreResult,
+  type LocalBackupRevisionRequest,
+  type LocalBackupState,
   type LocalMetricsHistory,
   type LocalMetricsSummary,
   type LocalReportDraft,
@@ -30,6 +35,13 @@ export * from "./ml-service.types";
 export type { EstablishmentHourly, EstablishmentLive, EstablishmentSummary, DailyEstablishmentMetrics, HourlyEstablishmentActivity } from "./establishment.types";
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
+
+/** Camera settings or a report draft changed, so the server backup should be refreshed soon. */
+export const LOCAL_DATA_CHANGED_EVENT = "tanaw:local-data-changed";
+
+function notifyLocalDataChanged() {
+  window.dispatchEvent(new Event(LOCAL_DATA_CHANGED_EVENT));
+}
 
 export const EMPTY_ML_COUNTS: MlCounts = {
   entry: 0,
@@ -133,6 +145,11 @@ export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: stri
   );
 }
 
+/** Sets aside an establishment's local data that this version cannot open; refused for readable data. */
+export async function resetUnreadableLocalData(baseUrl: string, enterpriseId: string): Promise<{ enterprise_id: string; set_aside_path: string }> {
+  return requestJson<{ enterprise_id: string; set_aside_path: string }>(`${baseUrl}/context/enterprise/reset-local-data`, { method: "POST", body: JSON.stringify({ enterprise_id: enterpriseId }) }, 15_000);
+}
+
 export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
   return requestJson<Camera[]>(`${baseUrl}/cameras`, { method: "GET" }, 2500);
 }
@@ -158,7 +175,9 @@ export async function replaceLocalCameras(baseUrl: string, cameras: Camera[]): P
     );
   cameraWriteQueues.set(baseUrl, write);
   try {
-    return await write;
+    const saved = await write;
+    notifyLocalDataChanged();
+    return saved;
   } finally {
     if (cameraWriteQueues.get(baseUrl) === write) cameraWriteQueues.delete(baseUrl);
   }
@@ -217,7 +236,7 @@ export async function getLocalReportDraft(baseUrl: string, draftKey: string): Pr
 }
 
 export async function saveLocalReportDraft(baseUrl: string, draftKey: string, payload: { period: string; reportId: string | null; reportPayload: Record<string, unknown> }): Promise<LocalReportDraft> {
-  return requestJson<LocalReportDraft>(
+  const draft = await requestJson<LocalReportDraft>(
     `${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`,
     {
       method: "PUT",
@@ -229,10 +248,14 @@ export async function saveLocalReportDraft(baseUrl: string, draftKey: string, pa
     },
     2500,
   );
+  notifyLocalDataChanged();
+  return draft;
 }
 
 export async function deleteLocalReportDraft(baseUrl: string, draftKey: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "DELETE" }, 2500);
+  const result = await requestJson<{ updated: number }>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "DELETE" }, 2500);
+  notifyLocalDataChanged();
+  return result;
 }
 
 export async function markLocalReportSynced(baseUrl: string, reportId: string, submissionId: string): Promise<{ updated: number }> {
@@ -250,6 +273,19 @@ export async function purgeLocalReportRawEvents(baseUrl: string, reportId: strin
 
 export async function markLocalEventsSynced(baseUrl: string): Promise<{ updated: number }> {
   return requestJson<{ updated: number }>(`${baseUrl}/metrics/mark-synced`, { method: "POST" }, 2500);
+}
+
+export async function exportLocalBackup(baseUrl: string): Promise<LocalBackup> {
+  return requestJson<LocalBackup>(`${baseUrl}/backup/local`, { method: "GET" }, 10_000);
+}
+
+export async function restoreLocalBackup(baseUrl: string, payload: LocalBackupRestoreRequest): Promise<LocalBackupRestoreResult> {
+  return requestJson<LocalBackupRestoreResult>(`${baseUrl}/backup/local/restore`, { method: "POST", body: JSON.stringify(payload) }, 15_000);
+}
+
+/** Records that local data is reconciled with a server backup revision; refused if the state moved on. */
+export async function recordLocalBackupRevision(baseUrl: string, payload: LocalBackupRevisionRequest): Promise<LocalBackupState> {
+  return requestJson<LocalBackupState>(`${baseUrl}/backup/local/revision`, { method: "POST", body: JSON.stringify(payload) }, 10_000);
 }
 
 export async function prepareLocalSampleCounts(baseUrl: string, payload: SamplePreparationRequest): Promise<SamplePreparationResult> {
@@ -546,6 +582,7 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
     "tripwire_persistence_failed",
     "tripwire_worker_update_failed",
     "service_shutting_down",
+    "local_database_reset_required",
     "request_timeout",
     "unknown",
   ];

@@ -34,6 +34,12 @@ function responseError(status: number) {
 
 function requestRejectingWith(error: Error) {
   return staffApi.get("/interceptor-test", {
+    adapter: (config) => Promise.reject(Object.assign(error, { config })),
+  });
+}
+
+function legacyRequestRejectingWith(error: Error) {
+  return staffApi.get("/interceptor-test", {
     adapter: () => Promise.reject(error),
   });
 }
@@ -81,6 +87,41 @@ describe("staff API authentication failures", () => {
       user: null,
     });
     expect(clearPersistedSession).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a session's own token on a request pinned to it", async () => {
+    let sent: unknown;
+    await staffApi.get("/interceptor-test", {
+      headers: { Authorization: "Bearer earlier-session-token" },
+      adapter: (config) => {
+        sent = config.headers.Authorization;
+        return Promise.resolve({ data: null, status: 200, statusText: "OK", headers: {}, config });
+      },
+    });
+
+    expect(sent).toBe("Bearer earlier-session-token");
+  });
+
+  it("keeps the current session when an earlier session's request returns HTTP 401", async () => {
+    const error = responseError(401);
+
+    await expect(
+      staffApi.get("/interceptor-test", {
+        headers: { Authorization: "Bearer earlier-session-token" },
+        adapter: (config) => Promise.reject(Object.assign(error, { config })),
+      }),
+    ).rejects.toBe(error);
+
+    expect(useAuthStore.getState()).toMatchObject({ status: "authenticated", token: "valid-desktop-session-token" });
+    expect(clearPersistedSession).not.toHaveBeenCalled();
+  });
+
+  it("invalidates the session for an HTTP 401 without request details", async () => {
+    const error = responseError(401);
+
+    await expect(legacyRequestRejectingWith(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState()).toMatchObject({ status: "anonymous", token: null });
   });
 
   it("keeps the session and rejects with the original HTTP 403 error", async () => {

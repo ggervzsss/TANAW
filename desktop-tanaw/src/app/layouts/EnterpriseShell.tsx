@@ -5,12 +5,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
-import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalCameras, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
+import { CameraServiceStartupCard } from "../../features/camera/components/CameraServiceStartupCard";
+import { DEFAULT_ML_SERVICE_BASE_URL, MlServiceRequestError, getMlServiceStatus, listLocalCameras, resetUnreadableLocalData, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess, notifyWarning } from "../../features/toasts/services/toast-service";
+import { useBackupRestoreGeneration } from "../../features/sync/hooks/useBackupRestoreGeneration";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -66,6 +68,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   const [dismissedCriticalIds, setDismissedCriticalIds] = useState<ReadonlySet<number>>(() => new Set());
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
+  const [mlContextResetRequired, setMlContextResetRequired] = useState(false);
   const [mlContextAttempt, setMlContextAttempt] = useState(0);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
@@ -77,6 +80,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   );
 
   useDesktopCloudSync(mlContextReady);
+  const backupRestoreGeneration = useBackupRestoreGeneration();
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -141,6 +145,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
     let disposed = false;
     setMlContextReady(false);
     setMlContextError(null);
+    setMlContextResetRequired(false);
     void getMlServiceStatus()
       .then((status) => {
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
@@ -156,6 +161,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
         if (!disposed) {
           setMlContextReady(false);
           setMlContextError(error instanceof Error ? error.message : "TANAW could not initialize the local camera service.");
+          setMlContextResetRequired(error instanceof MlServiceRequestError && error.code === "local_database_reset_required");
         }
       });
 
@@ -163,6 +169,15 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
       disposed = true;
     };
   }, [mlContextAttempt, user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
+
+  const resetLocalData = useCallback(async () => {
+    const enterpriseId = user?.enterpriseId || user?.id;
+    if (!enterpriseId) return;
+    const status = await getMlServiceStatus();
+    await resetUnreadableLocalData(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, enterpriseId);
+    notifySuccess("Local data was reset. TANAW is starting with fresh local data.");
+    setMlContextAttempt((attempt) => attempt + 1);
+  }, [user?.enterpriseId, user?.id]);
 
   useEffect(() => {
     if (!mlContextReady) return;
@@ -180,7 +195,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
     return () => {
       disposed = true;
     };
-  }, [mlContextReady, enterpriseCameraStorageKey]);
+  }, [mlContextReady, enterpriseCameraStorageKey, backupRestoreGeneration]);
 
   useLayoutEffect(() => {
     const container = contentScrollRef.current;
@@ -277,21 +292,12 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
           >
             <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
               {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
-                <section className="mx-auto mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900" role={mlContextError ? "alert" : "status"}>
-                  <h2 className="font-semibold">{mlContextError ? "Camera service unavailable" : "Starting the local camera service"}</h2>
-                  {mlContextError && (
-                    <>
-                      <p className="mt-2 text-sm wrap-break-word">{mlContextError}</p>
-                      <button
-                        type="button"
-                        className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-                        onClick={() => setMlContextAttempt((attempt) => attempt + 1)}
-                      >
-                        Try again
-                      </button>
-                    </>
-                  )}
-                </section>
+                <CameraServiceStartupCard
+                  error={mlContextError}
+                  resetRequired={mlContextResetRequired}
+                  onRetry={() => setMlContextAttempt((attempt) => attempt + 1)}
+                  onResetLocalData={resetLocalData}
+                />
               )}
               <Suspense fallback={<EnterpriseViewLoadingFallback />}>
                 {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}

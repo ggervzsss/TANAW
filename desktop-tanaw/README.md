@@ -247,9 +247,29 @@ and `ml-service.log` for the camera service. Camera passwords and tokens are
 redacted from both.
 
 A Windows uninstall removes the installed app's profile and cached installer
-payload for the current Windows account. Unsynced reports are lost. Installing
-an update over an existing installation keeps the profile. The development
-profile and records already synced to the server are separate.
+payload for the current Windows account. Installing an update over an existing
+installation keeps the profile. The development profile and records already
+synced to the server are separate.
+
+The app backs up each establishment's undelivered daily totals, report drafts,
+reports still waiting to upload, and camera settings to the server about once
+an hour and shortly after a camera or draft is saved. Camera usernames,
+passwords, raw tracking data, and session data stay on the computer. A custom
+RTSP camera is backed up by its host and port only, because its stream path or
+query can hold an access token.
+
+After a reinstall or reset, signing in merges that backup into the local data;
+a record already on the computer is kept as it is, and counts newer than the
+last backup are lost. A restored report keeps its original submission ID, so
+its upload is retried safely. Until the backup is merged or confirmed absent,
+the app works offline but uploads no backup, so a slow or failed restore cannot
+replace the server copy. The server also refuses an upload that was not based
+on its current copy, so a second computer must merge that copy first.
+
+If an update cannot open the local data an earlier version saved, the app
+offers **Reset local data**. It moves only that unreadable data to
+`ml-service/set-aside` inside the profile, then starts fresh and restores the
+server backup.
 
 ## Building installers
 

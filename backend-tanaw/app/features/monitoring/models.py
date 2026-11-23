@@ -72,6 +72,35 @@ Index(
 )
 
 
+class DesktopLocalBackup(Base):
+    """The latest copy of one enterprise's unsubmitted desktop data, replaced on every upload."""
+
+    __tablename__ = "desktop_local_backups"
+
+    enterprise_profile_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_profiles.account_id",
+            name="fk_desktop_local_backups_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+    )
+    device_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Increases on every saved upload; a desktop must name the revision it last saw.
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    day_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    draft_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    submission_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    camera_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 OPERATIONAL_ALERT_CODE_SEQUENCE = Sequence(
     "operational_alert_code_sequence", start=1, metadata=Base.metadata
 )

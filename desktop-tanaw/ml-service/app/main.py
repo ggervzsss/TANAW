@@ -37,6 +37,8 @@ from app.config.camera_config import (
     EnterpriseContextRequest,
     EnterpriseContextResponse,
     HealthResponse,
+    LocalDataResetRequest,
+    LocalDataResetResponse,
     PerformanceProfileRequest,
     SessionResponse,
 )
@@ -134,6 +136,21 @@ def set_enterprise_context(
     return EnterpriseContextResponse(
         **_registry(request).bind_enterprise(payload.enterprise_id, payload.enterprise_name)
     )
+
+
+@router.post("/context/enterprise/reset-local-data", response_model=LocalDataResetResponse)
+def reset_unreadable_local_data(
+    payload: LocalDataResetRequest, request: Request
+) -> LocalDataResetResponse:
+    """Set aside local data that this version cannot open, so binding can start fresh."""
+    try:
+        return LocalDataResetResponse(
+            **_registry(request).reset_unreadable_local_data(payload.enterprise_id)
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "local_data_readable", "message": str(exc)}
+        ) from exc
 
 
 @router.post("/camera/test", response_model=CameraTestResponse)

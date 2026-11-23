@@ -25,6 +25,10 @@ from app.features.maintenance.runtime import (
 )
 from app.features.realtime.runtime import start_realtime_runtime, stop_realtime_runtime
 
+# PUT is needed by the desktop backup upload; OPTIONS answers preflights.
+CORS_ALLOWED_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+CORS_ALLOWED_HEADERS = ("Authorization", "Content-Type")
+
 
 def create_lifespan(
     settings: Settings,
@@ -72,8 +76,8 @@ def create_app(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origin_list,
         allow_credentials=True,
-        allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_methods=list(CORS_ALLOWED_METHODS),
+        allow_headers=list(CORS_ALLOWED_HEADERS),
     )
 
     @application.middleware("http")

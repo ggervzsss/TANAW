@@ -57,7 +57,7 @@ def stream_candidates(brand: str, host: str, preferred: str | None = None) -> li
     if brand not in _BRAND_STREAMS:
         return [preferred] if preferred else []
     sub_streams = [sub.format(host=host) for sub, _ in _BRAND_STREAMS[brand]]
-    ordered = [preferred] if preferred and preferred in _known(brand, host) else []
+    ordered = [preferred] if preferred and preferred in known_stream_addresses(brand, host) else []
     return ordered + [url for url in sub_streams if url not in ordered]
 
 
@@ -120,7 +120,8 @@ def _suitable(result: StreamSelection) -> bool:
     return result.width is not None and MIN_DETECTION_WIDTH <= result.width <= MAX_PREFERRED_WIDTH
 
 
-def _known(brand: str, host: str) -> set[str]:
+def known_stream_addresses(brand: str, host: str) -> set[str]:
+    """Every preset stream address for a vendor brand; empty for custom RTSP."""
     return {
         template.format(host=host) for pair in _BRAND_STREAMS.get(brand, []) for template in pair
     }

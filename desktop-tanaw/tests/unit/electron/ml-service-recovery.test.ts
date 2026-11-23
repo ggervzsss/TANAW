@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
+  execFile: vi.fn(),
   blockerStart: vi.fn(() => 7),
   blockerStop: vi.fn(),
   secure: new Map<string, unknown>(),
@@ -12,7 +13,7 @@ vi.mock("electron", () => ({
   powerSaveBlocker: { start: mocks.blockerStart, stop: mocks.blockerStop },
 }));
 vi.mock("node:fs", () => ({ existsSync: () => true, statSync: () => ({ mtime: new Date(0) }) }));
-vi.mock("node:child_process", () => ({ spawn: mocks.spawn, execFile: vi.fn() }));
+vi.mock("node:child_process", () => ({ spawn: mocks.spawn, execFile: mocks.execFile }));
 vi.mock("../../../electron/ml-service-diagnostics", () => ({
   createMlDiagnosticLog: () => ({ file: "test-profile/logs/ml-service.log", write: vi.fn() }),
   createMlDiagnosticOutput: () => ({ push: vi.fn(), flush: vi.fn() }),
@@ -37,6 +38,7 @@ describe("ML service recovery", () => {
     vi.stubEnv("TANAW_ML_SERVICE_PORT", undefined);
     Object.defineProperty(process, "resourcesPath", { configurable: true, value: "test-resources" });
     mocks.spawn.mockReset();
+    mocks.execFile.mockReset();
     mocks.blockerStart.mockClear();
     mocks.blockerStop.mockClear();
     mocks.secure.clear();
@@ -61,6 +63,14 @@ describe("ML service recovery", () => {
       children.push(child);
       listening = true;
       return child;
+    });
+    // Windows stops the service with taskkill instead of child.kill(); end the matching process.
+    mocks.execFile.mockImplementation((file: string, args: string[], _options: unknown, callback: (error: Error | null, result: { stdout: string; stderr: string }) => void) => {
+      if (file === "taskkill.exe") {
+        const pid = Number(args[args.indexOf("/PID") + 1]);
+        children.find((child) => (child as EventEmitter & { pid: number }).pid === pid)?.emit("exit", 1, null);
+      }
+      callback(null, { stdout: "", stderr: "" });
     });
     const state: ServiceState = { counting: new Set(), profiles: [1] };
     let bound: string | null = null;

@@ -151,7 +151,7 @@ jobs:
           - app: desktop-tanaw
             port: 5175
             build: TANAW_RENDERER_ONLY=true VITE_API_BASE_URL=http://127.0.0.1:8012 npm run build
-            preview: TANAW_RENDERER_ONLY=true npx vite preview --host 127.0.0.1 --port 5175 --strictPort
+            preview: env TANAW_RENDERER_ONLY=true npx vite preview --host 127.0.0.1 --port 5175 --strictPort
     defaults:
       run:
         working-directory: ${{ matrix.app }}
