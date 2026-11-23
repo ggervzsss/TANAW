@@ -12,6 +12,8 @@ import {
   type LocalBackup,
   type LocalBackupRestoreRequest,
   type LocalBackupRestoreResult,
+  type LocalBackupRevisionRequest,
+  type LocalBackupState,
   type LocalMetricsHistory,
   type LocalMetricsSummary,
   type LocalReportDraft,
@@ -279,6 +281,11 @@ export async function exportLocalBackup(baseUrl: string): Promise<LocalBackup> {
 
 export async function restoreLocalBackup(baseUrl: string, payload: LocalBackupRestoreRequest): Promise<LocalBackupRestoreResult> {
   return requestJson<LocalBackupRestoreResult>(`${baseUrl}/backup/local/restore`, { method: "POST", body: JSON.stringify(payload) }, 15_000);
+}
+
+/** Records that local data is reconciled with a server backup revision; refused if the state moved on. */
+export async function recordLocalBackupRevision(baseUrl: string, payload: LocalBackupRevisionRequest): Promise<LocalBackupState> {
+  return requestJson<LocalBackupState>(`${baseUrl}/backup/local/revision`, { method: "POST", body: JSON.stringify(payload) }, 10_000);
 }
 
 export async function prepareLocalSampleCounts(baseUrl: string, payload: SamplePreparationRequest): Promise<SamplePreparationResult> {

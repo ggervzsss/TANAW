@@ -259,20 +259,56 @@ class LocalBackupDraft(BaseModel):
     updated_at: str = Field(min_length=1, max_length=40)
 
 
+class LocalBackupCameraTotal(BaseModel):
+    camera_id: int | None = None
+    camera_name: str | None = Field(default=None, max_length=120)
+    entries: int = Field(ge=0)
+    exits: int = Field(ge=0)
+    peak_occupancy: int = Field(ge=0)
+    unique_count: int = Field(ge=0)
+
+
+class LocalBackupSubmission(BaseModel):
+    """A submitted report still waiting to upload, with its original IDs."""
+
+    report_id: str = Field(min_length=1, max_length=120)
+    submission_id: str = Field(min_length=1, max_length=120)
+    period: str = Field(min_length=1, max_length=40)
+    submitted_at: str = Field(min_length=1, max_length=40)
+    entries: int | None = Field(default=None, ge=0)
+    exits: int | None = Field(default=None, ge=0)
+    peak_occupancy: int | None = Field(default=None, ge=0)
+    unique_count: int = Field(default=0, ge=0)
+    notes: str | None = Field(default=None, max_length=4000)
+    payload: dict[str, Any]
+    camera_breakdown: list[LocalBackupCameraTotal] = Field(default_factory=list, max_length=32)
+
+
+class LocalBackupState(BaseModel):
+    """Whether this computer merged the server copy, and which server revision it saw last."""
+
+    reconciled: bool
+    server_revision: int | None
+
+
 class LocalBackupResponse(BaseModel):
-    """Unsubmitted report data and camera settings for the server backup."""
+    """Unsubmitted report data and allowlisted camera settings for the server backup."""
 
     enterprise_id: str | None
-    empty: bool
+    state: LocalBackupState
     days: list[LocalBackupDay]
     drafts: list[LocalBackupDraft]
+    submissions: list[LocalBackupSubmission]
     cameras: list[dict[str, Any]]
 
 
 class LocalBackupRestoreRequest(BaseModel):
     enterprise_id: str = Field(min_length=1, max_length=160)
+    expected_revision: int | None = Field(ge=1)
+    server_revision: int = Field(ge=1)
     days: list[LocalBackupDay] = Field(default_factory=list, max_length=62)
     drafts: list[LocalBackupDraft] = Field(default_factory=list, max_length=12)
+    submissions: list[LocalBackupSubmission] = Field(default_factory=list, max_length=12)
     cameras: list[dict[str, Any]] = Field(default_factory=list, max_length=32)
 
 
@@ -280,4 +316,12 @@ class LocalBackupRestoreResponse(BaseModel):
     restored: bool
     days: int
     drafts: int
+    submissions: int
     cameras: int
+    custom_cameras: int
+
+
+class LocalBackupRevisionRequest(BaseModel):
+    enterprise_id: str = Field(min_length=1, max_length=160)
+    expected_revision: int | None = Field(ge=1)
+    server_revision: int | None = Field(ge=1)

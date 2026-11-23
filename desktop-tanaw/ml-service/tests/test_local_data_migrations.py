@@ -28,6 +28,7 @@ class LocalDataMigrationsTest(unittest.TestCase):
                 tables,
                 {
                     "schema_migrations",
+                    "server_backup_state",
                     "camera_analysis_revisions",
                     "analysis_runs",
                     "area_visits",

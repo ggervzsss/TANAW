@@ -18,6 +18,7 @@ export const apiPaths = {
 export type ApiAuthUser = ApiSchemas["AuthUser"];
 export type ApiLoginResponse = ApiSchemas["LoginResponse"];
 export type ApiDesktopBackup = ApiSchemas["DesktopBackup"];
+export type ApiDesktopBackupSummary = ApiSchemas["DesktopBackupSummary"];
 export type ApiDesktopBackupUpload = ApiSchemas["DesktopBackupUpload"];
 export type ApiDesktopReportSubmission = ApiSchemas["DesktopReportSubmissionIngest"];
 export type ApiDesktopTelemetry = ApiSchemas["DesktopTelemetryIngest"];

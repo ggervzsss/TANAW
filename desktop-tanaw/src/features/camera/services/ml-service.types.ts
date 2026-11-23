@@ -318,19 +318,53 @@ export type LocalBackupDay = {
   metrics: Record<string, unknown>;
 };
 
-/** Unsubmitted report data and camera settings that the server keeps as a backup. */
+export type LocalBackupCameraTotal = {
+  camera_id: number | null;
+  camera_name: string | null;
+  entries: number;
+  exits: number;
+  peak_occupancy: number;
+  unique_count: number;
+};
+
+/** A submitted report still waiting to upload, kept with its original IDs. */
+export type LocalBackupSubmission = {
+  report_id: string;
+  submission_id: string;
+  period: string;
+  submitted_at: string;
+  entries: number | null;
+  exits: number | null;
+  peak_occupancy: number | null;
+  unique_count: number;
+  notes: string | null;
+  payload: Record<string, unknown>;
+  camera_breakdown: LocalBackupCameraTotal[];
+};
+
+/** Whether local data was reconciled with the server copy, and the server revision seen last. */
+export type LocalBackupState = {
+  reconciled: boolean;
+  server_revision: number | null;
+};
+
+/** Unsubmitted report data and allowlisted camera settings that the server keeps as a backup. */
 export type LocalBackup = {
   enterprise_id: string | null;
-  empty: boolean;
+  state: LocalBackupState;
   days: LocalBackupDay[];
   drafts: LocalReportDraft[];
+  submissions: LocalBackupSubmission[];
   cameras: Record<string, unknown>[];
 };
 
 export type LocalBackupRestoreRequest = {
   enterprise_id: string;
+  expected_revision: number | null;
+  server_revision: number;
   days: LocalBackupDay[];
   drafts: LocalReportDraft[];
+  submissions: LocalBackupSubmission[];
   cameras: Record<string, unknown>[];
 };
 
@@ -338,7 +372,15 @@ export type LocalBackupRestoreResult = {
   restored: boolean;
   days: number;
   drafts: number;
+  submissions: number;
   cameras: number;
+  custom_cameras: number;
+};
+
+export type LocalBackupRevisionRequest = {
+  enterprise_id: string;
+  expected_revision: number | null;
+  server_revision: number | null;
 };
 
 export type SamplePreparationRequest = {

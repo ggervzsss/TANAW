@@ -30,7 +30,7 @@ from app.storage.repositories.establishment_repository import EstablishmentRepos
 from app.storage.repositories.establishment_sample_repository import prepare_sample_period
 from app.storage.repositories.local_backup_repository import (
     export_local_backup,
-    local_data_is_empty,
+    record_server_revision,
     restore_local_backup,
 )
 
@@ -895,43 +895,66 @@ class CameraPipelineRegistry:
     def export_local_backup(self) -> dict[str, Any]:
         with self._lifecycle_lock:
             database = self.establishment_repository().database
-            backup = export_local_backup(database, datetime.now(UTC))
             return {
-                **backup,
+                **export_local_backup(database, datetime.now(UTC)),
                 "enterprise_id": self._enterprise_id,
-                "cameras": self._reporting.list_camera_profiles(),
-                "empty": local_data_is_empty(database),
             }
+
+    def record_backup_revision(
+        self, *, enterprise_id: str, expected_revision: int | None, server_revision: int | None
+    ) -> dict[str, Any]:
+        """Mark local data reconciled with a server revision (nothing to merge, or just saved)."""
+        with self._lifecycle_lock:
+            self._require_bound(enterprise_id)
+            return record_server_revision(
+                self.establishment_repository().database,
+                expected_revision=expected_revision,
+                server_revision=server_revision,
+                now=datetime.now(UTC),
+            )
 
     def restore_local_backup(
         self,
         *,
         enterprise_id: str,
+        expected_revision: int | None,
+        server_revision: int,
         days: list[dict[str, Any]],
         drafts: list[dict[str, Any]],
+        submissions: list[dict[str, Any]],
         cameras: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        """Merge the server backup into the bound enterprise's local data.
+
+        The binding is checked under the lifecycle lock, so the enterprise cannot
+        change between the check and the write.
+        """
         with self._lifecycle_lock:
-            if self._enterprise_id != enterprise_id:
-                raise ValueError(
-                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}, "
-                    f"not {enterprise_id}."
-                )
-            database = self.establishment_repository().database
-            if not local_data_is_empty(database):
-                return {"restored": False, "days": 0, "drafts": 0, "cameras": 0}
-            # Restored cameras have no saved password yet, so each one is tested again.
-            profiles = self.replace_camera_profiles(
-                [{**camera, "status": "untested"} for camera in cameras]
-            )
+            self._require_bound(enterprise_id)
             restored = restore_local_backup(
-                database, days=days, drafts=drafts, now=datetime.now(UTC)
+                self.establishment_repository().database,
+                expected_revision=expected_revision,
+                server_revision=server_revision,
+                days=days,
+                drafts=drafts,
+                submissions=submissions,
+                cameras=cameras,
+                max_cameras=self._max_configured_cameras,
+                now=datetime.now(UTC),
             )
-        logger.info(
-            "Local data restored from the server backup.",
-            extra={"enterprise_id": enterprise_id, **restored, "cameras": len(profiles)},
-        )
-        return {"restored": True, **restored, "cameras": len(profiles)}
+        if restored["restored"]:
+            logger.info(
+                "Local data merged from the server backup.",
+                extra={"enterprise_id": enterprise_id, "server_revision": server_revision},
+            )
+        return restored
+
+    def _require_bound(self, enterprise_id: str) -> None:
+        if self._enterprise_id != enterprise_id:
+            raise ValueError(
+                f"Desktop is bound to {self._enterprise_id or 'no enterprise'}, "
+                f"not {enterprise_id}."
+            )
 
     def aggregate_session(self) -> dict[str, Any]:
         states = self.camera_states()

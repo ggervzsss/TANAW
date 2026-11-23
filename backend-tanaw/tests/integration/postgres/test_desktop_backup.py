@@ -14,7 +14,7 @@ from app.features.accounts.models import (
     EnterpriseProfile,
 )
 from app.features.monitoring.backups import (
-    StaleDesktopBackupError,
+    DesktopBackupConflictError,
     get_desktop_backup,
     save_desktop_backup,
 )
@@ -59,30 +59,44 @@ async def test_latest_backup_replaces_the_previous_copy_per_enterprise(
         await db.flush()
 
         assert await get_desktop_backup(db, first) is None
-        saved = await save_desktop_backup(db, first, _upload(now - timedelta(hours=1), entries=5))
-        assert (saved.days, saved.drafts, saved.cameras) == (1, 1, 1)
-        await save_desktop_backup(db, first, _upload(now, entries=9))
-        await save_desktop_backup(db, second, _upload(now, entries=2))
+        saved = await save_desktop_backup(
+            db, first, _upload(now - timedelta(hours=1), entries=5, base=None)
+        )
+        assert (saved.revision, saved.days, saved.drafts, saved.submissions, saved.cameras) == (
+            1,
+            1,
+            1,
+            1,
+            1,
+        )
+        replaced = await save_desktop_backup(db, first, _upload(now, entries=9, base=1))
+        assert replaced.revision == 2
+        await save_desktop_backup(db, second, _upload(now, entries=2, base=None))
         await db.commit()
 
     async with postgres_runtime.sessions() as db:
         backup = await get_desktop_backup(db, first)
         assert backup is not None
+        assert backup.revision == 2
+        assert first.enterprise_profile is not None
+        assert backup.enterpriseId == first.enterprise_profile.enterprise_id
         assert backup.capturedAt == now
         assert backup.days[0].metrics["entries"] == 9
         assert backup.drafts[0].draftKey == "period:November 2026"
+        assert backup.submissions[0].submissionId == "SUB-OCT"
         rows = await db.scalar(
             select(DesktopLocalBackup).where(DesktopLocalBackup.enterprise_profile_id == first.id)
         )
         assert rows is not None
-        assert rows.day_count == 1
+        assert (rows.day_count, rows.submission_count) == (1, 1)
         other = await get_desktop_backup(db, second)
         assert other is not None
+        assert other.revision == 1
         assert other.days[0].metrics["entries"] == 2
 
 
 @pytest.mark.asyncio
-async def test_a_delayed_older_upload_keeps_the_newer_copy(
+async def test_a_delayed_upload_from_the_same_base_keeps_the_newer_copy(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     now = datetime.now(UTC)
@@ -90,21 +104,62 @@ async def test_a_delayed_older_upload_keeps_the_newer_copy(
     async with postgres_runtime.sessions() as db:
         db.add(enterprise)
         await db.flush()
-        await save_desktop_backup(db, enterprise, _upload(now, entries=9))
+        await save_desktop_backup(db, enterprise, _upload(now, entries=4, base=None))
+        await save_desktop_backup(db, enterprise, _upload(now, entries=9, base=1))
 
-        with pytest.raises(StaleDesktopBackupError):
-            await save_desktop_backup(db, enterprise, _upload(now - timedelta(hours=1), entries=1))
+        with pytest.raises(DesktopBackupConflictError):
+            await save_desktop_backup(
+                db, enterprise, _upload(now - timedelta(hours=1), entries=1, base=1)
+            )
 
         backup = await get_desktop_backup(db, enterprise)
         assert backup is not None
-        assert backup.days[0].metrics["entries"] == 9
+        assert (backup.revision, backup.days[0].metrics["entries"]) == (2, 9)
 
 
-def _upload(captured_at: datetime, *, entries: int) -> DesktopBackupUpload:
+@pytest.mark.asyncio
+async def test_a_second_desktop_with_a_newer_timestamp_cannot_replace_an_unmerged_copy(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    now = datetime.now(UTC)
+    enterprise = _enterprise("two-devices")
+    async with postgres_runtime.sessions() as db:
+        db.add(enterprise)
+        await db.flush()
+        # The first desktop saves the only recoverable copy.
+        await save_desktop_backup(
+            db, enterprise, _upload(now, entries=40, base=None, device="desktop-a")
+        )
+
+        # A second desktop that never merged it uploads a later, partial snapshot.
+        with pytest.raises(DesktopBackupConflictError):
+            await save_desktop_backup(
+                db,
+                enterprise,
+                _upload(now + timedelta(hours=2), entries=1, base=None, device="desktop-b"),
+            )
+
+        backup = await get_desktop_backup(db, enterprise)
+        assert backup is not None
+        assert (backup.deviceId, backup.days[0].metrics["entries"]) == ("desktop-a", 40)
+
+        # Once it merged revision 1, its upload is accepted.
+        merged = await save_desktop_backup(
+            db,
+            enterprise,
+            _upload(now + timedelta(hours=2), entries=41, base=1, device="desktop-b"),
+        )
+        assert merged.revision == 2
+
+
+def _upload(
+    captured_at: datetime, *, entries: int, base: int | None, device: str = "desktop-1"
+) -> DesktopBackupUpload:
     values: dict[str, Any] = {
         "schemaVersion": 1,
-        "deviceId": "desktop-1",
+        "deviceId": device,
         "capturedAt": captured_at,
+        "baseRevision": base,
         "days": [
             {
                 "businessDate": "2026-11-16",
@@ -120,7 +175,27 @@ def _upload(captured_at: datetime, *, entries: int) -> DesktopBackupUpload:
                 "updatedAt": captured_at,
             }
         ],
-        "cameras": [{"id": 1, "name": "Main entrance", "rtsp": "rtsp://192.168.1.21/stream2"}],
+        "submissions": [
+            {
+                "reportId": "REP-OCT",
+                "submissionId": "SUB-OCT",
+                "period": "October 2026",
+                "submittedAt": captured_at,
+                "uniqueCount": 3,
+                "payload": {"status": "Submitted"},
+            }
+        ],
+        "cameras": [
+            {
+                "id": 1,
+                "name": "Main entrance",
+                "cameraHost": "192.168.1.21",
+                "rtsp": "rtsp://192.168.1.21/stream2",
+                "processingProfile": "auto",
+                "confidence": 0.35,
+                "config": {"tripwire": 50},
+            }
+        ],
     }
     return DesktopBackupUpload.model_validate(values)
 

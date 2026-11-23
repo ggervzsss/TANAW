@@ -5,6 +5,8 @@ from app.config.report_config import (
     LocalBackupResponse,
     LocalBackupRestoreRequest,
     LocalBackupRestoreResponse,
+    LocalBackupRevisionRequest,
+    LocalBackupState,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
     ReportDraftRequest,
@@ -148,14 +150,34 @@ def export_local_backup(request: Request) -> LocalBackupResponse:
 def restore_local_backup(
     payload: LocalBackupRestoreRequest, request: Request
 ) -> LocalBackupRestoreResponse:
-    """Restore the server backup into this computer's local data when it holds nothing yet."""
+    """Merge the server backup into this computer's local data, keeping what is already here."""
     try:
         return LocalBackupRestoreResponse(
             **registry(request).restore_local_backup(
                 enterprise_id=payload.enterprise_id,
+                expected_revision=payload.expected_revision,
+                server_revision=payload.server_revision,
                 days=[day.model_dump(mode="json") for day in payload.days],
                 drafts=[draft.model_dump(mode="json") for draft in payload.drafts],
+                submissions=[item.model_dump(mode="json") for item in payload.submissions],
                 cameras=payload.cameras,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/backup/local/revision", response_model=LocalBackupState)
+def record_local_backup_revision(
+    payload: LocalBackupRevisionRequest, request: Request
+) -> LocalBackupState:
+    """Record that local data is reconciled with a server backup revision."""
+    try:
+        return LocalBackupState(
+            **registry(request).record_backup_revision(
+                enterprise_id=payload.enterprise_id,
+                expected_revision=payload.expected_revision,
+                server_revision=payload.server_revision,
             )
         )
     except ValueError as exc:

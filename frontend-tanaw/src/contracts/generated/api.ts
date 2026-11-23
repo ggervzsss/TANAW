@@ -1475,10 +1475,10 @@ export interface components {
         };
         /** DesktopBackup */
         DesktopBackup: {
+            /** Baserevision */
+            baseRevision?: number | null;
             /** Cameras */
-            cameras?: {
-                [key: string]: unknown;
-            }[];
+            cameras?: components["schemas"]["DesktopBackupCamera"][];
             /**
              * Capturedat
              * Format: date-time
@@ -1490,16 +1490,98 @@ export interface components {
             deviceId?: string | null;
             /** Drafts */
             drafts?: components["schemas"]["DesktopBackupDraft"][];
+            /** Enterpriseid */
+            enterpriseId: string;
             /**
              * Receivedat
              * Format: date-time
              */
             receivedAt: string;
+            /** Revision */
+            revision: number;
             /**
              * Schemaversion
              * @constant
              */
             schemaVersion: 1;
+            /** Submissions */
+            submissions?: components["schemas"]["DesktopBackupSubmission"][];
+        };
+        /**
+         * DesktopBackupCamera
+         * @description The camera settings allowed to leave the desktop.
+         *
+         *     Usernames, passwords, and stream-address parts that could hold a secret are
+         *     not fields here, so a backup carrying them is refused rather than stored.
+         */
+        DesktopBackupCamera: {
+            /** Analysismode */
+            analysisMode?: ("entrance_exit" | "open_space") | null;
+            /**
+             * Camerabrand
+             * @default tapo
+             * @enum {string}
+             */
+            cameraBrand: "tapo" | "tenda" | "dahua" | "custom";
+            /**
+             * Camerahost
+             * Format: ipv4
+             */
+            cameraHost: string;
+            /** Confidence */
+            confidence: number;
+            config: components["schemas"]["DesktopBackupCameraConfig"];
+            /** Connectionprofile */
+            connectionProfile?: ("channel" | "channel_ampersand" | "profile" | "h264" | "manual") | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            openSpace?: components["schemas"]["DesktopBackupOpenSpace"] | null;
+            /**
+             * Processingprofile
+             * @enum {string}
+             */
+            processingProfile: "auto" | "compatibility" | "balanced" | "high_accuracy" | "emergency";
+            /** Reidmode */
+            reidMode?: ("auto" | "off" | "fast" | "quality") | null;
+            /** Rtsp */
+            rtsp: string;
+            /** Rtspstream */
+            rtspStream?: ("stream1" | "stream2") | null;
+            /** Trackingconfidence */
+            trackingConfidence?: number | null;
+            /** Uniquecountingmode */
+            uniqueCountingMode?: ("entry_only" | "estimated_reid") | null;
+            /**
+             * Zone
+             * @default
+             */
+            zone: string;
+        };
+        /** DesktopBackupCameraConfig */
+        DesktopBackupCameraConfig: {
+            /** Reverse */
+            reverse?: boolean | null;
+            roi?: components["schemas"]["DesktopBackupRegion"] | null;
+            /** Tripwire */
+            tripwire?: number | null;
+            tripwires?: components["schemas"]["DesktopBackupTripwires"] | null;
+        };
+        /** DesktopBackupCameraTotal */
+        DesktopBackupCameraTotal: {
+            /** Cameraid */
+            cameraId?: number | null;
+            /** Cameraname */
+            cameraName?: string | null;
+            /** Entries */
+            entries: number;
+            /** Exits */
+            exits: number;
+            /** Peakoccupancy */
+            peakOccupancy: number;
+            /** Uniquecount */
+            uniqueCount: number;
         };
         /**
          * DesktopBackupDay
@@ -1536,6 +1618,81 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** DesktopBackupOpenSpace */
+        DesktopBackupOpenSpace: {
+            /** Boundary Tolerance */
+            boundary_tolerance?: number | null;
+            /** Entry Confirmation Seconds */
+            entry_confirmation_seconds?: number | null;
+            /** Exit Confirmation Seconds */
+            exit_confirmation_seconds?: number | null;
+            /** Gap Grace Seconds */
+            gap_grace_seconds?: number | null;
+            /** Minimum Visit Seconds */
+            minimum_visit_seconds?: number | null;
+            /** Polygon */
+            polygon: components["schemas"]["DesktopBackupPoint"][];
+            /** Zone Id */
+            zone_id: string;
+            /** Zone Name */
+            zone_name: string;
+        };
+        /** DesktopBackupPoint */
+        DesktopBackupPoint: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** DesktopBackupRegion */
+        DesktopBackupRegion: {
+            /** Height */
+            height: number;
+            /** Left */
+            left: number;
+            /** Top */
+            top: number;
+            /** Width */
+            width: number;
+        };
+        /**
+         * DesktopBackupSubmission
+         * @description A submitted report still waiting to reach the server, kept with its original IDs.
+         *
+         *     Restoring it with the same ``submissionId`` keeps the eventual upload idempotent.
+         */
+        DesktopBackupSubmission: {
+            /** Camerabreakdown */
+            cameraBreakdown?: components["schemas"]["DesktopBackupCameraTotal"][];
+            /** Entries */
+            entries?: number | null;
+            /** Exits */
+            exits?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Peakoccupancy */
+            peakOccupancy?: number | null;
+            /** Period */
+            period: string;
+            /** Reportid */
+            reportId: string;
+            /** Submissionid */
+            submissionId: string;
+            /**
+             * Submittedat
+             * Format: date-time
+             */
+            submittedAt: string;
+            /**
+             * Uniquecount
+             * @default 0
+             */
+            uniqueCount: number;
+        };
         /** DesktopBackupSummary */
         DesktopBackupSummary: {
             /** Cameras */
@@ -1556,16 +1713,36 @@ export interface components {
              * Format: date-time
              */
             receivedAt: string;
+            /** Revision */
+            revision: number;
+            /** Submissions */
+            submissions: number;
+        };
+        /** DesktopBackupTripwire */
+        DesktopBackupTripwire: {
+            /** Curve */
+            curve?: ("linear" | "smooth") | null;
+            end: components["schemas"]["DesktopBackupPoint"];
+            /** Points */
+            points?: components["schemas"]["DesktopBackupPoint"][] | null;
+            /** Sampledpoints */
+            sampledPoints?: components["schemas"]["DesktopBackupPoint"][] | null;
+            start: components["schemas"]["DesktopBackupPoint"];
+        };
+        /** DesktopBackupTripwires */
+        DesktopBackupTripwires: {
+            entry: components["schemas"]["DesktopBackupTripwire"];
+            exit: components["schemas"]["DesktopBackupTripwire"];
         };
         /**
          * DesktopBackupUpload
          * @description Unsubmitted report data and camera settings, without passwords or raw tracking data.
          */
         DesktopBackupUpload: {
+            /** Baserevision */
+            baseRevision: number | null;
             /** Cameras */
-            cameras?: {
-                [key: string]: unknown;
-            }[];
+            cameras?: components["schemas"]["DesktopBackupCamera"][];
             /**
              * Capturedat
              * Format: date-time
@@ -1582,6 +1759,8 @@ export interface components {
              * @constant
              */
             schemaVersion: 1;
+            /** Submissions */
+            submissions?: components["schemas"]["DesktopBackupSubmission"][];
         };
         /** DesktopCameraMonitoringItem */
         DesktopCameraMonitoringItem: {
@@ -4224,6 +4403,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DesktopBackupSummary"];
                 };
+            };
+            /** @description The upload was not based on the saved copy. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

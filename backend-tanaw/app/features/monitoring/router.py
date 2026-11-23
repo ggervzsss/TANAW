@@ -24,7 +24,7 @@ from app.features.monitoring.alerts import (
     to_operational_alert_summary,
 )
 from app.features.monitoring.backups import (
-    StaleDesktopBackupError,
+    DesktopBackupConflictError,
     get_desktop_backup,
     save_desktop_backup,
 )
@@ -188,7 +188,13 @@ async def ingest_desktop_telemetry(
     return snapshot
 
 
-@router.put("/desktop/backup", response_model=DesktopBackupSummary)
+@router.put(
+    "/desktop/backup",
+    response_model=DesktopBackupSummary,
+    responses={
+        status.HTTP_409_CONFLICT: {"description": "The upload was not based on the saved copy."}
+    },
+)
 async def save_enterprise_desktop_backup(
     payload: DesktopBackupUpload,
     account: EnterpriseAccount,
@@ -196,7 +202,7 @@ async def save_enterprise_desktop_backup(
 ) -> DesktopBackupSummary:
     try:
         return await save_desktop_backup(db, account, payload)
-    except StaleDesktopBackupError as exc:
+    except DesktopBackupConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 

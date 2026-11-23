@@ -317,9 +317,10 @@ async function resolveOptional<T>(loader: () => Promise<T>) {
   }
 }
 
-export function getDesktopDeviceId() {
+/** This computer's ID for an establishment; pass the establishment to pin work to its own session. */
+export function getDesktopDeviceId(enterpriseId?: string) {
   const user = useAuthStore.getState().user;
-  const scope = user?.enterpriseId || user?.id || "unbound";
+  const scope = enterpriseId || user?.enterpriseId || user?.id || "unbound";
   const storageKey = `${DEVICE_ID_STORAGE_KEY}:${scope.replace(/[^a-zA-Z0-9._:-]/g, "_")}`;
   const existingId = window.localStorage.getItem(storageKey);
   if (existingId) return existingId;

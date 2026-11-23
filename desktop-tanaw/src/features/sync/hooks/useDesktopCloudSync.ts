@@ -4,7 +4,7 @@ import { useAuthStore } from "../../login/stores/auth-store";
 import { notifySuccess } from "../../toasts/services/toast-service";
 import { DESKTOP_REPORT_SYNC_EVENT, DESKTOP_SAMPLE_PREPARED_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
-import { DESKTOP_BACKUP_RESTORED_EVENT, restoreDesktopBackupIfEmpty, uploadDesktopBackup } from "../services/local-backup";
+import { DESKTOP_BACKUP_RESTORED_EVENT, captureBackupSession, createDesktopBackupRunner, type BackupSession } from "../services/local-backup";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
@@ -17,24 +17,19 @@ const BACKUP_CHECK_INTERVAL_MS = 60_000;
 /** Camera or draft edits are backed up once they settle for this long. */
 const BACKUP_AFTER_CHANGE_DELAY_MS = 30_000;
 
-type BackupState = {
-  changeTimerId: number | undefined;
-  fingerprint: string | null;
-  lastBackupAt: number;
-  restoreChecked: boolean;
-  running: boolean;
-};
-
 export function restoredBackupMessage(result: LocalBackupRestoreResult) {
   const parts = [
     result.days ? `${result.days} day${result.days === 1 ? "" : "s"} of counts` : null,
     result.drafts ? `${result.drafts} report draft${result.drafts === 1 ? "" : "s"}` : null,
+    result.submissions ? `${result.submissions} report${result.submissions === 1 ? "" : "s"} waiting to upload` : null,
     result.cameras ? `${result.cameras} camera${result.cameras === 1 ? "" : "s"}` : null,
   ].filter((part): part is string => part !== null);
   const restored = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : (parts[0] ?? "your local data");
-  return result.cameras
-    ? `Restored ${restored} from the server backup. A camera starts counting again once its username and password are saved on this computer.`
-    : `Restored ${restored} from the server backup.`;
+  const notes = [
+    result.cameras ? "A camera starts counting again once its username and password are saved on this computer." : null,
+    result.custom_cameras ? "Enter the stream address of each custom RTSP camera again; only its host and port are backed up." : null,
+  ].filter((note): note is string => note !== null);
+  return [`Restored ${restored} from the server backup.`, ...notes].join(" ");
 }
 
 type LiveTelemetryState = {
@@ -54,14 +49,21 @@ export function useDesktopCloudSync(contextReady: boolean) {
     queued: false,
     timerId: undefined,
   });
-  const backupRef = useRef<BackupState>({ changeTimerId: undefined, fingerprint: null, lastBackupAt: 0, restoreChecked: false, running: false });
 
   useEffect(() => {
     if (!token || role !== "enterprise" || !contextReady) return undefined;
 
     let isDisposed = false;
-    // Each sign-in checks for a restore and uploads a fresh backup for its own establishment.
-    backupRef.current = { changeTimerId: undefined, fingerprint: null, lastBackupAt: 0, restoreChecked: false, running: false };
+    // Each sign-in reconciles and backs up its own establishment. Its work is pinned to
+    // this session and cancelled when the effect ends (sign-out, account switch, rebind).
+    const backupState: { changeTimerId: number | undefined } = { changeTimerId: undefined };
+    const backupAbort = new AbortController();
+    let backupSession: BackupSession | null;
+    try {
+      backupSession = captureBackupSession(backupAbort.signal);
+    } catch {
+      backupSession = null;
+    }
 
     const clearLiveTelemetryTimer = () => {
       if (liveTelemetryRef.current.timerId !== undefined) {
@@ -121,49 +123,39 @@ export function useDesktopCloudSync(contextReady: boolean) {
       }
     };
 
-    const runBackup = async () => {
-      const backup = backupRef.current;
-      if (backup.running || isDisposed) return;
-      backup.running = true;
-      try {
-        // An empty computer is restored before anything can write to it or replace the server copy.
-        if (!backup.restoreChecked) {
-          const restored = await restoreDesktopBackupIfEmpty();
-          backup.restoreChecked = true;
-          if (restored && !isDisposed) {
+    const backupRunner = backupSession
+      ? createDesktopBackupRunner(backupSession, {
+          onRestored: (restored) => {
             notifySuccess(restoredBackupMessage(restored), "desktop-backup-restored");
             window.dispatchEvent(new Event(DESKTOP_BACKUP_RESTORED_EVENT));
-            // Open reports re-read their drafts.
+            // Open reports re-read their drafts, and restored reports upload.
             window.dispatchEvent(new Event(DESKTOP_SAMPLE_PREPARED_EVENT));
-          }
-          void runSamplePreparation();
-        }
-        backup.fingerprint = await uploadDesktopBackup(backup.fingerprint);
-        backup.lastBackupAt = Date.now();
-      } catch {
-        // The desktop keeps working offline; the next check retries.
-      } finally {
-        backup.running = false;
-      }
+            void runReportSync();
+          },
+          onReconciled: () => void runSamplePreparation(),
+        })
+      : null;
+
+    const runBackup = async () => {
+      if (!isDisposed) await backupRunner?.run();
     };
 
     const runDueBackup = () => {
-      const backup = backupRef.current;
-      if (!backup.restoreChecked || Date.now() - backup.lastBackupAt >= BACKUP_INTERVAL_MS) void runBackup();
+      if (!backupRunner) return;
+      if (!backupRunner.reconciled || Date.now() - backupRunner.lastBackupAt >= BACKUP_INTERVAL_MS) void runBackup();
     };
 
     const scheduleBackupAfterChange = () => {
-      const backup = backupRef.current;
-      if (backup.changeTimerId !== undefined) window.clearTimeout(backup.changeTimerId);
-      backup.changeTimerId = window.setTimeout(() => {
-        backup.changeTimerId = undefined;
+      if (backupState.changeTimerId !== undefined) window.clearTimeout(backupState.changeTimerId);
+      backupState.changeTimerId = window.setTimeout(() => {
+        backupState.changeTimerId = undefined;
         void runBackup();
       }, BACKUP_AFTER_CHANGE_DELAY_MS);
     };
 
     const runSamplePreparation = async () => {
-      // Sample counts would make an empty computer look in use, so they wait for the restore check.
-      if (syncStateRef.current.preparation || isDisposed || !backupRef.current.restoreChecked) return;
+      // Development sample counts wait until the server copy is merged or confirmed absent.
+      if (syncStateRef.current.preparation || isDisposed || !backupRunner?.reconciled) return;
       syncStateRef.current.preparation = true;
       try {
         // Development only: the backend returns nothing unless its sample dataset exists.
@@ -213,7 +205,8 @@ export function useDesktopCloudSync(contextReady: boolean) {
       window.clearInterval(telemetryIntervalId);
       window.clearInterval(reportIntervalId);
       window.clearInterval(backupIntervalId);
-      if (backupRef.current.changeTimerId !== undefined) window.clearTimeout(backupRef.current.changeTimerId);
+      backupAbort.abort();
+      if (backupState.changeTimerId !== undefined) window.clearTimeout(backupState.changeTimerId);
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
       window.removeEventListener(LOCAL_DATA_CHANGED_EVENT, scheduleBackupAfterChange);
     };

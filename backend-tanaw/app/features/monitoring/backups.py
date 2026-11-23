@@ -1,14 +1,20 @@
 """The server copy of each enterprise's unsubmitted desktop data.
 
-The desktop uploads its open reporting days, report drafts, and camera settings
-about once an hour. The server keeps only the latest copy per enterprise, so a
-reinstalled or reset desktop can restore them after sign-in.
+The desktop uploads its open reporting days, report drafts, reports still
+waiting to upload, and camera settings about once an hour. The server keeps only
+the latest copy per enterprise, so a reinstalled or reset desktop can restore
+them after sign-in.
+
+Each saved copy has a revision. An upload names the revision its desktop last
+restored or saved, and is refused when the server holds a different one: the
+desktop has not merged that copy yet, and replacing it could discard the only
+recoverable data (from a second computer, or from before a reset).
 """
 
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +28,8 @@ from app.features.monitoring.schemas import (
 )
 
 
-class StaleDesktopBackupError(ValueError):
-    """Raised when an upload is older than the copy the server already keeps."""
+class DesktopBackupConflictError(ValueError):
+    """Raised when an upload was not based on the copy the server currently keeps."""
 
 
 async def save_desktop_backup(
@@ -31,36 +37,54 @@ async def save_desktop_backup(
 ) -> DesktopBackupSummary:
     profile = require_enterprise_profile(account)
     captured_at = _aware(payload.capturedAt)
-    values = {
-        "enterprise_profile_id": profile.account_id,
+    stored = payload.model_dump(mode="json", exclude={"baseRevision"})
+    received_at = datetime.now(UTC)
+    values: dict[str, object] = {
         "device_id": payload.deviceId,
         "captured_at": captured_at,
+        "received_at": received_at,
         "schema_version": payload.schemaVersion,
         "day_count": len(payload.days),
         "draft_count": len(payload.drafts),
+        "submission_count": len(payload.submissions),
         "camera_count": len(payload.cameras),
-        "payload_json": json.dumps(payload.model_dump(mode="json"), sort_keys=True),
+        "payload_json": json.dumps(stored, sort_keys=True),
     }
-    insert_statement = insert(DesktopLocalBackup).values(**values)
-    excluded = insert_statement.excluded
-    statement = insert_statement.on_conflict_do_update(
-        index_elements=[DesktopLocalBackup.enterprise_profile_id],
-        set_={
-            **{key: excluded[key] for key in values if key != "enterprise_profile_id"},
-            "received_at": func.now(),
-        },
-        # A delayed upload from before the last saved copy must not replace it.
-        where=DesktopLocalBackup.captured_at <= excluded.captured_at,
-    ).returning(DesktopLocalBackup.received_at)
-    received_at = await db.scalar(statement)
-    if received_at is None:
-        raise StaleDesktopBackupError("A newer desktop backup is already saved.")
+    current = await db.scalar(
+        select(DesktopLocalBackup)
+        .where(DesktopLocalBackup.enterprise_profile_id == profile.account_id)
+        .with_for_update()
+    )
+    if current is None:
+        # Nothing to discard. A concurrent first upload wins the insert; this one conflicts.
+        revision = await db.scalar(
+            insert(DesktopLocalBackup)
+            .values(enterprise_profile_id=profile.account_id, revision=1, **values)
+            .on_conflict_do_nothing(index_elements=[DesktopLocalBackup.enterprise_profile_id])
+            .returning(DesktopLocalBackup.revision)
+        )
+        if revision is None:
+            raise DesktopBackupConflictError(
+                "Another desktop saved a backup first. Merge it before uploading."
+            )
+    else:
+        if current.revision != payload.baseRevision:
+            raise DesktopBackupConflictError(
+                "The server holds a backup this desktop has not merged yet."
+            )
+        revision = current.revision + 1
+        current.revision = revision
+        for key, value in values.items():
+            setattr(current, key, value)
+        await db.flush()
     return DesktopBackupSummary(
         deviceId=payload.deviceId,
+        revision=revision,
         capturedAt=captured_at,
         receivedAt=received_at,
         days=len(payload.days),
         drafts=len(payload.drafts),
+        submissions=len(payload.submissions),
         cameras=len(payload.cameras),
     )
 
@@ -75,7 +99,12 @@ async def get_desktop_backup(db: AsyncSession, account: Account) -> DesktopBacku
     if backup is None:
         return None
     return DesktopBackup.model_validate(
-        {**json.loads(backup.payload_json), "receivedAt": backup.received_at}
+        {
+            **json.loads(backup.payload_json),
+            "enterpriseId": profile.enterprise_id,
+            "revision": backup.revision,
+            "receivedAt": backup.received_at,
+        }
     )
 
 

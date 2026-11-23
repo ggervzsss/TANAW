@@ -869,6 +869,7 @@ def upgrade() -> None:
         "desktop_local_backups",
         sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
         sa.Column("device_id", sa.String(length=120), nullable=True),
+        sa.Column("revision", sa.Integer(), nullable=False),
         sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "received_at",
@@ -879,6 +880,7 @@ def upgrade() -> None:
         sa.Column("schema_version", sa.Integer(), nullable=False),
         sa.Column("day_count", sa.Integer(), nullable=False),
         sa.Column("draft_count", sa.Integer(), nullable=False),
+        sa.Column("submission_count", sa.Integer(), nullable=False),
         sa.Column("camera_count", sa.Integer(), nullable=False),
         sa.Column("payload_json", sa.Text(), nullable=False),
         sa.ForeignKeyConstraint(
