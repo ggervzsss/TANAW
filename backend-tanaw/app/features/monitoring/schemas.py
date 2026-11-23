@@ -162,6 +162,30 @@ class VisitorInsightEnterprise(BaseModel):
     activityLevel: VisitorActivityLevel
 
 
+class VisitorRankingEnterprise(BaseModel):
+    enterpriseId: str
+    enterpriseName: str
+    barangay: str
+    category: str
+    visitors: int = Field(ge=0)
+
+
+class VisitorRankingSummary(BaseModel):
+    """Visitors per enterprise for a date range, for ranking enterprises, barangays or categories."""
+
+    start: date
+    end: date
+    reportMonths: list[str] = Field(
+        description="Whole past months, as YYYY-MM, counted from monthly reports."
+    )
+    cameraDays: int = Field(ge=0, description="Days counted from camera counts, today included.")
+    includesToday: bool
+    uncoveredDays: int = Field(
+        ge=0, description="Days older than the camera history without a monthly report."
+    )
+    enterprises: list[VisitorRankingEnterprise]
+
+
 class VisitorInsightsSummary(BaseModel):
     range: VisitorInsightRange
     scopeType: VisitorInsightScope

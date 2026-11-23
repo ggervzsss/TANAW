@@ -68,7 +68,35 @@ async function openDashboard(page: Page, options: { busy?: () => VisitorInsightE
   });
 }
 
+/** The server's ranking: a whole past month comes from its report, anything else from camera counts. */
+async function mockVisitorRanking(page: Page) {
+  const previousMonthKey = `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, "0")}`;
+  await page.route("**/operational/visitor-insights/ranking**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const start = params.get("start") ?? "";
+    const end = params.get("end") ?? "";
+    const wholePreviousMonth = start === `${previousMonthKey}-01` && end === isoDay(new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0));
+    const base = { start, end, includesToday: !wholePreviousMonth, uncoveredDays: 0 };
+    return route.fulfill(
+      json(
+        wholePreviousMonth
+          ? { ...base, reportMonths: [previousMonthKey], cameraDays: 0, enterprises: [{ enterpriseId: "enterprise-reported", enterpriseName: "Reported Heritage Park", barangay: "Landayan", category: "Park", visitors: 1240 }] }
+          : {
+              ...base,
+              reportMonths: [],
+              cameraDays: 7,
+              enterprises: [
+                { enterpriseId: plaza.id, enterpriseName: plaza.name, barangay: plaza.barangay, category: plaza.category, visitors: 260 },
+                { enterpriseId: mapEnterprise.id, enterpriseName: mapEnterprise.name, barangay: mapEnterprise.barangay, category: mapEnterprise.category, visitors: 104 },
+              ],
+            },
+      ),
+    );
+  });
+}
+
 async function mockRecentData(page: Page) {
+  await mockVisitorRanking(page);
   await page.route("**/operational/reports/intake", (route) =>
     route.fulfill(
       json([
@@ -187,6 +215,14 @@ async function mockRecentData(page: Page) {
 test("shows the map, Most Visited, Peak Occupancy and the recent lists from real data", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.addInitScript(() => window.localStorage.removeItem("tanaw-dashboard-busy-dismissed"));
+  // Most Visited asks the server for one ranking instead of one visitor-insights request per enterprise.
+  const rankingRequests: string[] = [];
+  const enterpriseInsightRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/operational/visitor-insights/ranking")) rankingRequests.push(url.search);
+    else if (url.pathname.endsWith("/operational/visitor-insights") && url.searchParams.has("enterpriseId")) enterpriseInsightRequests.push(url.search);
+  });
   await openDashboard(page, { recent: true });
 
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
@@ -234,6 +270,8 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   await expect(peak.getByText(`Peak 120 on ${MONTHS_SHORT[yesterday.getMonth()]} ${yesterday.getDate()}`)).toBeVisible();
   await expect(peak.locator(".recharts-area-curve")).toBeVisible();
 
+  expect(rankingRequests.length).toBeGreaterThan(0);
+  expect(enterpriseInsightRequests).toEqual([]);
   await peak.getByRole("button", { name: /^Place: All of San Pedro/ }).click();
   const places = page.getByRole("dialog", { name: "Choose where to show peak occupancy" });
   const search = places.getByRole("combobox");

@@ -241,9 +241,22 @@ Open a month, confirm each day's visitor origins in the date picker (red badges
 mark days still to do), and submit; repeat for the others.
 A day where a camera records keeps only the camera's counts.
 
-In the portal, sign in as the sample LGU Staff account. Review the submissions
-under **Batch Reports**, mark eligible records **Ready to Consolidate**, generate
-a final report, and inspect its sources under **Final Reports Audit**.
+The supporting data fills the portal screens with nine more enterprises around
+the city. Their monthly reports arrive after each month closes, between the 2nd
+and the 13th of the next month, so a few are late (reports are due on the
+10th). The month just closed has a mix: reports waiting for review, one sent
+back for correction, one resubmitted, accepted reports, and one enterprise that
+has not sent its report. Earlier months are consolidated into finalized monthly
+reports. Each enterprise reports two or three named cameras; one has a camera
+that stopped reporting and one has lost its connection. Requests and Recent
+Activity include open and resolved requests from the last few days, sign-ins
+and account changes.
+
+In the portal, sign in as the sample LGU Staff account. Under **Reports**,
+review the month's reports, accept them, and generate the consolidated report;
+the new month then appears under **Consolidated Reports**. Sign in as the sample
+Admin account to see the same reports under **Reports**, the map and rankings on
+the **Dashboard**, and the enterprises under **Enterprise**.
 
 ## Load or remove data on the hosted demo
 

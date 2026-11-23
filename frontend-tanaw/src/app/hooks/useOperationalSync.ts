@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   getVisitorInsights,
+  getVisitorRanking,
   getOperationalSummary,
   listFinalReports,
   listIntakeReports,
@@ -16,6 +17,7 @@ export const operationalFinalReportsQueryKey = ["operational", "reports", "final
 export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
 export const operationalNotificationsQueryKey = ["operational", "notifications"];
 export const visitorInsightsQueryKey = ["operational", "visitor-insights"];
+export const visitorRankingQueryKey = ["operational", "visitor-ranking"];
 
 export function useOperationalSummary() {
   const token = useAuthStore((state) => state.token);
@@ -59,6 +61,19 @@ export function useVisitorInsights(params: VisitorInsightParams, enabled = true)
     queryKey: [...visitorInsightsQueryKey, params],
     queryFn: () => getVisitorInsights(params),
     enabled: Boolean(token) && enabled,
+  });
+}
+
+const VISITOR_RANKING_STALE_MS = 60_000;
+
+/** One request for Most Visited: visitors per enterprise for the range. */
+export function useVisitorRanking(params: { start: string; end: string }) {
+  const token = useAuthStore((state) => state.token);
+  return useQuery({
+    queryKey: [...visitorRankingQueryKey, params],
+    queryFn: () => getVisitorRanking(params),
+    enabled: Boolean(token),
+    staleTime: VISITOR_RANKING_STALE_MS,
   });
 }
 

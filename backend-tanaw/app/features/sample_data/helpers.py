@@ -54,15 +54,22 @@ def latest_capture_time(month_start: datetime, range_end: datetime) -> datetime:
     return add_months(month_start, 1) - timedelta(hours=12)
 
 
+# Day of the following month on which each enterprise (by position) sends its monthly report.
+# Reports are due on the 10th, so the 12th and 13th arrive late.
+SUBMISSION_DAYS = (2, 4, 5, 7, 9, 13, 3, 6, 8, 12)
+
+
 def sample_submitted_at(
     month_start: datetime, enterprise_index: int, range_end: datetime
-) -> datetime:
-    """Reports go in late in their month, but never after the moment the data is generated."""
-    planned = month_start.replace(
-        day=min(18 + enterprise_index, 24), hour=9 + enterprise_index, minute=15
+) -> datetime | None:
+    """When a month's report is sent: after the month closes, between the 2nd and the 13th of the
+    next month. None when that moment has not come yet, so the report is still pending."""
+    planned = add_months(month_start, 1).replace(
+        day=SUBMISSION_DAYS[enterprise_index % len(SUBMISSION_DAYS)],
+        hour=1 + enterprise_index % 8,
+        minute=15,
     )
-    latest = max(month_start, range_end - timedelta(hours=enterprise_index + 1))
-    return min(planned, latest)
+    return planned if planned <= range_end else None
 
 
 def should_skip_target_report(
@@ -77,8 +84,26 @@ def should_skip_target_report(
     )
 
 
-def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
-    open_months = {add_months(current_month, offset) for offset in range(-4, 1)}
+# Staff review of the reporting month (the month just closed), by enterprise position: some are
+# still waiting, one was resubmitted after a return, one is back with the enterprise for
+# correction, and the rest are accepted.
+REPORTING_MONTH_REVIEW = {1: "Pending Review", 2: "Returned", 4: "Pending Review"}
+RESUBMITTED_ENTERPRISE_INDEX = 4
+# An enterprise (by position) that has not sent its reporting-month report at all.
+MISSING_REPORT_ENTERPRISE_INDEX = 9
+
+
+def seeded_review_status(
+    month_start: datetime, current_month: datetime, enterprise_index: int = 0
+) -> str:
+    """Older months are consolidated into finalized monthly reports. The three months before the
+    reporting month are accepted and wait for the target enterprise's late reports. The reporting
+    month has a mix of review states. The month in progress has no reports yet."""
+    if month_start >= current_month:
+        return "Pending Review"
+    if month_start == add_months(current_month, -1):
+        return REPORTING_MONTH_REVIEW.get(enterprise_index, "Ready to Consolidate")
+    open_months = {add_months(current_month, offset) for offset in range(-4, -1)}
     return "Ready to Consolidate" if month_start in open_months else "Consolidated"
 
 

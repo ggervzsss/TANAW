@@ -104,6 +104,50 @@ def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
             "hallowridge.golf@tanaw.test",
             "+639171110005",
         ),
+        (
+            "Pacita Complex Mall",
+            "501",
+            "Andrea Villanueva",
+            "Pacita I",
+            "Barangay Pacita I, San Pedro, Laguna 4023",
+            14.343053,
+            121.060053,
+            "pacita.complex@tanaw.test",
+            "+639171110006",
+        ),
+        (
+            "San Pedro Public Market",
+            "502",
+            "Ramon Dela Cruz",
+            "Poblacion",
+            "Barangay Poblacion, San Pedro, Laguna 4023",
+            14.364497,
+            121.059092,
+            "public.market@tanaw.test",
+            "+639171110007",
+        ),
+        (
+            "Sampaguita Gardens",
+            "411",
+            "Liza Fernandez",
+            "Sampaguita",
+            "Barangay Sampaguita, San Pedro, Laguna 4023",
+            14.346698,
+            121.031807,
+            "sampaguita.gardens@tanaw.test",
+            "+639171110008",
+        ),
+        (
+            "Riverside Sports Center",
+            "405",
+            "Jerome Santos",
+            "Riverside",
+            "Barangay Riverside, San Pedro, Laguna 4023",
+            14.332135,
+            121.027693,
+            "riverside.sports@tanaw.test",
+            "+639171110009",
+        ),
     )
 
     assert (
@@ -159,27 +203,38 @@ def test_target_enterprise_is_missing_for_four_completed_months_and_current_mont
     )
     assert not should_skip_target_report(current_month, current_month, "supporting", "target")
     assert should_skip_target_report(current_month, current_month, "target", "target")
+    reporting_month = pending_months[-1]
     assert seeded_review_status(older_month, current_month) == "Consolidated"
     assert all(
         seeded_review_status(month, current_month) == "Ready to Consolidate"
-        for month in pending_months
+        for month in pending_months[:-1]
     )
-    assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
+    # The reporting month mixes waiting, returned and accepted reports by enterprise.
+    assert seeded_review_status(reporting_month, current_month, 0) == "Ready to Consolidate"
+    assert seeded_review_status(reporting_month, current_month, 1) == "Pending Review"
+    assert seeded_review_status(reporting_month, current_month, 2) == "Returned"
+    assert seeded_review_status(reporting_month, current_month, 4) == "Pending Review"
+    assert seeded_review_status(current_month, current_month) == "Pending Review"
 
 
-def test_sample_submissions_are_never_dated_after_generation() -> None:
-    generated_at = datetime(2026, 11, 19, 1, 18, tzinfo=UTC)
+def test_sample_reports_are_sent_after_their_month_and_never_after_generation() -> None:
+    generated_at = datetime(2026, 11, 7, 1, 18, tzinfo=UTC)
     current_month = datetime(2026, 11, 1, tzinfo=UTC)
-    completed_month = datetime(2026, 10, 1, tzinfo=UTC)
+    reporting_month = datetime(2026, 10, 1, tzinfo=UTC)
+    september = datetime(2026, 9, 1, tzinfo=UTC)
 
-    current = [sample_submitted_at(current_month, index, generated_at) for index in range(6)]
-
-    assert all(current_month <= value < generated_at for value in current)
-    assert sample_submitted_at(completed_month, 5, generated_at) == datetime(
-        2026, 10, 23, 14, 15, tzinfo=UTC
+    # The month in progress has not closed, so nobody has sent its report.
+    assert all(
+        sample_submitted_at(current_month, index, generated_at) is None for index in range(10)
     )
-    assert sample_submitted_at(current_month, 0, datetime(2026, 11, 1, 0, 30, tzinfo=UTC)) == (
-        current_month
+    # October's reports arrive from November 2; those planned after generation are still pending.
+    sent = {index: sample_submitted_at(reporting_month, index, generated_at) for index in range(10)}
+    assert sent[0] == datetime(2026, 11, 2, 1, 15, tzinfo=UTC)
+    assert sent[5] is None
+    assert all(value is None or value <= generated_at for value in sent.values())
+    # A full past month has every report; the sixth enterprise sends late, after the 10th.
+    assert sample_submitted_at(september, 5, generated_at) == datetime(
+        2026, 10, 13, 6, 15, tzinfo=UTC
     )
 
 
@@ -224,26 +279,30 @@ async def test_latest_sample_telemetry_starts_with_zero_live_occupancy() -> None
 
 
 @pytest.mark.asyncio
-async def test_sample_final_reports_require_every_participating_enterprise() -> None:
-    complete_period_reports = [
-        _consolidated_report("REP-FEB-1", "enterprise-1", datetime(2026, 2, 18, tzinfo=UTC)),
-        _consolidated_report("REP-FEB-2", "enterprise-2", datetime(2026, 2, 19, tzinfo=UTC)),
+async def test_sample_final_reports_leave_out_enterprises_without_a_report() -> None:
+    february_reports = [
+        _consolidated_report(
+            "REP-FEB-1", "enterprise-1", datetime(2026, 3, 2, tzinfo=UTC), "February 2026"
+        ),
+        _consolidated_report(
+            "REP-FEB-2", "enterprise-2", datetime(2026, 3, 4, tzinfo=UTC), "February 2026"
+        ),
     ]
-    incomplete_period_reports = [
-        _consolidated_report("REP-MAR-2", "enterprise-2", datetime(2026, 3, 19, tzinfo=UTC))
-    ]
+    december_report = _consolidated_report(
+        "REP-DEC-2", "enterprise-2", datetime(2026, 1, 4, tzinfo=UTC), "December 2025"
+    )
     db = MagicMock()
     db.flush = AsyncMock()
 
     final_reports = await create_final_reports(
-        db,
-        {"reports": [*complete_period_reports, *incomplete_period_reports]},
-        expected_enterprise_ids={"enterprise-1", "enterprise-2"},
+        db, {"reports": [*february_reports, december_report]}
     )
 
-    assert [report.period for report in final_reports] == ["February 2026"]
-    assert final_reports[0].enterprise_count == 2
-    assert final_reports[0].total_unique == 160
+    # December's report is sent in January, yet it belongs to December 2025.
+    assert sorted(report.period for report in final_reports) == ["December 2025", "February 2026"]
+    february = next(report for report in final_reports if report.period == "February 2026")
+    assert february.enterprise_count == 2
+    assert february.total_unique == 160
 
 
 def _details(month: date, last_day: date) -> dict:
@@ -320,15 +379,17 @@ def test_report_for_the_month_in_progress_covers_only_elapsed_days() -> None:
 
 
 def test_staff_notification_reports_include_current_submission_and_resubmission() -> None:
-    current_month = datetime(2026, 7, 1, tzinfo=UTC)
-    older_report = _report("REP-260601", datetime(2026, 6, 18, tzinfo=UTC))
-    submitted_report = _report("REP-260701", datetime(2026, 7, 18, tzinfo=UTC))
-    resubmitted_report = _report("REP-260702", datetime(2026, 7, 19, tzinfo=UTC))
-    extra_current_report = _report("REP-260703", datetime(2026, 7, 20, tzinfo=UTC))
+    reporting_month = datetime(2026, 7, 1, tzinfo=UTC)
+    older_report = _report("REP-260601", datetime(2026, 7, 4, tzinfo=UTC), "June 2026")
+    submitted_report = _report("REP-260701", datetime(2026, 8, 4, tzinfo=UTC), "July 2026")
+    submitted_report.review_status = "Pending Review"
+    resubmitted_report = _report("REP-260702", datetime(2026, 8, 9, tzinfo=UTC), "July 2026")
+    resubmitted_report.review_status = "Pending Review"
+    extra_current_report = _report("REP-260703", datetime(2026, 8, 5, tzinfo=UTC), "July 2026")
 
     prepared = prepare_staff_notification_reports(
-        [older_report, submitted_report, resubmitted_report, extra_current_report],
-        current_month,
+        [older_report, submitted_report, extra_current_report, resubmitted_report],
+        reporting_month,
     )
 
     assert prepared == [
@@ -450,7 +511,7 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
         "operationalAlerts": 2,
         "supportTickets": 2,
         "emailProblems": 1,
-        "activityLogs": 4,
+        "activityLogs": 5,
     }
     db.flush.assert_awaited_once()
 
@@ -481,7 +542,9 @@ def _enterprise_account(account_id: str, name: str) -> Account:
     return account
 
 
-def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmission:
+def _report(
+    report_id: str, submitted_at: datetime, period: str | None = None
+) -> EnterpriseReportSubmission:
     return EnterpriseReportSubmission(
         id=f"{report_id}-id",
         report_id=report_id,
@@ -489,8 +552,8 @@ def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmissio
         enterprise_name="Test Enterprise",
         attraction_code="411",
         barangay="Nueva",
-        period=f"{submitted_at:%b} 1 - {submitted_at:%b} 31, {submitted_at.year}",
-        month=submitted_at.strftime("%B"),
+        period=period or f"{submitted_at:%b} 1 - {submitted_at:%b} 31, {submitted_at.year}",
+        month=(period or submitted_at.strftime("%B")).split(" ")[0],
         submitted_at=submitted_at,
         entries=100,
         exits=90,
@@ -508,10 +571,10 @@ def _consolidated_report(
     report_id: str,
     enterprise_profile_id: str,
     submitted_at: datetime,
+    period: str,
 ) -> EnterpriseReportSubmission:
-    report = _report(report_id, submitted_at)
+    report = _report(report_id, submitted_at, period)
     report.enterprise_profile_id = enterprise_profile_id
     report.enterprise_name = enterprise_profile_id
-    report.period = submitted_at.strftime("%B %Y")
     report.review_status = "Consolidated"
     return report

@@ -29,6 +29,8 @@ from app.features.sample_data.definitions import (
     REPORTING_STAFF_NAME,
 )
 from app.features.sample_data.helpers import (
+    MISSING_REPORT_ENTERPRISE_INDEX,
+    add_months,
     last_reported_day,
     latest_capture_time,
     month_starts,
@@ -38,6 +40,8 @@ from app.features.sample_data.helpers import (
     seeded_review_status,
     should_skip_target_report,
 )
+
+RETURN_REMARKS = "Please verify the entry and exit variance before resubmission."
 
 
 async def create_operational_history(
@@ -76,6 +80,14 @@ async def create_operational_history(
             submitted_at = sample_submitted_at(month_start, enterprise_index, range_end)
             should_skip = should_skip_target_report(
                 month_start, current_month, enterprise.id, target.id
+            )
+            not_sent = (
+                submitted_at is None
+                or month_start >= current_month
+                or (
+                    month_start == add_months(current_month, -1)
+                    and enterprise_index == MISSING_REPORT_ENTERPRISE_INDEX
+                )
             )
             if should_skip:
                 target_prepared_counts.append(
@@ -133,10 +145,10 @@ async def create_operational_history(
             db.add(snapshot)
             telemetry.append(snapshot)
 
-            if should_skip:
+            if should_skip or not_sent or submitted_at is None:
                 continue
 
-            review_status = seeded_review_status(month_start, current_month)
+            review_status = seeded_review_status(month_start, current_month, enterprise_index)
             details = sample_report_details(
                 seed=f"{profile.account_id}:{period}",
                 enterprise_id=profile.enterprise_id,
@@ -171,9 +183,7 @@ async def create_operational_history(
                 status="Submitted",
                 review_status=review_status,
                 notes="Monthly visitor count submitted for LGU review.",
-                remarks="Please verify the entry and exit variance before resubmission."
-                if review_status == "Returned"
-                else None,
+                remarks=RETURN_REMARKS if review_status == "Returned" else None,
                 sync_status="synced",
                 payload_json=json.dumps(
                     {
@@ -195,7 +205,9 @@ async def create_operational_history(
             db.add(report)
             reports.append(report)
 
-    staff_notification_reports = prepare_staff_notification_reports(reports, current_month)
+    staff_notification_reports = prepare_staff_notification_reports(
+        reports, add_months(current_month, -1)
+    )
     await db.flush()
     if not target_prepared_counts:
         raise SystemExit(
@@ -210,13 +222,15 @@ async def create_operational_history(
 
 
 def prepare_staff_notification_reports(
-    reports: list[EnterpriseReportSubmission], current_month: datetime
+    reports: list[EnterpriseReportSubmission], reporting_month: datetime
 ) -> list[tuple[EnterpriseReportSubmission, str]]:
+    """The reporting month's reports still waiting for staff: the first was just submitted and
+    the second was resubmitted after staff returned it."""
+    period = period_label(reporting_month)
     candidates = [
         report
         for report in reports
-        if report.submitted_at.year == current_month.year
-        and report.submitted_at.month == current_month.month
+        if report.period == period and report.review_status == "Pending Review"
     ][:2]
     prepared: list[tuple[EnterpriseReportSubmission, str]] = []
 
@@ -285,23 +299,16 @@ async def create_staff_report_notifications(
     return count
 
 
-async def create_final_reports(
-    db: AsyncSession,
-    history: dict,
-    expected_enterprise_ids: set[str],
-) -> list[FinalReport]:
+async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalReport]:
+    """One finalized monthly report per month whose reports are consolidated. As in the Staff
+    portal, enterprises that did not send a report are left out rather than blocking the month."""
     reports_by_period: dict[str, list[EnterpriseReportSubmission]] = {}
     for report in history["reports"]:
         if report.review_status == "Consolidated":
-            reports_by_period.setdefault(f"{report.month} {report.submitted_at.year}", []).append(
-                report
-            )
+            reports_by_period.setdefault(report.period, []).append(report)
 
     final_reports: list[FinalReport] = []
     for period, reports in sorted(reports_by_period.items()):
-        submitted_enterprise_ids = {report.enterprise_profile_id for report in reports}
-        if submitted_enterprise_ids != expected_enterprise_ids:
-            continue
         final_report = FinalReport(
             id=sample_uuid("final-report", period),
             report_code=f"{SAMPLE_FINAL_REPORT_PREFIX}{period.replace(' ', '-').upper()}",
@@ -328,32 +335,26 @@ async def create_final_reports(
 
 
 async def create_activity_logs(
-    db: AsyncSession, history: dict, final_reports: list[FinalReport]
+    db: AsyncSession, history: dict, final_reports: list[FinalReport], range_end: datetime
 ) -> int:
-    count = 0
+    """Report submissions and staff review decisions, logged as the live workflow logs them (linked
+    by the intake report's ID), so the portals can show who reviewed each report and when."""
+    logs: list[ActivityLog] = []
     for report in history["reports"]:
-        db.add(
-            ActivityLog(
-                id=sample_uuid("activity-report", report.id),
-                timestamp=report.submitted_at,
-                category="Staff Submission",
-                severity="Success",
-                actor=report.enterprise_name,
-                actor_role="Enterprise Account",
-                action="Submit Enterprise Report",
-                target=report.enterprise_name,
-                summary=f"{report.enterprise_name} submitted {report.report_id} for {report.period}.",
-                source_id=f"{SAMPLE_SOURCE_PREFIX}report:{report.id}",
-                metadata_json=json.dumps(
-                    {
-                        "enterpriseId": report.enterprise_profile.enterprise_id,
-                        "period": report.period,
-                    },
-                    sort_keys=True,
-                ),
+        submitted_at = report.submitted_at
+        if _is_resubmission(report):
+            logs.append(_submission_log(report, submitted_at - timedelta(days=3), "first"))
+            logs.append(
+                _review_log(report, "Returned", submitted_at - timedelta(days=2), RETURN_REMARKS)
             )
-        )
-        count += 1
+        logs.append(_submission_log(report, submitted_at))
+        reviewed_at = max(submitted_at, min(submitted_at + timedelta(days=1), range_end))
+        if report.review_status in {"Ready to Consolidate", "Consolidated"}:
+            logs.append(_review_log(report, "Ready to Consolidate", reviewed_at, None))
+        elif report.review_status == "Returned":
+            logs.append(_review_log(report, "Returned", reviewed_at, report.remarks))
+    db.add_all(logs)
+    count = len(logs)
     for final_report in final_reports:
         db.add(
             ActivityLog(
@@ -376,3 +377,60 @@ async def create_activity_logs(
         count += 1
     await db.flush()
     return count
+
+
+def _is_resubmission(report: EnterpriseReportSubmission) -> bool:
+    return bool(json.loads(report.payload_json or "{}").get("status") == "Resubmitted")
+
+
+def _submission_log(
+    report: EnterpriseReportSubmission, at: datetime, variant: str = "latest"
+) -> ActivityLog:
+    return ActivityLog(
+        id=sample_uuid("activity-report", report.id, variant),
+        timestamp=at,
+        category="Staff Submission",
+        severity="Success",
+        actor=report.enterprise_name,
+        actor_role="Enterprise Account",
+        action="Submit Enterprise Report",
+        target=report.enterprise_name,
+        summary=f"{report.enterprise_name} submitted {report.report_id} for {report.period}.",
+        source_id=report.id,
+        metadata_json=json.dumps(
+            {
+                "enterpriseId": report.enterprise_profile.enterprise_id,
+                "period": report.period,
+                "uniqueCount": report.unique_count,
+            },
+            sort_keys=True,
+        ),
+    )
+
+
+def _review_log(
+    report: EnterpriseReportSubmission, status: str, at: datetime, remarks: str | None
+) -> ActivityLog:
+    return ActivityLog(
+        id=sample_uuid("activity-review", report.id, status, at.isoformat()),
+        timestamp=at,
+        category="Staff Operation",
+        severity="Warning" if status == "Returned" else "Success",
+        actor=REPORTING_STAFF_NAME,
+        actor_role="LGU Staff",
+        action=f"Report {status}",
+        target=report.enterprise_name,
+        summary=(
+            f"{REPORTING_STAFF_NAME} marked {report.report_id} from "
+            f"{report.enterprise_name} as {status}."
+        ),
+        source_id=report.id,
+        metadata_json=json.dumps(
+            {
+                "enterpriseId": report.enterprise_profile.enterprise_id,
+                "period": report.period,
+                "remarks": remarks,
+            },
+            sort_keys=True,
+        ),
+    )

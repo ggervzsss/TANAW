@@ -19,6 +19,13 @@ from app.features.sample_data.helpers import (
     sample_uuid,
 )
 
+# Camera locations shown on Enterprise Details; each enterprise has the first two or three.
+SAMPLE_CAMERA_LOCATIONS = ("Main Entrance", "Side Entrance", "Parking Area")
+# The enterprise (by position, the target first) whose main entrance camera stops reporting shortly
+# before generation, so the portals show "1 camera not reporting" next to the IT alert about it.
+PARTIAL_CAMERA_ENTERPRISE_INDEX = 3
+PARTIAL_CAMERA_OUTAGE = timedelta(minutes=50)
+
 
 async def create_admin_visitor_history(
     db: AsyncSession,
@@ -34,6 +41,7 @@ async def create_admin_visitor_history(
     telemetry: list[EnterpriseTelemetrySnapshot] = []
     target_matching_values: list[int] = []
     current_visitors = 0
+    camera_outage_since = local_now - PARTIAL_CAMERA_OUTAGE
 
     for day_offset in range(35):
         day = first_day + timedelta(days=day_offset)
@@ -105,7 +113,13 @@ async def create_admin_visitor_history(
                     else None,
                     analytics_fps=10.0 + rng.random() * 2.0,
                     payload_json=json.dumps(
-                        {"source": "desktop-camera", "purpose": "visitor-insights"},
+                        {
+                            "source": "desktop-camera",
+                            "purpose": "visitor-insights",
+                            "monitoring": sample_camera_monitoring(
+                                enterprise_index, local_captured_at, camera_outage_since
+                            ),
+                        },
                         sort_keys=True,
                     ),
                 )
@@ -122,6 +136,36 @@ async def create_admin_visitor_history(
         captured_at=range_end,
         telemetry=telemetry,
     )
+
+
+def sample_camera_monitoring(
+    enterprise_index: int, captured_at: datetime, outage_since: datetime
+) -> dict:
+    """The desktop's camera summary for one snapshot, in the shape telemetry ingestion stores."""
+    names = SAMPLE_CAMERA_LOCATIONS[: 2 + enterprise_index % 2]
+    outage = enterprise_index == PARTIAL_CAMERA_ENTERPRISE_INDEX and captured_at >= outage_since
+    since = outage_since.strftime("%I:%M %p").lstrip("0")
+    cameras = [
+        {
+            "cameraId": camera_id,
+            "cameraName": name,
+            "status": "error" if outage and camera_id == 1 else "running",
+            "running": not (outage and camera_id == 1),
+            "error": f"No visitor counts since {since}." if outage and camera_id == 1 else None,
+        }
+        for camera_id, name in enumerate(names, start=1)
+    ]
+    failing = sum(1 for camera in cameras if camera["status"] == "error")
+    return {
+        "status": "partial" if failing else "running",
+        "configuredCameraCount": len(cameras),
+        "activeCameraCount": len(cameras) - failing,
+        "healthyCameraCount": len(cameras) - failing,
+        "startingCameraCount": 0,
+        "stoppedCameraCount": 0,
+        "errorCameraCount": failing,
+        "cameras": cameras,
+    }
 
 
 def sample_normal_visitor_level(enterprise_index: int, captured_at: datetime) -> int:

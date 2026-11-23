@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -39,9 +40,11 @@ from app.features.monitoring.schemas import (
     TelemetrySnapshotSummary,
     VisitorInsightRange,
     VisitorInsightsSummary,
+    VisitorRankingSummary,
 )
 from app.features.monitoring.telemetry import ingest_telemetry, list_latest_telemetry
 from app.features.monitoring.visitor_insights import get_visitor_insights
+from app.features.monitoring.visitor_ranking import InvalidRankingRangeError, get_visitor_ranking
 from app.features.notifications.service import (
     NOTIFY_CAMERA_SESSION_ERROR_KEY,
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
@@ -282,6 +285,22 @@ async def get_admin_visitor_insights(
         enterprise_id=enterprise_id,
         barangay=barangay,
     )
+
+
+@router.get("/visitor-insights/ranking", response_model=VisitorRankingSummary)
+async def get_admin_visitor_ranking(
+    _: AdminAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    start: Annotated[date, Query(description="First day of the range, in Philippine time.")],
+    end: Annotated[date, Query(description="Last day of the range, in Philippine time.")],
+) -> VisitorRankingSummary:
+    """Visitors per enterprise for a date range, from monthly reports and camera counts."""
+    try:
+        return await get_visitor_ranking(db, start, end)
+    except InvalidRankingRangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get("/map-enterprises")

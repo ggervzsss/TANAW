@@ -44,7 +44,7 @@ export function AdminDashboardPage() {
       <div className="tanaw-dashboard__overview">
         <DashboardMap enterprises={enterprises} isEnterpriseError={mapQuery.isError} onRetry={() => void mapQuery.refetch()} busy={busy} monitoredCount={monitoredCount} />
         <div className="tanaw-dashboard__insights">
-          <MostVisited enterprises={enterprises} range={range} onRangeChange={setRange} today={today} />
+          <MostVisited range={range} onRangeChange={setRange} today={today} />
           <PeakOccupancy range={range} today={today} places={places} monitoredCount={monitoredCount} />
         </div>
       </div>

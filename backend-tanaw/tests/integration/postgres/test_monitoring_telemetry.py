@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -18,7 +18,9 @@ from app.features.monitoring.router import ingest_desktop_telemetry, list_map_en
 from app.features.monitoring.schemas import DesktopTelemetryIngest
 from app.features.monitoring.telemetry import ingest_telemetry, list_latest_telemetry
 from app.features.monitoring.visitor_insights import get_visitor_insights
+from app.features.monitoring.visitor_ranking import get_visitor_ranking
 from app.features.realtime.models import RealtimeOutbox
+from app.features.reporting.models import EnterpriseReportSubmission
 from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_PREFIX = "tanaw-f08-pg-"
@@ -39,6 +41,11 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
             await db.scalars(select(Account.id).where(Account.email.like(TEST_EMAIL_PATTERN)))
         )
         if account_ids:
+            await db.execute(
+                delete(EnterpriseReportSubmission).where(
+                    EnterpriseReportSubmission.enterprise_profile_id.in_(account_ids)
+                )
+            )
             await db.execute(
                 delete(EnterpriseTelemetrySnapshot).where(
                     EnterpriseTelemetrySnapshot.enterprise_profile_id.in_(account_ids)
@@ -187,6 +194,62 @@ async def test_open_space_telemetry_reaches_the_map_and_visitor_history(
         assert point.averageVisitors == 2
         assert point.peakVisitors == 4
         assert point.estimatedUniqueCount == 9
+
+
+@pytest.mark.asyncio
+async def test_visitor_ranking_adds_reported_months_and_camera_days(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    now = datetime(2026, 11, 24, 6, tzinfo=UTC)  # 2:00 PM in Manila
+    enterprise = _enterprise("ranking")
+    async with postgres_runtime.sessions() as db:
+        db.add(enterprise)
+        await db.flush()
+        db.add(
+            EnterpriseReportSubmission(
+                report_id=f"REP-RANK-{enterprise.id[-8:]}",
+                enterprise_profile_id=enterprise.id,
+                enterprise_name="F08 ranking",
+                attraction_code="413",
+                barangay="Nueva",
+                period="October 2026",
+                month="October",
+                submitted_at=datetime(2026, 11, 3, tzinfo=UTC),
+                unique_count=900,
+                status="Submitted",
+                review_status="Pending Review",
+            )
+        )
+        # Nov 23: the latest estimate of the day (40) counts, not the earlier one (25).
+        for captured_at, unique in [
+            (datetime(2026, 11, 23, 1, tzinfo=UTC), 25),
+            (datetime(2026, 11, 23, 9, tzinfo=UTC), 40),
+            (datetime(2026, 11, 24, 5, tzinfo=UTC), 12),
+        ]:
+            await ingest_telemetry(
+                db,
+                enterprise,
+                DesktopTelemetryIngest.model_validate(
+                    {"capturedAt": captured_at, "metrics": {"uniqueCount": unique}}
+                ),
+            )
+        await db.commit()
+        profile = enterprise.enterprise_profile
+        assert profile is not None
+        enterprise_id = profile.enterprise_id
+
+        ranking = await get_visitor_ranking(db, date(2026, 10, 1), date(2026, 11, 24), now=now)
+        assert ranking.reportMonths == ["2026-10"]
+        assert ranking.includesToday is True
+        assert ranking.cameraDays == 24
+        (entry,) = [item for item in ranking.enterprises if item.enterpriseId == enterprise_id]
+        assert entry.visitors == 900 + 40 + 12
+        assert entry.barangay == "Nueva"
+
+        camera_only = await get_visitor_ranking(db, date(2026, 11, 23), date(2026, 11, 23), now=now)
+        (entry,) = [item for item in camera_only.enterprises if item.enterpriseId == enterprise_id]
+        assert entry.visitors == 40
+        assert camera_only.reportMonths == []
 
 
 @pytest.mark.asyncio

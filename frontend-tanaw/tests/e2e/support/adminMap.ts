@@ -102,6 +102,11 @@ export async function configureAdminMapSession(
     const range = (params.get("range") ?? "today") as VisitorInsights["range"];
     return route.fulfill(json(options.insights?.(params) ?? visitorInsights(range)));
   });
+  // Most Visited's ranking: nothing counted unless a test serves its own.
+  await page.route("**/operational/visitor-insights/ranking**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    return route.fulfill(json({ start: params.get("start"), end: params.get("end"), reportMonths: [], cameraDays: 1, includesToday: true, uncoveredDays: 0, enterprises: [] }));
+  });
   await options.extraRoutes?.(page);
 
   await page.goto("/login");

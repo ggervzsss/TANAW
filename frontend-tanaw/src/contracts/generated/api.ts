@@ -1084,6 +1084,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/operational/visitor-insights/ranking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Admin Visitor Ranking
+         * @description Visitors per enterprise for a date range, from monthly reports and camera counts.
+         */
+        get: operations["get_admin_visitor_ranking_operational_visitor_insights_ranking_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ready/email": {
         parameters: {
             query?: never;
@@ -3026,6 +3046,54 @@ export interface components {
             typicalVisitors?: number | null;
             /** Unusuallybusy */
             unusuallyBusy?: components["schemas"]["VisitorInsightEnterprise"][];
+        };
+        /** VisitorRankingEnterprise */
+        VisitorRankingEnterprise: {
+            /** Barangay */
+            barangay: string;
+            /** Category */
+            category: string;
+            /** Enterpriseid */
+            enterpriseId: string;
+            /** Enterprisename */
+            enterpriseName: string;
+            /** Visitors */
+            visitors: number;
+        };
+        /**
+         * VisitorRankingSummary
+         * @description Visitors per enterprise for a date range, for ranking enterprises, barangays or categories.
+         */
+        VisitorRankingSummary: {
+            /**
+             * Cameradays
+             * @description Days counted from camera counts, today included.
+             */
+            cameraDays: number;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Enterprises */
+            enterprises: components["schemas"]["VisitorRankingEnterprise"][];
+            /** Includestoday */
+            includesToday: boolean;
+            /**
+             * Reportmonths
+             * @description Whole past months, as YYYY-MM, counted from monthly reports.
+             */
+            reportMonths: string[];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Uncovereddays
+             * @description Days older than the camera history without a monthly report.
+             */
+            uncoveredDays: number;
         };
     };
     responses: never;
@@ -5133,6 +5201,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VisitorInsightsSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_admin_visitor_ranking_operational_visitor_insights_ranking_get: {
+        parameters: {
+            query: {
+                /** @description First day of the range, in Philippine time. */
+                start: string;
+                /** @description Last day of the range, in Philippine time. */
+                end: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitorRankingSummary"];
                 };
             };
             /** @description Validation Error */

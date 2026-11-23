@@ -1,5 +1,5 @@
 import { apiClient } from "../lib/apiClient";
-import { apiPaths, type ApiNotification, type ApiSchemas } from "@/contracts/api";
+import { apiPaths, type ApiNotification, type ApiSchemas, type ApiVisitorRanking } from "@/contracts/api";
 import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, VisitorInsightRange, VisitorInsights } from "../types";
 
 export type BackendNotificationSeverity = ApiNotification["severity"];
@@ -85,6 +85,12 @@ export type VisitorInsightParams = {
 
 export async function getVisitorInsights(params: VisitorInsightParams) {
   const response = await apiClient.get<VisitorInsights>("/operational/visitor-insights", { params });
+  return response.data;
+}
+
+/** Visitors per enterprise for a date range (ISO days, Philippine time), from monthly reports and camera counts. */
+export async function getVisitorRanking(params: { start: string; end: string }) {
+  const response = await apiClient.get<ApiVisitorRanking>(apiPaths.visitorRanking, { params });
   return response.data;
 }
 

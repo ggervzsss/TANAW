@@ -294,6 +294,24 @@ async def create_portal_workflow_data(
                 source_id=f"{SAMPLE_SOURCE_PREFIX}activity:ticket:{high_ticket.id}",
             ),
             ActivityLog(
+                id=sample_uuid("activity-support-status", high_ticket.id),
+                timestamp=high_ticket.updated_at,
+                category="IT Activity",
+                severity="Success",
+                actor=it_account.display_name,
+                actor_role="IT Personnel",
+                action="Update Support Ticket Status",
+                target=high_ticket.ticket_code,
+                summary=(
+                    f"{it_account.display_name} updated {high_ticket.ticket_code} from Open "
+                    "to In Review."
+                ),
+                source_id=high_ticket.id,
+                metadata_json=json.dumps(
+                    {"ticketCode": high_ticket.ticket_code, "status": "In Review"}, sort_keys=True
+                ),
+            ),
+            ActivityLog(
                 id=sample_uuid("activity-account-request", profile_request_enterprise.id),
                 timestamp=range_end - timedelta(hours=4),
                 category="Enterprise Activity",
@@ -333,5 +351,5 @@ async def create_portal_workflow_data(
         "operationalAlerts": 2,
         "supportTickets": 2,
         "emailProblems": 1,
-        "activityLogs": 4,
+        "activityLogs": 5,
     }

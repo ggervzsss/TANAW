@@ -193,7 +193,7 @@ async def test_generation_and_cleanup_preserve_user_targets(
 
     assert first["target"]["accountId"] == target.id
     assert first["target"]["enterpriseId"] == f"{seed}_001@tanaw.sanpedro"
-    assert first["counts"]["participatingEnterprises"] == 6
+    assert first["counts"]["participatingEnterprises"] == 10
     assert len(first["counts"]["targetPreparedReportCounts"]) == 5
     assert await sample_dataset_present(db)
     sample_account = await db.get(Account, sample_uuid("account", SAMPLE_ACCOUNT_EMAILS[0]))

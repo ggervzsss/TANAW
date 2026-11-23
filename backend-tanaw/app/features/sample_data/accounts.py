@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +16,17 @@ from app.features.sample_data.helpers import (
 )
 
 
-async def create_accounts(db: AsyncSession, password: str) -> dict[str, list[Account]]:
+async def create_accounts(
+    db: AsyncSession, password: str, registered_before: datetime | None = None
+) -> dict[str, list[Account]]:
+    """Create the LGU and enterprise sample accounts.
+
+    Accounts are dated before `registered_before` (the start of the sample range), staggered by
+    enterprise, so screens that show registration dates or skip months before registration have
+    the whole sample history to work with.
+    """
     password_hash = hash_password(validate_password_policy(password))
+    registered_before = registered_before or datetime.now(UTC)
     lgu_accounts: list[Account] = []
     for email, role, display_name, title, first_name, last_name in LGU_ACCOUNTS:
         ensure_email_available(
@@ -33,7 +42,8 @@ async def create_accounts(db: AsyncSession, password: str) -> dict[str, list[Acc
             display_name=display_name,
             title=title,
             status=AccountStatus.ACTIVE,
-            activated_at=datetime.now(UTC),
+            activated_at=registered_before - timedelta(days=90),
+            created_at=registered_before - timedelta(days=92),
         )
         db.add(account)
         lgu_accounts.append(account)
@@ -45,6 +55,7 @@ async def create_accounts(db: AsyncSession, password: str) -> dict[str, list[Acc
             enterprise.email,
         )
         enterprise_id = await generate_enterprise_id(db, enterprise.name)
+        registered_at = registered_before - timedelta(days=20 + index * 17)
         account = Account(
             id=sample_uuid("account", enterprise.email),
             email=enterprise.email,
@@ -54,7 +65,8 @@ async def create_accounts(db: AsyncSession, password: str) -> dict[str, list[Acc
             display_name=enterprise.name,
             title="Enterprise Account",
             status=AccountStatus.ACTIVE,
-            activated_at=datetime.now(UTC),
+            activated_at=registered_at + timedelta(days=1),
+            created_at=registered_at,
             enterprise_profile=EnterpriseProfile(
                 enterprise_name=enterprise.name,
                 attraction_code=enterprise.attraction_code,

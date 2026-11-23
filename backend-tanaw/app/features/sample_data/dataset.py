@@ -12,6 +12,10 @@ SAMPLE_ACCOUNT_EMAILS = (
     "lolo.uweng.church@tanaw.test",
     "tricias.bar@tanaw.test",
     "hallowridge.golf@tanaw.test",
+    "pacita.complex@tanaw.test",
+    "public.market@tanaw.test",
+    "sampaguita.gardens@tanaw.test",
+    "riverside.sports@tanaw.test",
 )
 SAMPLE_REPORT_PREFIX = "SAMPLE-REP-"
 SAMPLE_FINAL_REPORT_PREFIX = "SAMPLE-FINAL-"

@@ -13,6 +13,7 @@ from app.features.reporting.models import (
     FinalReportSource,
 )
 from app.features.sample_data.accounts import create_accounts, resolve_target_enterprise
+from app.features.sample_data.activity import create_request_and_user_activity
 from app.features.sample_data.dataset import (
     SAMPLE_ACCOUNT_EMAILS,
     SAMPLE_CAMERA_PREFIX,
@@ -71,7 +72,7 @@ async def generate_sample_data(
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
-    accounts = await create_accounts(db, account_password)
+    accounts = await create_accounts(db, account_password, registered_before=range_start)
     enterprises = list(
         {enterprise.id: enterprise for enterprise in [target, *accounts["enterprises"]]}.values()
     )
@@ -88,15 +89,14 @@ async def generate_sample_data(
         range_end,
         visitor_scenario,
     )
+    history = await create_request_and_user_activity(
+        db, accounts["lgu"], accounts["enterprises"], range_end
+    )
     notifications = await create_staff_report_notifications(
         db, accounts["lgu"], reports["staffNotificationReports"]
     )
-    final_reports = await create_final_reports(
-        db,
-        reports,
-        expected_enterprise_ids={enterprise.id for enterprise in enterprises},
-    )
-    logs = await create_activity_logs(db, reports, final_reports)
+    final_reports = await create_final_reports(db, reports)
+    logs = await create_activity_logs(db, reports, final_reports, range_end)
 
     counts = {
         "lguAccounts": len(accounts["lgu"]),
@@ -108,10 +108,10 @@ async def generate_sample_data(
         "staffNotifications": notifications,
         "adminNotifications": operations["adminNotifications"],
         "itNotifications": operations["itNotifications"],
-        "operationalAlerts": operations["operationalAlerts"],
-        "supportTickets": operations["supportTickets"],
+        "operationalAlerts": operations["operationalAlerts"] + history["operationalAlerts"],
+        "supportTickets": operations["supportTickets"] + history["supportTickets"],
         "emailProblems": operations["emailProblems"],
-        "activityLogs": logs + operations["activityLogs"],
+        "activityLogs": logs + operations["activityLogs"] + history["activityLogs"],
         "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
     }
     await db.commit()
@@ -151,6 +151,16 @@ async def remove_sample_data(db: AsyncSession) -> dict:
             .distinct()
         )
     )
+    alert_ids = list(
+        await db.scalars(
+            select(OperationalAlert.id).where(OperationalAlert.alert_code.startswith("ALT-SAMPLE-"))
+        )
+    )
+    ticket_ids = list(
+        await db.scalars(
+            select(SupportTicket.id).where(SupportTicket.enterprise_profile_id.in_(account_ids))
+        )
+    )
     notification_filters = [
         UserNotification.source_id.in_(intake_report_ids),
         UserNotification.recipient_account_id.in_(account_ids),
@@ -182,6 +192,9 @@ async def remove_sample_data(db: AsyncSession) -> dict:
             ActivityLog.source_id.startswith(SAMPLE_SOURCE_PREFIX)
             | ActivityLog.source_id.in_(intake_report_ids)
             | ActivityLog.source_id.in_(final_report_ids)
+            | ActivityLog.source_id.in_(account_ids)
+            | ActivityLog.source_id.in_(alert_ids)
+            | ActivityLog.source_id.in_(ticket_ids)
         )
     )
     alerts_result = await db.execute(
