@@ -317,7 +317,7 @@ async function resolveOptional<T>(loader: () => Promise<T>) {
   }
 }
 
-function getDesktopDeviceId() {
+export function getDesktopDeviceId() {
   const user = useAuthStore.getState().user;
   const scope = user?.enterpriseId || user?.id || "unbound";
   const storageKey = `${DEVICE_ID_STORAGE_KEY}:${scope.replace(/[^a-zA-Z0-9._:-]/g, "_")}`;

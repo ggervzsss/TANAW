@@ -11,6 +11,11 @@ describe("ML service request policy", () => {
     expect(request.timeoutMs).toBe(30_000);
   });
 
+  it("accepts the local backup export and restore", () => {
+    expect(validateMlServiceRequest({ url: `${origin}/backup/local` }, origin).method).toBe("GET");
+    expect(validateMlServiceRequest({ method: "POST", url: `${origin}/backup/local/restore` }, origin).method).toBe("POST");
+  });
+
   it("rejects arbitrary origins and non-runtime paths", () => {
     expect(() => validateMlServiceRequest({ url: "https://example.com/health" }, origin)).toThrow(/not allowed/i);
     expect(() => validateMlServiceRequest({ url: `${origin}/docs` }, origin)).toThrow(/not allowed/i);

@@ -704,6 +704,24 @@ export interface paths {
         patch: operations["update_alert_status_operational_alerts__alert_code__status_patch"];
         trace?: never;
     };
+    "/operational/desktop/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Enterprise Desktop Backup */
+        get: operations["get_enterprise_desktop_backup_operational_desktop_backup_get"];
+        /** Save Enterprise Desktop Backup */
+        put: operations["save_enterprise_desktop_backup_operational_desktop_backup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operational/desktop/report-submissions": {
         parameters: {
             query?: never;
@@ -1454,6 +1472,116 @@ export interface components {
             status: string;
             /** Subject */
             subject: string;
+        };
+        /** DesktopBackup */
+        DesktopBackup: {
+            /** Cameras */
+            cameras?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Capturedat
+             * Format: date-time
+             */
+            capturedAt: string;
+            /** Days */
+            days?: components["schemas"]["DesktopBackupDay"][];
+            /** Deviceid */
+            deviceId?: string | null;
+            /** Drafts */
+            drafts?: components["schemas"]["DesktopBackupDraft"][];
+            /**
+             * Receivedat
+             * Format: date-time
+             */
+            receivedAt: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+        };
+        /**
+         * DesktopBackupDay
+         * @description One day's totals from the desktop's daily summary, as the desktop computed them.
+         */
+        DesktopBackupDay: {
+            /**
+             * Businessdate
+             * Format: date
+             */
+            businessDate: string;
+            /** Finalized */
+            finalized: boolean;
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            };
+        };
+        /** DesktopBackupDraft */
+        DesktopBackupDraft: {
+            /** Draftkey */
+            draftKey: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Period */
+            period: string;
+            /** Reportid */
+            reportId?: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** DesktopBackupSummary */
+        DesktopBackupSummary: {
+            /** Cameras */
+            cameras: number;
+            /**
+             * Capturedat
+             * Format: date-time
+             */
+            capturedAt: string;
+            /** Days */
+            days: number;
+            /** Deviceid */
+            deviceId?: string | null;
+            /** Drafts */
+            drafts: number;
+            /**
+             * Receivedat
+             * Format: date-time
+             */
+            receivedAt: string;
+        };
+        /**
+         * DesktopBackupUpload
+         * @description Unsubmitted report data and camera settings, without passwords or raw tracking data.
+         */
+        DesktopBackupUpload: {
+            /** Cameras */
+            cameras?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Capturedat
+             * Format: date-time
+             */
+            capturedAt: string;
+            /** Days */
+            days?: components["schemas"]["DesktopBackupDay"][];
+            /** Deviceid */
+            deviceId?: string | null;
+            /** Drafts */
+            drafts?: components["schemas"]["DesktopBackupDraft"][];
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
         };
         /** DesktopCameraMonitoringItem */
         DesktopCameraMonitoringItem: {
@@ -4042,6 +4170,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationalAlertSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_enterprise_desktop_backup_operational_desktop_backup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopBackup"] | null;
+                };
+            };
+        };
+    };
+    save_enterprise_desktop_backup_operational_desktop_backup_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopBackupUpload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopBackupSummary"];
                 };
             };
             /** @description Validation Error */

@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from app.analytics.establishment_hourly import hourly_activity
 from app.analytics.establishment_movements import daily_movements
+from app.analytics.restored_day import RESTORED_BASELINE_KEY, merge_restored_day
 from app.analytics.visitor_sex import daily_sex_counts
 from app.storage.local_database import LocalDatabase
 
@@ -352,6 +353,18 @@ class EstablishmentRepository:
                 "sources": sorted(source_modes),
                 "source_breakdown": source_breakdown,
             }
+            restored = db.execute(
+                "select metrics_json from establishment_daily_summaries "
+                "where business_date=? and finalized=0",
+                (business_date,),
+            ).fetchone()
+            baseline = (
+                json.loads(restored["metrics_json"]).get(RESTORED_BASELINE_KEY)
+                if restored is not None
+                else None
+            )
+            if isinstance(baseline, dict):
+                metrics = merge_restored_day(metrics, baseline)
             db.execute(
                 "insert into establishment_daily_summaries values (?,?,?,0,?) "
                 "on conflict(business_date) do update set metrics_json=excluded.metrics_json,"

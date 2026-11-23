@@ -6,6 +6,7 @@ import {
   getMlServiceStatus,
   getPreviewStreamUrl,
   getStreamUrl,
+  LOCAL_DATA_CHANGED_EVENT,
   replaceLocalCameras,
   startCameraProcessing,
   testCameraConnection,
@@ -152,8 +153,10 @@ describe("camera configuration write boundary", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
+    const dispatchEvent = vi.fn();
     vi.stubGlobal("window", {
       clearTimeout,
+      dispatchEvent,
       setTimeout,
     });
 
@@ -171,6 +174,8 @@ describe("camera configuration write boundary", () => {
     expect(payload.cameras[0]?.cameraHost).toBe("192.168.1.9");
     expect(payload.cameras[0]?.rtsp).toBe("rtsp://192.168.1.9/stream2");
     expect(payload.cameras[0]).not.toHaveProperty("password");
+    // Saved camera settings ask for a fresh server backup.
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: LOCAL_DATA_CHANGED_EVENT }));
   });
 
   it("hot-updates counting geometry with a credential-free persisted profile", async () => {

@@ -23,8 +23,16 @@ from app.features.monitoring.alerts import (
     resolve_operational_alert,
     to_operational_alert_summary,
 )
+from app.features.monitoring.backups import (
+    StaleDesktopBackupError,
+    get_desktop_backup,
+    save_desktop_backup,
+)
 from app.features.monitoring.models import OperationalAlert
 from app.features.monitoring.schemas import (
+    DesktopBackup,
+    DesktopBackupSummary,
+    DesktopBackupUpload,
     DesktopTelemetryIngest,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
@@ -178,6 +186,26 @@ async def ingest_desktop_telemetry(
         )
 
     return snapshot
+
+
+@router.put("/desktop/backup", response_model=DesktopBackupSummary)
+async def save_enterprise_desktop_backup(
+    payload: DesktopBackupUpload,
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DesktopBackupSummary:
+    try:
+        return await save_desktop_backup(db, account, payload)
+    except StaleDesktopBackupError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/desktop/backup", response_model=DesktopBackup | None)
+async def get_enterprise_desktop_backup(
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DesktopBackup | None:
+    return await get_desktop_backup(db, account)
 
 
 async def notify_it_technical_issue(

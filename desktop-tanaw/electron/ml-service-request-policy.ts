@@ -1,4 +1,5 @@
 const ALLOWED_PATH_PREFIXES = [
+  "/backup/",
   "/health",
   "/session",
   "/runtime/",

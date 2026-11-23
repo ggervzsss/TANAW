@@ -312,6 +312,35 @@ export type LocalReportDraft = {
   updated_at: string;
 };
 
+export type LocalBackupDay = {
+  business_date: string;
+  finalized: boolean;
+  metrics: Record<string, unknown>;
+};
+
+/** Unsubmitted report data and camera settings that the server keeps as a backup. */
+export type LocalBackup = {
+  enterprise_id: string | null;
+  empty: boolean;
+  days: LocalBackupDay[];
+  drafts: LocalReportDraft[];
+  cameras: Record<string, unknown>[];
+};
+
+export type LocalBackupRestoreRequest = {
+  enterprise_id: string;
+  days: LocalBackupDay[];
+  drafts: LocalReportDraft[];
+  cameras: Record<string, unknown>[];
+};
+
+export type LocalBackupRestoreResult = {
+  restored: boolean;
+  days: number;
+  drafts: number;
+  cameras: number;
+};
+
 export type SamplePreparationRequest = {
   enterpriseId: string;
   enterpriseName: string;

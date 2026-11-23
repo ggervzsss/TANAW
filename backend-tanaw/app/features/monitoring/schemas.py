@@ -1,5 +1,6 @@
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -208,3 +209,89 @@ class OperationalAlertSummary(BaseModel):
 
 class OperationalAlertStatusUpdate(BaseModel):
     status: Literal["New", "In Review", "Resolved"]
+
+
+DESKTOP_BACKUP_SCHEMA_VERSION = 1
+MAX_BACKUP_DAYS = 62
+MAX_BACKUP_DRAFTS = 12
+MAX_BACKUP_CAMERAS = 32
+MAX_BACKUP_SERIALIZED_BYTES = 2 * 1024 * 1024
+_CREDENTIAL_KEYS = frozenset({"password", "username"})
+
+
+class DesktopBackupDay(BaseModel):
+    """One day's totals from the desktop's daily summary, as the desktop computed them."""
+
+    businessDate: date
+    finalized: bool
+    metrics: dict[str, Any]
+
+
+class DesktopBackupDraft(BaseModel):
+    draftKey: str = Field(min_length=1, max_length=120)
+    period: str = Field(min_length=1, max_length=40)
+    reportId: str | None = Field(default=None, max_length=120)
+    payload: dict[str, Any]
+    updatedAt: datetime
+
+
+class DesktopBackupUpload(BaseModel):
+    """Unsubmitted report data and camera settings, without passwords or raw tracking data."""
+
+    schemaVersion: Literal[1]
+    deviceId: str | None = Field(default=None, max_length=120)
+    capturedAt: datetime
+    days: list[DesktopBackupDay] = Field(default_factory=list, max_length=MAX_BACKUP_DAYS)
+    drafts: list[DesktopBackupDraft] = Field(default_factory=list, max_length=MAX_BACKUP_DRAFTS)
+    cameras: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_BACKUP_CAMERAS)
+
+    @model_validator(mode="after")
+    def validate_backup(self) -> DesktopBackupUpload:
+        dates = [day.businessDate for day in self.days]
+        if len(dates) != len(set(dates)):
+            raise ValueError("Each backed-up day must appear once.")
+        keys = [draft.draftKey for draft in self.drafts]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Each backed-up report draft must appear once.")
+        if any(_contains_credentials(camera) for camera in self.cameras):
+            raise ValueError("Camera backups must not contain usernames or passwords.")
+        serialized_size = len(self.model_dump_json().encode("utf-8"))
+        if serialized_size > MAX_BACKUP_SERIALIZED_BYTES:
+            raise ValueError(
+                "Desktop backup exceeds the maximum serialized size of "
+                f"{MAX_BACKUP_SERIALIZED_BYTES} bytes."
+            )
+        return self
+
+
+class DesktopBackup(DesktopBackupUpload):
+    receivedAt: datetime
+
+
+class DesktopBackupSummary(BaseModel):
+    deviceId: str | None = None
+    capturedAt: datetime
+    receivedAt: datetime
+    days: int
+    drafts: int
+    cameras: int
+
+
+def _contains_credentials(value: Any) -> bool:
+    """Whether a camera profile carries a username, password, or credentials in a URL."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in _CREDENTIAL_KEYS and item not in (None, ""):
+                return True
+            if _contains_credentials(item):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_contains_credentials(item) for item in value)
+    if isinstance(value, str) and "://" in value:
+        try:
+            parsed = urlparse(value)
+            return bool(parsed.username or parsed.password)
+        except ValueError:
+            return False
+    return False

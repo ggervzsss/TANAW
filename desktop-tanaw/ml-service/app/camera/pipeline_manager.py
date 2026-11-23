@@ -27,6 +27,11 @@ from app.storage.repositories.area_repository import AreaRepository
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
 from app.storage.repositories.establishment_repository import EstablishmentRepository
 from app.storage.repositories.establishment_sample_repository import prepare_sample_period
+from app.storage.repositories.local_backup_repository import (
+    export_local_backup,
+    local_data_is_empty,
+    restore_local_backup,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -833,6 +838,47 @@ class CameraPipelineRegistry:
                 )
             result = prepare_sample_period(self.establishment_repository(), **values)
         return {**result, "enterprise_id": enterprise_id, "enterprise_name": enterprise_name}
+
+    def export_local_backup(self) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            database = self.establishment_repository().database
+            backup = export_local_backup(database, datetime.now(UTC))
+            return {
+                **backup,
+                "enterprise_id": self._enterprise_id,
+                "cameras": self._reporting.list_camera_profiles(),
+                "empty": local_data_is_empty(database),
+            }
+
+    def restore_local_backup(
+        self,
+        *,
+        enterprise_id: str,
+        days: list[dict[str, Any]],
+        drafts: list[dict[str, Any]],
+        cameras: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            if self._enterprise_id != enterprise_id:
+                raise ValueError(
+                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}, "
+                    f"not {enterprise_id}."
+                )
+            database = self.establishment_repository().database
+            if not local_data_is_empty(database):
+                return {"restored": False, "days": 0, "drafts": 0, "cameras": 0}
+            # Restored cameras have no saved password yet, so each one is tested again.
+            profiles = self.replace_camera_profiles(
+                [{**camera, "status": "untested"} for camera in cameras]
+            )
+            restored = restore_local_backup(
+                database, days=days, drafts=drafts, now=datetime.now(UTC)
+            )
+        logger.info(
+            "Local data restored from the server backup.",
+            extra={"enterprise_id": enterprise_id, **restored, "cameras": len(profiles)},
+        )
+        return {"restored": True, **restored, "cameras": len(profiles)}
 
     def aggregate_session(self) -> dict[str, Any]:
         states = self.camera_states()

@@ -11,6 +11,7 @@ import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess, notifyWarning } from "../../features/toasts/services/toast-service";
+import { useBackupRestoreGeneration } from "../../features/sync/hooks/useBackupRestoreGeneration";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -77,6 +78,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   );
 
   useDesktopCloudSync(mlContextReady);
+  const backupRestoreGeneration = useBackupRestoreGeneration();
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -180,7 +182,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
     return () => {
       disposed = true;
     };
-  }, [mlContextReady, enterpriseCameraStorageKey]);
+  }, [mlContextReady, enterpriseCameraStorageKey, backupRestoreGeneration]);
 
   useLayoutEffect(() => {
     const container = contentScrollRef.current;

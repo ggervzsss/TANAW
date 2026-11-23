@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from calendar import month_abbr, month_name, monthrange
 from datetime import date, datetime, timedelta
+from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -242,3 +243,41 @@ class ReportRawDataPurgeResponse(BaseModel):
 
 class SyncMarkResponse(BaseModel):
     updated: int
+
+
+class LocalBackupDay(BaseModel):
+    business_date: date
+    finalized: bool
+    metrics: dict[str, Any]
+
+
+class LocalBackupDraft(BaseModel):
+    draft_key: str = Field(min_length=1, max_length=120)
+    period: str = Field(min_length=1, max_length=120)
+    report_id: str | None = Field(default=None, max_length=120)
+    payload: dict[str, Any]
+    updated_at: str = Field(min_length=1, max_length=40)
+
+
+class LocalBackupResponse(BaseModel):
+    """Unsubmitted report data and camera settings for the server backup."""
+
+    enterprise_id: str | None
+    empty: bool
+    days: list[LocalBackupDay]
+    drafts: list[LocalBackupDraft]
+    cameras: list[dict[str, Any]]
+
+
+class LocalBackupRestoreRequest(BaseModel):
+    enterprise_id: str = Field(min_length=1, max_length=160)
+    days: list[LocalBackupDay] = Field(default_factory=list, max_length=62)
+    drafts: list[LocalBackupDraft] = Field(default_factory=list, max_length=12)
+    cameras: list[dict[str, Any]] = Field(default_factory=list, max_length=32)
+
+
+class LocalBackupRestoreResponse(BaseModel):
+    restored: bool
+    days: int
+    drafts: int
+    cameras: int

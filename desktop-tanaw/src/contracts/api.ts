@@ -7,6 +7,7 @@ export const apiPaths = {
   authLogin: "/auth/login",
   authLogout: "/auth/logout",
   authSession: "/auth/session",
+  desktopBackup: "/operational/desktop/backup",
   desktopReportSubmissions: "/operational/desktop/report-submissions",
   desktopSamplePreparation: "/operational/desktop/sample-preparation",
   desktopTelemetry: "/operational/desktop/telemetry",
@@ -16,6 +17,8 @@ export const apiPaths = {
 
 export type ApiAuthUser = ApiSchemas["AuthUser"];
 export type ApiLoginResponse = ApiSchemas["LoginResponse"];
+export type ApiDesktopBackup = ApiSchemas["DesktopBackup"];
+export type ApiDesktopBackupUpload = ApiSchemas["DesktopBackupUpload"];
 export type ApiDesktopReportSubmission = ApiSchemas["DesktopReportSubmissionIngest"];
 export type ApiDesktopTelemetry = ApiSchemas["DesktopTelemetryIngest"];
 export type ApiFinalReport = ApiSchemas["FinalReportSummary"];
