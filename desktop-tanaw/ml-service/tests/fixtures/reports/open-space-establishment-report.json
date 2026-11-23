@@ -22,6 +22,7 @@
     "counting": {
       "unique_count": 2,
       "confirmed_unique_count": 2,
+      "degraded_unique_count": 0,
       "entries": 0,
       "exits": 0,
       "repeat_entry_count": 0,
@@ -36,6 +37,7 @@
         {
           "business_date": "2026-10-10",
           "confirmed_unique_count": 2,
+          "degraded_unique_count": 0,
           "counting_basis": "sum_of_daily_establishment_unique_visitors",
           "coverage_ratio": 3.472222222222222e-05,
           "covered_ms": 3000,
@@ -128,7 +130,7 @@
         }
       ],
       "occupancy_corrections": [],
-      "snapshot_version": "5847862b41090faca335c76e4333a0658685fe3e89ee964894356b6ee1109aa6",
+      "snapshot_version": "f66dccb247b44e536efe0342a6d1efc20f6dfc81d11219a2f4b3a51b72878bfa",
       "male_count": 1,
       "female_count": 1,
       "sex_estimation_state": "estimated"
@@ -145,6 +147,7 @@
   "counting": {
     "unique_count": 2,
     "confirmed_unique_count": 2,
+    "degraded_unique_count": 0,
     "entries": 0,
     "exits": 0,
     "repeat_entry_count": 0,
@@ -159,6 +162,7 @@
       {
         "business_date": "2026-10-10",
         "confirmed_unique_count": 2,
+        "degraded_unique_count": 0,
         "counting_basis": "sum_of_daily_establishment_unique_visitors",
         "coverage_ratio": 3.472222222222222e-05,
         "covered_ms": 3000,
@@ -251,7 +255,7 @@
       }
     ],
     "occupancy_corrections": [],
-    "snapshot_version": "5847862b41090faca335c76e4333a0658685fe3e89ee964894356b6ee1109aa6",
+    "snapshot_version": "f66dccb247b44e536efe0342a6d1efc20f6dfc81d11219a2f4b3a51b72878bfa",
     "male_count": 1,
     "female_count": 1,
     "sex_estimation_state": "estimated"

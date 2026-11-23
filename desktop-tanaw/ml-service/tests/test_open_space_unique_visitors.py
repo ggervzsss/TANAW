@@ -8,6 +8,7 @@ import numpy as np
 
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
+from app.camera.runtime_math import resolve_reid_mode
 from app.config.camera_config import CameraStartRequest
 from app.config.open_space_config import OpenSpaceConfig, ZonePoint
 from app.counting.geometry import Centroid
@@ -121,7 +122,11 @@ def test_live_zone_identity_matching_preserves_gap_recovery_and_independent_dwel
     )
     manager._config = config
     manager._configure_reid_locked(config.model_copy(update={"reid_mode": "auto"}))
-    assert manager._effective_reid_mode == "fast"
+    # Auto identifies visitors on every profile; zones follow the same rule as doorways.
+    assert manager._effective_reid_mode == resolve_reid_mode(
+        "auto", manager._tracker.effective_profile
+    )
+    assert manager._effective_reid_mode != "off"
     manager._configure_reid_locked(config.model_copy(update={"reid_mode": "off"}))
     assert manager._effective_reid_mode == "off"
     manager._configure_reid_locked(config)

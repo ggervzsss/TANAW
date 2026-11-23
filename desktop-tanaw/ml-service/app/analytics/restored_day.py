@@ -14,6 +14,7 @@ RESTORED_BASELINE_KEY = "restored_baseline"
 _ADDITIVE_KEYS = (
     "unique_count",
     "confirmed_unique_count",
+    "degraded_unique_count",
     "repeat_entry_count",
     "unresolved_observations",
     "qualified_observations",

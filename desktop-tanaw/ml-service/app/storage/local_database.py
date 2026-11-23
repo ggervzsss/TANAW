@@ -66,9 +66,15 @@ class LocalDatabase:
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
-        """Share one atomic write snapshot with this store's nested repositories."""
-        if self._transaction.get() is not None:
-            raise RuntimeError("A local database transaction is already active.")
+        """Share one atomic write snapshot with this store's nested repositories.
+
+        A transaction opened inside another joins it, so a caller can make several
+        repository writes (each with its own transaction) commit or roll back together.
+        """
+        active = self._transaction.get()
+        if active is not None:
+            yield active
+            return
         with self.connection() as connection:
             connection.execute("begin immediate")
             token = self._transaction.set(connection)

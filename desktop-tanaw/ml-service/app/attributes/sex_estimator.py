@@ -123,7 +123,7 @@ class SexEstimator:
                 continue
             try:
                 heads.append(SexHead.load(path))
-            except (OSError, KeyError, ValueError) as exc:
+            except Exception as exc:  # A corrupt archive raises zip and zlib errors as well.
                 logger.warning("Sex head %s could not be loaded: %s", path.name, exc)
                 errors[path.name] = str(exc)
         return cls(heads, errors)

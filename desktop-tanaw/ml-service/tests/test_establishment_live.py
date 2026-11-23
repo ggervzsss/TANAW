@@ -18,7 +18,7 @@ def door_state(camera_id: int, *, running: bool = True) -> dict[str, Any]:
     return {
         "camera_id": camera_id,
         "counts": {"running": running, "status": "running" if running else "stopped"},
-        "health": {"raw_frame_stale_ms": 100 if running else None, "reid_model_ready": True},
+        "health": {"processed_frame_stale_ms": 100 if running else None, "reid_model_ready": True},
         "area": None,
     }
 
@@ -120,3 +120,17 @@ def test_cameras_without_any_counting_setup_still_count(registry):
     setup["states"] = [door_state(1)]
 
     assert pipelines.establishment_live(NOW + timedelta(seconds=1))["occupancy"] == 2
+
+
+def test_fresh_video_with_stalled_analysis_does_not_count_as_available(registry):
+    pipelines, setup = registry
+    enter(pipelines._establishment_registry, 2)
+    stalled = door_state(1)
+    stalled["health"] = {"raw_frame_stale_ms": 50, "processed_frame_stale_ms": 60_000}
+    cameras(setup, (1, "entrance_exit", stalled))
+
+    live = pipelines.establishment_live(NOW + timedelta(seconds=1))
+
+    assert live["missing_camera_ids"] == [1]
+    assert live["occupancy"] is None
+    assert live["state"] == "unavailable"

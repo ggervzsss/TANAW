@@ -328,7 +328,7 @@ function isPendingLocalReport(report: ReportRecord) {
   return Boolean(report.syncStatus && report.syncStatus !== "synced");
 }
 
-function uploadStatusLabel(status: string) {
+export function uploadStatusLabel(status: string) {
   if (status === "synced") return "Up to date";
   if (status === "pending_cloud_sync") return "Waiting to upload";
   if (status === "upload_rejected") return "Upload rejected";

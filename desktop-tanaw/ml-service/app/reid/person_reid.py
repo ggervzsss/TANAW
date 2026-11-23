@@ -14,6 +14,11 @@ import numpy as np
 from app.reid.model_registry import ReIdModelProfile
 from app.runtime.assets import model_directory
 
+# A failed model load or inference is retried after this backoff, doubling up to the maximum,
+# so one transient error never disables visitor identification for the rest of the day.
+RETRY_INITIAL_SECONDS = 1.0
+RETRY_MAX_SECONDS = 60.0
+
 
 @dataclass(frozen=True)
 class EmbeddingResult:
@@ -45,6 +50,8 @@ class PersonReIdentifier:
         self._ready = False
         self._total_inference_ms = 0.0
         self._inference_count = 0
+        self._failures = 0
+        self._retry_at: float | None = None
         self._lock = Lock()
 
     @classmethod
@@ -89,7 +96,7 @@ class PersonReIdentifier:
             self._lock.release()
 
     def warmup(self) -> None:
-        session = self._load_session()
+        session = self._load_session(force_retry=True)
         if session is None:
             return
 
@@ -111,37 +118,52 @@ class PersonReIdentifier:
             outputs = session.run([self._output_name], {self._input_name: tensor})
         except Exception as exc:
             with self._lock:
-                self._ready = False
-                self._status = "degraded"
-                self._error = str(exc)
+                self._mark_failed_locked(str(exc))
             return None
         inference_ms = (monotonic() - started_at) * 1000.0
         embedding = np.asarray(outputs[0]).reshape(-1).astype(np.float32)
         norm = float(np.linalg.norm(embedding))
         if not np.all(np.isfinite(embedding)) or not np.isfinite(norm) or norm <= 1e-9:
             with self._lock:
-                self._ready = False
-                self._status = "degraded"
-                self._error = "The visitor identification model returned an invalid embedding."
+                self._mark_failed_locked(
+                    "The visitor identification model returned an invalid embedding."
+                )
             return None
 
         embedding = embedding / norm
         with self._lock:
             self._ready = True
             self._status = "ready"
+            self._error = None
+            self._failures = 0
+            self._retry_at = None
             self._total_inference_ms += inference_ms
             self._inference_count += 1
 
         return EmbeddingResult(embedding=embedding, inference_ms=inference_ms)
 
-    def _load_session(self) -> Any | None:
+    def _mark_failed_locked(self, error: str) -> None:
+        self._ready = False
+        self._status = "degraded"
+        self._error = error
+        self._failures += 1
+        delay = min(RETRY_MAX_SECONDS, RETRY_INITIAL_SECONDS * 2 ** (self._failures - 1))
+        self._retry_at = monotonic() + delay
+
+    def _waiting_to_retry_locked(self, force_retry: bool) -> bool:
+        return (
+            not force_retry
+            and self._status == "degraded"
+            and self._retry_at is not None
+            and monotonic() < self._retry_at
+        )
+
+    def _load_session(self, *, force_retry: bool = False) -> Any | None:
         with self._lock:
-            if self._session is not None:
-                if self._status == "degraded":
-                    return None
-                return self._session
-            if self._status == "degraded" and self._error is not None:
+            if self._waiting_to_retry_locked(force_retry):
                 return None
+            if self._session is not None:
+                return self._session
 
             self._loading = True
 
@@ -174,10 +196,8 @@ class PersonReIdentifier:
         except Exception as exc:
             with self._lock:
                 self._session = None
-                self._ready = False
-                self._status = "degraded"
-                self._error = str(exc)
                 self._loading = False
+                self._mark_failed_locked(str(exc))
             return None
 
         with self._lock:

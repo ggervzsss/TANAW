@@ -84,6 +84,7 @@ class CameraPipelineRegistry:
         self._pipelines: dict[int, CameraProcessingManager] = {}
         self._config_fingerprints: dict[int, str] = {}
         self._pending_starts: dict[int, str] = {}
+        self._start_locks: dict[int, threading.Lock] = {}
         self._context_generation = 0
         self._switching_context = False
         self._enterprise_id: str | None = None
@@ -139,6 +140,8 @@ class CameraPipelineRegistry:
                     self._app_data_dir, normalized_id
                 )
                 self._establishment_registry.cleanup()
+                # Rebuilds still pending when the service last stopped were not saved.
+                self._establishment_registry.repository.rebuild_recent_days(datetime.now(UTC))
             except Exception:
                 # A half-bound enterprise would make the next attempt return early as bound.
                 with self._lock:
@@ -256,15 +259,22 @@ class CameraPipelineRegistry:
         if camera_id is None:
             return
 
-        with self._lifecycle_lock:
-            with self._lock:
-                if (
-                    self._pending_starts.get(camera_id) != fingerprint
-                    or generation != self._context_generation
-                ):
-                    return
+        def still_requested() -> bool:
+            # Read without the registry lock: a camera calls this while holding its own lock.
+            return (
+                self._pending_starts.get(camera_id) == fingerprint
+                and generation == self._context_generation
+                and not self._switching_context
+            )
+
+        # The slow stream probe and model warmup run outside the lifecycle lock, so other
+        # cameras, Stop, and reporting never wait behind one camera's startup. A stop, newer
+        # start, or sign-out cancels this start through ``still_requested``.
+        with self._camera_start_lock(camera_id):
+            if not still_requested():
+                return
             try:
-                self._start_locked(config)
+                self._start_locked(config, should_continue=still_requested)
             except Exception:
                 logger.exception("Camera %s failed during requested startup.", camera_id)
             finally:
@@ -272,7 +282,15 @@ class CameraPipelineRegistry:
                     if self._pending_starts.get(camera_id) == fingerprint:
                         self._pending_starts.pop(camera_id, None)
 
-    def _start_locked(self, config: CameraStartRequest) -> bool:
+    def _camera_start_lock(self, camera_id: int) -> threading.Lock:
+        with self._lock:
+            return self._start_locks.setdefault(camera_id, threading.Lock())
+
+    def _start_locked(
+        self,
+        config: CameraStartRequest,
+        should_continue: Callable[[], bool] | None = None,
+    ) -> bool:
         camera_id = config.camera_id
         if camera_id is None:
             raise ValueError("Camera ID is required to start camera processing.")
@@ -305,7 +323,10 @@ class CameraPipelineRegistry:
 
         self._start_summary_worker()
         try:
-            existing.start(config)
+            if should_continue is None:
+                existing.start(config)
+            else:
+                existing.start(config, should_continue=should_continue)
         except Exception:
             with self._lock:
                 self._config_fingerprints.pop(camera_id, None)
@@ -465,6 +486,7 @@ class CameraPipelineRegistry:
                     snapshot = self.establishment_live()
                     now = datetime.now(UTC)
                     self.establishment_repository().checkpoint_occupancy(snapshot, now)
+                    self.establishment_repository().rebuild_changed_days()
                     if (
                         self._summary_last_cleanup is None
                         or (now - self._summary_last_cleanup).total_seconds() >= 60
@@ -517,7 +539,8 @@ class CameraPipelineRegistry:
                 presence = area.get("presence") if available else None
                 available &= isinstance(presence, int) and presence >= 0
             else:
-                age = health.get("raw_frame_stale_ms")
+                # Analysed frames, not raw video, show that this doorway is still counting.
+                age = health.get("processed_frame_stale_ms")
                 available = bool(
                     counts.get("running")
                     and counts.get("status") in {"running", "degraded"}
@@ -699,10 +722,9 @@ class CameraPipelineRegistry:
     def service_health(self) -> dict[str, Any]:
         states = self.camera_states()
         cameras = states["cameras"]
-        first_health = cameras[0]["health"] if cameras else {}
         errors = [camera["counts"]["error"] for camera in cameras if camera["counts"].get("error")]
         return {
-            **first_health,
+            **_representative_health(cameras),
             "status": "ok",
             "running": states["active_camera_count"] > 0,
             "error": errors[0] if errors else None,
@@ -920,7 +942,8 @@ class CameraPipelineRegistry:
         counts = {
             "entry": summary["entries"],
             "exit": summary["exits"],
-            "occupancy": summary["current_occupancy"],
+            # The same daily establishment balance every other view shows.
+            "occupancy": states["enterprise_occupancy"],
             "running": states["active_camera_count"] > 0,
             "status": "running" if states["active_camera_count"] > 0 else "stopped",
             "started_at": None,
@@ -936,6 +959,28 @@ class CameraPipelineRegistry:
             "counts": counts,
             "updated_at": None,
         }
+
+
+def _representative_health(cameras: list[dict[str, Any]]) -> dict[str, Any]:
+    """The camera whose health a single summary should show: the one most in trouble.
+
+    A summary built from the first camera alone would hide a second camera that has
+    stalled or lost its models.
+    """
+    if not cameras:
+        return {}
+
+    def trouble(camera: dict[str, Any]) -> tuple[int, int, int, int]:
+        health, counts = camera.get("health") or {}, camera.get("counts") or {}
+        running = bool(counts.get("running"))
+        return (
+            int(running and bool(counts.get("error"))),
+            int(running and not health.get("model_ready", True)),
+            int(running and not health.get("reid_model_ready", True)),
+            int(running),
+        )
+
+    return dict(max(cameras, key=trouble)["health"])
 
 
 def _max_concurrent_cameras(explicit_value: int | None) -> int:

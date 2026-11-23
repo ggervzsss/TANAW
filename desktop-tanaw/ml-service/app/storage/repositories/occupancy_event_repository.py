@@ -28,9 +28,8 @@ class OccupancyEventRepository:
         if is_unique_entry is None:
             is_unique_entry = direction == "entry"
 
-        with self._database.connection() as connection:
+        with self._database.transaction() as connection:
             # This transaction serializes enterprise-wide occupancy updates across cameras.
-            connection.execute("begin immediate")
             current_occupancy = self._ensure_state(connection)
             cursor = connection.execute(
                 """
@@ -90,8 +89,7 @@ class OccupancyEventRepository:
 
     def update_identity(self, event_id: str, fields: dict[str, Any]) -> bool:
         """Enrich a crossing without replaying its occupancy delta or changing its time."""
-        with self._database.connection() as connection:
-            connection.execute("begin immediate")
+        with self._database.transaction() as connection:
             row = connection.execute(
                 "select payload_json from count_events where event_id=? "
                 "and direction='entry' and reid_decision='pending' "
@@ -147,8 +145,7 @@ class OccupancyEventRepository:
         del old_occupancy  # The authoritative old value is read inside the write transaction.
         correction_id = str(uuid4())
         recorded_at = recorded_at or _utc_now()
-        with self._database.connection() as connection:
-            connection.execute("begin immediate")
+        with self._database.transaction() as connection:
             authoritative_old_occupancy = self._ensure_state(connection)
             normalized_new_occupancy = max(0, new_occupancy)
             delta = normalized_new_occupancy - authoritative_old_occupancy

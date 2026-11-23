@@ -9,7 +9,11 @@ export type DevicePerformanceProfile = "auto" | "emergency" | "compatibility" | 
 
 export type DevicePerformanceRuntime = {
   processing_profile: DevicePerformanceProfile;
-  /** "quality" also turns on the higher-accuracy appearance model and male/female head. */
+  /**
+   * "auto" lets the ML service choose: every profile matches visitors, and all but Emergency
+   * use the higher-accuracy appearance model and male/female head. High Accuracy asks for it
+   * explicitly.
+   */
   reid_mode: "auto" | "quality";
 };
 
@@ -18,10 +22,10 @@ export const DEFAULT_DEVICE_PERFORMANCE_PROFILE: DevicePerformanceProfile = "aut
 
 export const DEVICE_PERFORMANCE_OPTIONS = [
   { value: "auto", label: "Auto (recommended)", description: "TANAW picks a profile from this computer's hardware." },
-  { value: "emergency", label: "Emergency / Low Power", description: "Lightest load for very old computers. Counts may miss people." },
-  { value: "compatibility", label: "Compatibility", description: "Small detector for older laptops and computers without a graphics card." },
-  { value: "balanced", label: "Balanced", description: "Larger detector and appearance matching for capable computers." },
-  { value: "high_accuracy", label: "High Accuracy", description: "Largest detector and the more accurate visitor and male/female models. Needs a strong computer." },
+  { value: "emergency", label: "Emergency / Low Power", description: "Lightest load for very old computers. Counts may miss people, and visitors are matched with the faster, less accurate model." },
+  { value: "compatibility", label: "Compatibility", description: "Small detector for older laptops and computers without a graphics card. Visitors are still matched and counted." },
+  { value: "balanced", label: "Balanced", description: "Larger detector for capable computers, with the same visitor matching." },
+  { value: "high_accuracy", label: "High Accuracy", description: "Largest detector for a strong computer with a graphics card." },
 ] as const satisfies ReadonlyArray<{ value: DevicePerformanceProfile; label: string; description: string }>;
 
 const PROFILE_LABELS: Record<string, string> = Object.fromEntries(DEVICE_PERFORMANCE_OPTIONS.map((option) => [option.value, option.label]));

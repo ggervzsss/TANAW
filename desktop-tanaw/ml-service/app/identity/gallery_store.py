@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -28,10 +28,10 @@ class VisitorGalleryStore:
         self._record_sightings = record_sightings
 
     def cleanup_expired(self, now: datetime) -> int:
-        return self._session_store.cleanup_expired_visitor_metadata(now.isoformat())
+        return self._session_store.cleanup_expired_visitor_metadata(_utc(now))
 
     def restore_identity(self, visitor_id: str, now: datetime) -> bool:
-        return self._session_store.restore_visitor_identity(visitor_id, recorded_at=now.isoformat())
+        return self._session_store.restore_visitor_identity(visitor_id, recorded_at=_utc(now))
 
     def resolve_identity(
         self,
@@ -44,16 +44,16 @@ class VisitorGalleryStore:
             visitor_id,
             identity_status=identity_status,
             canonical_visitor_id=canonical_visitor_id,
-            recorded_at=now.isoformat(),
+            recorded_at=_utc(now),
         )
 
     def load_gallery(
         self, business_date: str, camera_id: int | None, now: datetime
     ) -> list[VisitorIdentity]:
-        rows = self._session_store.load_active_visitor_identities(business_date, now.isoformat())
+        rows = self._session_store.load_active_visitor_identities(business_date, _utc(now))
         prototypes_by_visitor: dict[str, list[VisitorPrototype]] = {}
         prototype_rows = self._session_store.load_active_visitor_identity_prototypes(
-            business_date, self._model_name, now.isoformat()
+            business_date, self._model_name, _utc(now)
         )
         for row in prototype_rows:
             embedding = _row_embedding(row)
@@ -103,7 +103,7 @@ class VisitorGalleryStore:
         if self._quality_model_name is None:
             return {}
         rows = self._session_store.load_active_visitor_model_embeddings(
-            business_date, self._quality_model_name, now.isoformat()
+            business_date, self._quality_model_name, _utc(now)
         )
         gallery: dict[str, VisitorModelEmbedding] = {}
         for row in rows:
@@ -133,7 +133,7 @@ class VisitorGalleryStore:
             expires_at=identity.expires_at,
             identity_status=identity.identity_status,
             canonical_visitor_id=identity.canonical_visitor_id,
-            recorded_at=now.isoformat(),
+            recorded_at=_utc(now),
         )
         for prototype in identity.prototypes:
             self.persist_prototype(identity, prototype, now)
@@ -148,7 +148,7 @@ class VisitorGalleryStore:
             embedding=prototype.embedding.astype(np.float32).tobytes(),
             embedding_dim=int(prototype.embedding.size),
             embedding_count=prototype.embedding_count,
-            recorded_at=now.isoformat(),
+            recorded_at=_utc(now),
         )
 
     def persist_model_embedding(
@@ -162,7 +162,7 @@ class VisitorGalleryStore:
             embedding=embedding.astype(np.float32).tobytes(),
             embedding_dim=int(embedding.size),
             embedding_count=embedding_count,
-            recorded_at=now.isoformat(),
+            recorded_at=_utc(now),
         )
 
     def persist_sighting(
@@ -189,7 +189,7 @@ class VisitorGalleryStore:
                 "detection_confidence": detection_confidence,
                 "bbox": bbox,
             },
-            now.isoformat(),
+            _utc(now),
         )
 
 
@@ -209,3 +209,8 @@ def _row_embedding(row: dict[str, object]) -> np.ndarray | None:
 def _camera_matches(row: dict[str, object], camera_id: int | None) -> bool:
     row_camera_id = row.get("camera_id")
     return row_camera_id == camera_id
+
+
+def _utc(value: datetime) -> str:
+    """Stored times are compared as text, so every one is written in UTC."""
+    return value.astimezone(UTC).isoformat()

@@ -8,6 +8,7 @@ def day(**values: Any) -> dict[str, Any]:
         "business_date": "2026-11-16",
         "unique_count": 0,
         "confirmed_unique_count": 0,
+        "degraded_unique_count": 0,
         "entries": 0,
         "exits": 0,
         "repeat_entry_count": 0,
@@ -56,6 +57,7 @@ def source(camera_id: int, **values: Any) -> dict[str, Any]:
 BASELINE = day(
     unique_count=40,
     confirmed_unique_count=40,
+    degraded_unique_count=2,
     entries=50,
     exits=30,
     qualified_observations=80,
@@ -86,6 +88,7 @@ def test_new_activity_is_added_to_the_restored_totals() -> None:
     computed = day(
         unique_count=10,
         confirmed_unique_count=10,
+        degraded_unique_count=1,
         entries=12,
         exits=20,
         qualified_observations=22,
@@ -111,6 +114,7 @@ def test_new_activity_is_added_to_the_restored_totals() -> None:
     assert merged["entries"] == 62
     assert merged["exits"] == 50
     assert merged["unique_count"] == 50
+    assert merged["degraded_unique_count"] == 3
     assert merged["qualified_observations"] == 102
     assert merged["covered_ms"] == 18_000_000
     assert merged["coverage_ratio"] == 18_000_000 / 86_400_000
