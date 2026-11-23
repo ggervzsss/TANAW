@@ -143,6 +143,11 @@ export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: stri
   );
 }
 
+/** Sets aside an establishment's local data that this version cannot open; refused for readable data. */
+export async function resetUnreadableLocalData(baseUrl: string, enterpriseId: string): Promise<{ enterprise_id: string; set_aside_path: string }> {
+  return requestJson<{ enterprise_id: string; set_aside_path: string }>(`${baseUrl}/context/enterprise/reset-local-data`, { method: "POST", body: JSON.stringify({ enterprise_id: enterpriseId }) }, 15_000);
+}
+
 export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
   return requestJson<Camera[]>(`${baseUrl}/cameras`, { method: "GET" }, 2500);
 }
@@ -570,6 +575,7 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
     "tripwire_persistence_failed",
     "tripwire_worker_update_failed",
     "service_shutting_down",
+    "local_database_reset_required",
     "request_timeout",
     "unknown",
   ];

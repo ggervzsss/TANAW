@@ -90,5 +90,5 @@ class LocalDatabase:
     def initialize(self) -> None:
         if self._initialized:
             return
-        initialize_local_database(self.root, self.path, self.enterprise_id)
+        initialize_local_database(self.root, self.path)
         self._initialized = True

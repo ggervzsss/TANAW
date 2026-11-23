@@ -122,7 +122,7 @@ describe("desktop local backup", () => {
 
   it("tells the user what came back and that cameras need their sign-in again", () => {
     expect(restoredBackupMessage({ restored: true, days: 16, drafts: 1, cameras: 2 })).toBe(
-      "Restored 16 days of counts, 1 report draft and 2 cameras from the server backup. Enter each camera's username and password to start counting again.",
+      "Restored 16 days of counts, 1 report draft and 2 cameras from the server backup. A camera starts counting again once its username and password are saved on this computer.",
     );
     expect(restoredBackupMessage({ restored: true, days: 1, drafts: 0, cameras: 0 })).toBe("Restored 1 day of counts from the server backup.");
   });

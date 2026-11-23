@@ -381,6 +381,7 @@ export type MlServiceErrorCode =
   | "tripwire_persistence_failed"
   | "tripwire_worker_update_failed"
   | "service_shutting_down"
+  | "local_database_reset_required"
   | "request_timeout"
   | "unknown";
 

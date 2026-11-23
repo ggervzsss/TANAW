@@ -33,7 +33,7 @@ export function restoredBackupMessage(result: LocalBackupRestoreResult) {
   ].filter((part): part is string => part !== null);
   const restored = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : (parts[0] ?? "your local data");
   return result.cameras
-    ? `Restored ${restored} from the server backup. Enter each camera's username and password to start counting again.`
+    ? `Restored ${restored} from the server backup. A camera starts counting again once its username and password are saved on this computer.`
     : `Restored ${restored} from the server backup.`;
 }
 

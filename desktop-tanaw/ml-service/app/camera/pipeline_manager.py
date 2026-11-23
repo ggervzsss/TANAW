@@ -22,6 +22,7 @@ from app.config.camera_config import (
 )
 from app.identity.establishment_registry import EstablishmentRegistry
 from app.runtime.hardware import cached_runtime_capabilities
+from app.storage.local_data_schema import local_database_needs_reset, set_aside_local_data
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
 from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
@@ -138,6 +139,14 @@ class CameraPipelineRegistry:
                     self._app_data_dir, normalized_id
                 )
                 self._establishment_registry.cleanup()
+            except Exception:
+                # A half-bound enterprise would make the next attempt return early as bound.
+                with self._lock:
+                    self._enterprise_id = None
+                    self._enterprise_name = None
+                self._establishment_registry = None
+                self._reporting.unbind_enterprise()
+                raise
             finally:
                 with self._lock:
                     self._switching_context = False
@@ -838,6 +847,28 @@ class CameraPipelineRegistry:
                 )
             result = prepare_sample_period(self.establishment_repository(), **values)
         return {**result, "enterprise_id": enterprise_id, "enterprise_name": enterprise_name}
+
+    def reset_unreadable_local_data(self, enterprise_id: str) -> dict[str, Any]:
+        """Set aside an enterprise's local data that this version cannot open.
+
+        Only an unreadable database is moved, so this can never discard data the
+        application is able to use. The next enterprise binding starts fresh.
+        """
+        normalized_id = enterprise_id.strip()
+        if not normalized_id:
+            raise ValueError("Enterprise ID is required.")
+        with self._lifecycle_lock:
+            if self._enterprise_id == normalized_id:
+                raise ValueError("This establishment's local data is open and readable.")
+            database = LocalDatabase(self._app_data_dir, normalized_id)
+            if not local_database_needs_reset(database.path):
+                raise ValueError("This establishment's local data is readable; nothing was reset.")
+            moved_to = set_aside_local_data(database.root)
+        logger.warning(
+            "Unreadable local data was set aside.",
+            extra={"enterprise_id": normalized_id, "path": str(moved_to)},
+        )
+        return {"enterprise_id": normalized_id, "set_aside_path": str(moved_to)}
 
     def export_local_backup(self) -> dict[str, Any]:
         with self._lifecycle_lock:

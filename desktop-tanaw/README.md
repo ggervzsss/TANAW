@@ -233,9 +233,20 @@ and `ml-service.log` for the camera service. Camera passwords and tokens are
 redacted from both.
 
 A Windows uninstall removes the installed app's profile and cached installer
-payload for the current Windows account. Unsynced reports are lost. Installing
-an update over an existing installation keeps the profile. The development
-profile and records already synced to the server are separate.
+payload for the current Windows account. Installing an update over an existing
+installation keeps the profile. The development profile and records already
+synced to the server are separate.
+
+The app backs up each establishment's unsubmitted daily totals, report drafts,
+and camera settings (never camera usernames or passwords) to the server about
+once an hour and shortly after a camera or draft is saved. After a reinstall or
+reset, signing in restores that backup into the empty local data; counts newer
+than the last backup are lost.
+
+If an update cannot open the local data an earlier version saved, the app
+offers **Reset local data**. It moves only that unreadable data to
+`ml-service/set-aside` inside the profile, then starts fresh and restores the
+server backup.
 
 ## Building installers
 

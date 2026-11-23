@@ -36,6 +36,9 @@ class ApiContractTest(unittest.TestCase):
         }
 
         self.assertIn(("GET", "/cameras/runtime"), http_routes)
+        self.assertIn(("POST", "/context/enterprise/reset-local-data"), http_routes)
+        self.assertIn(("GET", "/backup/local"), http_routes)
+        self.assertIn(("POST", "/backup/local/restore"), http_routes)
         self.assertIn(("POST", "/camera/start"), http_routes)
         self.assertIn(("PATCH", "/camera/{camera_id}/counting-config"), http_routes)
         self.assertIn(("GET", "/camera/{camera_id}/stream"), http_routes)

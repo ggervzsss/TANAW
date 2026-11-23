@@ -31,6 +31,11 @@ class LocalOperationsService:
             "session_restored": False,
         }
 
+    def unbind_enterprise(self) -> None:
+        """Forget a binding that failed, so the next attempt binds again from the start."""
+        self._enterprise_id = None
+        self._store = SessionStore(self._app_data_dir)
+
     def test_connection(self, payload: CameraTestRequest) -> StreamSelection:
         """Find a working stream for the brand; the chosen address is returned to save."""
         return select_stream(
