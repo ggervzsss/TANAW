@@ -31,6 +31,10 @@ export const REQUIRED_MODEL_ASSETS = [
   "yolo11s_640_openvino_model/yolo11s.xml",
 ] as const;
 
+// Model cards kept beside the sex heads to document their measured accuracy.
+// Electron Builder's model filter leaves them out of the installer.
+export const SOURCE_ONLY_MODEL_FILES = ["sex_head_fast.json", "sex_head_quality.json"] as const;
+
 export const PROHIBITED_RELEASE_PATH_SEGMENTS = ["__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", "mypy"] as const;
 
 export const PROHIBITED_RELEASE_PATH_PREFIXES = ["runtime/_internal/torch/test/"] as const;
@@ -71,7 +75,7 @@ export async function inspectMlReleaseResources(runtimeDirectory: string, models
     throw new Error("The packaged ML runtime is missing the native lap tracker dependency.");
   }
 
-  const expectedModels = new Set<string>(REQUIRED_MODEL_ASSETS);
+  const expectedModels = new Set<string>([...REQUIRED_MODEL_ASSETS, ...SOURCE_ONLY_MODEL_FILES]);
   const missingModels = REQUIRED_MODEL_ASSETS.filter((file) => !modelFiles.includes(file));
   const unexpectedModels = modelFiles.filter((file) => !expectedModels.has(file));
   if (missingModels.length > 0) {

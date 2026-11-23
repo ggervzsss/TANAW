@@ -12,6 +12,7 @@ import {
   inspectOfflineInstaller,
   releaseBuilderArguments,
   REQUIRED_MODEL_ASSETS,
+  SOURCE_ONLY_MODEL_FILES,
   writeReleaseChecksums,
 } from "../../../release.config";
 
@@ -67,6 +68,15 @@ describe("desktop release configuration", () => {
     await expect(inspectMlReleaseResources(runtime, models, "linux")).rejects.toThrow(/native lap tracker/);
     await writeFile(path.join(runtime, "_internal", "lap", "_lapjv.cpython-312-x86_64-linux-gnu.so"), "native tracker");
     await expect(inspectMlReleaseResources(runtime, models, "linux")).resolves.toMatchObject({ modelBytes: REQUIRED_MODEL_ASSETS.length });
+  });
+
+  it("accepts the sex head model cards kept beside the models", async () => {
+    const root = await createReleaseFixture();
+    for (const file of SOURCE_ONLY_MODEL_FILES) {
+      await writeFile(path.join(root, "models", file), "{}");
+    }
+
+    await expect(inspectMlReleaseResources(path.join(root, "runtime"), path.join(root, "models"))).resolves.toBeDefined();
   });
 
   it("rejects development artifacts and unlisted models", async () => {
