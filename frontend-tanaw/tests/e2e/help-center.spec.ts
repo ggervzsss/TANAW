@@ -44,7 +44,7 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
   await search.focus();
   await search.fill("returned report");
   await expect(page.getByText("Resolve a returned report")).toBeVisible();
-  await search.fill("reviewer feedback");
+  await search.fill("return reason");
   await expect(page.getByText("Resolve a returned report")).toBeVisible();
   await search.fill("quantum pineapple");
   await expect(page.getByText("No help articles found")).toBeVisible();
@@ -62,7 +62,7 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
 test("offers the existing Support Tickets path from Admin help", async ({ page }) => {
   await mockPortal(page, "admin");
   await page.goto("/admin/help/admin-operations-center");
-  await expect(page.getByRole("heading", { name: "Investigate an issue in Alerts & Requests" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Follow up a request in Requests" })).toBeVisible();
   await page.getByRole("link", { name: "Open Support Tickets" }).click();
   await expect(page).toHaveURL(/\/admin\/settings\/support$/);
   await page.getByRole("button", { name: "Back from General Settings" }).click();

@@ -1,0 +1,56 @@
+/*
+ * Registered Enterprises and Enterprise Details. Colours that only these two screens use; everything
+ * else comes from the app tokens in src/styles/tokens.css.
+ */
+
+.admin-enterprises {
+  --ae-chip: #e4f1e8;
+  --ae-bar: #7fcf9f;
+  --ae-peak: #055b25;
+  --ae-segment-on: var(--tanaw-action);
+  --ae-segment-on-text: var(--tanaw-on-action);
+}
+
+.dark .admin-enterprises {
+  --ae-chip: #17382f;
+  --ae-bar: #2b6f55;
+  --ae-peak: #6ee7b7;
+  --ae-segment-on: #6ee7b7;
+  --ae-segment-on-text: #0b141d;
+}
+
+/* The trend period control: a pill track on Inset, the checked segment filled. */
+.admin-enterprises .ae-trend-period.tanaw-segmented {
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: 999px;
+  background: var(--tanaw-surface-inset);
+}
+
+.admin-enterprises .ae-trend-period [role="radio"][aria-checked="true"] {
+  background: var(--ae-segment-on);
+  color: var(--ae-segment-on-text);
+}
+
+.admin-enterprises .ae-bar {
+  background: var(--ae-bar);
+}
+
+.admin-enterprises .ae-bar[data-peak="true"] {
+  background: var(--ae-peak);
+}
+
+.admin-enterprises .ae-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.admin-enterprises .ae-table tbody tr:hover {
+  background: var(--tanaw-control-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-enterprises .ae-table tbody tr {
+    transition: none;
+  }
+}

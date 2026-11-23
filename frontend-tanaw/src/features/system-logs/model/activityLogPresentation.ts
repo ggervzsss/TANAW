@@ -3,9 +3,7 @@ import { isWithinActivityTimeRange, type ActivityTimeRange } from "@/shared/util
 import type { BadgeTone } from "../../../shared/ui-kit";
 
 export type ActivityCategory = "Reports" | "Admin Activity" | "Accounts & Settings" | "Issues & Resolutions" | "Security";
-export type ActivityGroup = ActivityCategory | "All Activity" | "Important Updates";
 
-export const activityGroups: ActivityGroup[] = ["All Activity", "Reports", "Admin Activity", "Important Updates", "Accounts & Settings", "Issues & Resolutions", "Security"];
 export const defaultTypeOptions = ["All Types", "IT Activity", "Enterprise Activity", "System"];
 export const defaultAccountOptions = ["All Accounts", "IT Personnel", "Enterprise Account", "System"];
 
@@ -42,18 +40,6 @@ export function activityGroupFor(log: SystemLog): ActivityCategory {
   return "Accounts & Settings";
 }
 
-export function filterAdminActivityLogs(logs: SystemLog[], query: string, group: ActivityGroup, timeRange: ActivityTimeRange) {
-  const normalizedQuery = query.trim().toLowerCase();
-  return [...logs]
-    .sort((left, right) => Number(right.resolutionStatus === "Unresolved") - Number(left.resolutionStatus === "Unresolved") || timestampValue(right.timestamp) - timestampValue(left.timestamp))
-    .filter((log) => {
-      const logGroup = activityGroupFor(log);
-      const searchable = [log.action, log.actor, log.target, log.summary, logGroup].join(" ").toLowerCase();
-      const matchesGroup = group === "All Activity" || logGroup === group || (group === "Important Updates" && isImportantActivity(logGroup));
-      return (!normalizedQuery || searchable.includes(normalizedQuery)) && matchesGroup && isWithinActivityTimeRange(log.timestamp, timeRange);
-    });
-}
-
 export function filterITSystemLogs(logs: SystemLog[], filters: { account: string; query: string; showRoutine: boolean; timeRange: ActivityTimeRange; type: string }) {
   const normalizedQuery = filters.query.trim().toLowerCase();
   return logs.filter((activity) => {
@@ -84,24 +70,7 @@ export function supportTicketIdFromActivity(log: SystemLog) {
   return text.includes("ticket") || text.includes("tck-") ? log.sourceId.replace(/^sample:activity:ticket:/, "") : null;
 }
 
-export function getAdminActivityMetrics(logs: SystemLog[]) {
-  return {
-    adminCount: logs.filter((log) => activityGroupFor(log) === "Admin Activity").length,
-    importantCount: logs.filter((log) => isImportantActivity(activityGroupFor(log))).length,
-    reportCount: logs.filter((log) => activityGroupFor(log) === "Reports").length,
-    todayCount: logs.filter((log) => isWithinActivityTimeRange(log.timestamp, "Today")).length,
-  };
-}
-
-function isImportantActivity(category: ActivityCategory) {
-  return category === "Issues & Resolutions" || category === "Security";
-}
-
 function isRoutineActivity(activity: SystemLog) {
   return ["Login", "Logout", "Submit Enterprise Report", "Generate Final Report"].includes(activity.action);
 }
 
-function timestampValue(timestamp: string) {
-  const value = Date.parse(timestamp);
-  return Number.isNaN(value) ? 0 : value;
-}

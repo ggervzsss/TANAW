@@ -1,26 +1,32 @@
 import L from "leaflet";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MapEnterprise } from "@/shared/types";
-import { createTooltipHtml, getMonitoringStatusLabel, getMonitoringStatusPresentation, getOccupancyRingColor } from "../utils";
+import { createTooltipHtml, getMapPinState, mapPinColors } from "../utils";
 
 type MutableRef<T> = { current: T };
 
+/**
+ * Keeps one Leaflet marker per visible enterprise. Pins are coloured by monitoring state, and an
+ * enterprise with more visitors than usual gets an amber outer ring.
+ */
 export function useEnterpriseMarkers({
+  ariaLabelFor,
+  busyEnterpriseIds,
   focusedEnterpriseId,
-  hoveredEnterpriseId,
   mapRef,
   markersRef,
   onSelect,
   visibleEnterprises,
 }: {
+  ariaLabelFor: (enterprise: MapEnterprise) => string;
+  busyEnterpriseIds: ReadonlySet<string>;
   focusedEnterpriseId: string | null;
-  hoveredEnterpriseId: string | null;
   mapRef: MutableRef<L.Map | null>;
   markersRef: MutableRef<Record<string, L.Marker>>;
   onSelect: (enterprise: MapEnterprise) => void;
   visibleEnterprises: MapEnterprise[];
 }) {
-  const previous = useRef(new Map<string, MapEnterprise>());
+  const previous = useRef(new Map<string, { enterprise: MapEnterprise; busy: boolean }>());
   const onSelectRef = useRef(onSelect);
   useLayoutEffect(() => {
     onSelectRef.current = onSelect;
@@ -38,10 +44,10 @@ export function useEnterpriseMarkers({
     });
 
     visibleEnterprises.forEach((enterprise) => {
-      const statusPresentation = getMonitoringStatusPresentation(enterprise.monitoringStatus);
-      const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
+      const state = getMapPinState(enterprise.monitoringStatus);
+      const busy = busyEnterpriseIds.has(enterprise.id);
       const before = previous.current.get(enterprise.id);
-      const statusChanged = Boolean(before && before.monitoringStatus !== enterprise.monitoringStatus);
+      const statusChanged = Boolean(before && getMapPinState(before.enterprise.monitoringStatus) !== state);
       const makeIcon = () =>
         L.divIcon({
           className: `tanaw-map-pin${statusChanged ? " is-status-changing" : ""}`,
@@ -49,7 +55,7 @@ export function useEnterpriseMarkers({
           iconSize: [50, 54],
           popupAnchor: [0, -53],
           tooltipAnchor: [0, -53],
-          html: createEnterpriseMarkerHtml(statusPresentation.tone, statusPresentation.color, occupancyRingColor, occupancyRingColor !== "transparent"),
+          html: createEnterpriseMarkerHtml(state, mapPinColors[state], busy),
         });
       const tooltip = createTooltipHtml(enterprise);
       let marker = markersRef.current[enterprise.id];
@@ -63,35 +69,41 @@ export function useEnterpriseMarkers({
         marker.on("click", (event: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(event.originalEvent);
           const current = previous.current.get(enterprise.id);
-          if (current) onSelectRef.current(current);
+          if (current) onSelectRef.current(current.enterprise);
+        });
+        // Pins are focusable buttons, so Enter and Space select them like a click.
+        marker.getElement()?.addEventListener("keydown", (keyEvent) => {
+          if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+          keyEvent.preventDefault();
+          keyEvent.stopPropagation();
+          const current = previous.current.get(enterprise.id);
+          if (current) onSelectRef.current(current.enterprise);
         });
         markersRef.current[enterprise.id] = marker;
       } else {
-        if (before?.lat !== enterprise.lat || before?.lng !== enterprise.lng) marker.setLatLng([enterprise.lat, enterprise.lng]);
-        if (statusChanged || before?.occupancyStatus !== enterprise.occupancyStatus) marker.setIcon(makeIcon());
+        if (before?.enterprise.lat !== enterprise.lat || before?.enterprise.lng !== enterprise.lng) marker.setLatLng([enterprise.lat, enterprise.lng]);
+        if (statusChanged || before?.busy !== busy) marker.setIcon(makeIcon());
         if (marker.getTooltip()?.getContent() !== tooltip) marker.setTooltipContent(tooltip);
       }
-      marker.getElement()?.setAttribute("aria-label", [enterprise.name, enterprise.barangay, getMonitoringStatusLabel(enterprise.monitoringStatus)].filter(Boolean).join(", "));
-      previous.current.set(enterprise.id, enterprise);
+      marker.getElement()?.setAttribute("aria-label", ariaLabelFor(enterprise));
+      marker.getElement()?.setAttribute("data-pin-state", state);
+      previous.current.set(enterprise.id, { enterprise, busy });
     });
-  }, [mapRef, markersRef, visibleEnterprises]);
+  }, [ariaLabelFor, busyEnterpriseIds, mapRef, markersRef, visibleEnterprises]);
 
   useEffect(() => {
     Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
-      const isHovered = enterpriseId === hoveredEnterpriseId;
       const isSelected = enterpriseId === focusedEnterpriseId;
       const element = marker.getElement();
-      element?.classList.toggle("is-directory-hovered", isHovered);
       element?.classList.toggle("is-selected", isSelected);
       if (isSelected) marker.closeTooltip();
-      marker.setZIndexOffset(isHovered ? 2000 : isSelected ? 1200 : 0);
+      marker.setZIndexOffset(isSelected ? 1200 : 0);
     });
-  }, [focusedEnterpriseId, hoveredEnterpriseId, markersRef, visibleEnterprises]);
-
+  }, [busyEnterpriseIds, focusedEnterpriseId, markersRef, visibleEnterprises]);
 }
 
-function createEnterpriseMarkerHtml(tone: string, statusColor: string, occupancyRingColor: string, hasOccupancyAlert: boolean) {
-  return `<span class="tanaw-enterprise-marker${hasOccupancyAlert ? " has-occupancy-alert" : ""}" data-tone="${tone}" style="--tanaw-marker-color:${statusColor};--tanaw-marker-alert:${occupancyRingColor};">
+function createEnterpriseMarkerHtml(state: string, color: string, busy: boolean) {
+  return `<span class="tanaw-enterprise-marker${busy ? " is-busy" : ""}" data-tone="${state}" style="--tanaw-marker-color:${color};">
     <span class="tanaw-enterprise-marker__selection" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__halo" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__body" aria-hidden="true">

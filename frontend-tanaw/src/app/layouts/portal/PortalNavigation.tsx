@@ -7,6 +7,7 @@ import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
 import { TopbarNavigation } from "@/shared/ui-kit/patterns/TopbarNavigation";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
+import type { NavigationItem } from "./navigation";
 import type { TopbarEntry } from "./portalNavigationModel";
 
 type DesktopProps = { entries: TopbarEntry[]; isDark: boolean; openMenuId: string | null; pathname: string; role: UserRole; onMenuChange: (id: string | null) => void };
@@ -15,9 +16,18 @@ function matchesRoute(path: string, pathname: string) {
   return !!matchPath({ path, end: false }, pathname);
 }
 
+function matchesItem(item: NavigationItem, pathname: string) {
+  return [item.path, ...(item.alsoActiveOn ?? [])].some((path) => matchesRoute(path, pathname));
+}
+
+/** Highlight a link on its own page and on the sub-pages it owns, such as Requests under Dashboard. */
+function navLinkActive(item: NavigationItem, pathname: string) {
+  return ({ isActive }: { isActive: boolean }) => isActive || matchesItem(item, pathname);
+}
+
 export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname, role, onMenuChange }: DesktopProps) {
   const queryClient = useQueryClient();
-  const selected = entries.find((entry) => entry.type === "link" ? matchesRoute(entry.item.path, pathname) : entry.children.some((child) => matchesRoute(child.path, pathname)));
+  const selected = entries.find((entry) => (entry.type === "link" ? matchesItem(entry.item, pathname) : entry.children.some((child) => matchesItem(child, pathname))));
   const activeId = selected?.type === "link" ? selected.item.id : selected?.id ?? null;
   const base =
     "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 max-2xl:px-3.5";
@@ -41,7 +51,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
               data-topbar-navigation={entry.item.id}
               onClick={() => onMenuChange(null)}
               {...routeIntentHandlers(queryClient, entry.item.path)}
-              className={({ isActive }) => [tabClass, isActive ? active : inactive].join(" ")}
+              className={(state) => [tabClass, navLinkActive(entry.item, pathname)(state) ? active : inactive].join(" ")}
             >
               <span className="relative z-10 flex items-center gap-2">
                 <Icon size={16} className="shrink-0" />
@@ -107,9 +117,9 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
 
 export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavigate }: Pick<DesktopProps, "entries" | "isDark" | "pathname" | "role"> & { onNavigate: () => void }) {
   const queryClient = useQueryClient();
-  const selected = entries.flatMap((entry) => entry.type === "link" ? [entry.item] : entry.children).find((item) => matchesRoute(item.path, pathname));
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${isActive ? "text-white" : "text-white/80"}`;
+  const selected = entries.flatMap((entry) => (entry.type === "link" ? [entry.item] : entry.children)).find((item) => matchesItem(item, pathname));
+  const linkClass = (item: NavigationItem) => (state: { isActive: boolean }) =>
+    `relative z-10 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${navLinkActive(item, pathname)(state) ? "text-white" : "text-white/80"}`;
   return (
     <motion.div
       initial={{ opacity: 0, height: 0 }}
@@ -120,7 +130,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
       <TopbarNavigation activeId={selected?.id ?? null} className="relative isolate grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
         {entries.map((entry) =>
           entry.type === "link" ? (
-            <NavLink key={entry.item.id} to={entry.item.path} data-topbar-navigation={entry.item.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, entry.item.path)} className={linkClass}>
+            <NavLink key={entry.item.id} to={entry.item.path} data-topbar-navigation={entry.item.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, entry.item.path)} className={linkClass(entry.item)}>
               {<entry.item.icon size={16} />}
               <span data-topbar-label>{entry.item.label}</span>
             </NavLink>
@@ -132,7 +142,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
               </div>
               <div className="grid gap-2">
                 {entry.children.map((child) => (
-                  <NavLink key={child.id} to={child.path} data-topbar-navigation={child.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, child.path)} className={linkClass}>
+                  <NavLink key={child.id} to={child.path} data-topbar-navigation={child.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, child.path)} className={linkClass(child)}>
                     {<child.icon size={15} />}
                     <span data-topbar-label>{child.label}</span>
                   </NavLink>

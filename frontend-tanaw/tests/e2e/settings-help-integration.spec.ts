@@ -38,22 +38,14 @@ async function mockPortal(page: Page, role: Parameters<typeof userFor>[0]) {
 
 for (const { role, path, previousTitle } of [
   { role: "it", path: "/it/work-center", previousTitle: "Work Center" },
-  { role: "admin", path: "/admin/mapview", previousTitle: "Map View" },
-  { role: "staff", path: "/staff/analytics", previousTitle: "Dashboard" },
+  { role: "admin", path: "/admin/requests", previousTitle: "Requests" },
+  { role: "staff", path: "/staff/consolidated-reports", previousTitle: "Consolidated Reports" },
 ] as const) {
   test(`${role} Settings takes over the portal page and returns to ${previousTitle}`, async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     await mockPortal(page, role);
-    if (role === "admin") {
-      await page.route(/https:\/\/[abcd]\.basemaps\.cartocdn\.com\//, (route) => route.abort());
-      await page.route("**/operational/map-enterprises", (route) => route.fulfill({ json: [] }));
-    }
     await page.goto(path, { waitUntil: "domcontentloaded" });
-    if (role === "admin") {
-      await expect(page.locator("#admin-enterprise-map")).toBeAttached();
-    } else {
-      await expect(page.getByRole("heading", { name: previousTitle, exact: true })).toBeVisible();
-    }
+    await expect(page.getByRole("heading", { name: previousTitle, exact: true })).toBeVisible();
 
     const trigger = page.getByRole("button", { name: "Open account menu" });
     await trigger.click();
@@ -80,9 +72,7 @@ for (const { role, path, previousTitle } of [
     await expect(back).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(path + "$"));
-    if (role !== "admin") {
-      await expect(page.getByRole("heading", { name: previousTitle, exact: true })).toBeVisible();
-    }
+    await expect(page.getByRole("heading", { name: previousTitle, exact: true })).toBeVisible();
   });
 }
 

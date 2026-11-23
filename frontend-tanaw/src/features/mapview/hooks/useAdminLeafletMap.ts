@@ -23,30 +23,37 @@ import { mountAdminLeafletLayers } from "../utils/leafletTheme";
 import { bindMapWheelZoom } from "../utils/mapWheelZoom";
 import { prefersReducedMapMotion } from "../utils/mapCamera";
 import { useEnterpriseMarkers } from "./useEnterpriseMarkers";
-import { useEnterprisePreview } from "./useEnterprisePreview";
+import { useEnterpriseCallout } from "./useEnterpriseCallout";
 import { useMapCameraSync } from "./useMapCameraSync";
 
 type AdminLeafletMapOptions = {
+  ariaLabelFor: (enterprise: MapEnterprise) => string;
   boundary: GeoJsonFeatureCollection | null;
+  busyEnterpriseIds: ReadonlySet<string>;
+  detailsHref: (enterpriseId: string) => string;
   dispatchMapInteraction: Dispatch<MapInteractionAction>;
-  hoveredEnterpriseId: string | null;
   interactionState: MapInteractionState;
   mapEnterprises: MapEnterprise[];
   selectedEnterprise: MapEnterprise | null;
   onViewDetails: (enterpriseId: string) => void;
+  /** Whether choosing this pin should also open its barangay. */
+  shouldDrillInto: (enterprise: MapEnterprise) => boolean;
   showBoundaries: boolean;
   showLabels: boolean;
   visibleEnterprises: MapEnterprise[];
 };
 
 export function useAdminLeafletMap({
+  ariaLabelFor,
   boundary,
+  busyEnterpriseIds,
+  detailsHref,
   dispatchMapInteraction,
-  hoveredEnterpriseId,
   interactionState,
   mapEnterprises,
   selectedEnterprise,
   onViewDetails,
+  shouldDrillInto,
   showBoundaries,
   showLabels,
   visibleEnterprises,
@@ -113,14 +120,19 @@ export function useAdminLeafletMap({
     [closeBoundaryTooltips, dispatchMapInteraction, findBoundaryLayerByName],
   );
 
-  const selectEnterprise = useCallback(
-    (enterprise: MapEnterprise) => {
+  const showEnterprise = useCallback(
+    (enterprise: MapEnterprise, drill: boolean) => {
       closeBoundaryTooltips();
-      selectedBarangayNameRef.current = enterprise.barangay;
-      dispatchMapInteraction({ type: "select-enterprise", barangayName: enterprise.barangay, enterpriseId: enterprise.id });
+      if (drill) selectedBarangayNameRef.current = enterprise.barangay;
+      dispatchMapInteraction({ type: "show-enterprise", barangayName: enterprise.barangay, enterpriseId: enterprise.id, drill });
     },
     [closeBoundaryTooltips, dispatchMapInteraction],
   );
+  const shouldDrillIntoRef = useRef(shouldDrillInto);
+  useLayoutEffect(() => {
+    shouldDrillIntoRef.current = shouldDrillInto;
+  }, [shouldDrillInto]);
+  const selectPin = useCallback((enterprise: MapEnterprise) => showEnterprise(enterprise, shouldDrillIntoRef.current(enterprise)), [showEnterprise]);
 
   const clearBarangaySelection = useCallback(
     (reason: MapDeselectReason) => {
@@ -311,14 +323,16 @@ export function useAdminLeafletMap({
     onReady: handleInitialCameraReady,
   });
   useEnterpriseMarkers({
-    focusedEnterpriseId: cameraTarget.type === "enterprise" ? cameraTarget.enterpriseId : null,
-    hoveredEnterpriseId,
+    ariaLabelFor,
+    busyEnterpriseIds,
+    focusedEnterpriseId: selectedEnterprise?.id ?? null,
     mapRef,
     markersRef,
-    onSelect: selectEnterprise,
+    onSelect: selectPin,
     visibleEnterprises,
   });
-  useEnterprisePreview({
+  useEnterpriseCallout({
+    detailsHref,
     enterprise: selectedEnterprise,
     mapRef,
     motionRef: mapMotionControllerRef,
@@ -326,9 +340,5 @@ export function useAdminLeafletMap({
     onViewDetails,
   });
 
-  const fitCitywide = () => {
-    const bounds = citywideBoundsRef.current;
-    if (bounds) mapMotionControllerRef.current?.setTarget({ type: "citywide", bounds });
-  };
-  return { clearBarangaySelection, fitCitywide, isInitialCameraReady, selectBarangay, selectEnterprise };
+  return { clearBarangaySelection, isInitialCameraReady, selectBarangay, showEnterprise };
 }

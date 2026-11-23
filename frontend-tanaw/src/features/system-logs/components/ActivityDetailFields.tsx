@@ -31,6 +31,3 @@ export function ActivityDetailFields({ activity, timeFormat = "12-hour", variant
   );
 }
 
-export function AdminActivityDetailFields({ activity, timeFormat = "12-hour" }: { activity: SystemLog; timeFormat?: SystemTimeFormat }) {
-  return <ActivityDetailFields activity={activity} timeFormat={timeFormat} variant="admin" />;
-}

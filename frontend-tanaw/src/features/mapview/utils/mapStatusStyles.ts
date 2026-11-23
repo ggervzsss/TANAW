@@ -81,3 +81,28 @@ export function getOccupancyBadgeClass(status: OccupancyStatus) {
   if (status === "Normal") return "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-100";
   return "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-200";
 }
+
+/** The three pin states the dashboard map shows. */
+export type MapPinState = "ok" | "partial" | "offline";
+
+export const mapPinColors: Record<MapPinState, string> = {
+  ok: "#1f8a3c",
+  partial: "#b45309",
+  offline: "#2c5d8f",
+};
+
+export const mapPinStateLabels: Record<MapPinState, string> = {
+  ok: "All cameras running",
+  partial: "Some cameras need attention",
+  offline: "Not reporting",
+};
+
+/**
+ * Pin colour by monitoring state: every camera running, some cameras down or delayed, or the
+ * enterprise is not reporting at all (stopped, offline or no cameras set up).
+ */
+export function getMapPinState(status: MonitoringStatus): MapPinState {
+  if (status === "Fully Monitoring") return "ok";
+  if (status === "Partially Monitoring" || status === "Updates Delayed" || status === "Fault") return "partial";
+  return "offline";
+}

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.features.accounts.router import dev_router
 from app.features.accounts.router import router as accounts_router
 from app.features.activity_logs.router import router as activity_logs_router
+from app.features.admin_requests.router import router as admin_requests_router
 from app.features.auth.router import router as auth_router
 from app.features.dashboard.router import router as dashboard_router
 from app.features.mail.router import router as mail_router
@@ -25,4 +26,5 @@ api_router.include_router(monitoring_router)
 api_router.include_router(reporting_router)
 api_router.include_router(support_router)
 api_router.include_router(notifications_router)
+api_router.include_router(admin_requests_router)
 api_router.include_router(realtime_router)

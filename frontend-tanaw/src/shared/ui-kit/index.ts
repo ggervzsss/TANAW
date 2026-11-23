@@ -17,19 +17,41 @@ export { Input, Textarea, controlClassName, type InputProps, type TextareaProps 
 export { ModalPortal, type ModalPortalProps } from "./components/ModalPortal";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from "./components/SegmentedControl";
+export { Pagination, type PaginationProps } from "./components/Pagination";
 export { Select, type SelectOption, type SelectProps } from "./components/Select";
 export { Skeleton, Spinner, type SkeletonProps, type SpinnerProps } from "./components/Spinner";
+export { StatusPill, type StatusPillProps } from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Tabs, type TabItem, type TabsProps } from "./components/Tabs";
 export { Tooltip, type TooltipProps } from "./components/Tooltip";
 
 // Patterns
+export { DateRangePicker, type DateRangePickerProps } from "./patterns/DateRangePicker";
 export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProps, type MetricTone } from "./patterns/MetricStrip";
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
+export { PortalPageHeader, type PortalPageHeaderProps } from "./patterns/PortalPageHeader";
 export { TopbarNavigation } from "./patterns/TopbarNavigation";
 
 // Helpers
 export { cn } from "./lib/cn";
+export { visiblePages } from "./lib/pagination";
+export { recordStatusTextClass, type RecordStatusTone } from "./lib/recordStatus";
+export {
+  DATE_RANGE_PRESETS,
+  customRange,
+  formatRangeLabel,
+  formatRangeText,
+  isInDateRange,
+  isValidDateRange,
+  monthRange,
+  parseIsoDate,
+  presetRange,
+  rangeDayCount,
+  rangeEndMonth,
+  toIsoDate,
+  type DateRange,
+  type DateRangePreset,
+} from "./lib/dateRange";
 export { DROPDOWN_SEARCH_MIN_OPTIONS, getNextDropdownIndex, shouldShowDropdownSearch, type DropdownKey } from "./lib/dropdown";
 export { useDialogFocus } from "./lib/focus-trap";
 export { initialsOf } from "./lib/initials";

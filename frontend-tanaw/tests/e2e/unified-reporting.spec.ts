@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
-test("Staff reviews and consolidates the frozen Open Space establishment report once", async ({ page }, testInfo) => {
+// Report due dates and "Submitted Nov 2" are local calendar days in San Pedro, Laguna.
+test.use({ timezoneId: "Asia/Manila" });
+
+test("Staff reviews, accepts and consolidates the frozen Open Space establishment report once", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const saved = JSON.parse(readFileSync(new URL("../../../desktop-tanaw/ml-service/tests/fixtures/reports/open-space-establishment-report.json", import.meta.url), "utf8"));
   const user = { id: "staff-review", email: "staff@example.test", displayName: "Staff Reviewer", role: "staff", title: "LGU Staff" };
@@ -18,6 +21,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
     submittedAt: saved.submitted_at,
     status: "Pending Review",
     code: saved.report_id,
+    notes: "Monthly visitor count submitted for LGU review.",
     metrics: { entry: null, exit: null, unique: 2, peak: "2" },
     payload: saved.payload,
     demographics: { thisProvMale: 1, thisProvFemale: 1, otherProvMale: 0, otherProvFemale: 0, foreignMale: 0, foreignFemale: 0 },
@@ -26,7 +30,7 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
     id: "CON-OCT-2026-0001",
     title: "Citywide Tourism Aggregation",
     period: saved.period,
-    generatedOn: "2026-11-03",
+    generatedOn: "2026-11-24",
     preparedBy: "Staff Reviewer",
     preparedRole: "Staff Processing Division",
     status: "Draft",
@@ -38,6 +42,9 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   };
   let generated = false;
   let generations = 0;
+  const reminders: unknown[] = [];
+  // After the October due date (Nov 10), so an enterprise with no report is Missing.
+  await page.clock.setFixedTime(new Date("2026-11-24T10:00:00+08:00"));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.route("**/auth/session", (route) => route.fulfill({ json: { token: "staff-review-token", user } }));
   await page.route("**/auth/me", (route) => route.fulfill({ json: user }));
@@ -50,8 +57,12 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
         { id: "museum-fixture", name: "Riverside Museum", category: "Tourism", barangay: "Nueva", complianceOwner: "Museum Operator" },
       ],
     });
+    if (path.endsWith("/notifications/enterprise")) {
+      reminders.push(route.request().postDataJSON());
+      return route.fulfill({ json: { ok: true } });
+    }
     if (path.endsWith("/reports/intake/source-one/status")) {
-      expect(route.request().postDataJSON().remarks).toBe("Reviewed for consolidation.");
+      expect(route.request().postDataJSON()).toEqual({ status: "Ready to Consolidate", remarks: "Accepted for consolidation." });
       intake = { ...intake, ...route.request().postDataJSON() };
       return route.fulfill({ json: intake });
     }
@@ -71,25 +82,33 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
     if (path.endsWith("/reports/final")) return route.fulfill({ json: generated ? [final] : [] });
     return route.fulfill({ json: [] });
   });
-  await page.goto("/staff/batch-reports?month=October&year=2026");
-  const generation = page.getByRole("region", { name: "Monthly report", exact: true });
-  const generate = generation.getByRole("button", { name: "Generate monthly report", exact: true });
+
+  await page.goto("/staff/reports?month=2026-10");
+  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
+  await expect(page.getByText("Accept each October report, then generate the consolidated report.")).toBeVisible();
+  const generate = page.getByRole("button", { name: "Generate consolidated report", exact: true });
+  const status = page.locator("#staff-reports-status");
   await expect(generate).toBeDisabled();
-  await expect(generation.getByText("0 of 2 establishments ready.")).toBeVisible();
-  await expect(generation.getByText(/1 pending review · 1 missing/)).toBeVisible();
+  await expect(generate).toHaveAttribute("aria-describedby", "staff-reports-status");
+  await expect(status).toContainText("0 of 1 received report consolidated.");
+  await expect(status).toContainText("0 reviewing, 1 waiting. Generate once all 1 are consolidated. Riverside Museum has not sent a report.");
+  await expect(page.getByRole("tab", { name: /^Missing\s*1$/ })).toBeVisible();
 
-  const followUp = page.getByRole("region", { name: "Missing or returned" });
-  await followUp.getByRole("button", { name: "Follow up for Riverside Museum" }).click();
-  const museumDialog = page.getByRole("dialog", { name: "Riverside Museum" });
-  await expect(museumDialog.getByText("No report submitted for this period.")).toBeVisible();
-  await expect(museumDialog.getByRole("button", { name: "Send submission reminder" })).toBeVisible();
-  await museumDialog.getByRole("button", { name: "Close establishment submissions" }).click();
+  const museumRow = page.getByRole("row", { name: /Riverside Museum/ });
+  await expect(museumRow.getByText("Missing", { exact: true })).toBeVisible();
+  await expect(museumRow.getByText("14 days overdue")).toBeVisible();
+  await museumRow.getByRole("button", { name: "Send a reminder to Riverside Museum" }).click();
+  await expect(museumRow.getByRole("button", { name: "Reminder sent to Riverside Museum" })).toBeDisabled();
+  expect(reminders).toEqual([expect.objectContaining({ enterpriseId: "museum-fixture", message: "Please send your October 2026 monthly report. It was due Nov 10." })]);
 
-  await page.screenshot({ path: testInfo.outputPath("batch-reports-light.png"), animations: "disabled" });
-  const queue = page.getByRole("region", { name: "Pending review" });
-  await queue.getByRole("button", { name: "Review report for Park", exact: true }).click();
-  const intakeDialog = page.getByRole("dialog", { name: "Establishment report", exact: true });
+  await page.screenshot({ path: testInfo.outputPath("staff-reports-light.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Review the report from Park", exact: true }).click();
+  await expect(page).toHaveURL(/report=source-one/);
+  const intakeDialog = page.getByRole("dialog", { name: "Enterprise report", exact: true });
   await expect(intakeDialog).toBeVisible();
+  await expect(intakeDialog.getByText("Park · October 2026")).toBeVisible();
+  await expect(intakeDialog.getByText(`${saved.report_id} · Submitted Nov 2 from the TANAW desktop app`)).toBeVisible();
+  await expect(intakeDialog.getByText("Monthly visitor count submitted for LGU review.")).toBeVisible();
   const table = intakeDialog.getByRole("table", { name: "Park VAR 2M" });
   await expect(table.getByRole("cell", { name: "411", exact: true })).toBeVisible();
   await expect(table.locator("tfoot td").last()).toHaveText("2");
@@ -105,26 +124,26 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   await page.screenshot({ path: testInfo.outputPath("staff-unified-intake-narrow.png"), animations: "disabled" });
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await intakeDialog.getByRole("textbox", { name: /review remarks/i }).fill("Reviewed for consolidation.");
-  await intakeDialog.getByRole("button", { name: "Accept & mark ready" }).click();
-  await page.getByRole("dialog", { name: "Accept report?" }).getByRole("button", { name: "Accept report", exact: true }).click();
+  await intakeDialog.getByRole("button", { name: "Accept report", exact: true }).click();
   await expect.poll(() => intake.status).toBe("Ready to Consolidate");
-  await expect(queue).toBeHidden();
-  await page.getByRole("tab", { name: /^Ready/ }).click();
-  await expect(page.getByRole("tabpanel", { name: /^Ready/ }).getByRole("button", { name: "View report for Park" })).toBeVisible();
-  const search = page.getByRole("searchbox", { name: "Search submissions" });
-  await search.fill("Park");
-  await expect(generate).toBeDisabled();
-  await expect(generation.getByText("1 of 2 establishments ready.")).toBeVisible();
-  await search.clear();
+  await expect(intakeDialog).toBeHidden();
+  await expect(page).not.toHaveURL(/report=/);
+  await expect(page.getByRole("row", { name: /Park/ }).getByText("Consolidated", { exact: true })).toBeVisible();
+  await expect(status).toContainText("1 of 1 received report consolidated.");
+  await expect(status).toContainText("Ready to generate the consolidated report. Riverside Museum has not sent a report.");
 
-  const barangay = page.getByRole("combobox", { name: "Barangay" });
-  await barangay.click();
-  await page.getByRole("option", { name: "Poblacion", exact: true }).click();
+  await page.getByRole("button", { name: "View the report from Park" }).click();
+  await expect(intakeDialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);
+  await expect(intakeDialog.getByRole("button", { name: "Return for correction" })).toHaveCount(0);
+  await intakeDialog.getByRole("button", { name: "Close report" }).click();
+
   await expect(generate).toBeEnabled();
-  await expect(generate).toBeInViewport({ ratio: 1 });
   await generate.click();
-  await page.getByRole("dialog", { name: "Generate monthly report?" }).getByRole("button", { name: "Generate monthly report", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Generate consolidated report?" });
+  await expect(confirm).toContainText("Combine the 1 accepted report into the October 2026 monthly report (VAR 2M). 1 enterprise has not sent a report and will not be included.");
+  await confirm.getByRole("button", { name: "Generate report", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/staff\/consolidated-reports\?year=2026&report=CON-OCT-2026-0001$/);
   const monthlyDialog = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
   const monthlyTable = monthlyDialog.getByRole("table", { name: "VAR 2M October 2026" });
   await expect(monthlyTable.getByRole("rowheader", { name: "Park" })).toBeVisible();
@@ -136,19 +155,22 @@ test("Staff reviews and consolidates the frozen Open Space establishment report 
   await monthlyDialog.getByRole("button", { name: "Finalize monthly report" }).click();
   await expect(monthlyDialog.getByRole("button", { name: "Finalize monthly report" })).toHaveCount(0);
   await monthlyDialog.getByRole("button", { name: "Close report" }).click();
+  await expect(page).toHaveURL(/\/staff\/consolidated-reports\?year=2026$/);
 
-  await page.getByRole("tab", { name: /^Completed/ }).click();
-  const completed = page.getByRole("tabpanel", { name: /^Completed/ });
-  await completed.getByRole("button", { name: "View report for Park" }).click();
-  await expect(intakeDialog.getByText("Consolidated", { exact: true })).toBeVisible();
-  await intakeDialog.getByRole("button", { name: "Close report" }).click();
-  await generation.getByRole("link", { name: "View generated reports" }).click();
-  await expect(page).toHaveURL(/generated-reports\?month=October&year=2026$/);
-  const generatedReports = page.getByRole("region", { name: "Monthly reports (VAR 2M)" });
-  await expect(generatedReports.getByRole("button", { name: `View monthly report ${final.id}` })).toBeVisible();
-  await expect(generatedReports.getByText("Finalized", { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("generated-reports-light.png"), animations: "disabled" });
-  await generatedReports.getByRole("button", { name: "View annual report" }).click();
+  const monthlyRow = page.getByRole("table", { name: "Monthly reports for 2026" }).getByRole("row", { name: /October 2026/ });
+  await expect(monthlyRow).toContainText(final.id);
+  await expect(monthlyRow).toContainText("1 of 2");
+  await expect(monthlyRow.getByText("Consolidated", { exact: true })).toBeVisible();
+  await expect(monthlyRow.getByRole("button", { name: "Download the October 2026 report as PDF" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("consolidated-reports-light.png"), animations: "disabled" });
+
+  await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
+  await expect(page).toHaveURL(/tab=annual/);
+  const annualRow = page.getByRole("table", { name: "Annual reports" }).getByRole("row", { name: /2026/ });
+  await expect(annualRow).toContainText("1 of 12");
+  await expect(annualRow.getByText("Waiting", { exact: true })).toBeVisible();
+  await annualRow.getByRole("button", { name: "View the 2026 annual report" }).click();
+  await expect(page).toHaveURL(/annual=2026/);
   const annualDialog = page.getByRole("dialog", { name: "Annual report (VAR 3M)" });
   await expect(annualDialog.getByRole("columnheader", { name: "Park - 411" })).toBeVisible();
   await expect(annualDialog.getByRole("row", { name: /^October/ })).toContainText("2");

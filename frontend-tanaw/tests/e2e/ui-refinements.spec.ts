@@ -71,7 +71,7 @@ async function signInAsStaff(page: Page) {
   await page.getByLabel("Email", { exact: true }).fill(staffUser.email);
   await page.getByLabel("Password", { exact: true }).fill("UI verification passphrase 2026");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/staff\/analytics$/);
+  await expect(page).toHaveURL(/\/staff\/reports$/);
 }
 
 test("uses the night topbar, keyboard month filter, and wide report preview", async ({ page }, testInfo) => {
@@ -89,35 +89,26 @@ test("uses the night topbar, keyboard month filter, and wide report preview", as
   await page.getByRole("radio", { name: "Dark Mode" }).click();
 
   await page.goto("/staff/batch-reports");
-  const generation = page.getByRole("region", { name: "Monthly report", exact: true });
-  await expect(generation.getByRole("button", { name: "Generate monthly report" })).toBeDisabled();
-  await expect(generation.getByText("No establishments to consolidate for this selection.")).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("batch-reports-dark.png"), animations: "disabled" });
+  await expect(page).toHaveURL(/\/staff\/reports$/);
+  await expect(page.getByRole("heading", { name: "Reports", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate consolidated report" })).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath("staff-reports-dark.png"), animations: "disabled" });
 
   await page.goto("/staff/final-reports-audit");
-  await expect(page).toHaveURL(/\/staff\/generated-reports$/);
-  const generatedReports = page.getByRole("region", { name: "Monthly reports (VAR 2M)" });
-  await expect(generatedReports.getByText(archivedReport.id, { exact: true })).toBeVisible();
-  await expect(generatedReports.getByText(finalReport.id, { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("generated-reports-dark.png"), animations: "disabled" });
-  const search = page.getByRole("searchbox", { name: "Search generated reports" });
-  await search.fill("Riverside Museum");
-  await expect(generatedReports.getByText(finalReport.id, { exact: true })).toHaveCount(0);
-  await generatedReports.getByRole("button", { name: `View monthly report ${archivedReport.id}` }).click();
-  const archivedViewer = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
-  await expect(archivedViewer.getByRole("rowheader", { name: "Riverside Museum" })).toBeVisible();
-  await archivedViewer.getByRole("button", { name: "Close report" }).click();
-  await search.clear();
-  const monthDropdown = page.getByRole("combobox", { name: "Report month" });
-  await expect(monthDropdown).toHaveJSProperty("tagName", "BUTTON");
-  await monthDropdown.focus();
-  await monthDropdown.press("Enter");
-  await expect(page.getByRole("listbox", { name: "Report month" })).toBeVisible();
-  await monthDropdown.press("ArrowDown");
-  await monthDropdown.press("Enter");
-  await expect(monthDropdown).toContainText("May");
+  await expect(page).toHaveURL(/\/staff\/consolidated-reports$/);
+  await expect(page.getByRole("heading", { name: "Consolidated Reports", exact: true })).toBeVisible();
+  const yearDropdown = page.getByRole("combobox", { name: "Year" });
+  await expect(yearDropdown).toHaveJSProperty("tagName", "BUTTON");
+  await expect(yearDropdown).toContainText("2026");
+  const monthly = page.getByRole("table", { name: "Monthly reports for 2026" });
+  await expect(monthly.getByText(finalReport.id, { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("consolidated-reports-dark.png"), animations: "disabled" });
+  await yearDropdown.focus();
+  await yearDropdown.press("Enter");
+  await expect(page.getByRole("listbox", { name: "Year" })).toBeVisible();
+  await yearDropdown.press("Escape");
 
-  await page.getByRole("button", { name: `View monthly report ${finalReport.id}` }).click();
+  await monthly.getByRole("button", { name: `View the ${finalReport.period} report` }).click();
   const viewer = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
   await expect(viewer).toBeVisible();
   const var2m = viewer.getByRole("table", { name: "VAR 2M May 2026" });
@@ -138,13 +129,14 @@ test("uses the night topbar, keyboard month filter, and wide report preview", as
   await expect(page.locator("html")).not.toHaveAttribute("data-print-invoked", "true");
   await page.keyboard.press("Escape");
   await expect(viewer).toBeHidden();
-  await expect(page.getByRole("button", { name: `View monthly report ${finalReport.id}` })).toBeFocused();
+  await expect(monthly.getByRole("button", { name: `View the ${finalReport.period} report` })).toBeFocused();
 });
 
 test("compiles the finalized months into the annual VAR 3M", async ({ page }, testInfo) => {
   await signInAsStaff(page);
-  await page.getByRole("link", { name: "Generated Reports" }).click();
-  await page.getByRole("button", { name: "View annual report" }).click();
+  await page.getByRole("link", { name: "Consolidated Reports" }).click();
+  await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
+  await page.getByRole("button", { name: "View the 2026 annual report" }).click();
 
   const var3 = page.getByRole("table", { name: "VAR 3M LGU Annual Report 2026" });
   await expect(var3.getByRole("columnheader", { name: "Archie's Event Place - 799" })).toBeVisible();
@@ -158,7 +150,7 @@ test("compiles the finalized months into the annual VAR 3M", async ({ page }, te
   await expect(annual.getByRole("columnheader", { name: "Grand Total Visitors" })).toBeVisible();
   await expect.poll(() => annual.locator("[data-dialog-body]").evaluate((body) => body.scrollWidth - body.clientWidth)).toBe(0);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download PDF" }).click();
+  await annual.getByRole("button", { name: "Download PDF" }).click();
   expect((await download).suggestedFilename()).toBe("VAR3M-2026.pdf");
 });
 
@@ -228,7 +220,7 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await expect(newPassword).toHaveValue("");
   await expect(confirmation).toHaveValue("");
 
-  await page.goto("/staff/analytics");
+  await page.goto("/staff/reports");
   await page.goto("/staff/security");
   await expect(page.getByLabel("Current Password", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("New Password", { exact: true })).toHaveValue("");

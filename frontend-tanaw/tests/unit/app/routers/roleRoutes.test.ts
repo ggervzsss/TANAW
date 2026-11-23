@@ -7,10 +7,14 @@ describe("General Settings return paths", () => {
     expect(getRoleSettingsBackPath("admin", from)).toBe(from);
   });
 
+  it("keeps a parameterized destination such as one enterprise's details", () => {
+    expect(getRoleSettingsBackPath("admin", "/admin/enterprises/ENT-001")).toBe("/admin/enterprises/ENT-001");
+  });
+
   it("uses the portal landing page for missing, cross-portal, or settings destinations", () => {
-    expect(getRoleSettingsBackPath("admin", undefined)).toBe("/admin/mapview");
-    expect(getRoleSettingsBackPath("it", "/admin/mapview")).toBe("/it/dashboard");
+    expect(getRoleSettingsBackPath("admin", undefined)).toBe("/admin/dashboard");
+    expect(getRoleSettingsBackPath("it", "/admin/dashboard")).toBe("/it/dashboard");
     expect(getRoleSettingsBackPath("it", "/it/settings/profile")).toBe("/it/dashboard");
-    expect(getRoleSettingsBackPath("staff", "/staff/missing")).toBe("/staff/analytics");
+    expect(getRoleSettingsBackPath("staff", "/staff/missing")).toBe("/staff/reports");
   });
 });

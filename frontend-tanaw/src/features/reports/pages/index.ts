@@ -1,2 +1,2 @@
-export { StaffBatchReportsPage } from "./StaffBatchReportsPage";
-export { StaffGeneratedReportsPage } from "./StaffGeneratedReportsPage";
+export { StaffConsolidatedReportsPage } from "./StaffConsolidatedReportsPage";
+export { StaffReportsPage } from "./StaffReportsPage";

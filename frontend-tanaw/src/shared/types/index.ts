@@ -2,6 +2,7 @@ export type { AuthUser, UserRole } from "./role.types";
 export type { AccountProfileChangeRequest, AccountSummary, ProfileChangeRequestType } from "./account.types";
 export type {
   AlertSeverity,
+  CameraMonitoringCamera,
   CameraMonitoringSummary,
   FinalReport,
   FinalReportArchivedFromStatus,

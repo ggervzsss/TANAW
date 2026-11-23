@@ -3,8 +3,8 @@ import { routes } from "@/app/routers/routes";
 import type { UserRole } from "@/shared/types/role.types";
 
 export function getRoleDashboardPath(role: UserRole): string {
-  if (role === "admin") return routes.admin.mapview;
-  if (role === "staff") return routes.staff.analytics;
+  if (role === "admin") return routes.admin.dashboard;
+  if (role === "staff") return routes.staff.reports;
   if (role === "enterprise") return routes.enterpriseAccess;
   return routes.it.dashboard;
 }

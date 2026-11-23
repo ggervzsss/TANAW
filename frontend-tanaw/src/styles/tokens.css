@@ -155,6 +155,25 @@
   --tanaw-information-surface: #eff6ff;
 
   /* Charts */
+  /* Record statuses: report submission (Submitted, Pending, Missing), staff review (Reviewing,
+     Consolidated, Waiting) and request progress, which borrows the same six tints. */
+  --tanaw-st-submitted: #166b53;
+  --tanaw-st-submitted-bg: #e7f6f0;
+  --tanaw-st-consolidated: #166534;
+  --tanaw-st-consolidated-bg: #dcfce7;
+  --tanaw-st-reviewing: #2948b1;
+  --tanaw-st-reviewing-bg: #e8eeff;
+  --tanaw-st-pending: #955400;
+  --tanaw-st-pending-bg: #fff1d6;
+  --tanaw-st-waiting: #475569;
+  --tanaw-st-waiting-bg: #f1f5f9;
+  --tanaw-st-missing: #b42318;
+  --tanaw-st-missing-bg: #fee7e7;
+  --tanaw-st-waiting-fill: #cbd5e1;
+  --tanaw-warn-ink: #92400e;
+  --tanaw-row-selected: #e3f1e7;
+  --tanaw-range-band: #d9ece0;
+
   --tanaw-chart-entry: #047857;
   --tanaw-chart-occupancy: #c96706;
   --tanaw-chart-peak: #9a7218;
@@ -259,6 +278,23 @@
   --tanaw-warning-surface: rgb(120 74 15 / 0.24);
   --tanaw-danger-surface: rgb(127 29 29 / 0.24);
   --tanaw-information-surface: rgb(30 64 112 / 0.24);
+
+  --tanaw-st-submitted: #6ee7b7;
+  --tanaw-st-submitted-bg: rgb(110 231 183 / 0.14);
+  --tanaw-st-consolidated: #86efac;
+  --tanaw-st-consolidated-bg: rgb(134 239 172 / 0.14);
+  --tanaw-st-reviewing: #a5b4fc;
+  --tanaw-st-reviewing-bg: rgb(165 180 252 / 0.16);
+  --tanaw-st-pending: #fcd34d;
+  --tanaw-st-pending-bg: rgb(252 211 77 / 0.14);
+  --tanaw-st-waiting: #cbd5e1;
+  --tanaw-st-waiting-bg: rgb(203 213 225 / 0.12);
+  --tanaw-st-missing: #fca5a5;
+  --tanaw-st-missing-bg: rgb(252 165 165 / 0.14);
+  --tanaw-st-waiting-fill: #475569;
+  --tanaw-warn-ink: #fcd34d;
+  --tanaw-row-selected: #17382f;
+  --tanaw-range-band: rgb(110 231 183 / 0.16);
 
   --tanaw-chart-entry: #34d399;
   --tanaw-chart-occupancy: #f6ad55;

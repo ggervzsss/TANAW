@@ -4,16 +4,17 @@ import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
-import { routes } from "./routes";
+import { legacyPortalRedirects, routes } from "./routes";
 import {
   GeneralSettingsPage,
   HelpCenterPage,
   ActivateAccountPage,
-  AdminActivityHistoryPage,
-  AdminMapViewPage,
-  AdminVisitorInsightsPage,
-  AdminOperationsCenterPage,
+  AdminDashboardPage,
+  AdminEnterpriseReportsPage,
+  AdminRecentActivityPage,
+  AdminRequestsPage,
   EnterpriseAccessPage,
+  EnterpriseDetailsPage,
   ITDashboardPage,
   ITDevLogPage,
   ITEnterpriseAccountsPage,
@@ -22,9 +23,9 @@ import {
   ITWorkCenterPage,
   LoginPage,
   NotificationsPage,
-  StaffAnalyticsPage,
-  StaffBatchReportsPage,
-  StaffGeneratedReportsPage,
+  RegisteredEnterprisesPage,
+  StaffConsolidatedReportsPage,
+  StaffReportsPage,
   VerifyEmailChangePage,
 } from "./routeModules";
 
@@ -82,11 +83,16 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to={routes.admin.mapview} replace />} />
-          <Route path="mapview" element={<AdminMapViewPage />} />
-          <Route path="visitor-insights" element={<AdminVisitorInsightsPage />} />
-          <Route path="activity-history" element={<AdminActivityHistoryPage />} />
-          <Route path="operations" element={<AdminOperationsCenterPage />} />
+          <Route index element={<Navigate to={routes.admin.dashboard} replace />} />
+          <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="enterprises" element={<RegisteredEnterprisesPage />} />
+          <Route path="enterprises/:enterpriseId" element={<EnterpriseDetailsPage />} />
+          <Route path="reports" element={<AdminEnterpriseReportsPage />} />
+          <Route path="activity" element={<AdminRecentActivityPage />} />
+          <Route path="requests" element={<AdminRequestsPage />} />
+          {legacyPortalRedirects.admin.map(([path, target]) => (
+            <Route key={path} path={path} element={<Navigate to={target} replace />} />
+          ))}
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
           <Route path="settings/:section?" element={<GeneralSettingsPage role="admin" />} />
           <Route path="profile" element={<Navigate to={routes.admin.profile} replace />} />
@@ -104,11 +110,12 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to={routes.staff.analytics} replace />} />
-          <Route path="batch-reports" element={<StaffBatchReportsPage />} />
-          <Route path="generated-reports" element={<StaffGeneratedReportsPage />} />
-          <Route path="final-reports-audit" element={<Navigate to={routes.staff.generatedReports} replace />} />
-          <Route path="analytics" element={<StaffAnalyticsPage />} />
+          <Route index element={<Navigate to={routes.staff.reports} replace />} />
+          <Route path="reports" element={<StaffReportsPage />} />
+          <Route path="consolidated-reports" element={<StaffConsolidatedReportsPage />} />
+          {legacyPortalRedirects.staff.map(([path, target]) => (
+            <Route key={path} path={path} element={<Navigate to={target} replace />} />
+          ))}
           <Route path="notifications" element={<NotificationsPage role="staff" />} />
           <Route path="settings/:section?" element={<GeneralSettingsPage role="staff" />} />
           <Route path="profile" element={<Navigate to={routes.staff.profile} replace />} />

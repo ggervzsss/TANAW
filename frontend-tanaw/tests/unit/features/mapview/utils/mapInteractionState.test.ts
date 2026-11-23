@@ -94,3 +94,21 @@ describe("map background deselection", () => {
     expect(shouldClearBarangayFromMapClick(null, null)).toBe(false);
   });
 });
+
+describe("showing an enterprise without zooming to it", () => {
+  it("selects a pin in place when it does not open a barangay", () => {
+    const state = mapInteractionReducer(initialMapInteractionState, { type: "show-enterprise", barangayName: "Poblacion", enterpriseId: "plaza", drill: false });
+
+    expect(state).toEqual({ ...initialMapInteractionState, selectedEnterpriseId: "plaza" });
+    expect(state.cameraTarget).toBe(initialMapInteractionState.cameraTarget);
+  });
+
+  it("opens the enterprise's barangay when drilling in, and keeps the camera for another pin there", () => {
+    const drilled = mapInteractionReducer(initialMapInteractionState, { type: "show-enterprise", barangayName: "Landayan", enterpriseId: "church", drill: true });
+    expect(drilled).toEqual({ cameraTarget: { type: "barangay", barangayName: "Landayan" }, selectedBarangayName: "Landayan", selectedEnterpriseId: "church" });
+
+    const again = mapInteractionReducer(drilled, { type: "show-enterprise", barangayName: "Landayan", enterpriseId: "walk", drill: true });
+    expect(again.cameraTarget).toBe(drilled.cameraTarget);
+    expect(again.selectedEnterpriseId).toBe("walk");
+  });
+});

@@ -12,6 +12,16 @@ export type CameraMonitoringSummary = {
   startingCameraCount: number;
   stoppedCameraCount: number;
   errorCameraCount: number;
+  /** Each configured camera as the enterprise desktop last reported it. */
+  cameras?: CameraMonitoringCamera[];
+};
+
+export type CameraMonitoringCamera = {
+  cameraId: number;
+  cameraName: string;
+  status: "stopped" | "starting" | "running" | "error";
+  running: boolean;
+  error: string | null;
 };
 
 export type MapEnterprise = {

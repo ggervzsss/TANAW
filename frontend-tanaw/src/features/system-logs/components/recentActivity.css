@@ -1,0 +1,48 @@
+/* Recent Activity (Admin): colours only this screen uses. The drawer is portalled, so it repeats the scope. */
+.tanaw-recent-activity,
+.tanaw-activity-drawer {
+  --ra-pin: #fdf4e3;
+  --ra-pin-hover: #fbecd0;
+  --ra-pin-line: #f3dfb8;
+  --ra-chip: #e9efeb;
+  --ra-chip-ink: #3f4f47;
+  --ra-scrim: rgb(9 24 17 / 0.36);
+}
+
+.dark .tanaw-recent-activity,
+.dark .tanaw-activity-drawer {
+  --ra-pin: rgb(252 211 77 / 0.07);
+  --ra-pin-hover: rgb(252 211 77 / 0.12);
+  --ra-pin-line: rgb(252 211 77 / 0.2);
+  --ra-chip: rgb(174 188 201 / 0.14);
+  --ra-chip-ink: #cbd5e1;
+  --ra-scrim: rgb(0 0 0 / 0.55);
+}
+
+.tanaw-activity-drawer__panel {
+  animation: tanaw-activity-drawer-in 180ms ease-out;
+}
+
+.tanaw-activity-drawer__scrim {
+  animation: tanaw-activity-scrim-in 180ms ease-out;
+}
+
+@keyframes tanaw-activity-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes tanaw-activity-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-activity-drawer__panel,
+  .tanaw-activity-drawer__scrim {
+    animation: none;
+  }
+}

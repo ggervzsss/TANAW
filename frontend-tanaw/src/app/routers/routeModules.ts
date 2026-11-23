@@ -4,15 +4,15 @@ import { routes } from "./routes";
 
 const modules = {
   settings: () => import("@/features/account/pages/GeneralSettingsPage"),
+  adminDashboard: () => import("@/features/admin-dashboard"),
+  adminEnterprises: () => import("@/features/admin-enterprises"),
+  adminReports: () => import("@/features/admin-reports"),
   alerts: () => import("@/features/alerts-monitor"),
-  analytics: () => import("@/features/analytics"),
   dashboard: () => import("@/features/dashboard"),
   devLog: () => import("@/features/dev-log"),
   enterpriseAccounts: () => import("@/features/enterprise-accounts"),
   lguAccounts: () => import("@/features/lgu-accounts"),
   login: () => import("@/features/login"),
-  mapView: () => import("@/features/mapview"),
-  visitorInsights: () => import("@/features/mapview/pages/AdminVisitorInsightsPage"),
   notifications: () => import("@/features/notifications"),
   reports: () => import("@/features/reports"),
   systemLogs: () => import("@/features/system-logs"),
@@ -20,9 +20,13 @@ const modules = {
 } as const;
 
 export const GeneralSettingsPage = lazy(() => modules.settings().then((module) => ({ default: module.GeneralSettingsPage })));
-export const AdminOperationsCenterPage = lazy(() => modules.alerts().then((module) => ({ default: module.AdminOperationsCenterPage })));
+export const AdminDashboardPage = lazy(() => modules.adminDashboard().then((module) => ({ default: module.AdminDashboardPage })));
+export const RegisteredEnterprisesPage = lazy(() => modules.adminEnterprises().then((module) => ({ default: module.RegisteredEnterprisesPage })));
+export const EnterpriseDetailsPage = lazy(() => modules.adminEnterprises().then((module) => ({ default: module.EnterpriseDetailsPage })));
+export const AdminEnterpriseReportsPage = lazy(() => modules.adminReports().then((module) => ({ default: module.AdminEnterpriseReportsPage })));
+export const AdminRecentActivityPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminRecentActivityPage })));
+export const AdminRequestsPage = lazy(() => modules.alerts().then((module) => ({ default: module.AdminRequestsPage })));
 export const ITWorkCenterPage = lazy(() => modules.alerts().then((module) => ({ default: module.ITWorkCenterPage })));
-export const StaffAnalyticsPage = lazy(() => modules.analytics().then((module) => ({ default: module.StaffAnalyticsPage })));
 export const ITDashboardPage = lazy(() => modules.dashboard().then((module) => ({ default: module.ITDashboardPage })));
 export const ITDevLogPage = import.meta.env.DEV ? lazy(() => modules.devLog().then((module) => ({ default: module.ITDevLogPage }))) : null;
 export const ITEnterpriseAccountsPage = lazy(() => modules.enterpriseAccounts().then((module) => ({ default: module.ITEnterpriseAccountsPage })));
@@ -31,21 +35,19 @@ export const ActivateAccountPage = lazy(() => modules.login().then((module) => (
 export const EnterpriseAccessPage = lazy(() => modules.login().then((module) => ({ default: module.EnterpriseAccessPage })));
 export const LoginPage = lazy(() => modules.login().then((module) => ({ default: module.LoginPage })));
 export const VerifyEmailChangePage = lazy(() => modules.login().then((module) => ({ default: module.VerifyEmailChangePage })));
-export const AdminVisitorInsightsPage = lazy(() => modules.visitorInsights().then((module) => ({ default: module.AdminVisitorInsightsPage })));
-export const AdminMapViewPage = lazy(() => modules.mapView().then((module) => ({ default: module.AdminMapViewPage })));
 export const NotificationsPage = lazy(() => modules.notifications().then((module) => ({ default: module.NotificationsPage })));
-export const StaffGeneratedReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffGeneratedReportsPage })));
-export const StaffBatchReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffBatchReportsPage })));
+export const StaffReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffReportsPage })));
+export const StaffConsolidatedReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffConsolidatedReportsPage })));
 export const HelpCenterPage = lazy(() => modules.helpCenter().then((module) => ({ default: module.HelpCenterPage })));
-export const AdminActivityHistoryPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminActivityHistoryPage })));
 export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.ITSystemLogsPage })));
 
 const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
-  [routes.admin.activityHistory]: modules.systemLogs,
-  [routes.admin.mapview]: modules.mapView,
-  [routes.admin.visitorInsights]: modules.visitorInsights,
+  [routes.admin.dashboard]: modules.adminDashboard,
+  [routes.admin.enterprises]: modules.adminEnterprises,
+  [routes.admin.reports]: modules.adminReports,
+  [routes.admin.activity]: modules.systemLogs,
+  [routes.admin.requests]: modules.alerts,
   [routes.admin.notifications]: modules.notifications,
-  [routes.admin.operations]: modules.alerts,
   [routes.admin.generalSettings]: modules.settings,
   [routes.it.dashboard]: modules.dashboard,
   [routes.it.enterpriseAccounts]: modules.enterpriseAccounts,
@@ -55,9 +57,8 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.it.systemLogs]: modules.systemLogs,
   [routes.it.systemSettings]: modules.settings,
   [routes.it.workCenter]: modules.alerts,
-  [routes.staff.analytics]: modules.analytics,
-  [routes.staff.batchReports]: modules.reports,
-  [routes.staff.generatedReports]: modules.reports,
+  [routes.staff.reports]: modules.reports,
+  [routes.staff.consolidatedReports]: modules.reports,
   [routes.staff.notifications]: modules.notifications,
   [routes.staff.generalSettings]: modules.settings,
 };
@@ -65,7 +66,7 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
 if (import.meta.env.DEV) portalModuleByPath[routes.it.devLog] = modules.devLog;
 
 const authorizedPaths: Partial<Record<UserRole, string[]>> = {
-  admin: Object.values(routes.admin),
+  admin: Object.values(routes.admin).filter((path) => !path.includes(":")),
   it: Object.values(routes.it).filter((path) => import.meta.env.DEV || path !== routes.it.devLog),
   staff: Object.values(routes.staff),
 };

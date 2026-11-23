@@ -189,14 +189,18 @@ describe("native Leaflet camera controller", () => {
     const map = createMap(focused.center, 16);
     const controller = new MapMotionController(map);
 
-    controller.setTarget(enterprise, { });
+    controller.setTarget(enterprise, {});
 
     expect(map.panTo).not.toHaveBeenCalled();
     expect(map.setView).not.toHaveBeenCalled();
     expect(map.getZoom()).toBe(16);
   });
 
-  it.each([[12, 15.75], [16, 16], [18, 17.25]])("focuses an enterprise from zoom %s at zoom %s", (startZoom, expectedZoom) => {
+  it.each([
+    [12, 15.75],
+    [16, 16],
+    [18, 17.25],
+  ])("focuses an enterprise from zoom %s at zoom %s", (startZoom, expectedZoom) => {
     const map = createMap([14.35, 121.05], startZoom);
     const target = resolveMapCameraPosition(map, { type: "enterprise", center: [14.36, 121.07] })!;
 
@@ -239,7 +243,7 @@ describe("native Leaflet camera controller", () => {
 
     controller.setTarget(sanRoque, { reducedMotion: false });
     listeners.zoomstart();
-    controller.setTarget({ type: "barangay", bounds: landayanBounds }, { });
+    controller.setTarget({ type: "barangay", bounds: landayanBounds }, {});
     controller.setTarget(langgam, { reducedMotion: false });
 
     expect(map.setView).toHaveBeenCalledTimes(1);
@@ -356,8 +360,8 @@ describe("geographic layer integrity safeguards", () => {
     expect(stylesheet).not.toMatch(geographicOverride);
   });
 
-  it("does not invalidate a map whose absolute directory overlay never changes its dimensions", () => {
-    const componentSource = readFileSync(new URL("../../../../../src/features/mapview/components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+  it("does not invalidate a map whose overlays never change its dimensions", () => {
+    const componentSource = readFileSync(new URL("../../../../../src/features/admin-dashboard/components/DashboardMap.tsx", import.meta.url), "utf8");
     const lifecycleSource = readFileSync(new URL("../../../../../src/features/mapview/hooks/useAdminLeafletMap.ts", import.meta.url), "utf8");
 
     expect(componentSource + lifecycleSource).not.toContain("invalidateSize");
@@ -366,7 +370,7 @@ describe("geographic layer integrity safeguards", () => {
   });
 
   it("keeps the map hidden until the canonical initial camera has been applied", () => {
-    const componentSource = readFileSync(new URL("../../../../../src/features/mapview/components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+    const componentSource = readFileSync(new URL("../../../../../src/features/admin-dashboard/components/DashboardMap.tsx", import.meta.url), "utf8");
     const lifecycleSource = readFileSync(new URL("../../../../../src/features/mapview/hooks/useAdminLeafletMap.ts", import.meta.url), "utf8");
     const cameraHookSource = readFileSync(new URL("../../../../../src/features/mapview/hooks/useMapCameraSync.ts", import.meta.url), "utf8");
 

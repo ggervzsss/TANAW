@@ -1,10 +1,8 @@
-import { Activity, CircleUserRound, Crosshair, FileText, Pin, ShieldAlert } from "lucide-react";
-import { Badge } from "@/shared/ui-kit";
+import { Activity } from "lucide-react";
 import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { SystemLog } from "@/shared/types";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
-import { activityGroupFor } from "../model";
-import { ActivityGroupBadge, SystemLogTypeBadge } from "./ActivityBadges";
+import { SystemLogTypeBadge } from "./ActivityBadges";
 
 export function ITSystemLogsTable({
   activities,
@@ -73,114 +71,6 @@ export function ITSystemLogsTable({
       </table>
     </div>
   );
-}
-
-export function AdminActivityTable({
-  activities,
-  isLoading,
-  timeFormat,
-  onSelect,
-}: {
-  activities: SystemLog[];
-  isLoading: boolean;
-  timeFormat: SystemTimeFormat;
-  onSelect: (activity: SystemLog) => void;
-}) {
-  return (
-    <div className="tanaw-data-table tanaw-admin-workspace__table overflow-x-auto">
-      <table className="w-full min-w-210 table-fixed text-left text-sm">
-        <colgroup>
-          <col className="w-[18%]" />
-          <col className="w-[24%]" />
-          <col className="w-[19%]" />
-          <col className="w-[17%]" />
-          <col className="w-[22%]" />
-        </colgroup>
-        <thead className="tanaw-data-table-head text-[11px] font-bold tracking-[0.06em] uppercase">
-          <tr>
-            {["Date and Time", "Activity", "Performed By", "Affected Item", "Details"].map((heading) => (
-              <th key={heading} className="px-4 py-4 whitespace-nowrap">
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
-          {activities.map((log) => (
-            <tr
-              key={log.id}
-              tabIndex={0}
-              aria-label={`View details for ${log.action}`}
-              onClick={() => onSelect(log)}
-              onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(log))}
-              data-unresolved={log.resolutionStatus === "Unresolved" || undefined}
-              className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer"
-            >
-              <td className="px-4 py-4 font-mono text-xs text-gray-500">
-                <time dateTime={log.timestamp} className="tanaw-audit-timestamp">
-                  {formatPhilippineDateTime(log.timestamp, timeFormat)}
-                </time>
-              </td>
-              <td className="px-4 py-4">
-                <div className="tanaw-audit-cell tanaw-audit-cell--action">
-                  <span className="tanaw-audit-cell__icon" aria-hidden="true">
-                    {log.resolutionStatus === "Unresolved" ? <ShieldAlert size={15} /> : <Activity size={15} />}
-                  </span>
-                  <div className="min-w-0">
-                    <ExpandableTableText primary={log.action} ariaLabel="activity" className="font-semibold text-gray-900" />
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <ActivityGroupBadge group={activityGroupFor(log)} />
-                      {log.resolutionStatus === "Unresolved" && (
-                        <Badge tone="warning">
-                          <span className="inline-flex items-center gap-1">
-                            <Pin size={12} aria-hidden="true" /> Unresolved
-                          </span>
-                        </Badge>
-                      )}
-                      {log.resolutionStatus === "Resolved" && <Badge tone="neutral">Resolved</Badge>}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="tanaw-audit-cell">
-                  <CircleUserRound size={15} aria-hidden="true" />
-                  <ExpandableTableText primary={log.actor} ariaLabel="person or system that performed the activity" className="font-semibold text-gray-900" />
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="tanaw-audit-cell">
-                  <Crosshair size={15} aria-hidden="true" />
-                  <ExpandableTableText primary={log.target} ariaLabel="affected item" className="text-sm font-medium text-gray-700" />
-                </div>
-              </td>
-              <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">
-                <div className="tanaw-audit-cell tanaw-audit-cell--details">
-                  <FileText size={15} aria-hidden="true" />
-                  <ExpandableTableText primary={log.summary} ariaLabel="activity details" twoLines />
-                </div>
-              </td>
-            </tr>
-          ))}
-          {activities.length === 0 && (
-            <EmptyTableRow
-              isLoading={isLoading}
-              title="No activity found"
-              loadingTitle="Loading activity history"
-              description="No recorded activity matches the selected filters."
-              loadingDescription="Loading important TANAW activity."
-            />
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function handleRowKeyDown(event: React.KeyboardEvent<HTMLTableRowElement>, onActivate: () => void) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  onActivate();
 }
 
 function EmptyTableRow({

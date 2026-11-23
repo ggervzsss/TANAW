@@ -1,7 +1,6 @@
 import { Search } from "lucide-react";
 import { FilterSelect } from "@/shared/components/ui";
 import { activityTimeRanges, type ActivityTimeRange } from "@/shared/utils";
-import { activityGroups, type ActivityGroup } from "../model";
 
 export function ITSystemLogFilters(props: {
   accountFilter: string;
@@ -32,35 +31,6 @@ export function ITSystemLogFilters(props: {
           {props.showRoutine ? "Hide routine activity" : "Show routine activity"}
         </button>
       </div>
-    </div>
-  );
-}
-
-export function AdminActivityFilters(props: {
-  activityGroup: ActivityGroup;
-  query: string;
-  timeRange: ActivityTimeRange;
-  onActivityGroupChange: (value: ActivityGroup) => void;
-  onQueryChange: (value: string) => void;
-  onTimeRangeChange: (value: ActivityTimeRange) => void;
-}) {
-  return (
-    <div className="tanaw-data-toolbar tanaw-admin-workspace__toolbar tanaw-audit-controls flex flex-wrap items-center gap-3">
-      <SearchInput value={props.query} placeholder="Search activity, name, affected item, or details" ariaLabel="Search activity history" onChange={props.onQueryChange} className="min-w-65" />
-      <FilterSelect
-        value={props.activityGroup}
-        onChange={(value) => props.onActivityGroupChange(value as ActivityGroup)}
-        options={activityGroups}
-        ariaLabel="Filter activity category"
-        className="tanaw-data-filter"
-      />
-      <FilterSelect
-        value={props.timeRange}
-        onChange={(value) => props.onTimeRangeChange(value as ActivityTimeRange)}
-        options={activityTimeRanges}
-        ariaLabel="Filter activity time range"
-        className="tanaw-data-filter"
-      />
     </div>
   );
 }

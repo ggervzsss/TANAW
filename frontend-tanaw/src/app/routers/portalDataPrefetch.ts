@@ -37,10 +37,12 @@ const reportEnterprises: Prefetch = { queryKey: ["report-enterprises"], queryFn:
 const systemSettings: Prefetch = { queryKey: systemSettingsQueryKey, queryFn: getSystemSettings };
 
 const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
-  [routes.admin.activityHistory]: [activityLogs],
-  [routes.admin.mapview]: [operationalMap],
+  [routes.admin.dashboard]: [operationalMap, activityLogs, alerts, supportTickets],
+  [routes.admin.enterprises]: [operationalMap, enterpriseAccounts],
+  [routes.admin.reports]: [operationalReports, reportEnterprises, enterpriseAccounts, operationalMap, activityLogs, operationalFinalReports],
+  [routes.admin.activity]: [activityLogs],
+  [routes.admin.requests]: [alerts, enterpriseAccounts, supportTickets],
   [routes.admin.notifications]: [operationalNotifications],
-  [routes.admin.operations]: [alerts, enterpriseAccounts, supportTickets],
   [routes.it.dashboard]: [alerts, operationalSummary, lguAccounts, enterpriseAccounts, supportTickets, emailDeliveries],
   [routes.it.enterpriseAccounts]: [enterpriseAccounts],
   [routes.it.lguAccounts]: [lguAccounts],
@@ -48,9 +50,8 @@ const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
   [routes.it.systemLogs]: [activityLogs],
   [routes.it.systemSettings]: [systemSettings],
   [routes.it.workCenter]: [alerts, enterpriseAccounts, supportTickets, emailDeliveries],
-  [routes.staff.analytics]: [operationalReports, reportEnterprises],
-  [routes.staff.batchReports]: [operationalReports, reportEnterprises],
-  [routes.staff.generatedReports]: [operationalFinalReports],
+  [routes.staff.reports]: [operationalReports, reportEnterprises],
+  [routes.staff.consolidatedReports]: [operationalFinalReports],
   [routes.staff.notifications]: [operationalNotifications],
 };
 

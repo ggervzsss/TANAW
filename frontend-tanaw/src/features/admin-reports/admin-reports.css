@@ -1,0 +1,110 @@
+/* Enterprise Reports (admin): column grids for the report list and the per-enterprise month history. */
+
+.tanaw-er-cols {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1.6fr) minmax(5rem, 0.6fr) repeat(3, minmax(8rem, 0.9fr)) 24px;
+  align-items: center;
+  column-gap: 20px;
+}
+
+.tanaw-er-row {
+  width: 100%;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  text-align: left;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  transition: background-color 120ms ease;
+}
+
+.tanaw-er-row:hover {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-er-row[aria-expanded="true"] {
+  background: var(--tanaw-surface-inset);
+  box-shadow: inset 3px 0 0 var(--tanaw-action);
+}
+
+.tanaw-er-row:focus-visible,
+.tanaw-er-month-row:focus-visible,
+.tanaw-er-scroll:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-er-month-cols {
+  display: grid;
+  grid-template-columns: 18px 1.2fr 1.2fr 0.7fr 0.7fr 1fr 1fr 1fr;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.tanaw-er-month-item + .tanaw-er-month-item {
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+.tanaw-er-month-item[data-open="true"] {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-er-month-row {
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--tanaw-text);
+}
+
+.tanaw-er-month-row:hover {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-er-month-chevron {
+  color: var(--tanaw-text-muted);
+  transition: transform 150ms ease;
+}
+
+.tanaw-er-month-row[aria-expanded="true"] .tanaw-er-month-chevron {
+  transform: rotate(90deg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-er-log-item {
+  position: relative;
+  padding: 0 0 14px 22px;
+  border-left: 2px solid var(--tanaw-border-soft);
+}
+
+.tanaw-er-log-item:last-child {
+  border-left-color: transparent;
+}
+
+.tanaw-er-log-dot {
+  position: absolute;
+  top: 4px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--tanaw-st-waiting-fill);
+}
+
+.tanaw-er-log-dot[data-tone="submitted"] {
+  background: var(--tanaw-action);
+}
+
+.tanaw-er-log-dot[data-tone="pending"] {
+  background: var(--tanaw-st-pending);
+}
+
+.tanaw-er-log-dot[data-tone="missing"] {
+  background: var(--tanaw-st-missing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-er-row,
+  .tanaw-er-month-chevron {
+    transition: none;
+  }
+}

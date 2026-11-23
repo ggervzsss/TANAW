@@ -10,6 +10,62 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
 }
 
 /*
+ * Staff Reports and Consolidated Reports: flat tables on the page background, separated by soft
+ * rules, with uppercase tracked column names.
+ */
+.tanaw-staff-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--tanaw-text);
+  font-size: 0.90625rem;
+  text-align: left;
+}
+
+.tanaw-staff-table thead th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tanaw-staff-table tbody :where(th, td) {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  font-weight: inherit;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.tanaw-staff-table tbody tr:hover > * {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-staff-table :where(th, td):first-child {
+  padding-left: 0;
+}
+
+.tanaw-staff-table :where(th, td):last-child {
+  padding-right: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tanaw-staff-table .tanaw-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (width < 56rem) {
+  .tanaw-staff-table .tanaw-hide-sm {
+    display: none;
+  }
+}
+
+/*
  * Official DOT VAR forms (VAR1_Blank.xlsx, VAR2M.xlsx, VAR3_Annual.xlsx). The sheet is printed
  * paper in both themes: black rules, yellow (#ff0) headings and a green (#92d050) monthly total.
  */

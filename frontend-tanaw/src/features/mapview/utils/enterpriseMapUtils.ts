@@ -1,8 +1,9 @@
 import L from "leaflet";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
 import type { MapEnterprise } from "@/shared/types";
+import { normalizeBarangayName } from "./barangayNames";
 import type { LeafletMapTheme } from "./leafletTheme";
-import { getDarkMonitoringBadgeClass, getMonitoringStatusLabel } from "./mapStatusStyles";
+import { getMapPinState, mapPinStateLabels } from "./mapStatusStyles";
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
@@ -60,16 +61,6 @@ const barangayColors: Record<string, string> = {
 };
 
 const fallbackBarangayColors = ["#A2D9A1", "#F6F1D1", "#B5D1FF", "#FFC8A2", "#DCCCF5", "#C7E9F1"];
-
-const barangayFilterAliases: Record<string, string> = {
-  brgypacitai: "pacita1",
-  brgypacitaii: "pacita2",
-  pacitai: "pacita1",
-  pacitaone: "pacita1",
-  pacitaii: "pacita2",
-  pacitatwo: "pacita2",
-  sanlorenzoruiz: "sanlorenzo",
-};
 
 export const activeBoundaryStyle: L.PathOptions = {
   color: "#4f7cff",
@@ -138,7 +129,6 @@ export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   };
 }
 
-
 export function normalizeGeoJson(payload: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
   return {
     ...payload,
@@ -172,18 +162,7 @@ export function isBoundaryPolygonFeature(featureItem: GeoJSON.Feature) {
   return featureItem.geometry?.type === "Polygon" || featureItem.geometry?.type === "MultiPolygon";
 }
 
-export function normalizeBarangayName(value: string) {
-  const normalized = value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\bbarangay\b/g, "")
-    .replace(/\bbrgy\b/g, "")
-    .replace(/\./g, "")
-    .replace(/[^a-z0-9]/g, "");
-
-  return barangayFilterAliases[normalized] ?? normalized;
-}
+export { normalizeBarangayName };
 
 export function getGeoJsonColor(name: string) {
   const normalized = normalizeBarangayName(name);
@@ -402,31 +381,20 @@ export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
   return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${name}</h3><p class="tanaw-map-popup__meta">San Pedro, Laguna ${postalCode}</p><span class="tanaw-map-popup__badge">${toSentenceCase(`${type} boundary`)}</span></div>`;
 }
 
+/** The hover summary of a pin: name, place, camera state and people inside now. */
 export function createTooltipHtml(enterprise: MapEnterprise) {
-  return createEnterpriseMapSummary(enterprise, false);
-}
-
-export function createPopupHtml(enterprise: MapEnterprise) {
-  return `${createEnterpriseMapSummary(enterprise, true)}
-    <button type="button" class="tanaw-enterprise-popup__details">View Details <span aria-hidden="true">→</span></button>`;
-}
-
-function createEnterpriseMapSummary(enterprise: MapEnterprise, expanded: boolean) {
   const cameras = enterprise.cameraMonitoring;
-  const cameraCount = cameras ? `${cameras.healthyCameraCount}/${cameras.configuredCameraCount} reporting` : "No telemetry";
-  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "No live data";
-  const address = enterprise.fullAddress;
-  const location = [enterprise.category, enterprise.barangay].filter(Boolean).join(" · ");
-  const isOccupancyAlert = enterprise.occupancyStatus === "Warning" || enterprise.occupancyStatus === "High Occupancy";
+  const cameraCount = cameras ? `${cameras.healthyCameraCount} of ${cameras.configuredCameraCount} running` : "No camera data";
+  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "No live count";
+  const location = [enterprise.category, enterprise.barangay ? `Barangay ${enterprise.barangay}` : ""].filter(Boolean).join(" · ");
+  const pinState = getMapPinState(enterprise.monitoringStatus);
   return `<div class="tanaw-map-marker-summary">
     <strong>${escapeHtml(enterprise.name)}</strong>
     ${location ? `<p class="tanaw-map-marker-summary__location">${escapeHtml(location)}</p>` : ""}
-    ${address && address !== location ? `<p>${escapeHtml(address)}</p>` : ""}
-    <span class="tanaw-map-marker-summary__status ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}">${escapeHtml(getMonitoringStatusLabel(enterprise.monitoringStatus))}</span>
+    <span class="tanaw-map-marker-summary__status" data-pin-state="${pinState}">${escapeHtml(mapPinStateLabels[pinState])}</span>
     <dl>
       <div><dt>Cameras</dt><dd>${cameraCount}</dd></div>
-      <div><dt>Live occupancy</dt><dd>${occupancy}</dd></div>
-      ${(isOccupancyAlert || expanded) && enterprise.totalLiveOccupancy != null ? `<div><dt>Occupancy status</dt><dd>${escapeHtml(enterprise.occupancyStatus)}</dd></div>` : ""}
+      <div><dt>Inside now</dt><dd>${occupancy}</dd></div>
     </dl>
   </div>`;
 }

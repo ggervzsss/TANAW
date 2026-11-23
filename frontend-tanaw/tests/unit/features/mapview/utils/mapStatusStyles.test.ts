@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getDarkMonitoringBadgeClass,
+  getMapPinState,
+  mapPinColors,
   getMonitoringStatusColor,
   getMonitoringStatusLabel,
   getMonitoringStatusPresentation,
@@ -66,5 +68,20 @@ describe("enterprise map monitoring styles", () => {
   ] as const)("uses a separate occupancy ring and badge for %s", (status, color, classColor) => {
     expect(getOccupancyRingColor(status)).toBe(color);
     expect(getOccupancyBadgeClass(status)).toContain(classColor);
+  });
+});
+
+describe("dashboard pin states", () => {
+  it.each([
+    ["Fully Monitoring", "ok"],
+    ["Partially Monitoring", "partial"],
+    ["Updates Delayed", "partial"],
+    ["Fault", "partial"],
+    ["Stopped", "offline"],
+    ["Offline", "offline"],
+    ["Not Configured", "offline"],
+  ] as const)("colours %s pins as %s", (status, state) => {
+    expect(getMapPinState(status)).toBe(state);
+    expect(mapPinColors[state]).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

@@ -1,5 +1,7 @@
 export { ActivityGroupBadge, SystemLogTypeBadge } from "./ActivityBadges";
-export { ActivityDetailFields, AdminActivityDetailFields } from "./ActivityDetailFields";
+export { ActivityDetailFields } from "./ActivityDetailFields";
 export { ActivityDetailsModal } from "./ActivityDetailsModal";
-export { AdminActivityFilters, ITSystemLogFilters } from "./ActivityFilters";
-export { AdminActivityTable, ITSystemLogsTable } from "./ActivityTables";
+export { ITSystemLogFilters } from "./ActivityFilters";
+export { ITSystemLogsTable } from "./ActivityTables";
+export { ActivityTypeChip, RecentActivityList, UnresolvedChip } from "./RecentActivityList";
+export { RecentActivityDrawer } from "./RecentActivityDrawer";

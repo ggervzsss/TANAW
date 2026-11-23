@@ -42,24 +42,15 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     [pathname],
   );
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
-  const isMapView = pathname === routes.admin.mapview;
   const isSettings = isRoleSettingsPath(role, pathname);
   const title = pageHeader?.pathname === pathname ? pageHeader.title : undefined;
   const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = ["text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl", centeredTitleClassName].filter(Boolean).join(" ");
-  const sectionClassName = [
-    "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100",
-    isMapView ? "" : "max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const mainClassName = [
-    "it-portal-main flex-1 bg-(--tanaw-page) text-[15px] transition-colors duration-200 dark:bg-(--tanaw-page-bg)",
-    isMapView ? "min-h-0 overflow-hidden p-0" : "overflow-y-auto px-8 py-8 max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const mainContentClassName = isMapView ? "flex h-full min-h-0 w-full flex-col" : "mx-auto w-full max-w-470";
+  const sectionClassName =
+    "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100 max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible";
+  const mainClassName =
+    "it-portal-main flex-1 overflow-y-auto bg-(--tanaw-page) px-8 py-8 text-[15px] transition-colors duration-200 max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5 dark:bg-(--tanaw-page-bg)";
+  const mainContentClassName = "mx-auto w-full max-w-470";
   const scrollStateKey = useMemo(() => createPageStateKey({ portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" }, pathname, "scroll"), [pathname, role, user?.id, user?.role]);
 
   const currentUserQuery = useQuery({
@@ -144,12 +135,12 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} data-density-adjustable={!isMapView && !isSettings} className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
+        <main ref={mainRef} data-density-adjustable={!isSettings} className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
           {isSettings ? (
             outlet
           ) : (
             <div className={mainContentClassName}>
-              {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
+              {title && <h1 className={titleClassName}>{title}</h1>}
               {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (
                 <Navigate to={routes.it.dashboard} replace />
               ) : (

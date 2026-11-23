@@ -22,15 +22,15 @@ function notification(overrides: Partial<BackendNotification>): BackendNotificat
 }
 
 describe("Admin notification destinations", () => {
-  it("opens the exact situation in the Operations Center", () => {
+  it("opens the exact situation in Requests", () => {
     const target = getBackendNotificationTargetPath("admin", notification({ sourceType: "operational.alert", sourceId: "ALT-000001" }));
 
-    expect(target).toBe("/admin/operations?view=situations&alert=ALT-000001");
+    expect(target).toBe("/admin/requests?alert=ALT-000001");
   });
 
-  it("opens escalated support and account requests in their Operations Center views", () => {
-    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "support.ticket", sourceId: "ticket-1" }))).toBe("/admin/operations?view=support&ticket=ticket-1");
-    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "enterprise.profile.contact", sourceId: "account-1" }))).toBe("/admin/operations?view=accounts");
+  it("opens support tickets and account requests in Requests", () => {
+    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "support.ticket", sourceId: "ticket-1" }))).toBe("/admin/requests?ticket=ticket-1");
+    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "enterprise.profile.contact", sourceId: "account-1" }))).toBe("/admin/requests?account=account-1");
   });
 });
 

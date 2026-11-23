@@ -1,0 +1,93 @@
+import type { ReactNode } from "react";
+import { cn } from "@/shared/ui-kit";
+import type { SystemTimeFormat } from "@/shared/utils/dateTime";
+import { formatRequestTime, progressLabels, progressTextClass, requestMarker, type AdminRequest, type RequestDayGroup, type RequestReadState } from "../model";
+
+type RequestListProps = {
+  groups: RequestDayGroup[];
+  selectedKey: string | null;
+  readState: RequestReadState;
+  timeFormat: SystemTimeFormat;
+  onSelect: (request: AdminRequest) => void;
+  /** Shown instead of the groups when nothing is listed. */
+  empty?: ReactNode;
+};
+
+/** The left pane: requests grouped by day under sticky day headings. */
+export function RequestList({ groups, selectedKey, readState, timeFormat, onSelect, empty }: RequestListProps) {
+  return (
+    <nav
+      aria-label="Requests"
+      className="tanaw-requests-list max-h-184 overflow-y-auto overscroll-contain border-r border-(--tanaw-border-soft) scrollbar-gutter-stable max-[980px]:max-h-none max-[980px]:border-r-0"
+    >
+      {groups.length === 0
+        ? empty
+        : groups.map((group) => (
+            <section key={group.key} aria-labelledby={`requests-day-${group.key}`}>
+              <h2
+                id={`requests-day-${group.key}`}
+                className="sticky top-0 z-1 m-0 border-b border-(--tanaw-border-soft) bg-(--tanaw-page) px-4 pt-2.5 pb-1.5 text-[0.8125rem] font-bold text-(--tanaw-text-secondary)"
+              >
+                {group.label}
+              </h2>
+              <ul className="m-0 list-none p-0">
+                {group.requests.map((request) => (
+                  <RequestListItem
+                    key={request.key}
+                    request={request}
+                    selected={request.key === selectedKey}
+                    marker={requestMarker(request, readState)}
+                    timeFormat={timeFormat}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+    </nav>
+  );
+}
+
+function RequestListItem({
+  request,
+  selected,
+  marker,
+  timeFormat,
+  onSelect,
+}: {
+  request: AdminRequest;
+  selected: boolean;
+  marker: "New" | "Updated" | null;
+  timeFormat: SystemTimeFormat;
+  onSelect: (request: AdminRequest) => void;
+}) {
+  const time = formatRequestTime(request.sentAt, timeFormat);
+  return (
+    <li className="border-b border-(--tanaw-border-soft)">
+      <button
+        type="button"
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(request)}
+        className={cn(
+          "block w-full cursor-pointer p-4 text-left text-(--tanaw-text) transition-colors hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
+          selected && "bg-(--tanaw-row-selected) shadow-[inset_3px_0_0_var(--tanaw-action)] hover:bg-(--tanaw-row-selected)",
+        )}
+      >
+        <span className="flex justify-between gap-3 text-[0.78125rem] text-(--tanaw-text-secondary)">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            {request.type}
+            {marker && <span className="font-bold text-(--tanaw-accent-ink)">{marker}</span>}
+          </span>
+          {time && (
+            <time dateTime={request.sentAt ?? undefined} className="shrink-0 tabular-nums">
+              {time}
+            </time>
+          )}
+        </span>
+        <span className={cn("mt-1 block text-[0.96875rem] leading-snug", marker ? "font-extrabold" : "font-semibold", selected && "text-(--tanaw-accent-ink)")}>{request.title}</span>
+        <span className="mt-0.5 block text-sm text-(--tanaw-text-secondary)">{request.place}</span>
+        <span className={cn("mt-2 block text-[0.8125rem] font-semibold", progressTextClass[request.progress])}>{progressLabels[request.progress]}</span>
+      </button>
+    </li>
+  );
+}

@@ -1,1 +1,1 @@
-export { AdminActivityHistoryPage, ITSystemLogsPage } from "./pages";
+export { AdminRecentActivityPage, ITSystemLogsPage } from "./pages";

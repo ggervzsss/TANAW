@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const webPortals = [
   { role: "it", path: "/it/dashboard", label: "IT Portal" },
-  { role: "admin", path: "/admin/operations", label: "Admin Portal" },
-  { role: "staff", path: "/staff/analytics", label: "Staff Portal" },
+  { role: "admin", path: "/admin/requests", label: "Admin Portal" },
+  { role: "staff", path: "/staff/reports", label: "Staff Portal" },
 ] as const;
 
 type WebPortalRole = (typeof webPortals)[number]["role"];
@@ -70,7 +70,7 @@ for (const portal of webPortals) {
 test("redirects to login when session restoration is rejected", async ({ page }) => {
   await page.route("**/auth/session", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Session expired or revoked" }) }));
 
-  await page.goto("/admin/operations");
+  await page.goto("/admin/requests");
 
   await expect(page).toHaveURL(/\/login$/);
 });
@@ -83,13 +83,13 @@ test("synchronizes explicit logout to another browser tab", async ({ context, pa
   await mockAuthenticatedPortal(page, "admin", () => {
     logoutCalls += 1;
   });
-  await page.goto("/admin/operations");
-  await expect(page.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
+  await page.goto("/admin/requests");
+  await expect(page.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
 
   const secondTab = await context.newPage();
   await mockAuthenticatedPortal(secondTab, "admin", () => undefined);
-  await secondTab.goto("/admin/operations");
-  await expect(secondTab.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
+  await secondTab.goto("/admin/requests");
+  await expect(secondTab.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
 
   await page.bringToFront();
   await page.getByRole("button", { name: "Open account menu" }).click();
@@ -105,13 +105,13 @@ test("synchronizes a server-rejected authenticated session to another browser ta
     Object.defineProperty(window, "BroadcastChannel", { configurable: true, value: undefined });
   });
   await mockAuthenticatedPortal(page, "admin", () => undefined);
-  await page.goto("/admin/operations");
-  await expect(page.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
+  await page.goto("/admin/requests");
+  await expect(page.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
 
   const secondTab = await context.newPage();
   await mockAuthenticatedPortal(secondTab, "admin", () => undefined);
-  await secondTab.goto("/admin/operations");
-  await expect(secondTab.getByRole("heading", { name: "Alerts & Requests" })).toBeVisible();
+  await secondTab.goto("/admin/requests");
+  await expect(secondTab.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
 
   await page.route("**/auth/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Session revoked" }) }));
   await page.reload();

@@ -13,7 +13,7 @@ export function ActivityDetailsModal({ activity, role, timeFormat, onClose }: { 
   const openTicket = () => {
     if (!ticketId) return;
     onClose();
-    navigate(role === "admin" ? `${routes.admin.operations}?view=support&ticket=${encodeURIComponent(ticketId)}` : `${routes.it.workCenter}?view=support&ticket=${encodeURIComponent(ticketId)}`);
+    navigate(role === "admin" ? `${routes.admin.requests}?ticket=${encodeURIComponent(ticketId)}` : `${routes.it.workCenter}?view=support&ticket=${encodeURIComponent(ticketId)}`);
   };
   return (
     <ModalFrame title="Activity Details" eyebrow={role === "admin" ? activityGroupFor(activity) : activity.id} onClose={onClose} maxWidthClassName={role === "admin" ? "max-w-4xl" : undefined}>

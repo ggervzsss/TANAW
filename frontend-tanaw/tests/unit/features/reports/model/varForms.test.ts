@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { FinalReport, FinalReportSource } from "@/shared/types";
-import { filterGeneratedReports } from "../../../../../src/features/reports/model/generatedReports";
 import { buildVar2m, buildVar3, sumCells, var2mCells, var3Cells, var3Years } from "../../../../../src/features/reports/model/varForms";
 
 const allocated = {
@@ -129,17 +128,5 @@ describe("VAR 3M", () => {
     expect(form.period).toBe("January - December 2026");
     expect(form.notes[0]).toBe("No finalized monthly report (VAR 2M) for January, February, March, April, July, August, September, October, November and December.");
     expect(var3Years(reports)).toEqual([2026, 2025]);
-  });
-});
-
-describe("Generated reports", () => {
-  it("finds a report by any included establishment and applies period filters", () => {
-    const archived = finalReport("CON-MAY-2025", "May 2025", "Archived", [{ enterprise: "Park" }, { enterprise: "Riverside Museum" }]);
-    const current = finalReport("CON-JUN-2026", "June 2026", "Finalized", [{ enterprise: "Riverside Museum" }]);
-    const filters = { query: "  riverside MUSEUM ", year: "", month: "" };
-
-    expect(filterGeneratedReports([current, archived], filters)).toEqual([current, archived]);
-    expect(filterGeneratedReports([current, archived], { ...filters, year: "2025", month: "May" })).toEqual([archived]);
-    expect(filterGeneratedReports([current, archived], { ...filters, year: "2025", month: "June" })).toEqual([]);
   });
 });

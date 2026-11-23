@@ -1,10 +1,10 @@
 import { Buffer } from "node:buffer";
 import { expect, type Page } from "@playwright/test";
-import type { MapEnterprise } from "../../../src/shared/types";
+import type { MapEnterprise, VisitorInsights } from "../../../src/shared/types";
 import { json, mockPortalSession, portalUser } from "./session";
 
-// Shared setup for the Admin Map View specs (admin-map-camera, admin-map-directory, and
-// admin-data-workspaces), which each run independently.
+// Shared setup for the Admin Dashboard specs (admin-dashboard and admin-map-camera): an admin
+// signs in through the real form and lands on the dashboard with its map ready.
 
 export const transparentPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==", "base64");
 
@@ -39,45 +39,49 @@ export const mapEnterprise: MapEnterprise = {
   },
 };
 
-export const visitorInsights = {
-  range: "7d",
-  scopeType: "city",
-  scopeId: null,
-  scopeName: "San Pedro",
-  currentVisitors: 12,
-  typicalVisitors: null,
-  differencePercent: null,
-  comparisonMessage: "More matching days are needed before TANAW can make a reliable comparison.",
-  busiestEnterprise: {
-    enterpriseId: mapEnterprise.id,
-    enterpriseName: mapEnterprise.name,
-    barangay: mapEnterprise.barangay,
+/** A visitor-insights answer for `range`, with no busy enterprises unless given. */
+export function visitorInsights(range: VisitorInsights["range"], overrides: Partial<VisitorInsights> = {}): VisitorInsights {
+  return {
+    range,
+    scopeType: "city",
+    scopeId: null,
+    scopeName: "San Pedro",
     currentVisitors: 12,
     typicalVisitors: null,
     differencePercent: null,
-    activityLevel: "No Recent Baseline",
-  },
-  busiestPeriodLabel: "Sun, Aug 9",
-  series: [
-    { startAt: "2026-08-09T00:00:00+08:00", label: "Sun, Aug 9", averageVisitors: 4, peakVisitors: 6, estimatedUniqueCount: 24 },
-    { startAt: "2026-08-10T00:00:00+08:00", label: "Mon, Aug 10", averageVisitors: 3, peakVisitors: 5, estimatedUniqueCount: 19 },
-  ],
-  unusuallyBusy: [],
-  lastUpdatedAt: "2026-08-13T11:30:00+08:00",
-};
+    comparisonMessage: "More matching days are needed before TANAW can make a reliable comparison.",
+    busiestEnterprise: null,
+    busiestPeriodLabel: null,
+    series: [],
+    unusuallyBusy: [],
+    lastUpdatedAt: null,
+    ...overrides,
+  };
+}
 
 export type MapGeometry = {
   boundary: { bottom: number; centerX: number; height: number; left: number; right: number; top: number; width: number };
-  directoryRight: number;
   map: { bottom: number; height: number; left: number; right: number; top: number; width: number };
   marker: { centerX: number; centerY: number };
   /** Every marker's center, keyed by its accessible name, so cameras compare the same establishment. */
   markers: Record<string, { centerX: number; centerY: number }>;
 };
 
+/**
+ * Mocks an admin session with `enterprises` on the map and signs in. Every other operational
+ * endpoint answers with an empty list unless a test routes it again afterwards (later routes win).
+ */
 export async function configureAdminMapSession(
   page: Page,
-  options: { theme?: "dark" | "light"; followSystem?: boolean; viewport?: { height: number; width: number }; enterprises?: MapEnterprise[] } = {},
+  options: {
+    theme?: "dark" | "light";
+    followSystem?: boolean;
+    viewport?: { height: number; width: number };
+    enterprises?: MapEnterprise[];
+    insights?: (params: URLSearchParams) => VisitorInsights;
+    /** More routes, registered after the catch-all mocks so they take precedence. */
+    extraRoutes?: (page: Page) => Promise<void>;
+  } = {},
 ) {
   const colorScheme = options.theme ?? "light";
   if (options.followSystem) await page.emulateMedia({ colorScheme });
@@ -93,13 +97,18 @@ export async function configureAdminMapSession(
   await mockPortalSession(page, adminUser, { theme, signedIn: false, token: "map-camera-token" });
   await page.route("**/accounts/enterprises", (route) => route.fulfill(json([])));
   await page.route("**/operational/map-enterprises", (route) => route.fulfill(json(options.enterprises ?? [mapEnterprise])));
-  await page.route("**/operational/visitor-insights**", (route) => route.fulfill(json(visitorInsights)));
+  await page.route("**/operational/visitor-insights**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const range = (params.get("range") ?? "today") as VisitorInsights["range"];
+    return route.fulfill(json(options.insights?.(params) ?? visitorInsights(range)));
+  });
+  await options.extraRoutes?.(page);
 
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(adminUser.email);
   await page.getByLabel("Password", { exact: true }).fill("Map camera verification passphrase 2026");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/admin\/mapview$/);
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
   await waitForMapReady(page);
 }
 
@@ -169,18 +178,16 @@ export async function readCameraAfterChange(page: Page, from: MapGeometry): Prom
 export async function readMapGeometry(page: Page): Promise<MapGeometry> {
   return page.evaluate(() => {
     const mapElement = document.querySelector<HTMLElement>("#admin-enterprise-map");
-    const directory = document.querySelector<HTMLElement>("#spatial-directory-panel");
     const marker = document.querySelector<HTMLElement>("#admin-enterprise-map .leaflet-marker-icon");
     const pathRects = Array.from(document.querySelectorAll<SVGPathElement>("#admin-enterprise-map path.tanaw-boundary-path"))
       .map((path) => path.getBoundingClientRect())
       .filter((rect) => rect.width > 0 && rect.height > 0);
 
-    if (!mapElement || !directory || !marker || pathRects.length === 0) {
+    if (!mapElement || !marker || pathRects.length === 0) {
       throw new Error("Admin map geometry is not ready.");
     }
 
     const map = mapElement.getBoundingClientRect();
-    const directoryRect = directory.getBoundingClientRect();
     const markerRect = marker.getBoundingClientRect();
     const left = Math.min(...pathRects.map((rect) => rect.left));
     const right = Math.max(...pathRects.map((rect) => rect.right));
@@ -188,28 +195,9 @@ export async function readMapGeometry(page: Page): Promise<MapGeometry> {
     const bottom = Math.max(...pathRects.map((rect) => rect.bottom));
 
     return {
-      boundary: {
-        bottom,
-        centerX: (left + right) / 2,
-        height: bottom - top,
-        left,
-        right,
-        top,
-        width: right - left,
-      },
-      directoryRight: directoryRect.right,
-      map: {
-        bottom: map.bottom,
-        height: map.height,
-        left: map.left,
-        right: map.right,
-        top: map.top,
-        width: map.width,
-      },
-      marker: {
-        centerX: markerRect.left + markerRect.width / 2,
-        centerY: markerRect.top + markerRect.height / 2,
-      },
+      boundary: { bottom, centerX: (left + right) / 2, height: bottom - top, left, right, top, width: right - left },
+      map: { bottom: map.bottom, height: map.height, left: map.left, right: map.right, top: map.top, width: map.width },
+      marker: { centerX: markerRect.left + markerRect.width / 2, centerY: markerRect.top + markerRect.height / 2 },
       markers: Object.fromEntries(
         Array.from(document.querySelectorAll<HTMLElement>("#admin-enterprise-map .leaflet-marker-icon[aria-label]")).map((element) => {
           const rect = element.getBoundingClientRect();
@@ -222,13 +210,12 @@ export async function readMapGeometry(page: Page): Promise<MapGeometry> {
 
 export function expectCanonicalCitywideFraming(geometry: MapGeometry) {
   const usableCenterX = (geometry.map.left + geometry.map.right) / 2;
-  const minimumBoundaryWidthRatio = geometry.map.width >= 1600 ? 0.35 : 0.25;
 
-  expect(geometry.boundary.width).toBeGreaterThan(geometry.map.width * minimumBoundaryWidthRatio);
-  expect(geometry.boundary.left).toBeGreaterThan(geometry.map.left + 24);
-  expect(geometry.boundary.top).toBeGreaterThan(geometry.map.top + 30);
-  expect(geometry.boundary.bottom).toBeLessThan(geometry.map.bottom - 30);
-  expect(Math.abs(geometry.boundary.centerX - usableCenterX)).toBeLessThan(Math.max(90, geometry.map.width * 0.09));
+  expect(geometry.boundary.width).toBeGreaterThan(geometry.map.width * 0.25);
+  expect(geometry.boundary.left).toBeGreaterThan(geometry.map.left + 4);
+  expect(geometry.boundary.top).toBeGreaterThan(geometry.map.top + 4);
+  expect(geometry.boundary.bottom).toBeLessThan(geometry.map.bottom - 4);
+  expect(Math.abs(geometry.boundary.centerX - usableCenterX)).toBeLessThan(Math.max(60, geometry.map.width * 0.09));
 }
 
 export function expectSameCamera(actual: MapGeometry, expected: MapGeometry) {
@@ -236,7 +223,7 @@ export function expectSameCamera(actual: MapGeometry, expected: MapGeometry) {
   expect(actual.boundary.top).toBeCloseTo(expected.boundary.top, 0);
   expect(actual.boundary.width).toBeCloseTo(expected.boundary.width, 0);
   expect(actual.boundary.height).toBeCloseTo(expected.boundary.height, 0);
-  // Markers are re-added when filters change, so the first marker can be another establishment.
+  // Markers are re-added when the view changes, so the first marker can be another establishment.
   const shared = Object.keys(expected.markers).filter((label) => label in actual.markers);
   expect(shared.length).toBeGreaterThan(0);
   for (const label of shared) {

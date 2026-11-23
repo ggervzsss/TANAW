@@ -423,7 +423,7 @@ test("keeps an explicit login theme through authentication, reload, and logout",
   await page.getByLabel("Password", { exact: true }).fill("Theme continuity passphrase 2026");
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page).toHaveURL(/\/staff\/analytics$/);
+  await expect(page).toHaveURL(/\/staff\/reports$/);
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect.poll(() => synchronizedTheme).toBe("dark");
   expect(await page.evaluate(() => window.localStorage.getItem("tanaw-web-theme"))).toBe("dark");

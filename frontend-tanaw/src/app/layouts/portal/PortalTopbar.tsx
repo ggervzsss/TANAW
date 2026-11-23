@@ -170,7 +170,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
         <div
           className={`pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`}
         />
-        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${isDarkTopbar ? "bg-emerald-100/10" : "bg-white/18"}`} />
+        <div data-topbar-signature className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[linear-gradient(90deg,transparent,var(--tanaw-gold-line)_14%,var(--tanaw-gold-line)_86%,transparent)] opacity-85" />
 
         <div
           className={`relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2 ${role === "admin" ? "xl:max-[1340px]:gap-3 xl:max-[1340px]:px-5" : ""}`}

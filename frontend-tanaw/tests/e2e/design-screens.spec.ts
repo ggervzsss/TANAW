@@ -22,9 +22,9 @@ const telemetrySummary = {
 };
 
 const pages: Record<Role, string[]> = {
-  admin: ["operations", "mapview", "activity-history", "notifications", "profile"],
+  admin: ["dashboard", "enterprises", "reports", "activity", "requests", "notifications", "profile"],
   it: ["dashboard", "work-center", "lgu-accounts", "enterprise-accounts", "system-settings", "system-logs", "security", "display-preferences", "help"],
-  staff: ["analytics", "batch-reports", "generated-reports"],
+  staff: ["reports", "consolidated-reports"],
 };
 
 function userFor(role: Role) {

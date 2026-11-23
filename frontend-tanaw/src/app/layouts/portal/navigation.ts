@@ -1,4 +1,4 @@
-import { BarChart3, Building2, ChartNoAxesCombined, ClipboardList, FileCheck2, FileText, Layers, LayoutDashboard, MapPinned, Settings, Users, Wrench } from "lucide-react";
+import { Building2, FileCheck2, FileText, Layers, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
 import type { ComponentType } from "react";
 import { routes } from "@/app/routers/routes";
 import type { UserRole } from "@/shared/types/role.types";
@@ -8,52 +8,43 @@ export type NavigationItem = {
   label: string;
   path: string;
   icon: ComponentType<{ size?: number; className?: string }>;
+  /** Other pages that belong to this item, so it stays highlighted on them. */
+  alsoActiveOn?: readonly string[];
 };
 
 export const roleNavigation: Record<UserRole, NavigationItem[]> = {
   admin: [
     {
-      id: "mapview",
-      label: "Map View",
-      path: routes.admin.mapview,
-      icon: MapPinned,
+      id: "dashboard",
+      label: "Dashboard",
+      path: routes.admin.dashboard,
+      icon: LayoutDashboard,
+      alsoActiveOn: [routes.admin.activity, routes.admin.requests],
     },
     {
-      id: "activity-history",
-      label: "Activity History",
-      path: routes.admin.activityHistory,
+      id: "enterprises",
+      label: "Enterprise",
+      path: routes.admin.enterprises,
+      icon: Building2,
+    },
+    {
+      id: "reports",
+      label: "Reports",
+      path: routes.admin.reports,
       icon: FileText,
-    },
-    {
-      id: "operations",
-      label: "Alerts & Requests",
-      path: routes.admin.operations,
-      icon: ClipboardList,
-    },
-    {
-      id: "visitor-insights",
-      label: "Visitor Insights",
-      path: routes.admin.visitorInsights,
-      icon: ChartNoAxesCombined,
     },
   ],
   staff: [
     {
-      id: "analytics",
-      label: "Dashboard",
-      path: routes.staff.analytics,
-      icon: BarChart3,
-    },
-    {
-      id: "batch-reports",
-      label: "Batch Reports",
-      path: routes.staff.batchReports,
+      id: "reports",
+      label: "Reports",
+      path: routes.staff.reports,
       icon: Layers,
     },
     {
-      id: "generated-reports",
-      label: "Generated Reports",
-      path: routes.staff.generatedReports,
+      id: "consolidated-reports",
+      label: "Consolidated Reports",
+      path: routes.staff.consolidatedReports,
       icon: FileCheck2,
     },
   ],

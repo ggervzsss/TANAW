@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SystemLog } from "@/shared/types";
-import { ActivityDetailFields, AdminActivityDetailFields } from "../../../../../src/features/system-logs/components/ActivityDetailFields";
+import { ActivityDetailFields } from "../../../../../src/features/system-logs/components/ActivityDetailFields";
 
 const logWithMetadata: SystemLog = {
   id: "log-1",
@@ -19,7 +19,7 @@ const logWithMetadata: SystemLog = {
 
 describe("activity detail presentation", () => {
   it.each([
-    ["Activity History Details", <AdminActivityDetailFields activity={logWithMetadata} />],
+    ["Admin activity details", <ActivityDetailFields activity={logWithMetadata} variant="admin" />],
     ["Activity Details", <ActivityDetailFields activity={logWithMetadata} />],
   ])("keeps API metadata out of %s while retaining legitimate fields", (_name, content) => {
     const markup = renderToStaticMarkup(content);

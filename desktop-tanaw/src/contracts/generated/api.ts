@@ -944,6 +944,26 @@ export interface paths {
         patch: operations["update_intake_report_status_operational_reports_intake__report_id__status_patch"];
         trace?: never;
     };
+    "/operational/requests/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Admin Request Message
+         * @description Send IT a message about an alert, support ticket or profile change request.
+         */
+        post: operations["create_admin_request_message_operational_requests_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operational/telemetry/summary": {
         parameters: {
             query?: never;
@@ -1378,6 +1398,30 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+        };
+        /**
+         * AdminRequestMessageCreate
+         * @description A note from an Admin to IT about one request on the Admin Requests screen.
+         */
+        AdminRequestMessageCreate: {
+            /** Message */
+            message: string;
+            /** Sourceid */
+            sourceId: string;
+            /**
+             * Sourcetype
+             * @enum {string}
+             */
+            sourceType: "operational.alert" | "support.ticket" | "enterprise.profile";
+        };
+        /**
+         * AdminRequestMessageResult
+         * @description The activity record that keeps the message, and how many IT accounts were notified.
+         */
+        AdminRequestMessageResult: {
+            activity: components["schemas"]["ActivityLogSummary"];
+            /** Recipientcount */
+            recipientCount: number;
         };
         /** AttractionClassification */
         AttractionClassification: {
@@ -4817,6 +4861,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeReportSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_admin_request_message_operational_requests_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRequestMessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRequestMessageResult"];
                 };
             };
             /** @description Validation Error */

@@ -160,15 +160,15 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
   if (role === "admin") {
     if (notification.sourceType === "operational.alert") {
-      return adminOperationsPath("situations", "alert", notification.sourceId);
+      return adminRequestsPath("alert", notification.sourceId);
     }
     if (text.includes("enterprise.profile") || text.includes("profile change request")) {
-      return adminOperationsPath("accounts");
+      return adminRequestsPath("account", notification.sourceId);
     }
     if (text.includes("support") || text.includes("ticket")) {
-      return adminOperationsPath("support", "ticket", notification.sourceId);
+      return adminRequestsPath("ticket", notification.sourceId);
     }
-    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activityHistory : routes.admin.operations;
+    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activity : routes.admin.requests;
   }
   if (role === "it") {
     if (notification.sourceType === "operational.alert") return itWorkCenterPath("issues", "alert", notification.sourceId);
@@ -180,17 +180,18 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
     return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : itWorkCenterPath("issues");
   }
   if (role === "staff") {
-    if (text.includes("report") || text.includes("batch")) return routes.staff.batchReports;
+    if (text.includes("consolidated") || text.includes("final report")) return routes.staff.consolidatedReports;
+    if (text.includes("report") || text.includes("batch")) return routes.staff.reports;
     if (text.includes("security") || text.includes("password")) return routes.staff.security;
     return routes.staff.notifications;
   }
   return undefined;
 }
 
-function adminOperationsPath(view: "situations" | "support" | "accounts", itemKey?: "alert" | "ticket", itemId?: string | null) {
-  const params = new URLSearchParams({ view });
-  if (itemKey && itemId) params.set(itemKey, itemId);
-  return `${routes.admin.operations}?${params.toString()}`;
+/** Requests deep link: `alert`, `ticket` or `account` (an enterprise profile change request) selects that request. */
+function adminRequestsPath(itemKey: "alert" | "ticket" | "account", itemId?: string | null) {
+  if (!itemId) return routes.admin.requests;
+  return `${routes.admin.requests}?${new URLSearchParams({ [itemKey]: itemId }).toString()}`;
 }
 
 function itWorkCenterPath(view: "issues" | "support" | "accounts" | "email", itemKey?: "alert" | "ticket" | "account", itemId?: string | null) {

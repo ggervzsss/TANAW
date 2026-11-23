@@ -23,10 +23,12 @@ export const routes = {
   admin: {
     root: "/admin",
     generalSettings: "/admin/settings",
-    mapview: "/admin/mapview",
-    activityHistory: "/admin/activity-history",
-    operations: "/admin/operations",
-    visitorInsights: "/admin/visitor-insights",
+    dashboard: "/admin/dashboard",
+    enterprises: "/admin/enterprises",
+    enterpriseDetails: "/admin/enterprises/:enterpriseId",
+    reports: "/admin/reports",
+    activity: "/admin/activity",
+    requests: "/admin/requests",
     notifications: "/admin/notifications",
     profile: "/admin/settings/profile",
     security: "/admin/settings/security",
@@ -36,13 +38,33 @@ export const routes = {
   staff: {
     root: "/staff",
     generalSettings: "/staff/settings",
-    batchReports: "/staff/batch-reports",
-    generatedReports: "/staff/generated-reports",
-    analytics: "/staff/analytics",
+    reports: "/staff/reports",
+    consolidatedReports: "/staff/consolidated-reports",
     notifications: "/staff/notifications",
     profile: "/staff/settings/profile",
     security: "/staff/settings/security",
     displayPreferences: "/staff/settings/appearance",
     help: "/staff/help",
   },
+} as const;
+
+/** The Enterprise Details page for one enterprise, by its enterprise ID (as on the map and in reports). */
+export function adminEnterpriseDetailsPath(enterpriseId: string) {
+  return `${routes.admin.enterprises}/${encodeURIComponent(enterpriseId)}`;
+}
+
+/** Old portal addresses kept as redirects, so bookmarks and notification links still land on the new screens. */
+export const legacyPortalRedirects = {
+  admin: [
+    ["mapview", routes.admin.dashboard],
+    ["visitor-insights", routes.admin.dashboard],
+    ["activity-history", routes.admin.activity],
+    ["operations", routes.admin.requests],
+  ],
+  staff: [
+    ["analytics", routes.staff.reports],
+    ["batch-reports", routes.staff.reports],
+    ["generated-reports", routes.staff.consolidatedReports],
+    ["final-reports-audit", routes.staff.consolidatedReports],
+  ],
 } as const;
