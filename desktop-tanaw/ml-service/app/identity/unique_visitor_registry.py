@@ -102,6 +102,7 @@ class UniqueVisitorRegistry:
         self._gallery: list[VisitorIdentity] = []
         self._quality_gallery: dict[str, VisitorModelEmbedding] = {}
         self._track_visitors: dict[int, str] = {}
+        self._stashed_track_visitors: dict[tuple[str, int | None], dict[int, str]] = {}
         self._last_cleanup_at: str | None = None
 
     def prepare(self, camera_id: int | None, now: datetime | None = None) -> None:
@@ -111,15 +112,29 @@ class UniqueVisitorRegistry:
         if business_date == self._business_date and camera_id == self._camera_id:
             return
 
+        # Keep each day's live track bindings: identifying an entry on the day it crossed,
+        # just after midnight, briefly switches back to that day and must not make every
+        # person in view today look new.
+        if self._business_date is not None:
+            self._stashed_track_visitors[(self._business_date, self._camera_id)] = dict(
+                self._track_visitors
+            )
         self._business_date = business_date
         self._camera_id = camera_id
-        self._track_visitors.clear()
+        self._track_visitors = self._stashed_track_visitors.pop((business_date, camera_id), {})
+        while len(self._stashed_track_visitors) > 2:
+            self._stashed_track_visitors.pop(next(iter(self._stashed_track_visitors)))
         self._track_learned_views.clear()
         self._gallery = self._load_gallery(business_date, camera_id, now)
         self._quality_gallery = self._load_quality_gallery(business_date, camera_id, now)
+        valid = {identity.visitor_id for identity in self._gallery}
+        self._track_visitors = {
+            track: visitor for track, visitor in self._track_visitors.items() if visitor in valid
+        }
 
     def reset_session_tracks(self) -> None:
         self._track_visitors.clear()
+        self._stashed_track_visitors.clear()
         self._track_learned_views.clear()
 
     def refresh_gallery(self, camera_id: int | None, now: datetime) -> None:

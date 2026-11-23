@@ -6,6 +6,7 @@ from threading import Event
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import ProcessingSession
@@ -236,8 +237,13 @@ def test_an_uncertain_visitor_is_settled_while_nobody_is_in_view(tmp_path: Path)
     assert unique_count(service) == 2
 
 
+@pytest.mark.parametrize(
+    "box_rows",
+    [(20, 180), (40, 200)],
+    ids=["inside the frame", "cut off at the bottom edge"],
+)
 def test_open_space_person_hidden_long_enough_to_get_a_new_track_stays_one_visitor(
-    tmp_path: Path,
+    tmp_path: Path, box_rows: tuple[int, int]
 ) -> None:
     polygon = [ZonePoint(x=x, y=y) for x, y in ((0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8))]
     manager = CameraProcessingManager(str(tmp_path), camera_id=1)
@@ -288,7 +294,7 @@ def test_open_space_person_hidden_long_enough_to_get_a_new_track_stays_one_visit
                         ResolvedTrack(
                             track_id,
                             track_id,
-                            (x - 30, 20, x + 30, 180),
+                            (x - 30, box_rows[0], x + 30, box_rows[1]),
                             0.9,
                             Centroid(x, 90),
                             Centroid(x, 100),

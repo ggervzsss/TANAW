@@ -1,10 +1,12 @@
 """One serialized daily identity gallery for both camera modes in an enterprise."""
 
+import functools
 import hashlib
 import json
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Concatenate, Literal
 
 import numpy as np
 
@@ -32,6 +34,19 @@ MIN_SWEEP_INTERVAL_SECONDS = 1.0
 IDENTITY_NAMESPACE = "establishment:v1:"
 
 
+def _serialized[**P, R](
+    method: Callable[Concatenate["EstablishmentRegistry", P], R],
+) -> Callable[Concatenate["EstablishmentRegistry", P], R]:
+    """Run the whole method under the registry lock, including any steps it runs first."""
+
+    @functools.wraps(method)
+    def locked(self: "EstablishmentRegistry", *args: P.args, **kwargs: P.kwargs) -> R:
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return locked
+
+
 class EstablishmentRegistry:
     def __init__(self, app_data_dir: str | None, enterprise_id: str) -> None:
         self.database = LocalDatabase(app_data_dir, enterprise_id)
@@ -45,6 +60,8 @@ class EstablishmentRegistry:
         # Successor physical track key -> (predecessor key, linked at).
         self._track_links: dict[str, tuple[str, datetime]] = {}
         self._last_sweep_at: datetime | None = None
+        # Registries recreated after a restart without knowing their quality space.
+        self._placeholder_keys: set[tuple[str, int, str | None]] = set()
 
     def refresh_track(
         self,
@@ -108,6 +125,7 @@ class EstablishmentRegistry:
                 {f"{camera_id}:{key}" for key in track_keys},
             )
 
+    @_serialized
     def observe(
         self,
         *,
@@ -308,8 +326,10 @@ class EstablishmentRegistry:
         """Record that a new physical track resumed a lost one on the same camera.
 
         The camera decides the link from timing, position, and appearance; both tracks then
-        share one visitor. When each already has its own visitor, the two visitors are merged,
-        unless they were ever seen at the same time. Returns the shared visitor when known.
+        share one visitor. When the new track already has a visitor of its own, the two are
+        merged only if that visitor came from the new track alone and the two were never seen
+        at the same time: a link is weaker evidence than a daily match, so it never joins two
+        established visitors. Returns the shared visitor, or None when the link is refused.
         """
         successor = f"{camera_id}:{track_key}"
         predecessor = f"{camera_id}:{predecessor_track_key}"
@@ -330,14 +350,19 @@ class EstablishmentRegistry:
             if visitor is None:
                 return None
             changed = False
+            excluded = self._excluded_visitors(successor, at, business_date)
+            if visitor in excluded:
+                return None
             own = self._track_visitor(db, successor, business_date)
             if own is not None and own != visitor:
+                if own in excluded or not self._visitor_only_on(
+                    db, own, self._link_group(successor), business_date
+                ):
+                    return None
                 merged = self._merge_visitors(own, visitor, observed_at)
                 if merged is None:
                     return None
                 visitor, changed = merged, True
-            if visitor in self._excluded_visitors(successor, at, business_date):
-                return None
             for registry in self._registries.values():
                 if registry.visitor_id_for_track(_track_id(successor)) is None:
                     registry.bind_track(_track_id(successor), visitor)
@@ -422,6 +447,9 @@ class EstablishmentRegistry:
             (business_date, space),
         ).fetchone()
         quality = str(row["model_name"]).rpartition("@")[0] if row is not None else None
+        key = (model_name, int(dimension), quality)
+        if quality is None and key not in self._registries:
+            self._placeholder_keys.add(key)
         self._registry(model_name, int(dimension), quality)
 
     def _track_visitor(self, db: Any, track_key: str, business_date: str) -> str | None:
@@ -437,6 +465,20 @@ class EstablishmentRegistry:
         ).fetchone()
         return str(row["visitor_id"]) if row is not None else None
 
+    @staticmethod
+    def _visitor_only_on(
+        db: Any, visitor_id: str, track_keys: set[str], business_date: str
+    ) -> bool:
+        """Whether every observation of this visitor today belongs to these tracks."""
+        keys = sorted(track_keys)
+        placeholders = ",".join("?" for _ in keys)
+        row = db.execute(
+            "select count(*) from establishment_observations where business_date=? "
+            f"and visitor_id=? and track_key not in ({placeholders})",
+            (business_date, visitor_id, *keys),
+        ).fetchone()
+        return int(row[0]) == 0
+
     def _merge_visitors(self, alias: str, canonical: str, now: datetime) -> str | None:
         """Merge two visitors shown by linked tracks; returns the surviving visitor."""
         if canonical in self._co_visible_visitors(alias):
@@ -448,11 +490,15 @@ class EstablishmentRegistry:
         return None
 
     def _co_visible_visitors(self, visitor_id: str) -> frozenset[str]:
-        """Visitors observed while this visitor was in view, on any camera: other people."""
+        """Visitors observed while this visitor was in view, on any camera: other people.
+
+        Saved rows lag the cameras by a couple of seconds, so a track still in view counts
+        as seen until its camera's latest frame, not only until its last saved row.
+        """
         with self.database.connection() as db:
             own = db.execute(
-                "select business_date,track_key,first_at,last_at from establishment_observations "
-                "where visitor_id=?",
+                "select business_date,track_key,first_at,last_at,ended_at "
+                "from establishment_observations where visitor_id=?",
                 (visitor_id,),
             ).fetchall()
             if not own:
@@ -460,24 +506,31 @@ class EstablishmentRegistry:
             dates = sorted({str(row["business_date"]) for row in own})
             placeholders = ",".join("?" for _ in dates)
             others = db.execute(
-                "select visitor_id,track_key,first_at,last_at from establishment_observations "
-                f"where business_date in ({placeholders}) and visitor_id is not null "
-                "and visitor_id!=?",
+                "select visitor_id,track_key,first_at,last_at,ended_at "
+                f"from establishment_observations where business_date in ({placeholders}) "
+                "and visitor_id is not null and visitor_id!=?",
                 (*dates, visitor_id),
             ).fetchall()
+        seen_until: dict[str, datetime] = {}
+        for at, keys in self._present_tracks.values():
+            for key in keys:
+                seen_until[key] = max(at, seen_until.get(key, at))
+
+        def span(row: Any) -> tuple[datetime, datetime]:
+            first = datetime.fromisoformat(row["first_at"])
+            last = datetime.fromisoformat(row["last_at"])
+            live = seen_until.get(row["track_key"])
+            if row["ended_at"] is None and live is not None and live > last:
+                last = live
+            return first, last
+
         own_keys = {row["track_key"] for row in own}
-        spans = [
-            (datetime.fromisoformat(row["first_at"]), datetime.fromisoformat(row["last_at"]))
-            for row in own
-        ]
+        spans = [span(row) for row in own]
         co_visible: set[str] = set()
         for row in others:
             if row["track_key"] in own_keys or row["visitor_id"] in co_visible:
                 continue
-            first, last = (
-                datetime.fromisoformat(row["first_at"]),
-                datetime.fromisoformat(row["last_at"]),
-            )
+            first, last = span(row)
             if any(first <= own_last and own_first <= last for own_first, own_last in spans):
                 co_visible.add(str(row["visitor_id"]))
         return frozenset(co_visible)
@@ -563,7 +616,8 @@ class EstablishmentRegistry:
             # A registry recreated after a restart may not know the quality space; a camera's
             # request supersedes it. It holds no track bindings, so nothing is lost.
             placeholder = (model_name, dimension, None)
-            if quality_model_name is not None and placeholder in self._registries:
+            if quality_model_name is not None and placeholder in self._placeholder_keys:
+                self._placeholder_keys.discard(placeholder)
                 self._gallery_versions.pop(self._registries.pop(placeholder), None)
             registry = UniqueVisitorRegistry(
                 self._store,

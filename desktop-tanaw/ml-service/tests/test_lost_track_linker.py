@@ -30,39 +30,95 @@ def test_track_resuming_a_briefly_hidden_person_links_to_their_track() -> None:
     seen(linker, 1, 1.0)
     linker.remember_appearance(1, PERSON)
     seen(linker, 2, 4.0, x=0.55)
+    # A track looks for its past only once its appearance is trusted.
+    assert not linker.needs_link_decision(2, 4.0)
+    linker.remember_appearance(2, SAME_PERSON_LATER)
     assert linker.needs_link_decision(2, 4.0)
     assert linker.link(2, SAME_PERSON_LATER) == 1
     assert not linker.needs_link_decision(2, 4.5)
 
 
-def test_a_failed_link_is_retried_with_a_better_view_while_the_track_is_new() -> None:
+def test_link_attempts_are_timed_from_the_first_trusted_appearance() -> None:
     linker = LostTrackLinker(decision_window_seconds=5.0)
     seen(linker, 1, 0.0)
     linker.remember_appearance(1, PERSON)
     seen(linker, 2, 2.0)
+    # In a crowd the new track collects clean samples only after several seconds.
+    seen(linker, 2, 9.0)
+    linker.remember_appearance(2, SOMEONE_ELSE)
+    assert linker.needs_link_decision(2, 9.0)
     assert linker.link(2, SOMEONE_ELSE) is None
-    assert linker.needs_link_decision(2, 4.0)
+    # A failed attempt is retried with a better view while the window lasts.
+    seen(linker, 2, 11.0)
+    assert linker.needs_link_decision(2, 11.0)
     assert linker.link(2, SAME_PERSON_LATER) == 1
-    assert not linker.needs_link_decision(2, 4.0)
+    assert not linker.needs_link_decision(2, 11.0)
     late = LostTrackLinker(decision_window_seconds=5.0)
-    seen(late, 1, 0.0)
-    seen(late, 2, 2.0)
-    assert not late.needs_link_decision(2, 7.5)
+    seen(late, 2, 0.0)
+    late.remember_appearance(2, PERSON)
+    seen(late, 2, 5.5)
+    assert not late.needs_link_decision(2, 5.5)
 
 
-def test_people_leaving_or_entering_at_the_frame_edge_are_not_linked() -> None:
+def walk(
+    linker: LostTrackLinker,
+    track_id: int,
+    start: float,
+    path: list[tuple[float, float]],
+    edges: list[set[str]],
+) -> None:
+    for step, (position, sides) in enumerate(zip(path, edges, strict=True)):
+        linker.observe({track_id: position}, start + step * 0.5, edges={track_id: sides})
+
+
+def test_people_walking_out_of_or_into_the_frame_are_not_linked() -> None:
     leaving = LostTrackLinker()
-    leaving.observe({1: (0.98, 0.5)}, 0.0, at_edge={1})
+    walk(leaving, 1, 0.0, [(0.90, 0.5), (0.94, 0.5), (0.98, 0.5)], [set(), set(), {"right"}])
     leaving.remember_appearance(1, PERSON)
-    leaving.observe({2: (0.97, 0.5)}, 2.0)
+    walk(leaving, 2, 3.0, [(0.97, 0.5), (0.97, 0.5), (0.97, 0.5)], [{"right"}] * 3)
+    leaving.remember_appearance(2, PERSON)
     assert leaving.link(2, PERSON) is None
 
     entering = LostTrackLinker()
-    seen(entering, 1, 0.0)
+    walk(entering, 1, 0.0, [(0.5, 0.95)] * 3, [set()] * 3)
     entering.remember_appearance(1, PERSON)
-    entering.observe({2: (0.5, 0.5)}, 2.0, at_edge={2})
-    assert not entering.needs_link_decision(2, 2.0)
+    walk(entering, 2, 3.0, [(0.5, 0.99), (0.5, 0.95), (0.5, 0.90)], [{"bottom"}, set(), set()])
+    entering.remember_appearance(2, PERSON)
     assert entering.link(2, PERSON) is None
+
+
+def test_a_person_hidden_while_standing_at_the_frame_edge_is_linked() -> None:
+    # Close to a high camera, a person's box is cut off at the bottom of the frame.
+    linker = LostTrackLinker()
+    walk(linker, 1, 0.0, [(0.5, 0.99)] * 3, [{"bottom"}] * 3)
+    linker.remember_appearance(1, PERSON)
+    walk(linker, 2, 3.0, [(0.52, 0.99)] * 3, [{"bottom"}] * 3)
+    linker.remember_appearance(2, PERSON)
+    assert linker.needs_link_decision(2, 4.0)
+    assert linker.link(2, PERSON) == 1
+
+
+def test_a_tracker_flicker_at_the_frame_edge_is_linked() -> None:
+    # Standing at the side of the frame, the cut-off box jitters outwards, then the tracker
+    # replaces the track a moment later at the same spot.
+    linker = LostTrackLinker()
+    walk(linker, 1, 0.0, [(0.948, 0.32), (0.963, 0.32), (0.973, 0.33)], [{"right"}] * 3)
+    linker.remember_appearance(1, PERSON)
+    walk(linker, 2, 1.2, [(0.958, 0.29)] * 3, [{"right"}] * 3)
+    linker.remember_appearance(2, PERSON)
+    assert linker.link(2, PERSON) == 1
+
+
+def test_an_edge_entry_waits_until_its_motion_is_known() -> None:
+    linker = LostTrackLinker()
+    linker.observe({1: (0.5, 0.97)}, 0.0)
+    linker.remember_appearance(1, PERSON)
+    linker.observe({2: (0.5, 0.99)}, 2.0, edges={2: {"bottom"}})
+    linker.remember_appearance(2, PERSON)
+    assert linker.link(2, PERSON) is None
+    # Standing still for a second at the edge, it is no longer walking in.
+    linker.observe({2: (0.5, 0.99)}, 3.1, edges={2: {"bottom"}})
+    assert linker.link(2, PERSON) == 1
 
 
 def test_a_lone_candidate_needs_a_stronger_likeness() -> None:

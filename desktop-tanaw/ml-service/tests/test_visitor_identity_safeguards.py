@@ -10,7 +10,9 @@ from app.camera.camera_manager import CameraProcessingManager
 from app.camera.models import PendingEntryEvent
 from app.counting.geometry import Centroid
 from app.identity.establishment_registry import EstablishmentRegistry
+from app.identity.unique_visitor_registry import UniqueVisitorRegistry
 from app.storage.repositories.establishment_repository import day_bounds
+from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack
 
 NOW = datetime(2026, 11, 10, 2, tzinfo=UTC)
@@ -219,3 +221,85 @@ def test_a_queued_entry_follows_its_track_through_a_reid_relink(tmp_path: Path) 
         assert (moved.track_id, moved.source_track_id) == (9, 11)
     finally:
         manager.close()
+
+
+def test_a_link_to_a_visitor_in_view_elsewhere_changes_nothing(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observe(service, "run:1")
+    observe(service, "run:2", embedding=STRANGER, observed_at=NOW + timedelta(seconds=3))
+    # The first visitor is in view on another camera at the moment of the link.
+    observe(service, "x", camera_id=3, observed_at=NOW + timedelta(seconds=4))
+    service.update_present_tracks(3, {"x"}, NOW + timedelta(seconds=4.5))
+    linked = service.link_track(
+        camera_id=2,
+        track_key="run:2",
+        predecessor_track_key="run:1",
+        observed_at=NOW + timedelta(seconds=4.5),
+    )
+    assert linked is None
+    with service.database.connection() as db:
+        statuses = {row[0] for row in db.execute("select identity_status from visitor_identities")}
+    assert statuses == {"confirmed"}
+    assert unique_count(service) == 2
+
+
+def test_a_link_never_merges_two_established_visitors(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    earlier = observe(service, "earlier", ended_at=NOW)
+    later = NOW + timedelta(minutes=1)
+    observe(service, "run:1", embedding=STRANGER, observed_at=later)
+    # The new track already matched the visitor seen a minute ago.
+    rematched = observe(service, "run:2", observed_at=later + timedelta(seconds=3))
+    assert rematched.visitor_id == earlier.visitor_id
+    linked = service.link_track(
+        camera_id=2,
+        track_key="run:2",
+        predecessor_track_key="run:1",
+        observed_at=later + timedelta(seconds=4),
+    )
+    assert linked is None
+    assert unique_count(service) == 2
+
+
+def test_a_track_still_in_view_counts_as_seen_beyond_its_last_saved_row(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    first = observe(service, "run:1")
+    other = observe(
+        service, "x", camera_id=3, embedding=STRANGER, observed_at=NOW + timedelta(seconds=1.5)
+    )
+    assert other.visitor_id not in service._co_visible_visitors(first.visitor_id)
+    # The first track is still in view; its row is simply not saved again yet.
+    service.update_present_tracks(2, {"run:1"}, NOW + timedelta(seconds=2))
+    assert other.visitor_id in service._co_visible_visitors(first.visitor_id)
+
+
+def test_switching_days_keeps_each_days_track_bindings(tmp_path: Path) -> None:
+    registry = UniqueVisitorRegistry(SessionStore(str(tmp_path)))
+    after_midnight = datetime(2026, 11, 10, 16, 0, 5, tzinfo=UTC)
+    decision = registry.resolve_entry(
+        track_id=1,
+        camera_id=None,
+        embedding=PERSON,
+        detection_confidence=0.9,
+        bbox=None,
+        now=after_midnight,
+    )
+    registry.prepare(None, after_midnight - timedelta(seconds=10))
+    assert registry.visitor_id_for_track(1) is None
+    registry.prepare(None, after_midnight)
+    assert registry.visitor_id_for_track(1) == decision.visitor_id
+
+
+def test_only_restart_placeholders_give_way_to_a_cameras_registry(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    live = service._registry("fast", 4, None)
+    service._registry("fast", 4, "quality")
+    assert service._registries[("fast", 4, None)] is live
+
+    observe(service, "first")
+    observe(service, "second", embedding=at_cosine(0.65), observed_at=NOW + timedelta(minutes=1))
+    restarted = EstablishmentRegistry(str(tmp_path), "park")
+    restarted.finalize_pending(NOW + timedelta(minutes=1, seconds=1))
+    assert ("person_reid_onnx", 4, None) in restarted._registries
+    restarted._registry("person_reid_onnx", 4, "quality")
+    assert ("person_reid_onnx", 4, None) not in restarted._registries

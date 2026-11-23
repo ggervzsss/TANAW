@@ -1528,7 +1528,7 @@ class CameraProcessingManager:
                 if t.track_id > 0
             },
             observed_at,
-            at_edge={t.track_id for t in tracks if _touches_frame_edge(t.bbox, width, height)},
+            edges={t.track_id: _frame_edges(t.bbox, width, height) for t in tracks},
         )
         if self._establishment_registry is not None and session.config.camera_id is not None:
             self._establishment_registry.update_present_tracks(
@@ -2226,10 +2226,16 @@ class CameraProcessingManager:
         )
 
 
-def _touches_frame_edge(
+def _frame_edges(
     bbox: tuple[int, int, int, int], width: int, height: int, margin: float = 0.02
-) -> bool:
-    """Whether a box reaches the frame border, where people walk in and out of view."""
+) -> frozenset[str]:
+    """The sides of the frame a box reaches, where people may walk in and out of view."""
     x1, y1, x2, y2 = bbox
     mx, my = width * margin, height * margin
-    return x1 <= mx or y1 <= my or x2 >= width - mx or y2 >= height - my
+    sides = {
+        "left": x1 <= mx,
+        "right": x2 >= width - mx,
+        "top": y1 <= my,
+        "bottom": y2 >= height - my,
+    }
+    return frozenset(side for side, touched in sides.items() if touched)

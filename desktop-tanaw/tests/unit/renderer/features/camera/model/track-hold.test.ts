@@ -58,8 +58,17 @@ describe("held person boxes", () => {
   it("treats detections from stalled processing as stale", () => {
     expect(detectionsAreFresh(null)).toBe(true);
     expect(detectionsAreFresh(200)).toBe(true);
-    expect(detectionsAreFresh(1499, 1500)).toBe(true);
-    expect(detectionsAreFresh(1500, 1500)).toBe(false);
+    expect(detectionsAreFresh(1499, null, 1500)).toBe(true);
+    expect(detectionsAreFresh(1500, null, 1500)).toBe(false);
     expect(detectionsAreFresh(3000)).toBe(false);
+  });
+
+  it("allows a few frame intervals of age when processing is slow", () => {
+    // At 1 frame per second, boxes stay up to three seconds between frames.
+    expect(detectionsAreFresh(2500, 1)).toBe(true);
+    expect(detectionsAreFresh(3000, 1)).toBe(false);
+    // Fast processing keeps the 1.5 s floor.
+    expect(detectionsAreFresh(1600, 10)).toBe(false);
+    expect(detectionsAreFresh(1600, 0)).toBe(false);
   });
 });

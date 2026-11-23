@@ -6,9 +6,18 @@ export const TRACK_HOLD_MS = 700;
 /** Detections older than this no longer describe the live video, so their boxes are hidden. */
 export const DETECTION_STALE_MS = 1500;
 
-/** Whether the latest detections are recent enough to draw over the live video. */
-export function detectionsAreFresh(processedFrameStaleMs: number | null | undefined, staleMs: number = DETECTION_STALE_MS): boolean {
-  return processedFrameStaleMs == null || processedFrameStaleMs < staleMs;
+/** At slow processing rates, boxes survive this many frame intervals before they count as stale. */
+const STALE_FRAME_INTERVALS = 3;
+
+/**
+ * Whether the latest detections are recent enough to draw over the live video.
+ * A slow machine processes a frame only every second or so; the limit grows with that
+ * interval so boxes do not blink off between frames.
+ */
+export function detectionsAreFresh(processedFrameStaleMs: number | null | undefined, processingFps?: number | null, staleMs: number = DETECTION_STALE_MS): boolean {
+  if (processedFrameStaleMs == null) return true;
+  const limit = processingFps != null && processingFps > 0 ? Math.max(staleMs, (STALE_FRAME_INTERVALS * 1000) / processingFps) : staleMs;
+  return processedFrameStaleMs < limit;
 }
 
 export type DisplayedTrack = MlDetectionTrack & {

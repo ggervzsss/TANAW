@@ -110,7 +110,7 @@ export function CameraVideoPreview({
   const frameHeight = detections.frame_height ?? 0;
   const imageAspectRatio = decodedAspectRatio ?? (frameWidth > 0 && frameHeight > 0 ? frameWidth / frameHeight : null);
   // Boxes from stalled processing would sit still over live video, so they are hidden.
-  const freshDetections = detectionsAreFresh(health?.processed_frame_stale_ms);
+  const freshDetections = detectionsAreFresh(health?.processed_frame_stale_ms, health?.analytics_fps ?? health?.target_processing_fps);
   const confidentTracks = useMemo(() => (freshDetections ? detections.tracks.filter((track) => track.confidence >= activeCam.confidence) : NO_TRACKS), [activeCam.confidence, detections.tracks, freshDetections]);
   // Boxes glide between detection updates and survive a brief miss instead of jumping or blinking.
   const heldTracks = useHeldTracks(confidentTracks, activeCam.id);
