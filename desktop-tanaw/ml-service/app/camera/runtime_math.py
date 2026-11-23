@@ -28,13 +28,18 @@ def max_frame_width(configured_width: int | None, processing_profile: str) -> in
 
 
 def resolve_reid_mode(requested_mode: str, processing_profile: str) -> str:
+    """The appearance models a profile runs when the camera asks for ``auto``.
+
+    Unique visitors are the main reporting figure and come only from appearance matching, so
+    every profile identifies visitors. The quality model takes two samples per person and
+    carries the male/female head that meets its accuracy targets; only the lowest-power
+    profile relies on the fast model alone.
+    """
     if requested_mode in {"off", "fast", "quality"}:
         return requested_mode
-    if processing_profile == "high_accuracy":
-        return "quality"
-    if processing_profile == "balanced":
+    if processing_profile == "emergency":
         return "fast"
-    return "off"
+    return "quality"
 
 
 def fast_reid_enabled(mode: str) -> bool:

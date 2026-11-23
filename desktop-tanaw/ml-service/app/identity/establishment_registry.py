@@ -4,8 +4,9 @@ import functools
 import hashlib
 import json
 import threading
-from collections.abc import Callable
-from datetime import UTC, datetime
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Concatenate, Literal
 
 import numpy as np
@@ -32,6 +33,14 @@ TRACK_LINK_RETENTION_SECONDS = 3600.0
 # Every camera asks for the pending-identity sweep; it runs at most this often in total.
 MIN_SWEEP_INTERVAL_SECONDS = 1.0
 IDENTITY_NAMESPACE = "establishment:v1:"
+# A visitor whose latest doorway event is an entry this recent, with no exit since, is inside:
+# a new entry that looks like them is someone else, such as a group in matching uniforms.
+REENTRY_EXCLUSION_SECONDS = 30.0
+# Closer than this, a second entry is the tracker replacing the same person's track; group
+# members that close together are normally still in view and excluded as present.
+REENTRY_EXCLUSION_MIN_SECONDS = 2.0
+# People seen within this long of an observation, without a later end, may still be in view.
+PRESENCE_WINDOW_SECONDS = 1.0
 
 
 def _serialized[**P, R](
@@ -113,6 +122,16 @@ class EstablishmentRegistry:
                 payload=json.loads(source["payload_json"]),
                 view_embedding=view_embedding,
             )
+
+    @contextmanager
+    def atomic(self) -> Iterator[None]:
+        """Commit a camera's ledger write and its observations together, or neither.
+
+        The registry lock is taken before the database write lock, the same order every
+        observation uses, so two cameras writing at once never wait on each other in a cycle.
+        """
+        with self._lock, self.database.transaction():
+            yield
 
     def update_present_tracks(
         self, camera_id: int, track_keys: set[str], observed_at: datetime
@@ -228,7 +247,9 @@ class EstablishmentRegistry:
             if qualified and normalized is not None:
                 registry = self._registry(model_name, normalized.size, quality_model_name)
                 self._refresh_registry(registry, business_date, observed_at)
-                excluded = self._excluded_visitors(track_key, at, business_date)
+                excluded = self._excluded_visitors(
+                    track_key, at, business_date, entering=kind == "entry"
+                )
                 # Each uncertain identity excludes the people seen beside it, whoever this
                 # observation's track is.
                 finalized = registry.finalize_due_provisionals(observed_at)
@@ -294,7 +315,7 @@ class EstablishmentRegistry:
                 )
             if changed:
                 self.repository.reconcile_identities(business_date)
-                self.repository.rebuild_day(business_date, observed_at)
+                self.repository.mark_day_changed(business_date, observed_at)
             return decision
 
     def _unidentified_crossing_day(
@@ -371,7 +392,7 @@ class EstablishmentRegistry:
             )
             if changed:
                 self.repository.reconcile_identities(business_date)
-                self.repository.rebuild_day(business_date, observed_at)
+                self.repository.mark_day_changed(business_date, observed_at)
             return visitor
 
     def finalize_pending(self, now: datetime | None = None) -> bool:
@@ -389,6 +410,7 @@ class EstablishmentRegistry:
             ):
                 return False
             self._last_sweep_at = now
+            settled_yesterday = self._settle_previous_day(db, now)
             spaces = {
                 str(row["model_name"])
                 for row in db.execute(
@@ -398,7 +420,7 @@ class EstablishmentRegistry:
                 )
             }
             if not spaces:
-                return False
+                return settled_yesterday
             for space in spaces:
                 self._registry_for_space(db, space, business_date)
             changed = False
@@ -413,7 +435,40 @@ class EstablishmentRegistry:
                     )
             if changed:
                 self.repository.reconcile_identities(business_date)
-                self.repository.rebuild_day(business_date, now)
+                self.repository.mark_day_changed(business_date, now)
+        return changed or settled_yesterday
+
+    def _settle_previous_day(self, db: Any, now: datetime) -> bool:
+        """Settle uncertain identities left from the business day that just ended.
+
+        An identity created seconds before midnight would otherwise wait for a sweep of a day
+        no sweep looks at, and that day would be finalized with the visitor unresolved.
+        """
+        today = now.astimezone(TIMEZONE).date()
+        previous = (today - timedelta(days=1)).isoformat()
+        spaces = {
+            str(row["model_name"])
+            for row in db.execute(
+                "select distinct model_name from visitor_identities "
+                "where business_date=? and identity_status='provisional'",
+                (previous,),
+            )
+        }
+        if not spaces:
+            return False
+        day_end = datetime.combine(today, time.min, TIMEZONE) - timedelta(microseconds=1)
+        for space in spaces:
+            self._registry_for_space(db, space, previous)
+        changed = False
+        for registry in list(self._registries.values()):
+            if registry.model_name not in spaces:
+                continue
+            self._refresh_registry(registry, previous, day_end)
+            changed |= registry.finalize_due_provisionals(day_end, force=True)
+            self._gallery_versions.pop(registry, None)
+        if changed:
+            self.repository.reconcile_identities(previous)
+            self.repository.mark_day_changed(previous, now)
         return changed
 
     def _refresh_registry(
@@ -495,22 +550,6 @@ class EstablishmentRegistry:
         Saved rows lag the cameras by a couple of seconds, so a track still in view counts
         as seen until its camera's latest frame, not only until its last saved row.
         """
-        with self.database.connection() as db:
-            own = db.execute(
-                "select business_date,track_key,first_at,last_at,ended_at "
-                "from establishment_observations where visitor_id=?",
-                (visitor_id,),
-            ).fetchall()
-            if not own:
-                return frozenset()
-            dates = sorted({str(row["business_date"]) for row in own})
-            placeholders = ",".join("?" for _ in dates)
-            others = db.execute(
-                "select visitor_id,track_key,first_at,last_at,ended_at "
-                f"from establishment_observations where business_date in ({placeholders}) "
-                "and visitor_id is not null and visitor_id!=?",
-                (*dates, visitor_id),
-            ).fetchall()
         seen_until: dict[str, datetime] = {}
         for at, keys in self._present_tracks.values():
             for key in keys:
@@ -524,8 +563,38 @@ class EstablishmentRegistry:
                 last = live
             return first, last
 
+        with self.database.connection() as db:
+            own = db.execute(
+                "select business_date,track_key,first_at,last_at,ended_at "
+                "from establishment_observations where visitor_id=?",
+                (visitor_id,),
+            ).fetchall()
+            if not own:
+                return frozenset()
+            spans = [span(row) for row in own]
+            dates = sorted({str(row["business_date"]) for row in own})
+            live_keys = sorted(seen_until)
+            # Only rows whose span can overlap this visitor's: saved, or still in view.
+            live_clause = (
+                f" or (ended_at is null and track_key in ({','.join('?' for _ in live_keys)}))"
+                if live_keys
+                else ""
+            )
+            others = db.execute(
+                "select visitor_id,track_key,first_at,last_at,ended_at "
+                f"from establishment_observations where business_date in "
+                f"({','.join('?' for _ in dates)}) and visitor_id is not null and visitor_id!=? "
+                f"and first_at<=? and (last_at>=?{live_clause})",
+                (
+                    *dates,
+                    visitor_id,
+                    timestamp(max(last for _, last in spans)),
+                    timestamp(min(first for first, _ in spans)),
+                    *live_keys,
+                ),
+            ).fetchall()
+
         own_keys = {row["track_key"] for row in own}
-        spans = [span(row) for row in own]
         co_visible: set[str] = set()
         for row in others:
             if row["track_key"] in own_keys or row["visitor_id"] in co_visible:
@@ -633,33 +702,78 @@ class EstablishmentRegistry:
             self._registries[key] = registry
         return self._registries[key]
 
-    def _excluded_visitors(self, track_key: str, at: str, business_date: str) -> set[str]:
+    def _excluded_visitors(
+        self, track_key: str, at: str, business_date: str, *, entering: bool = False
+    ) -> set[str]:
         """Visitors physically present on any camera right now are other people.
 
         Cameras watch different places, so a person still in view elsewhere at this
         instant cannot be the one being observed here. Anyone seen earlier today, on
-        any camera, may be matched.
+        any camera, may be matched. A doorway entry also excludes visitors who entered
+        moments ago and have not left (see ``REENTRY_EXCLUSION_SECONDS``).
         """
         excluded: set[str] = set()
         instant = datetime.fromisoformat(at)
+        present_keys = sorted(
+            {key for _, keys in self._present_tracks.values() for key in keys} - {track_key}
+        )
+        present_clause = (
+            f" or track_key in ({','.join('?' for _ in present_keys)})" if present_keys else ""
+        )
         with self.database.connection() as db:
+            # Only rows that can still be in view: seen within the window, or tracked now.
             rows = db.execute(
                 "select camera_id,track_key,visitor_id,last_at,ended_at "
                 "from establishment_observations where business_date=? and visitor_id is not null "
-                "and track_key!=?",
-                (business_date, track_key),
+                f"and track_key!=? and (last_at>=?{present_clause})",
+                (
+                    business_date,
+                    track_key,
+                    timestamp(instant - timedelta(seconds=PRESENCE_WINDOW_SECONDS)),
+                    *present_keys,
+                ),
             ).fetchall()
+            if entering:
+                excluded |= self._just_entered_visitors(db, track_key, instant, business_date)
         for row in rows:
             elapsed = max(0.0, (instant - datetime.fromisoformat(row["last_at"])).total_seconds())
             current = self._present_tracks.get(row["camera_id"])
             present = (
                 row["track_key"] in current[1]
-                if current is not None and abs((instant - current[0]).total_seconds()) <= 1
-                else row["ended_at"] is None and elapsed <= 1
+                if current is not None
+                and abs((instant - current[0]).total_seconds()) <= PRESENCE_WINDOW_SECONDS
+                else row["ended_at"] is None and elapsed <= PRESENCE_WINDOW_SECONDS
             )
             if present:
                 excluded.add(row["visitor_id"])
         return excluded
+
+    @staticmethod
+    def _just_entered_visitors(
+        db: Any, track_key: str, instant: datetime, business_date: str
+    ) -> set[str]:
+        rows = db.execute(
+            "select visitor_id,kind,first_at,last_at from establishment_observations "
+            "where business_date=? and analysis_mode='entrance_exit' and visitor_id is not null "
+            "and track_key!=? and last_at>=?",
+            (
+                business_date,
+                track_key,
+                timestamp(instant - timedelta(seconds=REENTRY_EXCLUSION_SECONDS)),
+            ),
+        ).fetchall()
+        latest: dict[str, tuple[str, str]] = {}
+        for row in rows:
+            event_at = row["last_at"] if row["kind"] == "exit" else row["first_at"]
+            if row["visitor_id"] not in latest or event_at > latest[row["visitor_id"]][0]:
+                latest[row["visitor_id"]] = (event_at, row["kind"])
+        oldest = timestamp(instant - timedelta(seconds=REENTRY_EXCLUSION_SECONDS))
+        newest = timestamp(instant - timedelta(seconds=REENTRY_EXCLUSION_MIN_SECONDS))
+        return {
+            visitor
+            for visitor, (event_at, kind) in latest.items()
+            if kind == "entry" and oldest <= event_at <= newest
+        }
 
     def cleanup(self, now: datetime | None = None) -> None:
         now = now or datetime.now(UTC)

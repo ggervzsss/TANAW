@@ -69,17 +69,31 @@ camera. It is saved on the computer, not with a camera or an account, and
 changing it restarts running cameras with their own settings. Camera Monitoring
 shows the profile in use and its AI frame rate, with a link to change it.
 
-| Profile               | Detector         | Appearance matching    | Use on                                    |
-| --------------------- | ---------------- | ---------------------- | ----------------------------------------- |
-| Auto (recommended)    | Chosen by TANAW  | Chosen by TANAW        | Any computer; the selector shows the pick |
-| Emergency / Low Power | YOLO11n at 480px | Off (Open Space: fast) | Very old computers                        |
-| Compatibility         | YOLO11n at 640px | Off (Open Space: fast) | Older laptops and CPU-only computers      |
-| Balanced              | YOLO11s at 640px | Fast                   | Capable computers                         |
-| High Accuracy         | YOLO11m at 640px | Quality                | Strong computers, ideally with a GPU      |
+| Profile               | Detector         | Appearance matching | Use on                                    |
+| --------------------- | ---------------- | ------------------- | ----------------------------------------- |
+| Auto (recommended)    | Chosen by TANAW  | Chosen by TANAW     | Any computer; the selector shows the pick |
+| Emergency / Low Power | YOLO11n at 480px | Fast                | Very old computers                        |
+| Compatibility         | YOLO11n at 640px | Fast and quality    | Older laptops and CPU-only computers      |
+| Balanced              | YOLO11s at 640px | Fast and quality    | Capable computers                         |
+| High Accuracy         | YOLO11m at 640px | Fast and quality    | Strong computers, ideally with a GPU      |
 
 Auto picks Balanced with an NVIDIA GPU (CUDA), Compatibility with OpenVINO, and
-Emergency otherwise. Only High Accuracy uses the quality appearance model, which
-matches visitors more reliably and runs the more accurate male/female head.
+Emergency otherwise. Unique visitors come only from appearance matching, so
+every profile matches visitors. All but Emergency also run the quality
+appearance model, which takes two samples per person, matches visitors more
+reliably, and runs the more accurate male/female head.
+
+A visitor that could not be identified (for example, never seen clearly) still
+counts once, as a degraded estimate, rather than not at all. The male/female
+split is shown only when at least one visitor was seen clearly enough to judge.
+
+### Unattended operation
+
+TANAW restarts the camera service if it stops unexpectedly, reopens the signed-in
+establishment, and starts again every camera the operator left counting. Cameras
+that are unreachable when started are retried every minute, and the computer is
+kept from sleeping while a camera counts. Only **Stop** (or **Stop Monitoring**
+in the tray) keeps a camera stopped.
 
 ### Reports and synchronization
 

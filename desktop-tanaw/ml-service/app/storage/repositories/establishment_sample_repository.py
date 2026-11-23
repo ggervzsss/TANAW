@@ -69,6 +69,8 @@ def prepare_sample_period(
     period = begin.strftime("%B %Y")
     today = now.astimezone(TIMEZONE).date()
     plan = allocate_month(report_id, begin.date(), entries, exits, unique_count)
+    # Camera days must be current before deciding which days the sample may fill.
+    repository.rebuild_changed_days()
     with repository.database.connection() as db:
         # A submitted report freezes its counts; adding history afterwards would contradict it.
         if db.execute("select 1 from report_submissions where period=?", (period,)).fetchone():

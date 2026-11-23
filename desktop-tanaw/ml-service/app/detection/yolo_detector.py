@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Lock
@@ -25,7 +27,11 @@ from app.runtime.hardware import get_runtime_capabilities
 configure_third_party_directories()
 
 PERSON_CLASS_IDS = (0,)
+# Serializes inference and every use of Ultralytics' process-wide track ID counter.
 _GLOBAL_INFERENCE_LOCK = Lock()
+# Lowest detector confidence the tracker configs use (``track_low_thresh``): boxes between it
+# and the tracking confidence only extend existing tracks, so they must reach the tracker.
+TRACKER_LOW_CONFIDENCE = 0.08
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,11 @@ class YoloPersonTracker:
         self._inference_times_ms: deque[float] = deque(maxlen=128)
         self._last_inference_at: float | None = None
         self._inference_intervals: deque[float] = deque(maxlen=128)
+        # Ultralytics numbers tracks from one class-level counter shared by every tracker in
+        # the process, and resets it whenever any tracker is created or reset. Each camera keeps
+        # its own counter and swaps it in around its own tracker calls, so starting or
+        # restarting one camera never reissues IDs that another camera is still using.
+        self._track_id_counter = 0
         self.configure("auto")
 
     def status(self) -> dict[str, Any]:
@@ -118,13 +129,16 @@ class YoloPersonTracker:
                 self._clear_loaded_model_locked()
         return self.effective_profile
 
-    def reset_tracking(self) -> None:
+    def reset_tracking(self, *, restart_ids: bool = True) -> None:
+        """Forget every track. Without ``restart_ids`` new tracks keep numbering after the old."""
         model = self._model
         predictor = getattr(model, "predictor", None) if model is not None else None
-        for tracker in getattr(predictor, "trackers", []) or []:
-            reset = getattr(tracker, "reset", None)
-            if callable(reset):
-                reset()
+        with _GLOBAL_INFERENCE_LOCK, self._own_track_ids():
+            for tracker in getattr(predictor, "trackers", []) or []:
+                reset = getattr(tracker, "reset", None)
+                if callable(reset):
+                    reset()
+            _set_shared_track_id_counter(0 if restart_ids else self._track_id_counter)
         self._last_inference_at = None
         with self._telemetry_lock:
             self._inference_times_ms.clear()
@@ -211,6 +225,7 @@ class YoloPersonTracker:
         except Exception as exc:
             if not self._fallback_tracker_after_failure(exc):
                 raise
+            self._replace_trackers(model)
             results = self._track_with_config(model, frame, confidence)
 
         if not results:
@@ -258,13 +273,13 @@ class YoloPersonTracker:
         # Each camera owns an independent YOLO/tracker instance so that BoT-SORT
         # state can never leak across streams. GPU execution is serialized here
         # because the runtime and driver stack are shared process-wide.
-        with _GLOBAL_INFERENCE_LOCK:
+        with _GLOBAL_INFERENCE_LOCK, self._own_track_ids():
             results = model.track(
                 frame,
                 persist=True,
                 tracker=self.tracker_config_path,
                 classes=list(PERSON_CLASS_IDS),
-                conf=confidence,
+                conf=min(confidence, TRACKER_LOW_CONFIDENCE),
                 device=self._device,
                 half=self._use_half,
                 imgsz=self.image_size,
@@ -295,6 +310,39 @@ class YoloPersonTracker:
                     verbose=False,
                 )
             self._record_inference_time(started_at, monotonic())
+
+    @contextmanager
+    def _own_track_ids(self) -> Iterator[None]:
+        """Run tracker code with this camera's track ID counter; hold the inference lock."""
+        shared = _shared_track_id_counter()
+        _set_shared_track_id_counter(self._track_id_counter)
+        try:
+            yield
+        finally:
+            counter = _shared_track_id_counter()
+            if counter is not None:
+                self._track_id_counter = counter
+            _set_shared_track_id_counter(shared)
+
+    def _replace_trackers(self, model: Any) -> None:
+        """Rebuild the persistent trackers from the current tracker config.
+
+        Ultralytics keeps trackers on the predictor once created, so changing the config path
+        alone would leave the failed tracker in place.
+        """
+        predictor: Any = getattr(model, "predictor", None)
+        trackers = getattr(predictor, "trackers", None)
+        if predictor is None or not trackers:
+            return
+        from ultralytics.trackers.track import TRACKER_MAP
+        from ultralytics.utils import YAML, IterableSimpleNamespace
+
+        config = IterableSimpleNamespace(**YAML.load(self.tracker_config_path))
+        with _GLOBAL_INFERENCE_LOCK, self._own_track_ids():
+            counter = self._track_id_counter
+            predictor.trackers = [TRACKER_MAP[config.tracker_type](args=config) for _ in trackers]
+            # Creating a tracker resets the counter; keep numbering after this camera's IDs.
+            _set_shared_track_id_counter(counter)
 
     def _fallback_after_runtime_failure(self, exc: Exception) -> bool:
         with self._lock:
@@ -425,6 +473,25 @@ class YoloPersonTracker:
             if average_interval and average_interval > 0
             else None,
         }
+
+
+def _shared_track_id_counter() -> int | None:
+    base_track = _base_track_class()
+    return int(base_track._count) if base_track is not None else None
+
+
+def _set_shared_track_id_counter(value: int | None) -> None:
+    base_track = _base_track_class()
+    if base_track is not None and value is not None:
+        base_track._count = value
+
+
+def _base_track_class() -> Any | None:
+    try:
+        from ultralytics.trackers.basetrack import BaseTrack
+    except Exception:
+        return None
+    return BaseTrack
 
 
 def resolve_detector_selection(

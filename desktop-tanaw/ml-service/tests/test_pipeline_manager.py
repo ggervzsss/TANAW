@@ -97,7 +97,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
 
     def test_failed_sixth_worker_releases_capacity_and_preserves_five_workers(self) -> None:
         class SixthCameraFails(FakePipeline):
-            def start(self, config: CameraStartRequest) -> None:
+            def start(self, config: CameraStartRequest, should_continue: Any = None) -> None:
                 if config.camera_id == 6:
                     raise RuntimeError("simulated stream failure")
                 super().start(config)
@@ -353,7 +353,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
         initialization_finished = threading.Event()
 
         class SlowPipeline(FakePipeline):
-            def start(self, config: CameraStartRequest) -> None:
+            def start(self, config: CameraStartRequest, should_continue: Any = None) -> None:
                 initialization_started.set()
                 finish_initialization.wait(timeout=2)
                 super().start(config)
@@ -439,7 +439,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
         latest_update_finished = threading.Event()
 
         class SerializedPipeline(FakePipeline):
-            def start(self, config: CameraStartRequest) -> None:
+            def start(self, config: CameraStartRequest, should_continue: Any = None) -> None:
                 if config.camera_name == "First update":
                     first_update_started.set()
                     release_first_update.wait(timeout=2)

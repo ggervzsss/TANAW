@@ -163,7 +163,12 @@ class AsyncReIdWorker:
                 with self._lock:
                     self._pending.discard((task.session_id, task.track_id))
                 continue
-            result = self._reidentifier.embed_crop(task.crop)
+            try:
+                result = self._reidentifier.embed_crop(task.crop)
+            except Exception:
+                # One bad crop must not end the worker and every later identification.
+                logger.exception("Visitor appearance embedding failed.")
+                result = None
             completed_at = monotonic()
             with self._lock:
                 self._pending.discard((task.session_id, task.track_id))

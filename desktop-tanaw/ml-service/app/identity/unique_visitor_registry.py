@@ -639,15 +639,22 @@ class UniqueVisitorRegistry:
         return canonical.visitor_id
 
     def finalize_due_provisionals(
-        self, now: datetime, excluded_visitor_ids: frozenset[str] = frozenset()
+        self,
+        now: datetime,
+        excluded_visitor_ids: frozenset[str] = frozenset(),
+        *,
+        force: bool = False,
     ) -> bool:
-        """Settle uncertain identities whose decision wait has elapsed; True if any changed."""
+        """Settle uncertain identities whose decision wait has elapsed; True if any changed.
+
+        ``force`` settles every uncertain identity now, e.g. when its business day has ended.
+        """
         if self.provisional_decision_seconds <= 0 or self._business_date is None:
             return False
         changed = False
         for identity in list(self._gallery):
             if identity.identity_status != "provisional" or not self._provisional_decision_due(
-                identity, now, False
+                identity, now, force
             ):
                 continue
             track_id = next(

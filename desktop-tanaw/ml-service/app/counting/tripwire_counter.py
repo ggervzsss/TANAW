@@ -332,6 +332,17 @@ class TripwireCounter:
             line_exit_crossed = previous_side == 0 and current_side != 0
             if movement_progress is None and not point_crossed and not line_exit_crossed:
                 continue
+            # A side change alone uses the infinite line through the nearest segment. Count it
+            # only when the person stayed alongside the drawn path, not beyond its ends.
+            if movement_progress is None and not (
+                _alongside_path(
+                    previous, lines[line_id], frame_width, frame_height, self.side_margin_px
+                )
+                and _alongside_path(
+                    current, lines[line_id], frame_width, frame_height, self.side_margin_px
+                )
+            ):
+                continue
 
             crossed.append(
                 (
@@ -561,6 +572,31 @@ def _nearest_scaled_segment(
             closest_segment = segment
 
     return closest_segment
+
+
+def _alongside_path(
+    point: Centroid, line: NormalizedPath, frame_width: int, frame_height: int, tolerance_px: float
+) -> bool:
+    """Whether a point projects onto the drawn path rather than past either of its ends."""
+    scaled_points = tuple((x * frame_width, y * frame_height) for x, y in line)
+    if len(scaled_points) < 2:
+        return False
+    position = (point.x, point.y)
+    last_index = len(scaled_points) - 2
+    nearest_index = min(
+        range(last_index + 1),
+        key=lambda index: _point_segment_distance(
+            position, scaled_points[index], scaled_points[index + 1]
+        ),
+    )
+    (x1, y1), (x2, y2) = scaled_points[nearest_index], scaled_points[nearest_index + 1]
+    length = hypot(x2 - x1, y2 - y1)
+    if length < 1e-9:
+        return False
+    along = ((point.x - x1) * (x2 - x1) + (point.y - y1) * (y2 - y1)) / length
+    if nearest_index == 0 and along < -tolerance_px:
+        return False
+    return not (nearest_index == last_index and along > length + tolerance_px)
 
 
 def _point_segment_distance(

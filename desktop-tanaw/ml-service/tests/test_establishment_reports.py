@@ -184,7 +184,9 @@ def test_visitors_without_a_recorded_sex_count_toward_the_baseline(tmp_path: Pat
     assert saved["origins"] == body["payload"]["origins"]
 
 
-def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_path: Path) -> None:
+def test_unidentified_visitors_are_reported_as_a_degraded_estimate_not_zero(
+    tmp_path: Path,
+) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     service.observe(
         observation_id="unidentified",
@@ -200,8 +202,26 @@ def test_missing_identity_measurement_cannot_be_submitted_as_zero_visitors(tmp_p
     repo = EstablishmentReportRepository(service.database)
     result = repo.period_summary("October 2026")
     assert result["counting"]["unresolved_observations"] == 1
-    assert result["counting"]["identification_state"] == "unavailable"
-    with pytest.raises(ValueError, match="visitor estimate is unavailable"):
+    assert result["counting"]["identification_state"] == "partial"
+    assert result["counting"]["unique_count"] == result["counting"]["degraded_unique_count"] == 1
+    assert result["metrics"]["unique_count"] == 1
+
+
+def test_a_period_with_only_unsettled_identities_cannot_be_submitted_as_zero(
+    tmp_path: Path,
+) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service, "doorway")
+    repo = EstablishmentReportRepository(service.database)
+    with service.database.connection() as db:
+        # An identity still waiting for its decision: observed, but not yet countable.
+        db.execute(
+            "update establishment_observations set identity_confidence='low' where kind!='exit'"
+        )
+        db.execute("update visitor_identities set identity_status='provisional'")
+    service.repository.rebuild_day("2026-10-10", OBSERVED)
+    assert repo.period_summary("October 2026")["counting"]["unique_count"] == 0
+    with pytest.raises(ValueError, match="none could be counted"):
         repo.submit(**request(repo, 0))
 
 

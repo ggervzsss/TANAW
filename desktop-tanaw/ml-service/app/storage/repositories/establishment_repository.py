@@ -7,6 +7,7 @@ a recognized visitor counts once per business day across all cameras.
 
 import hashlib
 import json
+import threading
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -24,6 +25,12 @@ COUNTING_BASIS = "sum_of_daily_establishment_unique_visitors"
 # Observations and occupancy intervals are kept this many days; see ``cleanup``.
 RETENTION_DAYS = 30
 HOURLY_MAX_DAYS = 31
+
+# Days whose observations changed since their summary was last rebuilt, per database file.
+# Rebuilding replays a whole day, so cameras only mark a day here and the summary worker (or
+# the next summary read) rebuilds it once, off the camera processing threads.
+_CHANGED_DAYS: dict[str, dict[str, datetime]] = {}
+_CHANGED_DAYS_LOCK = threading.Lock()
 
 
 def snapshot_digest(value: dict[str, Any]) -> str:
@@ -58,6 +65,67 @@ def business_date_for(value: datetime) -> str:
 class EstablishmentRepository:
     def __init__(self, database: LocalDatabase) -> None:
         self.database = database
+        self._changed_key = str(database.path.resolve())
+        self._balance_cache: tuple[tuple[str, int], int] | None = None
+        self._camera_estimates: dict[tuple[int, str], tuple[int, dict[str, int]]] = {}
+
+    def mark_day_changed(self, business_date: str, now: datetime) -> None:
+        """Note that a day's observations changed; its summary is rebuilt before it is read."""
+        with _CHANGED_DAYS_LOCK:
+            days = _CHANGED_DAYS.setdefault(self._changed_key, {})
+            days[business_date] = max(now, days.get(business_date, now))
+
+    def rebuild_changed_days(self) -> int:
+        """Rebuild every day marked as changed; returns how many days were rebuilt."""
+        with _CHANGED_DAYS_LOCK:
+            pending = _CHANGED_DAYS.pop(self._changed_key, {})
+        for index, (business_date, now) in enumerate(sorted(pending.items())):
+            try:
+                self.rebuild_day(business_date, now)
+            except Exception:
+                for day, at in list(pending.items())[index:]:
+                    self.mark_day_changed(day, at)
+                raise
+        return len(pending)
+
+    def rebuild_recent_days(self, now: datetime) -> None:
+        """Rebuild today and yesterday, whose pending rebuilds a crash may have lost."""
+        yesterday = (now.astimezone(TIMEZONE).date() - timedelta(days=1)).isoformat()
+        with self.database.connection() as db:
+            days = [
+                row[0]
+                for row in db.execute(
+                    "select distinct business_date from establishment_observations "
+                    "where business_date>=?",
+                    (yesterday,),
+                )
+            ]
+        for business_date in days:
+            self.rebuild_day(business_date, now)
+
+    def camera_visitor_estimate(self, camera_id: int, business_date: str) -> dict[str, int]:
+        """A doorway camera's visitors today, counted as the establishment report counts them."""
+        version = self.database.change_version
+        cached = self._camera_estimates.get((camera_id, business_date))
+        if cached is not None and cached[0] == version:
+            return dict(cached[1])
+        with self.database.connection() as db:
+            rows = db.execute(
+                "select visitor_id,identity_confidence,track_key from establishment_observations "
+                "where business_date=? and camera_id=? and qualified=1 and kind!='exit'",
+                (business_date, camera_id),
+            ).fetchall()
+        confirmed = {row[0] for row in rows if row[0] is not None and row[1] == "high"}
+        degraded = {row[2] for row in rows if row[0] is None}
+        pending = sum(row[0] is not None and row[1] != "high" for row in rows)
+        estimate = {
+            "estimated_unique_count": len(confirmed) + len(degraded),
+            "confirmed_unique_count": len(confirmed),
+            "degraded_unique_count": len(degraded),
+            "repeat_entry_count": max(0, len(rows) - len(confirmed) - len(degraded) - pending),
+        }
+        self._camera_estimates[(camera_id, business_date)] = (version, estimate)
+        return dict(estimate)
 
     def save_observation(self, record: dict[str, Any]) -> bool:
         with self.database.connection() as db:
@@ -204,9 +272,16 @@ class EstablishmentRepository:
         """The shared Entry / Exit balance since the start of today's business day."""
         now = now or datetime.now(UTC)
         business_date = business_date_for(now)
+        # The live views read this several times a second; replay the day only after a change.
+        key = (business_date, self.database.change_version)
+        cached = self._balance_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
         with self.database.connection() as db:
             rows, corrections = self._day_inputs(db, business_date)
-        return int(daily_movements(rows, business_date, corrections, until=now)["balance"])
+        balance = int(daily_movements(rows, business_date, corrections, until=now)["balance"])
+        self._balance_cache = (key, balance)
+        return balance
 
     def rebuild_day(self, business_date: str, now: datetime) -> dict[str, Any]:
         with self.database.connection() as db:
@@ -222,6 +297,13 @@ class EstablishmentRepository:
                 row["visitor_id"] is None or row["identity_confidence"] != "high"
                 for row in identifiable
             )
+            # People seen without any identity still visited: each unidentified physical track
+            # counts once as a degraded estimate rather than as nobody. Identification later
+            # replaces it with a matched visitor.
+            units = {row["observation_id"]: _visitor_unit(row, identities) for row in identifiable}
+            degraded = {
+                unit for unit in units.values() if unit is not None and unit not in identities
+            }
             movement = daily_movements(rows, business_date, corrections)
             begin, end = day_bounds(business_date)
             intervals = db.execute(
@@ -256,6 +338,7 @@ class EstablishmentRepository:
             model_spaces = {row["model_name"] for row in rows if row["visitor_id"] is not None}
             identification_possible = (
                 bool(identities)
+                or bool(degraded)
                 or any(row["model_name"] is not None for row in rows)
                 or any(item.get("identification_available") for item in live_evidence)
             )
@@ -315,12 +398,19 @@ class EstablishmentRepository:
                         "additive": False,
                     }
                 )
-            sex = daily_sex_counts(rows, identities)
+            sex = daily_sex_counts(
+                [
+                    {**row, "visitor_id": units.get(row["observation_id"]) or row["visitor_id"]}
+                    for row in rows
+                ],
+                identities | degraded,
+            )
             metrics = {
                 **sex.as_metrics(),
                 "business_date": business_date,
-                "unique_count": len(identities),
+                "unique_count": len(identities) + len(degraded),
                 "confirmed_unique_count": len(identities),
+                "degraded_unique_count": len(degraded),
                 "entries": movement["entries"],
                 "exits": movement["exits"],
                 "repeat_entry_count": movement["repeat_entry_count"],
@@ -376,6 +466,7 @@ class EstablishmentRepository:
             or stop != day_bounds(end.astimezone(TIMEZONE).date().isoformat())[0]
         ):
             raise ValueError("Daily summaries require Asia/Manila midnight boundaries.")
+        self.rebuild_changed_days()
         with self.database.connection() as db:
             days = [
                 {**json.loads(row["metrics_json"]), "finalized": bool(row["finalized"])}
@@ -390,6 +481,7 @@ class EstablishmentRepository:
             for key in (
                 "unique_count",
                 "confirmed_unique_count",
+                "degraded_unique_count",
                 "entries",
                 "exits",
                 "repeat_entry_count",
@@ -544,6 +636,8 @@ class EstablishmentRepository:
 
     def cleanup(self, now: datetime) -> None:
         today = now.astimezone(TIMEZONE).date()
+        # A day is finalized only from its latest observations.
+        self.rebuild_changed_days()
         with self.database.connection() as db:
             cutoff = (today - timedelta(days=180)).isoformat()
             # Give the previous day's pending work the existing two-hour grace window.
@@ -654,6 +748,17 @@ class EstablishmentRepository:
                 )
                 if previous_day != day:
                     self.rebuild_day(previous_day.isoformat(), now)
+
+
+def _visitor_unit(row: dict[str, Any], identities: set[str]) -> str | None:
+    """Who an identifiable observation counts as: a confirmed visitor or a degraded unit."""
+    visitor = row["visitor_id"]
+    if visitor is None:
+        return f"track:{row['track_key']}"
+    if visitor in identities or row["identity_confidence"] == "high":
+        return str(visitor)
+    # An uncertain identity is settled within seconds; it counts once that decision is made.
+    return None
 
 
 def day_bounds(business_date: str) -> tuple[str, str]:

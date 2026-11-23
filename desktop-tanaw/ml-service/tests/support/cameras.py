@@ -51,6 +51,9 @@ class FakePipeline(CameraProcessingManager):
     def running(self) -> bool:
         return self.running_value
 
+    def use_establishment_registry(self, registry: Any) -> None:
+        self.establishment_registry = registry
+
     @property
     def current_config(self) -> CameraStartRequest | None:
         return self.config
@@ -70,7 +73,7 @@ class FakePipeline(CameraProcessingManager):
             "session_restored": False,
         }
 
-    def start(self, config: CameraStartRequest) -> None:
+    def start(self, config: CameraStartRequest, should_continue: Any = None) -> None:
         if self.running_value:
             self.stop()
         self.config = config
@@ -186,3 +189,6 @@ class FakeTracker:
     def track_people(self, frame: np.ndarray, confidence: float) -> list[TrackResult]:
         self.seen_confidences.append(confidence)
         return self._responses.pop(0)
+
+    def reset_tracking(self, *, restart_ids: bool = True) -> None:
+        self.resets = getattr(self, "resets", 0) + 1

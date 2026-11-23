@@ -8,6 +8,7 @@ import { useSystemDisplayPreferences } from "../../preferences/system-display-pr
 import { formatPhilippineDateTime } from "../../../utils/date-time";
 import { formatReportingPeriodLabel, reportingMonthKey } from "../utils/reporting-period";
 import type { ReportLedgerRow } from "../model/report-ledger";
+import { uploadStatusLabel } from "../model/report-workspace";
 
 export type { ReportLedgerRow } from "../model/report-ledger";
 type Props = {
@@ -132,7 +133,12 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                     <span className="report-status" data-tone={statusTone(row)}>
                       {row.statusLabel}
                     </span>
-                    {report.syncStatus && report.syncStatus !== "synced" && <span className="report-upload-state">Waiting to upload</span>}
+                    {/* A rejected upload is never retried, so it must not read as waiting. */}
+                    {report.syncStatus && report.syncStatus !== "synced" && (
+                      <span className="report-upload-state" data-state={report.syncStatus}>
+                        {uploadStatusLabel(report.syncStatus)}
+                      </span>
+                    )}
                   </td>
                   <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { dateStyle: "medium" }) : "—"}</td>
                   <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { timeStyle: "short" }) : "—"}</td>

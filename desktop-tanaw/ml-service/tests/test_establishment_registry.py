@@ -127,7 +127,9 @@ def test_unidentified_visit_is_explicitly_unresolved(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "no-model", 2, embedding=None)
     result = summary(service)
-    assert result["unique_count"] == 0
+    # The visit still happened: it counts once as a degraded estimate, never as a confirmed one.
+    assert result["unique_count"] == result["degraded_unique_count"] == 1
+    assert result["confirmed_unique_count"] == 0
     assert result["unresolved_observations"] == 1
     assert result["reconciliation_state"] == "partial"
     assert result["movement_state"] == "unavailable"
@@ -160,7 +162,8 @@ def test_invalid_descriptors_cannot_create_confirmed_identities(
 ) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observe(service, "invalid", embedding=vector)
-    assert summary(service)["unique_count"] == 0
+    assert summary(service)["confirmed_unique_count"] == 0
+    assert summary(service)["degraded_unique_count"] == 1
     assert summary(service)["unresolved_observations"] == 1
 
 
@@ -387,5 +390,6 @@ def test_correction_sets_the_shared_balance(tmp_path: Path) -> None:
     assert service.repository.today_balance(NOW + timedelta(seconds=3)) == 9
     result = summary(service)
     assert result["entries"] == result["exits"] == 1
-    assert result["unique_count"] == 0
+    assert result["confirmed_unique_count"] == 0
+    assert result["unique_count"] == result["degraded_unique_count"] == 1
     assert result["occupancy_corrections"][0]["reason"] == "Ten people physically verified"

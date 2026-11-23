@@ -47,7 +47,10 @@ def test_visitor_probability_combines_every_observation_by_weight() -> None:
     probabilities, models = visitor_female_probabilities(rows, {"a", "b", "c", "d"})
     assert probabilities["a"] == pytest.approx(sigmoid((2.0 * 0.5 - 1.0 * 1.5) / 2.0))
     assert probabilities["b"] is None
-    assert "c" not in probabilities and "d" not in probabilities
+    # The caller chooses which units count; a listed unit's evidence is used whatever its row
+    # confidence, and a row without a sex head carries no evidence.
+    assert probabilities["c"] == pytest.approx(sigmoid(3.0))
+    assert "d" not in probabilities
     assert models == {MODEL}
 
 
@@ -103,6 +106,11 @@ def test_counts_always_sum_to_unique_visitors_for_random_days() -> None:
                 seen = rng.random() < 0.8
                 rows.append(row(visitor, rng.uniform(-8, 8) if seen else None, rng.random()))
         counts = daily_sex_counts(rows, visitors)
+        if counts.state == "unavailable":
+            # Nobody was seen well enough: no invented even split.
+            assert counts.male_count is None and counts.female_count is None
+            assert counts.evidence_share == 0.0
+            continue
         assert counts.male_count is not None and counts.female_count is not None
         assert counts.male_count >= 0 and counts.female_count >= 0
         assert counts.male_count + counts.female_count == len(visitors)
@@ -219,3 +227,10 @@ def test_sample_months_have_male_and_female_for_every_day(tmp_path: Path) -> Non
     assert 0.35 < result["female_count"] / result["unique_count"] < 0.65
     for day in result["days"]:
         assert day["male_count"] + day["female_count"] == day["unique_count"]
+
+
+def test_a_day_with_no_usable_views_has_no_invented_split() -> None:
+    visitors = {f"v{index}" for index in range(100)}
+    counts = daily_sex_counts([row("v0", None)], visitors)
+    assert (counts.male_count, counts.female_count, counts.state) == (None, None, "unavailable")
+    assert counts.evidence_share == 0.0

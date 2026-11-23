@@ -53,6 +53,7 @@ class EstablishmentReportRepository:
         self.establishment = EstablishmentRepository(database)
 
     def periods(self) -> list[dict[str, Any]]:
+        self.establishment.rebuild_changed_days()
         with self.database.connection() as db:
             months = [
                 row[0]
@@ -150,6 +151,11 @@ class EstablishmentReportRepository:
                 )
             if snapshot["identification_state"] == "unavailable":
                 raise ValueError("A visitor estimate is unavailable for this period.")
+            if snapshot["unique_count"] == 0 and snapshot["unresolved_observations"] > 0:
+                # Observed visitors without identities are not evidence of zero visitors.
+                raise ValueError(
+                    "Visitors were observed but none could be counted. Refresh the period."
+                )
             if (
                 expected_snapshot_version
                 and expected_snapshot_version != snapshot["snapshot_version"]

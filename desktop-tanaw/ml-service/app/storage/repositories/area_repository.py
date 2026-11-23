@@ -46,8 +46,7 @@ class AreaRepository:
         self, run_id: str, camera_id: int, camera_name: str, config: dict[str, Any], at: str
     ) -> str:
         canonical = json.dumps(config, sort_keys=True, separators=(",", ":"))
-        with self.database.connection() as db:
-            db.execute("begin immediate")
+        with self.database.transaction() as db:
             latest = db.execute(
                 "select revision_id,config_json from camera_analysis_revisions where camera_id=? order by created_at desc,rowid desc limit 1",
                 (camera_id,),
@@ -142,8 +141,7 @@ class AreaRepository:
         snapshot: dict[str, Any],
         at: str,
     ) -> None:
-        with self.database.connection() as db:
-            db.execute("begin immediate")
+        with self.database.transaction() as db:
             run = db.execute("select * from analysis_runs where run_id=?", (run_id,)).fetchone()
             if run is None or run["ended_at"] is not None:
                 return
@@ -213,16 +211,14 @@ class AreaRepository:
         )
 
     def recover(self) -> None:
-        with self.database.connection() as db:
-            db.execute("begin immediate")
+        with self.database.transaction() as db:
             for run in db.execute(
                 "select run_id,last_checkpoint_at from analysis_runs where ended_at is null"
             ).fetchall():
                 self._end(db, run["run_id"], "process_interrupted", run["last_checkpoint_at"])
 
     def end(self, run_id: str, reason: str, at: str) -> None:
-        with self.database.connection() as db:
-            db.execute("begin immediate")
+        with self.database.transaction() as db:
             self._end(db, run_id, reason, at)
 
     def revisions(self, camera_id: int) -> list[dict[str, Any]]:

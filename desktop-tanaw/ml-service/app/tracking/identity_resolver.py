@@ -96,6 +96,14 @@ class TrackIdentityResolver:
         self._active_swap_count = 0
         self._lock = RLock()
 
+    def forget_tracks(self) -> None:
+        """Drop every track but keep numbering, so new tracks never reuse an earlier ID."""
+        with self._lock:
+            self._source_to_stable.clear()
+            self._tracks.clear()
+            self._aliases.clear()
+            self._pending_active_swaps.clear()
+
     def reset(self) -> None:
         with self._lock:
             self._next_track_id = 0

@@ -2,6 +2,8 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -71,6 +73,8 @@ from app.tracking import (
 
 logger = logging.getLogger(__name__)
 FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
+# Crowds submit several crops per frame; a short queue would drop the people behind the first.
+FAST_REID_QUEUE_SIZE = 8
 QUALITY_REID_RESULT_MAX_AGE_SECONDS = 6.0
 # Clean fast-model samples a track needs before its appearance is trusted for identity.
 FAST_REID_CONSENSUS_SAMPLES = 3
@@ -79,6 +83,19 @@ QUALITY_REID_CONSENSUS_SAMPLES = 2
 PENDING_IDENTITY_SWEEP_SECONDS = 2.0
 # Entry / Exit physical track keys remembered so a ReID re-link can join their observations.
 MAX_REMEMBERED_TRACK_KEYS = 512
+# An open zone visit whose identity evidence is unchanged is saved again at most this often.
+AREA_VISIT_REFRESH_SECONDS = 10.0
+# Overlay frames are drawn and JPEG-encoded only while a viewer asked for one this recently.
+STREAM_DEMAND_SECONDS = 5.0
+# Placeholder decision: the establishment gallery identifies this entry when it is saved.
+ESTABLISHMENT_DECIDES = VisitorDecision(
+    visitor_id=None,
+    is_unique_entry=False,
+    reid_score=None,
+    reid_decision="establishment",
+    identity_confidence="pending",
+    business_date="",
+)
 
 
 class CameraProcessingManager:
@@ -101,6 +118,7 @@ class CameraProcessingManager:
         self._latest_stream_encoded_at: float | None = None
         self._latest_stream_jpeg: bytes | None = None
         self._latest_stream_frame_id = 0
+        self._stream_demand_at: float | None = None
         self._stream_generation = 0
         self._latest_processed_frame: np.ndarray | None = None
         self._latest_processed_frame_id = 0
@@ -110,7 +128,7 @@ class CameraProcessingManager:
         self._counter = TripwireCounter()
         self._tracker = YoloPersonTracker()
         self._reidentifier = PersonReIdentifier.from_profile(get_reid_model_profile("fast"))
-        self._reid_worker = AsyncReIdWorker(self._reidentifier)
+        self._reid_worker = AsyncReIdWorker(self._reidentifier, max_queue_size=FAST_REID_QUEUE_SIZE)
         self._quality_reidentifier = PersonReIdentifier.from_profile(
             get_reid_model_profile("quality")
         )
@@ -174,13 +192,40 @@ class CameraProcessingManager:
         # The zone's unique visitors as Reports counts them: (business date, count).
         self._area_unique_visitors: tuple[str, int] | None = None
         self._area_frame_index = 0
+        # Open visit -> (what was last saved for it, when), to skip unchanged re-saves.
+        self._area_observed: dict[str, tuple[tuple[object, ...], float]] = {}
         self._establishment_registry: EstablishmentRegistry | None = None
+        # Stream generation whose frames the trackers last saw; a new one follows a reconnect.
+        self._motion_generation: int | None = None
+        # Generation of the frame being counted right now, checked again before each write.
+        self._counting_generation: int | None = None
 
     def use_establishment_registry(self, registry: EstablishmentRegistry) -> None:
-        """Attach the enterprise's shared service before starting a camera worker."""
+        """Attach the enterprise's shared service before starting a camera worker.
+
+        The camera's ledger then shares the registry's database, so a crossing and its
+        establishment observation commit in one transaction.
+        """
         if self.running:
             raise RuntimeError("Attach establishment counting before starting the camera.")
         self._establishment_registry = registry
+        if registry.database.enterprise_id == self._enterprise_id:
+            self._session_store = SessionStore(
+                self._app_data_dir,
+                self._enterprise_id,
+                self._camera_id_scope,
+                database=registry.database,
+            )
+            self._visitor_registry = UniqueVisitorRegistry(
+                self._session_store,
+                model_name=self._reidentifier.model_name,
+                quality_model_name=self._quality_reidentifier.model_name,
+            )
+
+    def _atomic(self) -> AbstractContextManager[None]:
+        """One transaction for a ledger write and its establishment observations."""
+        registry = self._establishment_registry
+        return registry.atomic() if registry is not None else nullcontext()
 
     @property
     def running(self) -> bool:
@@ -264,7 +309,15 @@ class CameraProcessingManager:
             "session_restored": restored,
         }
 
-    def start(self, config: CameraStartRequest) -> None:
+    def start(
+        self, config: CameraStartRequest, should_continue: Callable[[], bool] | None = None
+    ) -> None:
+        """Start processing ``config``.
+
+        ``should_continue`` is checked after the slow stream probe and model warmup; when it
+        returns False the start was cancelled meanwhile (a stop, a newer start, or a sign-out)
+        and the camera is left stopped.
+        """
         if self._closed:
             raise RuntimeError("This camera processing manager has been closed.")
         if config.camera_id is None:
@@ -291,6 +344,8 @@ class CameraProcessingManager:
                 self._persist_session_locked()
                 self._raw_frame_condition.notify_all()
             raise CameraStreamUnavailableError(message)
+        if self._start_cancelled(should_continue):
+            return
 
         with self._lock:
             self._effective_profile = self._tracker.configure(
@@ -357,6 +412,9 @@ class CameraProcessingManager:
             raise RuntimeError(safe_message) from exc
 
         with self._lock:
+            # Checked under the lock a stop takes, so a stop never misses the new session.
+            if self._start_cancelled_locked(should_continue):
+                return
             self._next_session_id += 1
             session = ProcessingSession(
                 session_id=self._next_session_id,
@@ -374,6 +432,8 @@ class CameraProcessingManager:
                 self._begin_area(config, session.event_scope)
             self._reid_worker.begin_session(session.session_id)
             self._quality_reid_worker.begin_session(session.session_id)
+            self._motion_generation = None
+            self._counting_generation = None
             self._tracker.reset_tracking()
             self._identity_resolver.reset()
             self._counting_track_resolver.reset()
@@ -403,6 +463,19 @@ class CameraProcessingManager:
             self._processing_thread.start()
             self._stream_thread.start()
             self._persist_session_locked()
+
+    def _start_cancelled(self, should_continue: Callable[[], bool] | None) -> bool:
+        with self._raw_frame_condition:
+            return self._start_cancelled_locked(should_continue)
+
+    def _start_cancelled_locked(self, should_continue: Callable[[], bool] | None) -> bool:
+        if not self._closed and (should_continue is None or should_continue()):
+            return False
+        self._state = RuntimeState(running=False, status="stopped", error=None)
+        if self._enterprise_id is not None or self._config is not None:
+            self._persist_session_locked()
+        self._raw_frame_condition.notify_all()
+        return True
 
     def _configure_tracking_locked(self, config: CameraStartRequest, processing_fps: float) -> None:
         """Appearance sampling and track continuity for one run, paced by ``processing_fps``."""
@@ -479,15 +552,21 @@ class CameraProcessingManager:
         session: ProcessingSession | None
         with self._lock:
             session = self._active_session
+            if session is not None:
+                session.stop_event.set()
+        if session is not None:
+            # Wait for the processing thread's frame in progress, then settle queued entries
+            # while their session is still current. Never take this lock while holding _lock.
+            with self._counting_lock:
+                self._flush_pending_entry_events(session, time.monotonic(), force=True)
+        with self._lock:
             threads = [
                 thread
                 for thread in (self._reader_thread, self._processing_thread, self._stream_thread)
                 if thread is not None
             ]
-            if session is not None:
-                session.stop_event.set()
-                self._flush_pending_entry_events(session, time.monotonic(), force=True)
-            self._active_session = None
+            if self._active_session is session:
+                self._active_session = None
             self._invalidate_stream_frames_locked()
             self._raw_frame_condition.notify_all()
 
@@ -672,7 +751,11 @@ class CameraProcessingManager:
                 "stream_generation": self._stream_generation,
                 "raw_frame_stale_ms": _age_ms(now, self._latest_raw_frame_captured_at),
                 "processed_frame_stale_ms": _age_ms(now, self._latest_processed_at),
-                "stream_frame_stale_ms": _age_ms(now, self._latest_stream_encoded_at),
+                # Without a viewer no overlay frames are encoded, so their age means nothing.
+                "stream_frame_stale_ms": _age_ms(now, self._latest_stream_encoded_at)
+                if self._stream_demand_at is not None
+                and now - self._stream_demand_at <= STREAM_DEMAND_SECONDS
+                else None,
                 "reid_results_stale": self._reid_results_stale,
                 "pending_unique_entries": len(self._pending_entry_events),
                 "tracking_confidence": self._config.tracking_confidence if self._config else None,
@@ -682,8 +765,15 @@ class CameraProcessingManager:
                 "unique_counting_mode": self._config.unique_counting_mode if self._config else None,
             }
             has_local_context = self._enterprise_id is not None or self._config is not None
+        registry = self._establishment_registry
+        camera_id = self._config.camera_id if self._config else self._camera_id_scope
         summary = (
-            self._session_store.runtime_metrics()
+            # Doorway figures come from the same observations the establishment report counts.
+            registry.repository.camera_visitor_estimate(
+                camera_id, establishment_business_date(datetime.now(UTC))
+            )
+            if registry is not None and camera_id is not None
+            else self._session_store.runtime_metrics()
             if has_local_context
             else {
                 "estimated_unique_count": 0,
@@ -802,6 +892,8 @@ class CameraProcessingManager:
             )
 
         with self._raw_frame_condition:
+            if overlay:
+                self._stream_demand_at = time.monotonic()
             if not self._raw_frame_condition.wait_for(has_new_frame, timeout=timeout):
                 return None, cursor
             if overlay:
@@ -920,6 +1012,7 @@ class CameraProcessingManager:
                     config.tracking_confidence,
                     config.counting_confidence,
                     observed_at=captured_at,
+                    generation=generation,
                 )
                 skipped_frames = max(0, frame_id - last_processed_frame_id - 1)
                 last_processed_frame_id = frame_id
@@ -943,9 +1036,10 @@ class CameraProcessingManager:
                     self._raw_frame_condition.notify_all()
 
                 elapsed = time.monotonic() - started_at
-                # If capture advanced while inference was running, prioritize the freshest
-                # frame over nominal pacing so live overlays do not drift behind the video.
-                remaining = 0.0 if skipped_frames > 0 else frame_interval - elapsed
+                # Keep the configured rate even when capture runs ahead: the next frame read is
+                # always the newest one, so pacing never makes overlays lag the video, while
+                # running flat out would starve the other cameras of shared compute.
+                remaining = frame_interval - elapsed
                 if remaining > 0:
                     session.stop_event.wait(remaining)
         except Exception as exc:
@@ -979,6 +1073,10 @@ class CameraProcessingManager:
                     session, last_encoded_processed_frame_id, timeout=1.0
                 )
                 if frame_snapshot is None:
+                    continue
+                if not self._overlay_stream_wanted():
+                    # Nobody is watching: skip drawing and encoding, which cost CPU per frame.
+                    last_encoded_processed_frame_id = frame_snapshot[1]
                     continue
 
                 (
@@ -1030,6 +1128,11 @@ class CameraProcessingManager:
                     session.stop_event.wait(remaining)
         except Exception as exc:
             self._set_session_error(session, str(exc))
+
+    def _overlay_stream_wanted(self) -> bool:
+        with self._lock:
+            demand_at = self._stream_demand_at
+        return demand_at is not None and time.monotonic() - demand_at <= STREAM_DEMAND_SECONDS
 
     def _next_display_frame_snapshot(
         self, session: ProcessingSession, last_encoded_processed_frame_id: int, timeout: float
@@ -1103,24 +1206,62 @@ class CameraProcessingManager:
         tracking_confidence: float,
         counting_confidence: float | None = None,
         observed_at: float | None = None,
+        generation: int | None = None,
     ) -> list[DisplayTrack]:
         with self._counting_lock:
             if not self._is_current_session(session):
                 return []
-            if session.config.analysis_mode == "open_space":
-                return self._detect_area(
-                    session,
-                    frame,
-                    tracking_confidence,
-                    counting_confidence or tracking_confidence,
-                    observed_at if observed_at is not None else time.monotonic(),
+            if generation is not None:
+                if self._motion_generation is not None and generation != self._motion_generation:
+                    self._forget_motion_after_gap()
+                self._motion_generation = generation
+            self._counting_generation = generation
+            try:
+                return self._detect_and_count_for_mode(
+                    session, frame, tracking_confidence, counting_confidence, observed_at
                 )
-            return self._detect_and_count_locked(
+            finally:
+                self._counting_generation = None
+
+    def _forget_motion_after_gap(self) -> None:
+        """People moved unseen while the stream was down; restart tracks and partial crossings.
+
+        Counts are kept. Track numbering continues, so no new person reuses an earlier key.
+        """
+        self._tracker.reset_tracking(restart_ids=False)
+        self._identity_resolver.forget_tracks()
+        self._counting_track_resolver.forget_tracks()
+        self._counter.tracks.clear()
+
+    def _frame_is_current_locked(self) -> bool:
+        """Whether the frame being counted still belongs to the live stream connection."""
+        return (
+            self._counting_generation is None
+            or self._counting_generation == self._stream_generation
+        )
+
+    def _detect_and_count_for_mode(
+        self,
+        session: ProcessingSession,
+        frame: np.ndarray,
+        tracking_confidence: float,
+        counting_confidence: float | None,
+        observed_at: float | None,
+    ) -> list[DisplayTrack]:
+        if session.config.analysis_mode == "open_space":
+            return self._detect_area(
                 session,
                 frame,
                 tracking_confidence,
-                counting_confidence,
+                counting_confidence or tracking_confidence,
+                observed_at if observed_at is not None else time.monotonic(),
             )
+        return self._detect_and_count_locked(
+            session,
+            frame,
+            tracking_confidence,
+            counting_confidence,
+        )
 
     def _detect_and_count_locked(
         self,
@@ -1137,8 +1278,9 @@ class CameraProcessingManager:
         self._apply_reid_results(session, now)
         self._flush_pending_entry_events(session, now)
         source_tracks = self._tracker.track_people(frame, tracking_confidence)
-        if not self._is_current_session(session):
-            return []
+        with self._lock:
+            if not self._is_current_session_locked(session) or not self._frame_is_current_locked():
+                return []
         tracks = self._identity_resolver.resolve(source_tracks, now, frame_width, frame_height)
         counting_tracks = self._counting_track_resolver.resolve(
             source_tracks, now, frame_width, frame_height
@@ -1250,11 +1392,16 @@ class CameraProcessingManager:
                             event_id=event_id,
                         )
                         continue
-                    visitor_decision = event_decision
-                    visitor_id = event_decision.visitor_id
-                self._persist_count_event(
+                saved = self._persist_count_event(
                     session, track, direction, event_decision, event_id=event_id
                 )
+                if direction == "entry":
+                    resolved = saved or (
+                        None if event_decision is ESTABLISHMENT_DECIDES else event_decision
+                    )
+                    if resolved is not None:
+                        visitor_decision = resolved
+                        visitor_id = resolved.visitor_id
             display_tracks.append(
                 DisplayTrack(
                     track_id=track.track_id,
@@ -1328,7 +1475,13 @@ class CameraProcessingManager:
         self._area_tracker = AreaVisitTracker(
             config.open_space, anchor=anchor, wall_anchor=datetime.now(UTC)
         )
-        self._area_repo = AreaRepository(LocalDatabase(self._app_data_dir, self._enterprise_id))
+        registry = self._establishment_registry
+        self._area_repo = AreaRepository(
+            registry.database
+            if registry is not None and registry.database.enterprise_id == self._enterprise_id
+            else LocalDatabase(self._app_data_dir, self._enterprise_id)
+        )
+        self._area_observed.clear()
         self._area_run_id = run_id or uuid4().hex
         self._area_revision_id = self._area_repo.start(
             self._area_run_id,
@@ -1426,8 +1579,10 @@ class CameraProcessingManager:
         ):
             return
         at = tracker.timestamp(tracker.last_frame_at if tracker.last_frame_at is not None else now)
-        repo.checkpoint(run_id, tracker.active_records(), self._area_pending, state, at)
-        self._save_establishment_visits([*tracker.active_records(), *self._area_pending])
+        # The zone's checkpoint and its report observations commit together, or neither.
+        with self._atomic():
+            repo.checkpoint(run_id, tracker.active_records(), self._area_pending, state, at)
+            self._save_establishment_visits([*tracker.active_records(), *self._area_pending])
         previous_unique = self._area_unique_visitors
         self._refresh_area_unique_visitors(self._config.camera_id if self._config else None)
         if self._area_unique_visitors != previous_unique:
@@ -1505,8 +1660,9 @@ class CameraProcessingManager:
             return []
         height, width = frame.shape[:2]
         source_tracks = self._tracker.track_people(frame, tracking_confidence)
-        if not self._is_current_session(session):
-            return []
+        with self._lock:
+            if not self._is_current_session_locked(session) or not self._frame_is_current_locked():
+                return []
         if time.monotonic() - observed_at > 5:
             self._tick_area(time.monotonic())
             return []
@@ -1552,8 +1708,9 @@ class CameraProcessingManager:
                 confidence=t.confidence,
                 centroid=(int(t.centroid.x), int(t.centroid.y)),
                 trigger_point=(int(t.counting_point.x), int(t.counting_point.y)),
-                inside_roi=t.track_id in observations,
-                counting_eligible=t.track_id in observations,
+                # Counted means inside the monitored zone, not merely confident enough.
+                inside_roi=t.track_id in tracker.observed_track_ids,
+                counting_eligible=t.track_id in tracker.observed_track_ids,
                 sex_estimate=self._live_sex_estimate(t.track_id),
             )
             for t in tracks
@@ -1581,6 +1738,9 @@ class CameraProcessingManager:
             return
         observed_ids = tracker.observed_track_ids
         inside = {t.track_id: t for t in tracks if t.track_id in observed_ids}
+        # A sample requested while a person was in the zone still describes them after they
+        # step out or before their visit is confirmed; keep it for every track still in view.
+        current = {t.track_id: t for t in tracks if t.track_id > 0}
         for worker, buffer, max_age in (
             (self._reid_worker, self._appearance_buffer, FAST_REID_RESULT_MAX_AGE_SECONDS),
             (
@@ -1590,7 +1750,7 @@ class CameraProcessingManager:
             ),
         ):
             for result in worker.poll(session.session_id):
-                track = inside.get(result.track_id)
+                track = current.get(result.track_id)
                 if (
                     track is None
                     or track.source_track_id != result.source_track_id
@@ -1737,6 +1897,10 @@ class CameraProcessingManager:
                 business_date=self._visitor_registry.business_date_for(datetime.now(UTC)),
             )
 
+        if self._establishment_registry is not None and camera_id is not None:
+            # The establishment gallery identifies the entry when it is saved; matching it in a
+            # second, per-camera gallery as well would only repeat that work.
+            return ESTABLISHMENT_DECIDES
         return self._visitor_registry.resolve_entry(
             track_id=track.track_id,
             camera_id=camera_id,
@@ -1805,12 +1969,15 @@ class CameraProcessingManager:
             if not self._is_current_session(session):
                 continue
             visitor_decision = self._resolve_unique_entry(session, event.track)
-            self._session_store.update_event_identity(
-                event.event_id, visitor_decision.as_event_fields()
-            )
-            self._observe_establishment_crossing(
-                session, event.track, "entry", event.event_id, final=True
-            )
+            with self._atomic():
+                saved = self._observe_establishment_crossing(
+                    session, event.track, "entry", event.event_id, final=True
+                )
+                if visitor_decision is ESTABLISHMENT_DECIDES:
+                    visitor_decision = saved or self._degraded_unique_entry_decision("unidentified")
+                self._session_store.update_event_identity(
+                    event.event_id, visitor_decision.as_event_fields()
+                )
 
     def _track_has_reid_consensus(self, track_id: int) -> bool:
         return (
@@ -1968,15 +2135,22 @@ class CameraProcessingManager:
         visitor_decision: VisitorDecision | None = None,
         *,
         event_id: str | None = None,
-    ) -> None:
-        with self._lock:
-            if not self._is_current_session_locked(session):
-                return
+    ) -> VisitorDecision | None:
+        """Save a crossing to the camera ledger and the establishment, in one transaction.
+
+        Returns the establishment's identity decision for the crossing, when it made one.
+        """
+        with self._lock, self._atomic():
+            if not self._is_current_session_locked(session) or not self._frame_is_current_locked():
+                return None
 
             counts = self._counter.counts.as_dict()
+            stable_event_id = event_id or uuid4().hex
+            saved = self._observe_establishment_crossing(session, track, direction, stable_event_id)
+            if visitor_decision is ESTABLISHMENT_DECIDES:
+                visitor_decision = saved
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
             camera_id = self._config.camera_id if self._config else None
-            stable_event_id = event_id or uuid4().hex
             self._session_store.append_event(
                 {
                     "event_id": stable_event_id,
@@ -1993,8 +2167,8 @@ class CameraProcessingManager:
                     "counts": counts,
                 }
             )
-            self._observe_establishment_crossing(session, track, direction, stable_event_id)
             self._persist_session_locked()
+            return saved
 
     def _observe_establishment_crossing(
         self,
@@ -2004,11 +2178,11 @@ class CameraProcessingManager:
         event_id: str,
         *,
         final: bool = False,
-    ) -> None:
+    ) -> VisitorDecision | None:
         """Save a doorway crossing; ``final`` uses whatever appearance the track has by then."""
         registry = self._establishment_registry
         if registry is None or session.config.camera_id is None:
-            return
+            return None
         now = datetime.now(UTC)
         has_evidence = self._track_has_reid_consensus(track.track_id) or (
             final and self._appearance_buffer.sample_count_for_track(track.track_id) > 0
@@ -2018,7 +2192,7 @@ class CameraProcessingManager:
             and _fast_reid_enabled(self._effective_reid_mode)
             and has_evidence
         )
-        registry.observe(
+        return registry.observe(
             observation_id=event_id,
             camera_id=session.config.camera_id,
             track_key=f"{session.event_scope}:{track.source_track_id}",
@@ -2038,7 +2212,7 @@ class CameraProcessingManager:
             quality_model_name=self._quality_reidentifier.embedding_space,
             detection_confidence=track.confidence,
             bbox=track.bbox,
-            sex_evidence=self._sex_evidence(track.track_id) if identified else None,
+            sex_evidence=self._sex_evidence(track.track_id),
             view_embedding=self._appearance_buffer.recent_embedding_for_track(track.track_id)
             if identified
             else None,
@@ -2081,8 +2255,29 @@ class CameraProcessingManager:
         registry, config = self._establishment_registry, self._config
         if registry is None or config is None or config.camera_id is None:
             return
+        now = time.monotonic()
         for record in records:
             track_id = record["track_generation"]
+            # An unchanged visit is re-saved only now and then to extend its last sighting;
+            # re-identifying every person in the zone on every checkpoint grows with the day.
+            signature = (
+                record["qualified"],
+                record["ended_at"],
+                record["departure_observed"],
+                self._appearance_buffer.sample_count_for_track(track_id),
+                self._quality_appearance_buffer.sample_count_for_track(track_id),
+            )
+            previous = self._area_observed.get(record["visit_id"])
+            if (
+                previous is not None
+                and previous[0] == signature
+                and now - previous[1] < AREA_VISIT_REFRESH_SECONDS
+            ):
+                continue
+            if record["ended_at"] is None:
+                self._area_observed[record["visit_id"]] = (signature, now)
+            else:
+                self._area_observed.pop(record["visit_id"], None)
             # A finished visit uses whatever clean views it got: in a crowd some people never
             # collect a full sample set, and leaving them unidentified would undercount.
             has_evidence = self._track_has_reid_consensus(track_id) or (
@@ -2112,7 +2307,8 @@ class CameraProcessingManager:
                 else None,
                 quality_model_name=self._quality_reidentifier.embedding_space,
                 revision_id=self._area_revision_id,
-                sex_evidence=self._sex_evidence(track_id) if identified else None,
+                # Appearance supports a male/female estimate even when identity is unsettled.
+                sex_evidence=self._sex_evidence(track_id),
                 view_embedding=self._appearance_buffer.recent_embedding_for_track(track_id)
                 if identified
                 else None,
@@ -2196,15 +2392,7 @@ class CameraProcessingManager:
 
     def _configure_reid_locked(self, config: CameraStartRequest) -> None:
         processing_profile = getattr(self._tracker, "effective_profile", self._effective_profile)
-        requested_reid_mode = config.reid_mode
-        if (
-            config.analysis_mode == "open_space"
-            and config.unique_counting_mode == "estimated_reid"
-            and requested_reid_mode == "auto"
-        ):
-            # The bounded async fast path supplies the zone's unique-visitor estimate.
-            requested_reid_mode = "fast"
-        self._effective_reid_mode = _resolve_reid_mode(requested_reid_mode, processing_profile)
+        self._effective_reid_mode = _resolve_reid_mode(config.reid_mode, processing_profile)
         fast_profile = get_reid_model_profile("fast")
         quality_profile = get_reid_model_profile("quality")
         if (
@@ -2217,7 +2405,7 @@ class CameraProcessingManager:
         self._quality_reid_worker.close()
         self._reidentifier = PersonReIdentifier.from_profile(fast_profile)
         self._quality_reidentifier = PersonReIdentifier.from_profile(quality_profile)
-        self._reid_worker = AsyncReIdWorker(self._reidentifier)
+        self._reid_worker = AsyncReIdWorker(self._reidentifier, max_queue_size=FAST_REID_QUEUE_SIZE)
         self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
         self._visitor_registry = UniqueVisitorRegistry(
             self._session_store,
