@@ -61,6 +61,12 @@ describe("recent requests", () => {
     ]);
   });
 
+  it("leaves out more-visitors-than-usual alerts, which the map shows", () => {
+    const crowd = { ...alert, id: "al-crowd", type: "Foot Traffic Alert", owner: "Admin", time: "2026-11-21T09:00:00Z" } as PriorityAlert;
+    const spike = { ...alert, id: "al-spike", type: "Occupancy Spike", owner: "Admin", time: "2026-11-21T09:30:00Z" } as PriorityAlert;
+    expect(latestRequests([crowd, spike, alert], [ticket]).map((item) => item.key)).toEqual(["alert-al-1", "ticket-tk-1"]);
+  });
+
   it("maps request statuses", () => {
     expect([requestProgress("New"), requestProgress("Open"), requestProgress("In Review"), requestProgress("Resolved")]).toEqual(["Seen by IT", "Seen by IT", "In progress", "Resolved"]);
   });

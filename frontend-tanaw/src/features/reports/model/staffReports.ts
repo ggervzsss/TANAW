@@ -76,27 +76,72 @@ export function staffReportRows(enterprises: readonly ReportEnterprise[], report
   return rows.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
-// Tabs ------------------------------------------------------------------------------------------
+// Filters ---------------------------------------------------------------------------------------
 
-/** "not-sent" holds the enterprises with no report; it is labelled Pending or Missing, like their pills. */
-export const STAFF_REPORT_TABS = ["all", "waiting", "reviewing", "consolidated", "not-sent"] as const;
-export type StaffReportsTab = (typeof STAFF_REPORT_TABS)[number];
+export type StaffReportFilters = {
+  /** Enterprise name, barangay or report ID. */
+  query: string;
+  submission: "all" | SubmissionStatus;
+  review: "all" | ReviewStatus;
+  barangay: string;
+};
 
-export function parseStaffReportsTab(value: string | null | undefined): StaffReportsTab {
-  return STAFF_REPORT_TABS.find((tab) => tab === value) ?? "all";
+export const EMPTY_STAFF_REPORT_FILTERS: StaffReportFilters = { query: "", submission: "all", review: "all", barangay: "all" };
+
+const SUBMISSION_STATUSES: readonly SubmissionStatus[] = ["Submitted", "Pending", "Missing"];
+const REVIEW_STATUSES: readonly ReviewStatus[] = ["Waiting", "Reviewing", "Consolidated"];
+
+/** Filters from the address: `?q=&submission=missing&review=waiting&barangay=Poblacion`. */
+export function parseStaffReportFilters(params: URLSearchParams): StaffReportFilters {
+  const pick = <T extends string>(values: readonly T[], value: string | null) => values.find((item) => item.toLowerCase() === value?.toLowerCase()) ?? "all";
+  return {
+    query: (params.get("q") ?? "").slice(0, 120),
+    submission: pick(SUBMISSION_STATUSES, params.get("submission")),
+    review: pick(REVIEW_STATUSES, params.get("review")),
+    barangay: params.get("barangay")?.trim() || "all",
+  };
 }
 
-export function rowInTab(row: StaffReportRow, tab: StaffReportsTab) {
-  if (tab === "all") return true;
-  if (tab === "not-sent") return row.submission !== "Submitted";
-  if (row.submission !== "Submitted") return false;
-  return row.review.toLowerCase() === tab;
+/** The address params for the filters; unset filters are left out. */
+export function staffReportFilterParams(filters: StaffReportFilters): Record<string, string | null> {
+  return {
+    q: filters.query.trim() || null,
+    submission: filters.submission === "all" ? null : filters.submission.toLowerCase(),
+    review: filters.review === "all" ? null : filters.review.toLowerCase(),
+    barangay: filters.barangay === "all" ? null : filters.barangay,
+  };
 }
 
-export function staffReportTabs(rows: readonly StaffReportRow[]) {
-  const notSentLabel = rows.some((row) => row.submission === "Missing") || !rows.some((row) => row.submission === "Pending") ? "Missing" : "Pending";
-  const labels: Record<StaffReportsTab, string> = { all: "All", waiting: "Waiting", reviewing: "Reviewing", consolidated: "Consolidated", "not-sent": notSentLabel };
-  return STAFF_REPORT_TABS.map((value) => ({ value, label: labels[value], count: rows.filter((row) => rowInTab(row, value)).length }));
+export function hasStaffReportFilters(filters: StaffReportFilters) {
+  return Boolean(filters.query.trim()) || filters.submission !== "all" || filters.review !== "all" || filters.barangay !== "all";
+}
+
+export function rowMatchesFilters(row: StaffReportRow, filters: StaffReportFilters) {
+  const query = filters.query.trim().toLowerCase();
+  const matchesQuery = !query || [row.name, row.barangay, row.report?.code].some((value) => value?.toLowerCase().includes(query));
+  return (
+    matchesQuery &&
+    (filters.submission === "all" || row.submission === filters.submission) &&
+    // A month with no report shows Waiting too, but filtering by review means received reports.
+    (filters.review === "all" || (Boolean(row.report) && row.review === filters.review)) &&
+    (filters.barangay === "all" || row.barangay === filters.barangay)
+  );
+}
+
+export function filterStaffReportRows(rows: readonly StaffReportRow[], filters: StaffReportFilters) {
+  return rows.filter((row) => rowMatchesFilters(row, filters));
+}
+
+/** Dropdown options with how many enterprises each would show, given the other filters. */
+export function staffReportFilterOptions(rows: readonly StaffReportRow[], filters: StaffReportFilters) {
+  const countWith = (patch: Partial<StaffReportFilters>) => filterStaffReportRows(rows, { ...filters, ...patch }).length;
+  const option = (value: string, label: string, patch: Partial<StaffReportFilters>) => ({ value, label, meta: String(countWith(patch)) });
+  const barangays = [...new Set(rows.map((row) => row.barangay).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return {
+    submission: [option("all", "All submissions", { submission: "all" }), ...SUBMISSION_STATUSES.map((status) => option(status, status, { submission: status }))],
+    review: [option("all", "All reviews", { review: "all" }), ...REVIEW_STATUSES.map((status) => option(status, status, { review: status }))],
+    barangay: [option("all", "All barangays", { barangay: "all" }), ...barangays.map((name) => option(name, name, { barangay: name }))],
+  };
 }
 
 // Progress and generation -------------------------------------------------------------------------
@@ -137,35 +182,11 @@ export function staffReportsProgress(rows: readonly StaffReportRow[]): StaffRepo
   };
 }
 
-/** "A", "A and B", "A, B and C", "A, B, C and 2 more". */
-export function listNames(names: readonly string[], limit = 3) {
-  if (names.length <= 1) return names[0] ?? "";
-  if (names.length > limit) return `${names.slice(0, limit).join(", ")} and ${names.length - limit} more`;
-  return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-}
-
-function notSentSentence(rows: readonly StaffReportRow[]) {
-  if (rows.length === 0) return "";
-  const names = listNames(rows.map((row) => row.name));
-  const yet = rows.every((row) => row.submission === "Pending") ? " yet" : "";
-  return rows.length === 1 ? `${names} has not sent a report${yet}.` : `${names} have not sent reports${yet}.`;
-}
-
-/** The status line above the progress bar: a bold summary and the detail after it. */
-export function staffReportsStatus(progress: StaffReportsProgress, month: ReportingMonth) {
-  const notSent = notSentSentence(progress.notSent);
-  if (progress.received === 0) {
-    return { line: `No ${formatReportingMonth(month)} reports received yet.`, detail: notSent };
-  }
-  const line = `${progress.consolidated} of ${progress.received} received ${progress.received === 1 ? "report" : "reports"} consolidated.`;
-  const next = progress.canGenerate
-    ? "Ready to generate the consolidated report."
-    : progress.generated
-      ? "The consolidated report for this month has been generated."
-      : `${progress.reviewing} reviewing, ${progress.waiting} waiting. Generate once all ${progress.received} are consolidated.`;
-  return { line, detail: [next, notSent].filter(Boolean).join(" ") };
-}
-
-export function progressBarLabel(progress: StaffReportsProgress) {
-  return `${progress.consolidated} consolidated, ${progress.reviewing} reviewing, ${progress.waiting} waiting`;
+/** One line beside the filters saying whether the month can be generated yet. */
+export function staffReportsSummary(progress: StaffReportsProgress, month: ReportingMonth) {
+  const { received, consolidated } = progress;
+  if (received === 0) return `No ${formatReportingMonth(month)} reports received yet.`;
+  if (progress.generated) return "The consolidated report for this month has been generated.";
+  if (progress.canGenerate) return received === 1 ? "The received report is consolidated. Ready to generate." : `All ${received} received reports are consolidated. Ready to generate.`;
+  return `${consolidated} of ${received} received ${received === 1 ? "report" : "reports"} consolidated. Generate once ${received === 1 ? "it is" : `all ${received} are`}.`;
 }

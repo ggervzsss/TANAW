@@ -1,21 +1,31 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { Button, PortalPageHeader, Select, Tabs } from "@/shared/ui-kit";
+import { Button, PortalPageHeader, Select } from "@/shared/ui-kit";
 import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
-import { ReportsProgressStrip } from "../components/ReportsProgressStrip";
+import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
 import { useStaffReports } from "../hooks/useStaffReports";
 import { currentReportingMonth } from "../model/reportStatuses";
 import { formatReportingMonth, monthKey, parseMonthKey, reportingMonthOptions } from "../model/reportingMonth";
-import { parseStaffReportsTab, rowInTab, staffReportsStatus, staffReportTabs, type StaffReportRow } from "../model/staffReports";
+import {
+  EMPTY_STAFF_REPORT_FILTERS,
+  filterStaffReportRows,
+  hasStaffReportFilters,
+  parseStaffReportFilters,
+  staffReportFilterParams,
+  staffReportsSummary,
+  type StaffReportFilters,
+  type StaffReportRow,
+} from "../model/staffReports";
 
 const STATUS_ID = "staff-reports-status";
 
 /**
- * Staff Reports. URL: `?month=2026-10` (the reporting month, default the current one),
- * `&tab=waiting|reviewing|consolidated|not-sent` and `&report=<intake report id>` for the open report.
+ * Staff Reports. URL: `?month=2026-10` (the reporting month, default the current one), the filters
+ * `&q=&submission=submitted|pending|missing&review=waiting|reviewing|consolidated&barangay=`, and
+ * `&report=<intake report id>` for the open report.
  */
 export function StaffReportsPage() {
   const [params, setParams] = useSearchParams();
@@ -24,17 +34,16 @@ export function StaffReportsPage() {
   const current = useMemo(() => currentReportingMonth(today), [today]);
   const monthParam = params.get("month");
   const month = useMemo(() => parseMonthKey(monthParam) ?? current, [current, monthParam]);
-  const tab = parseStaffReportsTab(params.get("tab"));
+  const filters = useMemo(() => parseStaffReportFilters(params), [params]);
   const reportId = params.get("report");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const data = useStaffReports(month, today);
   const { progress } = data;
   const monthLabel = formatReportingMonth(month);
   const openReport = reportId ? data.reports.find((report) => report.id === reportId) : undefined;
-  const tabs = staffReportTabs(data.rows);
-  const visibleRows = data.rows.filter((row) => rowInTab(row, tab));
+  const visibleRows = filterStaffReportRows(data.rows, filters);
+  const filtered = hasStaffReportFilters(filters);
   const monthOptions = reportingMonthOptions(data.reports, current).map((option) => [monthKey(option), formatReportingMonth(option)] as const);
-  const statusText = staffReportsStatus(progress, month);
 
   const updateParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -45,24 +54,9 @@ export function StaffReportsPage() {
     setParams(next, { replace: true });
   };
   const closeReport = () => updateParams({ report: null });
-
-  const status = data.isError
-    ? { line: "Reports could not be loaded.", detail: "Refresh the page to try again." }
-    : data.isLoading
-      ? { line: "Loading reports…", detail: "" }
-      : {
-          line: statusText.line,
-          detail: progress.generated ? (
-            <>
-              {statusText.detail}{" "}
-              <Link to={`${routes.staff.consolidatedReports}?year=${month.year}`} className="font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
-                Open consolidated reports
-              </Link>
-            </>
-          ) : (
-            statusText.detail
-          ),
-        };
+  const changeFilters = (patch: Partial<StaffReportFilters>) => updateParams(staffReportFilterParams({ ...filters, ...patch }));
+  const clearFilters = () => updateParams(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS));
+  const summary = data.isError ? "Reports could not be loaded." : data.isLoading ? "Loading reports…" : staffReportsSummary(progress, month);
 
   return (
     <>
@@ -79,17 +73,30 @@ export function StaffReportsPage() {
         }
       />
 
-      <ReportsProgressStrip id={STATUS_ID} progress={progress} status={status} />
+      <StaffReportsFilters rows={data.rows} filters={filters} onChange={changeFilters} />
 
-      <Tabs
-        ariaLabel="Filter by staff review"
-        idPrefix="staff-reports"
-        className="mt-4"
-        items={tabs.map((item) => ({ ...item, count: data.isLoading || data.isError ? undefined : item.count }))}
-        value={tab}
-        onChange={(value) => updateParams({ tab: value === "all" ? null : value })}
-      />
-      <div role="tabpanel" id={`staff-reports-panel-${tab}`} aria-labelledby={`staff-reports-tab-${tab}`}>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 border-b border-(--tanaw-border-soft) pb-3 text-sm">
+        <p role="status" className="flex flex-wrap items-center gap-x-3 font-semibold text-(--tanaw-text) tabular-nums">
+          {data.isLoading || data.isError ? null : filtered ? `Showing ${visibleRows.length} of ${data.rows.length} enterprises` : `${data.rows.length} ${data.rows.length === 1 ? "enterprise" : "enterprises"}`}
+          {filtered && (
+            <button type="button" onClick={clearFilters} className="font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
+              Clear filters
+            </button>
+          )}
+        </p>
+        <p id={STATUS_ID} className="text-(--tanaw-text-secondary)">
+          {summary}
+          {progress.generated && !data.isLoading && !data.isError && (
+            <>
+              {" "}
+              <Link to={`${routes.staff.consolidatedReports}?year=${month.year}`} className="font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
+                Open consolidated reports
+              </Link>
+            </>
+          )}
+        </p>
+      </div>
+      <div>
         {data.isLoading || data.isError ? (
           <p role={data.isError ? "alert" : "status"} className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
             {data.isError ? "Reports could not be loaded. Refresh the page to try again." : "Loading reports…"}
@@ -97,7 +104,7 @@ export function StaffReportsPage() {
         ) : (
           <StaffReportsTable
             rows={visibleRows}
-            emptyMessage={data.rows.length ? "No reports in this view." : "No enterprises are registered yet."}
+            emptyMessage={data.rows.length ? "No enterprises match these filters. Try another status or barangay, or clear the search." : "No enterprises are registered yet."}
             remindingId={data.remind.isPending ? (data.remind.variables?.enterpriseId ?? null) : null}
             wasReminded={data.wasReminded}
             onOpen={(row: StaffReportRow) => row.report && updateParams({ report: row.report.id })}

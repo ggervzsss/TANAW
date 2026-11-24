@@ -74,6 +74,18 @@ describe("activity types", () => {
   });
 });
 
+describe("more-visitors-than-usual alerts", () => {
+  it("are TANAW's own activity, linked to the Dashboard rather than Requests", () => {
+    const raised = log({ id: "crowd-1", action: "Alert Created", actor: "TANAW", actorRole: "System", sourceId: "alert-9", metadata: { alertType: "Foot Traffic Alert", status: "New" } });
+    expect(activityKind(raised)).toBe("actions");
+    expect(activityLinks(raised)).toContainEqual({ label: "Open the Dashboard", to: "/admin/dashboard" });
+    expect(activityLinks(raised).some((link) => link.to.startsWith("/admin/requests"))).toBe(false);
+
+    const maintenance = log({ id: "it-1", action: "Alert Created", sourceId: "alert-10", metadata: { alertType: "Maintenance Request", status: "New" } });
+    expect(activityKind(maintenance)).toBe("help");
+  });
+});
+
 describe("pinning, filtering and ordering", () => {
   const pinnedOld = log({
     id: "pinned-old",

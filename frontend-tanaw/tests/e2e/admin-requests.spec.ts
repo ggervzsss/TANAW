@@ -56,6 +56,18 @@ const busyAlert = {
   time: "2026-11-22T02:00:00Z",
 };
 
+// A request-type alert from yesterday, listed beside the busy alert that Requests leaves out.
+const lateReportAlert = {
+  ...busyAlert,
+  id: "ALT-000008",
+  type: "Submission Delay",
+  summary: "San Pedro Plaza has not sent its October report.",
+  requiredAction: "Follow up with the enterprise.",
+  resolutionMode: "Staff Follow-up",
+  owner: "System",
+  time: "2026-11-22T03:00:00Z",
+};
+
 const enterpriseAccount = {
   id: "account-1",
   email: "plaza@example.test",
@@ -119,7 +131,7 @@ async function openRequests(page: Page, path = "/admin/requests"): Promise<MockA
   await page.clock.setFixedTime(NOW);
   await mockPortalSession(page, portalUser("admin", { id: "admin-requests-e2e", displayName: "LGU Admin" }));
   await page.route("**/operational/notifications", (route) => route.fulfill(json([])));
-  await page.route("**/operational/alerts", (route) => route.fulfill(json([alert])));
+  await page.route("**/operational/alerts", (route) => route.fulfill(json([alert, lateReportAlert])));
   await page.route("**/operational/alerts/*/status", async (route) => {
     const body = route.request().postDataJSON() as { status: string };
     api.alertUpdates.push(body);
@@ -174,6 +186,9 @@ test("selects a deep-linked ticket and shows its details, photos and updates", a
   await expect(list.getByRole("heading", { name: "Today" })).toBeVisible();
   await expect(list.getByRole("heading", { name: "Yesterday" })).toBeVisible();
   await expect(list.getByRole("heading", { name: "Nov 21" })).toBeVisible();
+  // Yesterday's "more visitors than usual" alert is not a request: the Dashboard map shows it.
+  await expect(list.getByRole("button", { name: /Late enterprise report/ })).toBeVisible();
+  await expect(list.getByRole("button", { name: /Busier than usual/ })).toHaveCount(0);
   await expect(list.getByRole("button")).toHaveCount(4);
   await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toHaveAttribute("aria-current", "true");
   // The opened ticket is read; the other three are still new.
@@ -238,7 +253,7 @@ test("filters, searches and remembers what this Admin has read", async ({ page }
   // The newest request opens by default and counts as read.
   await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toHaveAttribute("aria-current", "true");
   await expect(page.getByText("3 unread", { exact: true })).toBeVisible();
-  await expect(list.getByRole("button", { name: /Busier than usual/ })).toContainText("New");
+  await expect(list.getByRole("button", { name: /Late enterprise report/ })).toContainText("New");
 
   await page.getByRole("searchbox", { name: "Search" }).fill("TCK-000124");
   await expect(list.getByRole("button")).toHaveCount(1);
@@ -269,17 +284,11 @@ test("filters, searches and remembers what this Admin has read", async ({ page }
   await expect(page.getByText("All caught up", { exact: true })).toBeVisible();
 });
 
-test("handles an Admin-owned alert from a notification link", async ({ page }) => {
-  const api = await openRequests(page, "/admin/requests?alert=ALT-000007");
-  const detail = page.getByRole("article");
-  await expect(detail.getByRole("heading", { level: 2, name: "Busier than usual" })).toBeVisible();
-  await expect(detail.getByText("Needs attention").first()).toBeVisible();
-  await expect(detail.getByText("TANAW, automatic alert", { exact: true })).toBeVisible();
-
-  await detail.getByRole("button", { name: "Mark in progress" }).click();
-  await expect(detail.getByText("Alert marked in progress.")).toBeVisible();
-  expect(api.alertUpdates).toEqual([{ status: "In Review" }]);
-  await expect(detail.getByText("In progress").first()).toBeVisible();
+test("leaves a more-visitors-than-usual alert to the Dashboard, even from an old link", async ({ page }) => {
+  await openRequests(page, "/admin/requests?alert=ALT-000007");
+  await expect(page.getByText("That request is not in the list.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("article").getByRole("heading", { level: 2, name: "Busier than usual" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Requests" }).getByRole("button", { name: /Busier than usual/ })).toHaveCount(0);
 });
 
 test("explains a deep link to a request that is not listed", async ({ page }) => {

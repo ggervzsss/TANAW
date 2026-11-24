@@ -43,13 +43,13 @@ function ticket(overrides: Partial<SupportTicket> = {}): SupportTicket {
 function alert(overrides: Partial<PriorityAlert> = {}): PriorityAlert {
   return {
     id: "ALT-000007",
-    type: "Foot Traffic Alert",
+    type: "Submission Delay",
     severity: "Warning",
     urgency: "Important",
     enterprise: "San Pedro Plaza",
     requester: "San Pedro Plaza",
-    summary: "San Pedro Plaza has 220 visitors, compared with its usual 120.",
-    requiredAction: "Review the live map.",
+    summary: "San Pedro Plaza has not sent its October report.",
+    requiredAction: "Follow up with the enterprise.",
     resolutionMode: "Admin Monitoring",
     status: "New",
     owner: "Admin",
@@ -152,6 +152,11 @@ describe("request progress", () => {
 });
 
 describe("merging sources", () => {
+  it("leaves out more-visitors-than-usual alerts, which the Dashboard map shows", () => {
+    const crowd = [alert({ id: "ALT-CROWD-1", type: "Foot Traffic Alert" }), alert({ id: "ALT-CROWD-2", type: "Occupancy Spike" })];
+    expect(buildAdminRequests({ alerts: [...crowd, alert()], tickets: [], accounts: [] }).map((request) => request.sourceId)).toEqual(["ALT-000007"]);
+  });
+
   it("lists every source newest first", () => {
     expect(requests.map((request) => request.key)).toEqual(["ticket:ticket-1", "alert:ALT-000007", "account:account-1:contactNumber"]);
   });
@@ -174,7 +179,7 @@ describe("merging sources", () => {
     const request = byKind("alert");
     expect(request.enterpriseId).toBe("ENT-001");
     expect(request.sentBy).toBe("TANAW, automatic alert");
-    expect(request.title).toBe("Busier than usual");
+    expect(request.title).toBe("Late enterprise report");
     expect(request.reference).toBe("ALT-000007");
   });
 
@@ -195,7 +200,7 @@ describe("merging sources", () => {
 describe("search and filters", () => {
   it("matches title, place and reference number", () => {
     expect(filterRequests(requests, { ...initialRequestFilters, query: "tck-000123" }).map((request) => request.kind)).toEqual(["ticket"]);
-    expect(filterRequests(requests, { ...initialRequestFilters, query: "busier" }).map((request) => request.kind)).toEqual(["alert"]);
+    expect(filterRequests(requests, { ...initialRequestFilters, query: "late enterprise" }).map((request) => request.kind)).toEqual(["alert"]);
     expect(filterRequests(requests, { ...initialRequestFilters, query: "san pedro" })).toHaveLength(3);
     expect(filterRequests(requests, { ...initialRequestFilters, query: "Maria" })).toHaveLength(0);
   });

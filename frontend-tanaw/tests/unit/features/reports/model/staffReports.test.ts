@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { listNames, parseStaffReportsTab, rowInTab, staffReportRows, staffReportsProgress, staffReportsStatus, staffReportTabs } from "@/features/reports/model/staffReports";
+import {
+  EMPTY_STAFF_REPORT_FILTERS,
+  filterStaffReportRows,
+  hasStaffReportFilters,
+  parseStaffReportFilters,
+  staffReportFilterOptions,
+  staffReportFilterParams,
+  staffReportRows,
+  staffReportsProgress,
+  staffReportsSummary,
+} from "@/features/reports/model/staffReports";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
 
 const october = { month: "October", year: 2026 } as const;
@@ -59,26 +69,44 @@ describe("staff report rows", () => {
   });
 });
 
-describe("staff report tabs", () => {
-  it("counts each view and labels the not-sent tab after its rows' status", () => {
-    const reports = [report("a", "Pending Review"), report("b", "Returned"), report("c", "Ready to Consolidate")];
-    const after = staffReportRows(enterprises, reports, october, afterDue);
-    expect(staffReportTabs(after).map(({ label, count }) => [label, count])).toEqual([
-      ["All", 5],
-      ["Waiting", 1],
-      ["Reviewing", 1],
-      ["Consolidated", 1],
-      ["Missing", 2],
-    ]);
-    const before = staffReportRows(enterprises, reports, october, beforeDue);
-    expect(staffReportTabs(before).at(-1)).toEqual({ value: "not-sent", label: "Pending", count: 2 });
-    expect(before.filter((row) => rowInTab(row, "waiting")).map((row) => row.name)).toEqual(["Acacia Park"]);
+describe("staff report filters", () => {
+  const enterprisesByBarangay = [enterprise("a", "Acacia Park"), enterprise("b", "Balon ni Lolo", "Landayan"), enterprise("c", "City Plaza"), enterprise("d", "Daisy Resort", "Landayan"), enterprise("e", "Echo Mall")];
+  const reports = [report("a", "Pending Review"), report("b", "Returned"), report("c", "Ready to Consolidate")];
+  const rows = staffReportRows(enterprisesByBarangay, reports, october, afterDue);
+  const names = (filters: Partial<typeof EMPTY_STAFF_REPORT_FILTERS>) => filterStaffReportRows(rows, { ...EMPTY_STAFF_REPORT_FILTERS, ...filters }).map((row) => row.name);
+
+  it("searches names, barangays and report IDs", () => {
+    expect(names({ query: "plaza" })).toEqual(["City Plaza"]);
+    expect(names({ query: "landayan" })).toEqual(["Daisy Resort", "Balon ni Lolo"]);
+    expect(names({ query: "RPT-2026-10-a" })).toEqual(["Acacia Park"]);
   });
 
-  it("falls back to All for an unknown tab", () => {
-    expect(parseStaffReportsTab("reviewing")).toBe("reviewing");
-    expect(parseStaffReportsTab("nope")).toBe("all");
-    expect(parseStaffReportsTab(null)).toBe("all");
+  it("filters by submission, staff review and barangay together", () => {
+    expect(names({ submission: "Missing" })).toEqual(["Daisy Resort", "Echo Mall"]);
+    expect(names({ review: "Waiting" })).toEqual(["Acacia Park"]);
+    expect(names({ review: "Reviewing" })).toEqual(["Balon ni Lolo"]);
+    expect(names({ submission: "Missing", barangay: "Landayan" })).toEqual(["Daisy Resort"]);
+  });
+
+  it("counts what each option would show alongside the other filters", () => {
+    const options = staffReportFilterOptions(rows, { ...EMPTY_STAFF_REPORT_FILTERS, barangay: "Landayan" });
+    expect(options.submission.map(({ label, meta }) => [label, meta])).toEqual([
+      ["All submissions", "2"],
+      ["Submitted", "1"],
+      ["Pending", "0"],
+      ["Missing", "1"],
+    ]);
+    expect(options.barangay.map(({ value }) => value)).toEqual(["all", "Landayan", "Poblacion"]);
+  });
+
+  it("reads and writes the filters in the address", () => {
+    const filters = parseStaffReportFilters(new URLSearchParams("q=plaza&submission=missing&review=WAITING&barangay=Landayan"));
+    expect(filters).toEqual({ query: "plaza", submission: "Missing", review: "Waiting", barangay: "Landayan" });
+    expect(staffReportFilterParams(filters)).toEqual({ q: "plaza", submission: "missing", review: "waiting", barangay: "Landayan" });
+    expect(parseStaffReportFilters(new URLSearchParams("submission=nope"))).toEqual(EMPTY_STAFF_REPORT_FILTERS);
+    expect(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS)).toEqual({ q: null, submission: null, review: null, barangay: null });
+    expect(hasStaffReportFilters(EMPTY_STAFF_REPORT_FILTERS)).toBe(false);
+    expect(hasStaffReportFilters(filters)).toBe(true);
   });
 });
 
@@ -87,32 +115,23 @@ describe("generating the consolidated report", () => {
     const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Returned"), report("c", "Ready to Consolidate")], october, afterDue);
     const progress = staffReportsProgress(rows);
     expect(progress).toMatchObject({ received: 3, consolidated: 1, reviewing: 1, waiting: 1, readyReportIds: ["r-c"], canGenerate: false, generated: false });
-    expect(staffReportsStatus(progress, october)).toEqual({
-      line: "1 of 3 received reports consolidated.",
-      detail: "1 reviewing, 1 waiting. Generate once all 3 are consolidated. Daisy Resort and Echo Mall have not sent reports.",
-    });
+    expect(staffReportsSummary(progress, october)).toBe("1 of 3 received reports consolidated. Generate once all 3 are.");
   });
 
   it("is ready once every received report is accepted, even when some enterprises have not sent one", () => {
     const rows = staffReportRows(enterprises, [report("a", "Ready to Consolidate"), report("b", "Consolidated")], october, beforeDue);
     const progress = staffReportsProgress(rows);
     expect(progress).toMatchObject({ canGenerate: true, readyReportIds: ["r-a"] });
-    expect(staffReportsStatus(progress, october).detail).toBe("Ready to generate the consolidated report. City Plaza, Daisy Resort and Echo Mall have not sent reports yet.");
+    expect(staffReportsSummary(progress, october)).toBe("All 2 received reports are consolidated. Ready to generate.");
   });
 
   it("has nothing to generate when every received report is already in a monthly report, or none arrived", () => {
     const done = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [report("a", "Consolidated")], october, afterDue));
     expect(done).toMatchObject({ canGenerate: false, generated: true });
-    expect(staffReportsStatus(done, october)).toEqual({ line: "1 of 1 received report consolidated.", detail: "The consolidated report for this month has been generated." });
+    expect(staffReportsSummary(done, october)).toBe("The consolidated report for this month has been generated.");
 
     const none = staffReportsProgress(staffReportRows([enterprise("d", "Daisy Resort")], [], october, afterDue));
     expect(none.canGenerate).toBe(false);
-    expect(staffReportsStatus(none, october)).toEqual({ line: "No October 2026 reports received yet.", detail: "Daisy Resort has not sent a report." });
-  });
-
-  it("lists names in plain English", () => {
-    expect(listNames(["A"])).toBe("A");
-    expect(listNames(["A", "B"])).toBe("A and B");
-    expect(listNames(["A", "B", "C", "D", "E"])).toBe("A, B, C and 2 more");
+    expect(staffReportsSummary(none, october)).toBe("No October 2026 reports received yet.");
   });
 });

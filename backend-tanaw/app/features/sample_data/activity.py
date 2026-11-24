@@ -111,7 +111,8 @@ async def create_request_and_user_activity(
     db.add(account_ticket)
     logs.append(_ticket_submitted(account_ticket, account_opened))
 
-    # A busy-visitors alert two days ago that the Admin followed up and resolved.
+    # A busy-visitors alert two days ago. TANAW raises these from camera counts and clears them
+    # when visitors return to their usual level; the Admin Dashboard shows them, not Requests.
     busy_enterprise = enterprises[5]
     busy_raised = range_end - timedelta(days=2, hours=6)
     busy_alert = OperationalAlert(
@@ -123,7 +124,7 @@ async def create_request_and_user_activity(
         requester=_name(busy_enterprise),
         summary=(
             f"{_name(busy_enterprise)} had 96 visitors, compared with its usual 62 around this day "
-            "and time."
+            "and time. The latest visitor level has returned to its usual range."
         ),
         required_action=(
             "Review the live map and coordinate with the establishment if support is needed."
@@ -146,7 +147,10 @@ async def create_request_and_user_activity(
             actor_role="System",
             action="Alert Created",
             target=_name(busy_enterprise),
-            summary=busy_alert.summary,
+            summary=(
+                f"{_name(busy_enterprise)} had 96 visitors, compared with its usual 62 around this "
+                "day and time."
+            ),
             source_id=busy_alert.id,
             metadata={"alertType": busy_alert.alert_type, "status": "New"},
         )
@@ -157,13 +161,13 @@ async def create_request_and_user_activity(
             busy_raised + timedelta(hours=2),
             category="Admin Operation",
             severity="Success",
-            actor=admin.display_name,
-            actor_role="Admin",
+            actor="TANAW",
+            actor_role="System",
             action="Alert Resolved",
             target=_name(busy_enterprise),
-            summary=f"{admin.display_name} marked {busy_alert.alert_code} as Resolved.",
+            summary=busy_alert.summary,
             source_id=busy_alert.id,
-            metadata={"previousStatus": "New", "newStatus": "Resolved"},
+            metadata={"alertType": busy_alert.alert_type, "status": "Resolved"},
         )
     )
 

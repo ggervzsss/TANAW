@@ -1,6 +1,7 @@
 import type { RecordStatusTone } from "@/shared/ui-kit/lib/recordStatus";
 import type { SupportTicket } from "@/shared/services/supportTickets";
 import type { PriorityAlert, SystemLog } from "@/shared/types";
+import { isCrowdAlertType } from "@/shared/utils/crowdAlerts";
 
 /* The two lists at the bottom of the dashboard: the latest activity and the latest requests. */
 
@@ -62,10 +63,15 @@ export type RecentRequest = {
   search: string;
 };
 
-/** The newest `limit` alerts and support tickets together, newest activity first. */
+/**
+ * The newest `limit` requests (alerts and support tickets), newest activity first. "More visitors
+ * than usual" alerts are left out: the map above shows them, and they are not help requests.
+ */
 export function latestRequests(alerts: readonly PriorityAlert[], tickets: readonly SupportTicket[], limit = 3): RecentRequest[] {
   const items: RecentRequest[] = [
-    ...alerts.map((alert) => ({
+    ...alerts
+      .filter((alert) => !isCrowdAlertType(alert.type))
+      .map((alert) => ({
       key: `alert-${alert.id}`,
       title: alertTitles[alert.type] ?? alert.type,
       place: alert.enterprise || alert.requester,

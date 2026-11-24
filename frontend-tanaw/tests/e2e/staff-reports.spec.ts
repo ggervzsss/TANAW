@@ -69,11 +69,14 @@ test("Staff returns a report for correction with remarks, and it then opens read
   await expect(row.getByText("Reviewing", { exact: true })).toBeVisible();
   await expect(row.getByText("Returned for correction")).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate consolidated report" })).toBeDisabled();
-  await expect(page.locator("#staff-reports-status")).toContainText("1 reviewing, 0 waiting.");
+  await expect(page.locator("#staff-reports-status")).toContainText("consolidated. Generate once");
 
-  await page.getByRole("tab", { name: /^Reviewing/ }).click();
-  await expect(page).toHaveURL(/tab=reviewing/);
+  // Filter to the reports being reviewed; the filter is kept in the address.
+  await page.getByRole("combobox", { name: "Staff review" }).click();
+  await page.getByRole("option", { name: /^Reviewing/ }).click();
+  await expect(page).toHaveURL(/review=reviewing/);
   await expect(page.getByRole("row", { name: /Laguna Lakeside Resort/ })).toHaveCount(0);
+  await expect(page.getByText(/^Showing 1 of \d+ enterprises/)).toBeVisible();
   await page.getByRole("button", { name: "View the report from City Plaza Shops" }).click();
   await expect(dialog.getByText("Returned for correction: The October 14 count is missing.")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);
@@ -86,8 +89,20 @@ test("Before the due date an enterprise without a report is Pending, not Missing
   await mockReports(page, { now: "2026-11-05T10:00:00+08:00", intake: [] });
   await page.goto("/staff/reports");
   await expect(page.getByRole("combobox", { name: "Reporting month" })).toContainText("October 2026");
-  await expect(page.getByRole("tab", { name: /^Pending\s*2$/ })).toBeVisible();
-  await expect(page.locator("#staff-reports-status")).toContainText("No October 2026 reports received yet. City Plaza Shops and Laguna Lakeside Resort have not sent reports yet.");
+  await expect(page.locator("#staff-reports-status")).toHaveText("No October 2026 reports received yet.");
+  // Both enterprises are Pending, not Missing, so the Pending option lists them.
+  await page.getByRole("combobox", { name: "Submission" }).click();
+  await expect(page.getByRole("option", { name: /^Pending\s*2$/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /^Missing\s*0$/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Search narrows the list, and Clear filters brings everyone back.
+  await page.getByRole("searchbox", { name: "Search reports" }).fill("lakeside");
+  await expect(page).toHaveURL(/q=lakeside/);
+  await expect(page.getByRole("row", { name: /City Plaza Shops/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.getByRole("row", { name: /City Plaza Shops/ })).toBeVisible();
+  await expect(page).not.toHaveURL(/q=/);
   const row = page.getByRole("row", { name: /Laguna Lakeside Resort/ });
   await expect(row.getByText("Due Nov 10")).toBeVisible();
   await expect(row.getByText("Pending", { exact: true })).toBeVisible();

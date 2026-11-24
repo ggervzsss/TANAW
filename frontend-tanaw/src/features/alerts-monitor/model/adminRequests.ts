@@ -7,6 +7,7 @@
  */
 import type { SupportTicket, SupportTicketAttachment } from "@/shared/services/supportTickets";
 import type { AccountProfileChangeRequest, AccountSummary, PriorityAlert, PriorityAlertType, ProfileChangeRequestType } from "@/shared/types";
+import { isCrowdAlertType } from "@/shared/utils/crowdAlerts";
 import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 export const REQUEST_TYPES = ["Camera issue", "Report concern", "Account and access", "Desktop app and maintenance", "Other"] as const;
@@ -221,7 +222,7 @@ function profileChangeStatusSentence(change: AccountProfileChangeRequest) {
   return "It is waiting for IT to approve it.";
 }
 
-/** Merges every source into one list, newest first. */
+/** Merges every source into one list, newest first. "More visitors than usual" alerts are left out: they are not help requests, and the Dashboard map shows them. */
 export function buildAdminRequests({ alerts, tickets, accounts }: { alerts: readonly PriorityAlert[]; tickets: readonly SupportTicket[]; accounts: readonly AccountSummary[] }): AdminRequest[] {
   const accountsByEnterpriseId = new Map<string, AccountSummary>();
   const enterpriseIdsByName = new Map<string, string>();
@@ -230,7 +231,7 @@ export function buildAdminRequests({ alerts, tickets, accounts }: { alerts: read
     if (account.enterpriseId && account.enterpriseName) enterpriseIdsByName.set(normalizeName(account.enterpriseName), account.enterpriseId);
   }
   const requests = [
-    ...alerts.map((alert) => alertToRequest(alert, enterpriseIdsByName)),
+    ...alerts.filter((alert) => !isCrowdAlertType(alert.type)).map((alert) => alertToRequest(alert, enterpriseIdsByName)),
     ...tickets.map((ticket) => ticketToRequest(ticket, accountsByEnterpriseId)),
     ...accounts.flatMap((account) => (account.profileChangeRequests ?? []).map((change) => profileChangeToRequest(account, change))),
   ];

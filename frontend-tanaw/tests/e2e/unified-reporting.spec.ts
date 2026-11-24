@@ -90,9 +90,10 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   const status = page.locator("#staff-reports-status");
   await expect(generate).toBeDisabled();
   await expect(generate).toHaveAttribute("aria-describedby", "staff-reports-status");
-  await expect(status).toContainText("0 of 1 received report consolidated.");
-  await expect(status).toContainText("0 reviewing, 1 waiting. Generate once all 1 are consolidated. Riverside Museum has not sent a report.");
-  await expect(page.getByRole("tab", { name: /^Missing\s*1$/ })).toBeVisible();
+  await expect(status).toHaveText("0 of 1 received report consolidated. Generate once it is.");
+  await page.getByRole("combobox", { name: "Submission" }).click();
+  await expect(page.getByRole("option", { name: /^Missing\s*1$/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   const museumRow = page.getByRole("row", { name: /Riverside Museum/ });
   await expect(museumRow.getByText("Missing", { exact: true })).toBeVisible();
@@ -129,8 +130,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(intakeDialog).toBeHidden();
   await expect(page).not.toHaveURL(/report=/);
   await expect(page.getByRole("row", { name: /Park/ }).getByText("Consolidated", { exact: true })).toBeVisible();
-  await expect(status).toContainText("1 of 1 received report consolidated.");
-  await expect(status).toContainText("Ready to generate the consolidated report. Riverside Museum has not sent a report.");
+  await expect(status).toHaveText("The received report is consolidated. Ready to generate.");
 
   await page.getByRole("button", { name: "View the report from Park" }).click();
   await expect(intakeDialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);

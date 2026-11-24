@@ -2,6 +2,7 @@ import { adminEnterpriseDetailsPath, routes } from "@/app/routers/routes";
 import { MONTH_NAMES, reviewStatus, reviewTone } from "@/features/reports/model/reportStatuses";
 import type { SystemLog, SystemLogActorRole } from "@/shared/types";
 import type { DateRange, RecordStatusTone } from "@/shared/ui-kit";
+import { isCrowdAlertType } from "@/shared/utils/crowdAlerts";
 import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 /*
@@ -92,8 +93,15 @@ const ACCOUNT_ACTIONS = new Set([
 ]);
 const REPORT_ACTIONS = new Set(["Submit Enterprise Report", "Generate Final Report", "Return Final Report for Revision"]);
 
+/** A log about a "More visitors than usual" alert: TANAW raised or cleared it from camera counts. */
+export function isCrowdAlertLog(log: SystemLog) {
+  return log.action.startsWith("Alert ") && isCrowdAlertType(metaString(log, "alertType"));
+}
+
 export function activityKind(log: SystemLog): ActivityKind {
   const { action } = log;
+  // Not a help request: TANAW raises and clears these by itself, and the Dashboard map shows them.
+  if (isCrowdAlertLog(log)) return "actions";
   if (log.resolutionStatus || TICKET_ACTIONS.has(action) || ALERT_ACTIONS.has(action) || action.startsWith("Alert ")) return "help";
   if (SECURITY_ACTIONS.has(action)) return "security";
   if (ACCOUNT_ACTIONS.has(action)) return "accounts";
@@ -461,6 +469,7 @@ export function activityLinks(log: SystemLog): ActivityLink[] {
   const links: ActivityLink[] = [];
   const kind = activityKind(log);
   const request = kind === "help" ? activityRequest(log) : null;
+  if (isCrowdAlertLog(log)) links.push({ label: "Open the Dashboard", to: routes.admin.dashboard });
   if (request) links.push({ label: "View details", to: `${routes.admin.requests}?${request.kind}=${encodeURIComponent(request.id)}` });
   else if (kind === "help") links.push({ label: "Open Requests", to: routes.admin.requests });
   if (kind === "reports") {

@@ -4,6 +4,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalNotifications } from "@/app/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
 import type { UserRole } from "@/shared/types/role.types";
+import { CROWD_NOTIFICATION_TYPE } from "@/shared/utils/crowdAlerts";
 import { isStaffReportSubmissionNotification } from "@/shared/utils/notificationRules";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
@@ -159,6 +160,8 @@ function notificationStatusLabel(severity: BackendNotificationSeverity, role: Us
 export function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
   if (role === "admin") {
+    // Busier-than-usual alerts live on the Dashboard map, not in Requests.
+    if (notification.type === CROWD_NOTIFICATION_TYPE) return routes.admin.dashboard;
     if (notification.sourceType === "operational.alert") {
       return adminRequestsPath("alert", notification.sourceId);
     }

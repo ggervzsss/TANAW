@@ -28,6 +28,10 @@ describe("Admin notification destinations", () => {
     expect(target).toBe("/admin/requests?alert=ALT-000001");
   });
 
+  it("opens the Dashboard for more-visitors-than-usual alerts, which are not requests", () => {
+    expect(getBackendNotificationTargetPath("admin", notification({ type: "High Visitor Activity", sourceType: "operational.alert", sourceId: "ALT-000003" }))).toBe("/admin/dashboard");
+  });
+
   it("opens support tickets and account requests in Requests", () => {
     expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "support.ticket", sourceId: "ticket-1" }))).toBe("/admin/requests?ticket=ticket-1");
     expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "enterprise.profile.contact", sourceId: "account-1" }))).toBe("/admin/requests?account=account-1");
