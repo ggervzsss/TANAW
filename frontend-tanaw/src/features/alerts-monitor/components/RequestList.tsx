@@ -1,20 +1,20 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
-import { formatRequestTime, progressLabels, progressTextClass, requestMarker, type AdminRequest, type RequestDayGroup, type RequestReadState } from "../model";
+import type { Request } from "@/shared/services/requests";
+import { formatRequestTime, requestMarker, requestPlace, statusLabels, statusTextClass, type RequestDayGroup } from "../model";
 
 type RequestListProps = {
   groups: RequestDayGroup[];
-  selectedKey: string | null;
-  readState: RequestReadState;
+  selectedId: string | null;
   timeFormat: SystemTimeFormat;
-  onSelect: (request: AdminRequest) => void;
+  onSelect: (request: Request) => void;
   /** Shown instead of the groups when nothing is listed. */
   empty?: ReactNode;
 };
 
 /** The left pane: requests grouped by day under sticky day headings. */
-export function RequestList({ groups, selectedKey, readState, timeFormat, onSelect, empty }: RequestListProps) {
+export function RequestList({ groups, selectedId, timeFormat, onSelect, empty }: RequestListProps) {
   return (
     <nav
       aria-label="Requests"
@@ -33,10 +33,10 @@ export function RequestList({ groups, selectedKey, readState, timeFormat, onSele
               <ul className="m-0 list-none p-0">
                 {group.requests.map((request) => (
                   <RequestListItem
-                    key={request.key}
+                    key={request.id}
                     request={request}
-                    selected={request.key === selectedKey}
-                    marker={requestMarker(request, readState)}
+                    selected={request.id === selectedId}
+                    marker={requestMarker(request)}
                     timeFormat={timeFormat}
                     onSelect={onSelect}
                   />
@@ -55,13 +55,13 @@ function RequestListItem({
   timeFormat,
   onSelect,
 }: {
-  request: AdminRequest;
+  request: Request;
   selected: boolean;
   marker: "New" | "Updated" | null;
   timeFormat: SystemTimeFormat;
-  onSelect: (request: AdminRequest) => void;
+  onSelect: (request: Request) => void;
 }) {
-  const time = formatRequestTime(request.sentAt, timeFormat);
+  const time = formatRequestTime(request.createdAt, timeFormat);
   return (
     <li className="border-b border-(--tanaw-border-soft)">
       <button
@@ -75,18 +75,19 @@ function RequestListItem({
       >
         <span className="flex justify-between gap-3 text-[0.78125rem] text-(--tanaw-text-secondary)">
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            {request.type}
+            {request.group}
+            {request.urgent && <span className="font-bold text-(--tanaw-danger)">Urgent</span>}
             {marker && <span className="font-bold text-(--tanaw-accent-ink)">{marker}</span>}
           </span>
           {time && (
-            <time dateTime={request.sentAt ?? undefined} className="shrink-0 tabular-nums">
+            <time dateTime={request.createdAt} className="shrink-0 tabular-nums">
               {time}
             </time>
           )}
         </span>
         <span className={cn("mt-1 block text-[0.96875rem] leading-snug", marker ? "font-extrabold" : "font-semibold", selected && "text-(--tanaw-accent-ink)")}>{request.title}</span>
-        <span className="mt-0.5 block text-sm text-(--tanaw-text-secondary)">{request.place}</span>
-        <span className={cn("mt-2 block text-[0.8125rem] font-semibold", progressTextClass[request.progress])}>{progressLabels[request.progress]}</span>
+        <span className="mt-0.5 block text-sm text-(--tanaw-text-secondary)">{requestPlace(request)}</span>
+        <span className={cn("mt-2 block text-[0.8125rem] font-semibold", statusTextClass[request.status])}>{statusLabels[request.status]}</span>
       </button>
     </li>
   );

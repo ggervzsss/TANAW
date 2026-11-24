@@ -2,16 +2,12 @@ import type { ReactNode } from "react";
 import type { SystemLog } from "@/shared/types";
 import { cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
-import { activityKind, activityKindChipLabels, activityTitle, actorRoleLabel, formatActivityDate, formatActivityTime, isPinnedActivity } from "../model/recentActivity";
+import { activityKind, activityKindChipLabels, activityTitle, actorRoleLabel, formatActivityDate, formatActivityTime } from "../model/recentActivity";
 
 const chipClass = "inline-flex min-h-5.5 items-center rounded-full px-2.5 text-xs leading-tight font-semibold whitespace-nowrap";
 
 export function ActivityTypeChip({ log }: { log: SystemLog }) {
   return <span className={cn(chipClass, "bg-(--ra-chip) text-(--ra-chip-ink)")}>{activityKindChipLabels[activityKind(log)]}</span>;
-}
-
-export function UnresolvedChip({ children = "Unresolved" }: { children?: ReactNode }) {
-  return <span className={cn(chipClass, "bg-(--tanaw-st-pending-bg) text-(--tanaw-st-pending)")}>{children}</span>;
 }
 
 export const ACTIVITY_DRAWER_ID = "activity-details-drawer";
@@ -46,14 +42,13 @@ export function RecentActivityList({
         ) : (
           <ul aria-label="Activity records">
             {rows.map((log) => {
-              const pinned = isPinnedActivity(log);
               const open = log.id === selectedId;
               return (
                 <li key={log.id}>
                   <button
                     type="button"
                     data-activity-row={log.id}
-                    data-pinned={pinned || undefined}
+                    data-activity-kind={activityKind(log)}
                     aria-haspopup="dialog"
                     aria-expanded={open}
                     aria-controls={open ? ACTIVITY_DRAWER_ID : undefined}
@@ -61,7 +56,7 @@ export function RecentActivityList({
                     className={cn(
                       columns,
                       "w-full border-b px-3 py-4 text-left text-sm text-(--tanaw-text) transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                      pinned ? "border-(--ra-pin-line) bg-(--ra-pin) hover:bg-(--ra-pin-hover)" : "border-(--tanaw-border-soft) hover:bg-(--tanaw-control-hover)",
+                      "border-(--tanaw-border-soft) hover:bg-(--tanaw-control-hover)",
                       open && "bg-(--tanaw-row-selected) shadow-[inset_3px_0_0_var(--tanaw-action)] hover:bg-(--tanaw-row-selected)",
                     )}
                   >
@@ -73,7 +68,6 @@ export function RecentActivityList({
                       <span className="block font-bold wrap-break-word">{activityTitle(log)}</span>
                       <span className="mt-1.5 flex flex-wrap gap-1.5">
                         <ActivityTypeChip log={log} />
-                        {pinned && <UnresolvedChip />}
                       </span>
                     </span>
                     <span className="min-w-0">

@@ -1,58 +1,41 @@
-import { UserRoundCog } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
-import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { emailDeliveriesQueryKey, isEmailProblem, ITEmailDeliveriesPage, listEmailDeliveries } from "@/features/email-deliveries";
+import { LiveAlertList } from "@/features/live-alerts";
 import { SupportTicketsPage } from "@/features/support-tickets";
 import { PageHeader } from "@/shared/components/layout";
-import { EmptyState, PageMotion } from "@/shared/components/ui";
+import { PageMotion } from "@/shared/components/ui";
 import { useAlerts } from "@/shared/hooks/useAlerts";
-import type { AccountSummary } from "@/shared/types";
-import { type SupportTicket, listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
-import { ITAlertsPage } from "./ITAlertsPage";
+import { isClosedRequest, listRequests, requestsQueryKey } from "@/shared/services/requests";
 
-type WorkCenterView = "issues" | "support" | "accounts" | "email";
+type WorkCenterView = "requests" | "alerts" | "email";
 
-const EMPTY_ACCOUNTS: AccountSummary[] = [];
-const EMPTY_TICKETS: SupportTicket[] = [];
 const workCenterViews: { id: WorkCenterView; label: string }[] = [
-  { id: "issues", label: "Technical Issues" },
-  { id: "support", label: "Support Requests" },
-  { id: "accounts", label: "Account Requests" },
+  { id: "requests", label: "Requests" },
+  { id: "alerts", label: "Live Alerts" },
   { id: "email", label: "Email Problems" },
 ];
 
+/**
+ * IT's Work Center: requests to handle (help and account changes), the alerts happening now, and
+ * emails that could not be delivered. Alerts are information only: they end by themselves.
+ */
 export function ITWorkCenterPage() {
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const view = parseWorkCenterView(searchParams.get("view"));
-  const highlightedAccountId = searchParams.get("account");
-  const { alerts } = useAlerts();
-  const enterpriseAccountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
-  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
+  const { alerts, isLoading: alertsLoading } = useAlerts();
+  const requestsQuery = useQuery({ queryKey: requestsQueryKey, queryFn: listRequests });
   const emailDeliveriesQuery = useQuery({ queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries });
 
-  const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ACCOUNTS;
-  const supportTickets = supportTicketsQuery.data ?? EMPTY_TICKETS;
-  const activeIssues = alerts.filter((alert) => alert.owner === "IT" && alert.status !== "Resolved");
-  const activeSupportRequests = supportTickets.filter((ticket) => ticket.status !== "Resolved");
-  const pendingAccountRequests = enterpriseAccounts.reduce((total, account) => total + account.profileChangeRequests.length, 0);
-  const emailProblems = (emailDeliveriesQuery.data ?? []).filter(isEmailProblem);
   const viewCounts: Record<WorkCenterView, number> = {
-    issues: activeIssues.length,
-    support: activeSupportRequests.length,
-    accounts: pendingAccountRequests,
-    email: emailProblems.length,
-  };
-
-  const setView = (nextView: WorkCenterView) => {
-    setSearchParams({ view: nextView });
+    requests: (requestsQuery.data ?? []).filter((request) => !isClosedRequest(request)).length,
+    alerts: alerts.length,
+    email: (emailDeliveriesQuery.data ?? []).filter(isEmailProblem).length,
   };
 
   return (
     <PageMotion className="tanaw-data-page pb-12">
-      <PageHeader title="Work Center" description="See what needs attention, who is affected, and what to do next." />
+      <PageHeader title="Work Center" description="Requests to handle, what is happening right now, and emails that need attention." />
 
       <div role="tablist" aria-label="Work Center sections" className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
         {workCenterViews.map((item) => (
@@ -61,7 +44,7 @@ export function ITWorkCenterPage() {
             type="button"
             role="tab"
             aria-selected={view === item.id}
-            onClick={() => setView(item.id)}
+            onClick={() => setSearchParams({ view: item.id })}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
               view === item.id ? "bg-tanaw-civic text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700"
             }`}
@@ -72,31 +55,18 @@ export function ITWorkCenterPage() {
         ))}
       </div>
 
-      {view === "issues" && <ITAlertsPage embedded />}
-      {view === "support" && <SupportTicketsPage mode="it" embedded />}
+      {view === "requests" && <SupportTicketsPage mode="it" embedded />}
+      {view === "alerts" && (
+        <section aria-label="Live alerts" className="rounded-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface) px-5 py-2">
+          <LiveAlertList alerts={alerts} dashboardPath={null} emptyText={alertsLoading ? "Checking for alerts." : "No live alerts. Every place is counting normally."} />
+        </section>
+      )}
       {view === "email" && <ITEmailDeliveriesPage embedded problemsOnly />}
-      {view === "accounts" &&
-        (pendingAccountRequests > 0 ? (
-          <EnterpriseProfileRequestsPanel
-            accounts={enterpriseAccounts}
-            canResolve
-            highlightedAccountId={highlightedAccountId}
-            onAccountUpdated={() => void queryClient.invalidateQueries({ queryKey: enterpriseAccountsQueryKey })}
-          />
-        ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <EmptyState
-              icon={UserRoundCog}
-              title={enterpriseAccountsQuery.isLoading ? "Checking account requests" : "No account requests"}
-              description={enterpriseAccountsQuery.isLoading ? "Looking for enterprise account changes." : "There are no enterprise account changes waiting for IT review."}
-            />
-          </div>
-        ))}
     </PageMotion>
   );
 }
 
 function parseWorkCenterView(value: string | null): WorkCenterView {
-  if (value === "support" || value === "accounts" || value === "email") return value;
-  return "issues";
+  if (value === "alerts" || value === "email") return value;
+  return "requests";
 }

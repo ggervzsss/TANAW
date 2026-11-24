@@ -5,10 +5,8 @@ import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { activityLogsQueryKey } from "@/features/system-logs/hooks/useActivityLogs";
 import { listActivityLogs } from "@/features/system-logs/services/activityLogService";
-import { alertsQueryKey } from "@/shared/hooks/useAlerts";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { listAlerts } from "@/shared/services/alerts";
-import { listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
+import { listRequests, requestsQueryKey } from "@/shared/services/requests";
 import { recordStatusTextClass } from "@/shared/ui-kit";
 import { activityTag, latestActivity, latestRequests, requestProgressTone } from "../model/recent";
 import { formatDayAndTime, formatRecentTime } from "../model/time";
@@ -71,8 +69,8 @@ export function RecentActivity() {
             const rowClass = "tanaw-dashboard-row grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-center gap-3 px-1 py-3 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:*:first:col-span-2";
             return (
               <li key={log.id} className="border-t border-(--dash-rule) first:border-t-0">
-                {tag === "Resolved" || tag === "Request" ? (
-                  <Link to={routes.admin.requests} className={rowClass}>
+                {log.group === "Requests" && log.sourceId ? (
+                  <Link to={`${routes.admin.requests}?${new URLSearchParams({ request: log.sourceId })}`} className={rowClass}>
                     {content}
                   </Link>
                 ) : (
@@ -90,25 +88,24 @@ export function RecentActivity() {
 export function RecentRequests() {
   const token = useAuthStore((state) => state.token);
   const { timeFormat } = useSystemDisplayPreferences();
-  const alertsQuery = useQuery({ queryKey: alertsQueryKey, queryFn: listAlerts, enabled: Boolean(token) });
-  const ticketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets, enabled: Boolean(token) });
-  const requests = latestRequests(alertsQuery.data ?? [], ticketsQuery.data ?? []);
+  const requestsQuery = useQuery({ queryKey: requestsQueryKey, queryFn: listRequests, enabled: Boolean(token) });
+  const requests = latestRequests(requestsQuery.data ?? []);
   const now = new Date();
 
   return (
     <RecentSection
       titleId="recent-requests-title"
       title="Recent Requests"
-      description="All requests across TANAW."
+      description="The latest requests people sent to IT."
       link={
         <Link to={routes.admin.requests} className="tanaw-dashboard-link">
           View all requests <span aria-hidden="true">›</span>
         </Link>
       }
     >
-      {alertsQuery.isLoading || ticketsQuery.isLoading ? (
+      {requestsQuery.isLoading ? (
         <ListMessage>Loading requests…</ListMessage>
-      ) : alertsQuery.isError && ticketsQuery.isError ? (
+      ) : requestsQuery.isError ? (
         <ListMessage>Requests could not be loaded.</ListMessage>
       ) : requests.length === 0 ? (
         <ListMessage>No requests yet.</ListMessage>

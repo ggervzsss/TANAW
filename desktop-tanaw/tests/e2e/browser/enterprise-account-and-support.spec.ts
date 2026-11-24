@@ -1,4 +1,4 @@
-// Enterprise Support Tickets, account settings, and desktop navigation.
+// Enterprise Requests, account settings, and desktop navigation.
 import { expect, test, type Locator } from "@playwright/test";
 import { mockCameraSetup, mockRememberedSession, switchTheme } from "./support/preload";
 import { signIn, defaultEnterpriseUser } from "./support/session";
@@ -15,80 +15,52 @@ async function expectSettledTopbarUnderline(underline: Locator, tab: Locator) {
     .toBeLessThan(2);
 }
 
-test("updates Support Ticket selects together after a theme change", async ({ page }) => {
+test("updates the request group select after a theme change", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.goto("/#/enterprise/tickets");
 
-  const category = page.getByRole("combobox", { name: "Category" });
-  const priority = page.getByRole("combobox", { name: "Priority" });
-  await expect(category).toBeVisible();
-  await expect(priority).toBeVisible();
-  const initialDarkState = await page.evaluate(() => ({
-    categoryBackground: getComputedStyle(document.querySelector('[aria-label="Category"]') as HTMLElement).backgroundColor,
-    priorityBackground: getComputedStyle(document.querySelector('[aria-label="Priority"]') as HTMLElement).backgroundColor,
-  }));
-  expect(initialDarkState.categoryBackground).not.toBe("rgb(255, 255, 255)");
-  expect(initialDarkState.priorityBackground).toBe(initialDarkState.categoryBackground);
+  const group = page.getByRole("combobox", { name: "What is it about?" });
+  await expect(group).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Priority" })).toHaveCount(0);
+  const darkBackground = await group.evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(darkBackground).not.toBe("rgb(255, 255, 255)");
 
   await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  const lightState = await page.evaluate(() => {
-    const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
-    const prioritySelect = document.querySelector('[aria-label="Priority"]') as HTMLElement;
-    return {
-      categoryBackground: getComputedStyle(categorySelect).backgroundColor,
-      isDark: document.documentElement.classList.contains("dark"),
-      priorityBackground: getComputedStyle(prioritySelect).backgroundColor,
-      transitionDelay: getComputedStyle(categorySelect).transitionDelay,
-    };
-  });
-  expect(lightState.isDark).toBe(false);
-  expect(lightState.priorityBackground).toBe(lightState.categoryBackground);
-  expect(lightState.transitionDelay.split(",").every((delay) => delay.trim() === "0s")).toBe(true);
-  await expect(category).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(priority).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  const transitionDelay = await group.evaluate((element) => getComputedStyle(element).transitionDelay);
+  expect(transitionDelay.split(",").every((delay) => delay.trim() === "0s")).toBe(true);
+  await expect(group).toHaveCSS("background-color", "rgb(255, 255, 255)");
 
-  await category.click();
-  await expect(page.getByRole("listbox", { name: "Category" })).toBeVisible();
-  await expect(page.getByRole("listbox", { name: "Category" }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await group.click();
+  const options = page.getByRole("listbox", { name: "What is it about?" });
+  await expect(options).toBeVisible();
+  await expect(options.getByRole("option")).toHaveText(["Desktop app or camera problem", "Report problem", "Other"]);
+  await expect(options.locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.keyboard.press("Escape");
 
   await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
-  const darkState = await page.evaluate(() => {
-    const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
-    const prioritySelect = document.querySelector('[aria-label="Priority"]') as HTMLElement;
-    return {
-      categoryBackground: getComputedStyle(categorySelect).backgroundColor,
-      isDark: document.documentElement.classList.contains("dark"),
-      priorityBackground: getComputedStyle(prioritySelect).backgroundColor,
-    };
-  });
-  expect(darkState.isDark).toBe(true);
-  expect(darkState.priorityBackground).toBe(darkState.categoryBackground);
-  await expect(category).toHaveCSS("background-color", initialDarkState.categoryBackground);
-  await expect(priority).toHaveCSS("background-color", initialDarkState.priorityBackground);
+  await expect(group).toHaveCSS("background-color", darkBackground);
 });
 
-test("reveals and focuses the first invalid Support Ticket field", async ({ page }) => {
+test("reveals and focuses the first invalid request field", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 700 });
   await signIn(page);
   await page.goto("/#/enterprise/tickets");
 
-  await page.getByRole("button", { name: "Submit Ticket" }).click();
-  const subject = page.getByPlaceholder("Brief summary of the issue");
-  await expect(subject).toBeFocused();
-  await expect(subject).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText("Enter a ticket subject.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Send Request" }).click();
+  const title = page.getByPlaceholder("A short summary, for example: Gate camera keeps disconnecting");
+  await expect(title).toBeFocused();
+  await expect(title).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Enter a short title for the request.", { exact: true })).toBeVisible();
 
-  await subject.fill("Camera unavailable");
-  await page.getByPlaceholder("Describe what happened, when it started, and any affected workflows.").fill("The camera feed stopped updating this morning.");
-  await page.getByRole("button", { name: "Submit Ticket" }).click();
-  const affectedArea = page.getByRole("textbox", { name: /^Affected Area/ });
-  await expect(affectedArea).toBeFocused();
-  await expect(affectedArea).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText("Enter the affected area.", { exact: true })).toBeVisible();
+  await title.fill("Camera unavailable");
+  await page.getByRole("button", { name: "Send Request" }).click();
+  const description = page.getByPlaceholder("Describe what happened, when it started, and any affected workflows.");
+  await expect(description).toBeFocused();
+  await expect(description).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Describe the problem.", { exact: true })).toBeVisible();
 });
 
 test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {
@@ -142,63 +114,67 @@ test("keeps Enterprise password inputs empty and reveals only manually entered t
   await expect(page.getByPlaceholder("Repeat the password")).toHaveValue("");
 });
 
-test("submits a Support Ticket and keeps resolved history visible", async ({ page }) => {
-  const resolvedTicket = {
-    id: "ticket-resolved",
-    code: "TCK-000099",
+test("sends a request, and reopens a resolved one", async ({ page }) => {
+  const resolvedRequest = {
+    id: "request-resolved",
+    code: "REQ-000099",
+    group: "Desktop app or camera problem",
+    title: "Resolved camera concern",
+    description: "The camera concern has already been resolved.",
+    status: "Resolved",
+    urgent: false,
     enterpriseId: defaultEnterpriseUser.enterpriseId,
     enterpriseName: defaultEnterpriseUser.enterpriseName,
-    submittedBy: defaultEnterpriseUser.displayName,
-    category: "Camera Issue",
-    priority: "High",
-    subject: "Resolved camera concern",
-    description: "The camera concern has already been resolved.",
+    requesterName: defaultEnterpriseUser.displayName,
+    requesterEmail: null,
     affectedArea: "Lobby",
-    cameraNode: null,
+    camera: null,
     attachments: [],
-    status: "Resolved",
+    accountChange: null,
+    unread: false,
+    updated: false,
+    closedAt: "2026-07-23T12:15:04.071391+00:00",
     createdAt: "2026-07-23T12:11:04.071391+00:00",
     updatedAt: "2026-07-23T12:15:04.071391+00:00",
     messages: [
-      {
-        id: "message-1",
-        authorName: "Default IT Personnel",
-        authorRole: "it",
-        message: "The connection has been restored.",
-        createdAt: "2026-07-23T12:14:04.071391+00:00",
-      },
+      { id: "message-1", authorName: "Default IT Personnel", authorRole: "it", kind: "message", message: "The connection has been restored.", createdAt: "2026-07-23T12:14:04.071391+00:00" },
     ],
   };
+  let current = resolvedRequest;
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
-  await page.route("**/operational/tickets**", (route) => {
+  await page.route("**/operational/requests**", (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (route.request().method() === "POST" && pathname.endsWith("/reopen")) {
+      current = { ...current, status: "Sent", closedAt: null };
+      return route.fulfill({ json: current });
+    }
     if (route.request().method() === "POST") {
       const request = route.request().postDataJSON();
-      expect(request).toMatchObject({ category: "Report Concern", priority: "Normal", subject: "Report summary question" });
-      return route.fulfill({ json: { ...resolvedTicket, ...request, id: "ticket-new", code: "TCK-000100", status: "Open", messages: [] } });
+      expect(request).toMatchObject({ group: "Report problem", title: "Report summary question" });
+      expect(request).not.toHaveProperty("priority");
+      return route.fulfill({ json: { ...resolvedRequest, ...request, id: "request-new", code: "REQ-000100", status: "Sent", closedAt: null, messages: [] } });
     }
-    const pathname = new URL(route.request().url()).pathname;
-    const body = pathname.endsWith("/ticket-resolved") ? resolvedTicket : [resolvedTicket];
+    const body = pathname.endsWith("/request-resolved") ? current : [current];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.getByRole("button", { name: "Open account menu" }).click();
   await page.getByRole("button", { name: "General Settings" }).click();
-  await page.getByRole("button", { name: "Support Tickets" }).click();
-  await page.getByRole("combobox", { name: "Category" }).click();
-  await page.getByRole("option", { name: "Report Concern" }).click();
-  await page.getByRole("combobox", { name: "Priority" }).click();
-  await page.getByRole("option", { name: "Normal" }).click();
-  await page.getByLabel("Subject", { exact: true }).fill("Report summary question");
-  await page.getByLabel("Description", { exact: true }).fill("Please help confirm the correct date range for the visitor report.");
-  await page.getByRole("button", { name: "Submit Ticket" }).click();
-  await expect(page.getByText("Ticket TCK-000100 submitted.")).toBeVisible();
+  await page.getByRole("button", { name: "Requests", exact: true }).click();
+  await page.getByRole("combobox", { name: "What is it about?" }).click();
+  await page.getByRole("option", { name: "Report problem" }).click();
+  await page.getByPlaceholder("A short summary, for example: Gate camera keeps disconnecting").fill("Report summary question");
+  await page.getByPlaceholder("Describe what happened, when it started, and any affected workflows.").fill("Please help confirm the correct date range for the visitor report.");
+  await page.getByRole("button", { name: "Send Request" }).click();
+  await expect(page.getByText("Request REQ-000100 sent.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Report summary question/ })).toBeVisible();
 
   await page.getByRole("button", { name: /Resolved camera concern/ }).click();
   await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();
-  await expect(page.getByText("This ticket is resolved. The conversation is now closed.", { exact: false })).toBeVisible();
-  await expect(page.getByText("Reply in TANAW", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("This request is resolved, so the conversation is closed.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Send Reply" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reopen request" }).click();
+  await expect(page.getByText("REQ-000099 is open again.")).toBeVisible();
 });
 
 test("keeps the active underline visible and retargets it through desktop navigation", async ({ page }) => {

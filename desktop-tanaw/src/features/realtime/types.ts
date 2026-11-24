@@ -40,7 +40,7 @@ export function isRealtimeEnvelope(value: unknown): value is RealtimeEnvelope {
 export function realtimeOrderingKey(event: RealtimeEnvelope) {
   const domain = event.event_type.split(".", 1)[0];
   const entityId =
-    event.scope.ticket_id ??
+    event.scope.request_id ??
     event.scope.report_id ??
     event.scope.recipient_account_id ??
     event.scope.enterprise_account_id ??

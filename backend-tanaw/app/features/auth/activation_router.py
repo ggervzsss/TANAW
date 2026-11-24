@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.features.accounts.models import AccountRole
 from app.features.activity_logs.service import (
     get_actor_role_label,
     get_actor_role_label_for_role,
@@ -21,9 +22,6 @@ from app.features.auth.email_change import (
     AccountEmailChangeError,
     verify_account_email_change,
 )
-from app.features.auth.policies import (
-    get_auth_log_category,
-)
 from app.features.auth.schemas import (
     AccountActivationCompleteRequest,
     AccountActivationCompleteResponse,
@@ -32,6 +30,7 @@ from app.features.auth.schemas import (
     AccountEmailChangeVerifyRequest,
     AccountEmailChangeVerifyResponse,
 )
+from app.features.requests.service import touch_account_change_request
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ async def complete_activation(
 
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Accounts",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -106,9 +105,11 @@ async def verify_email_change_link(
             detail="Email verification link is invalid or expired.",
         ) from exc
 
+    if verification.account_role == AccountRole.ENTERPRISE:
+        await touch_account_change_request(db, verification.account_id, "businessEmail")
     await record_auth_log(
         db,
-        category="System",
+        group="Accounts",
         severity="Success",
         actor=verification.display_name,
         actor_role=get_actor_role_label_for_role(verification.account_role),

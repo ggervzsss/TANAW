@@ -1,130 +1,90 @@
 import { adminEnterpriseDetailsPath, routes } from "@/app/routers/routes";
 import { MONTH_NAMES, reviewStatus, reviewTone } from "@/features/reports/model/reportStatuses";
-import type { SystemLog, SystemLogActorRole } from "@/shared/types";
+import type { ActivityGroup, SystemLog, SystemLogActorRole } from "@/shared/types";
 import type { DateRange, RecordStatusTone } from "@/shared/ui-kit";
-import { isCrowdAlertType } from "@/shared/utils/crowdAlerts";
 import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 /*
- * Recent Activity (Admin): the activity log as six types, with unresolved help requests pinned.
- *
- * Types, decided from the logged action first and the log category second:
- *   help      support tickets (sent, replied to, status changed) and operational alerts (raised,
- *             resolved, desktop app problems), the same records the Requests page lists, plus any
- *             log the backend tracks as an issue (it carries a resolutionStatus).
- *   security  sign-in, sign-out and password recovery attempts, and System warnings.
- *   accounts  accounts created or changed, profile changes, password changes and activation.
- *   reports   enterprise report submissions, staff review decisions and consolidated reports.
- *   actions   everything else any TANAW user did, such as messages to enterprises or settings.
- *
- * Pinned: a log whose resolutionStatus is "Unresolved" (the backend keeps it Unresolved until IT
- * resolves the ticket or alert in Work Center). Pinned logs come first and ignore the date range.
+ * Activity: a record of everything every user did, and everything TANAW did by itself, once
+ * per event. The Admin and IT read the same records, in six groups, newest first. The Admin
+ * reads the plain summary; IT also gets the technical details (`itDetail`) the backend sends
+ * only to IT. Nothing is pinned: open problems are on the Requests page and in Alerts.
  */
 
-export type ActivityKind = "reports" | "actions" | "accounts" | "help" | "security";
+export type ActivityKind = "security" | "accounts" | "reports" | "requests" | "monitoring" | "settings";
 export type ActivityTypeFilter = "all" | ActivityKind;
 
 export const ACTIVITY_PAGE_SIZE = 8;
 
-/** The query parameter that holds the activity open in the drawer: `/admin/activity?activity=<log id>`. */
+/** The query parameter that holds the activity open in the drawer: `?activity=<log id>`. */
 export const ACTIVITY_PARAM = "activity";
 
+const KIND_BY_GROUP: Record<ActivityGroup, ActivityKind> = {
+  "Login & Security": "security",
+  Accounts: "accounts",
+  Reports: "reports",
+  Requests: "requests",
+  Monitoring: "monitoring",
+  "Settings & Maintenance": "settings",
+};
+
 export const activityTypeOptions: readonly { value: ActivityTypeFilter; label: string; meta?: string }[] = [
-  { value: "all", label: "All Activities" },
-  { value: "reports", label: "Report Updates" },
-  { value: "actions", label: "User Actions", meta: "By any TANAW user" },
-  { value: "accounts", label: "Account Changes" },
-  { value: "help", label: "Help Requests" },
+  { value: "all", label: "All Activity" },
   { value: "security", label: "Login & Security" },
+  { value: "accounts", label: "Accounts" },
+  { value: "reports", label: "Reports" },
+  { value: "requests", label: "Requests" },
+  { value: "monitoring", label: "Monitoring", meta: "Cameras, busy places, offline desktop apps" },
+  { value: "settings", label: "Settings & Maintenance" },
 ];
 
 /** The chip on each row and in the drawer header. */
 export const activityKindChipLabels: Record<ActivityKind, string> = {
-  reports: "Report update",
-  actions: "User action",
-  accounts: "Account change",
-  help: "Help request",
   security: "Login & security",
+  accounts: "Accounts",
+  reports: "Reports",
+  requests: "Requests",
+  monitoring: "Monitoring",
+  settings: "Settings",
 };
 
 export function activityTypeLabel(type: ActivityTypeFilter) {
-  return activityTypeOptions.find((option) => option.value === type)?.label ?? "All Activities";
+  return activityTypeOptions.find((option) => option.value === type)?.label ?? "All Activity";
 }
 
 export function parseActivityType(value: string | null): ActivityTypeFilter {
   return activityTypeOptions.some((option) => option.value === value) ? (value as ActivityTypeFilter) : "all";
 }
 
-const TICKET_ACTIONS = new Set(["Submit Support Ticket", "Submit Important Support Request", "Reply Support Ticket", "Update Support Ticket Status"]);
-const ALERT_ACTIONS = new Set(["Alert Created", "Alert Resolved", "Desktop Application Problem", "Technical Issue Resolved"]);
-const SECURITY_ACTIONS = new Set([
-  "Login",
-  "Logout",
-  "Password Recovery Request",
-  "Password Recovery Code Verified",
-  "Password Recovery Verification Rejected",
-  "Password Recovery Reset Rejected",
-  "Password Recovery Reset Completed",
-]);
-const ACCOUNT_ACTIONS = new Set([
-  "Create Enterprise Account",
-  "Create LGU Account",
-  "Update Enterprise Account",
-  "Update LGU Account",
-  "Update Account Status",
-  "Approve Verified Email Change",
-  "Decline Verified Email Change",
-  "Approve Enterprise Profile Change",
-  "Decline Enterprise Profile Change",
-  "Resend Account Activation",
-  "Activation Email Queued",
-  "Account Activated",
-  "Verify Proposed Account Email",
-  "Update Profile",
-  "Update Profile Logo",
-  "Update Lead Admin",
-  "Update Building Capacity",
-  "Request Account Update",
-  "Request Contact Number Change",
-  "Request Business Email Change",
-  "Cancel Business Email Change",
-  "Password Changed",
-  "Password Reset",
-]);
-const REPORT_ACTIONS = new Set(["Submit Enterprise Report", "Generate Final Report", "Return Final Report for Revision"]);
-
-/** A log about a "More visitors than usual" alert: TANAW raised or cleared it from camera counts. */
-export function isCrowdAlertLog(log: SystemLog) {
-  return log.action.startsWith("Alert ") && isCrowdAlertType(metaString(log, "alertType"));
-}
-
 export function activityKind(log: SystemLog): ActivityKind {
-  const { action } = log;
-  // Not a help request: TANAW raises and clears these by itself, and the Dashboard map shows them.
-  if (isCrowdAlertLog(log)) return "actions";
-  if (log.resolutionStatus || TICKET_ACTIONS.has(action) || ALERT_ACTIONS.has(action) || action.startsWith("Alert ")) return "help";
-  if (SECURITY_ACTIONS.has(action)) return "security";
-  if (ACCOUNT_ACTIONS.has(action)) return "accounts";
-  if (REPORT_ACTIONS.has(action) || action.startsWith("Report ") || action.startsWith("Final Report ") || log.category === "Staff Submission") return "reports";
-  if (log.category === "System" && (log.severity === "Warning" || log.severity === "Critical")) return "security";
-  return "actions";
-}
-
-/** Unresolved help or issue records stay pinned at the top until IT resolves them. */
-export function isPinnedActivity(log: SystemLog) {
-  return log.resolutionStatus === "Unresolved";
+  return KIND_BY_GROUP[log.group] ?? "settings";
 }
 
 const ACTION_TITLES: Record<string, string> = {
+  // Login & Security
   Login: "Signed In",
   Logout: "Signed Out",
-  "Password Recovery Request": "Password Recovery Requested",
-  "Password Recovery Code Verified": "Recovery Code Verified",
-  "Password Recovery Verification Rejected": "Recovery Code Rejected",
-  "Password Recovery Reset Rejected": "Password Reset Rejected",
-  "Password Recovery Reset Completed": "Password Reset Completed",
+  "Account Locked": "Account Locked",
   "Password Changed": "Password Changed",
   "Password Reset": "Password Reset",
+  "Password Recovery Request": "Password Recovery Requested",
+  "Password Recovery Rejected": "Recovery Code or Link Rejected",
+  // Accounts
+  "Create Enterprise Account": "Enterprise Account Created",
+  "Create LGU Account": "LGU Account Created",
+  "Update Enterprise Account": "Enterprise Account Updated",
+  "Update LGU Account": "LGU Account Updated",
+  "Update Account Status": "Account Status Changed",
+  "Resend Account Activation": "Invitation Resent",
+  "Account Activated": "Invitation Accepted",
+  "Verify Proposed Account Email": "New Email Verified",
+  "Update Profile": "Profile Updated",
+  "Update Profile Logo": "Profile Photo Updated",
+  "Update Lead Admin": "Lead Admin Updated",
+  "Update Building Capacity": "Building Capacity Updated",
+  "Approve Account Change": "Account Change Approved",
+  "Decline Account Change": "Account Change Declined",
+  // Reports
   "Submit Enterprise Report": "Report Submitted",
   "Report Pending Review": "Report Set to Pending Review",
   "Report Returned": "Report Sent Back for Correction",
@@ -133,46 +93,38 @@ const ACTION_TITLES: Record<string, string> = {
   "Generate Final Report": "Consolidated Report Generated",
   "Return Final Report for Revision": "Consolidated Report Returned for Revision",
   "Notify Enterprise": "Message Sent to Enterprise",
-  "Submit Support Ticket": "Support Request Sent",
-  "Submit Important Support Request": "Important Support Request Sent",
-  "Reply Support Ticket": "Support Request Reply Sent",
-  "Update Support Ticket Status": "Support Request Updated",
-  "Desktop Application Problem": "Desktop App Problem Reported",
-  "Technical Issue Resolved": "Technical Issue Resolved",
-  "Create Enterprise Account": "Enterprise Account Created",
-  "Create LGU Account": "LGU Account Created",
-  "Update Enterprise Account": "Enterprise Account Updated",
-  "Update LGU Account": "LGU Account Updated",
-  "Update Account Status": "Account Status Changed",
-  "Approve Verified Email Change": "Email Change Approved",
-  "Decline Verified Email Change": "Email Change Declined",
-  "Approve Enterprise Profile Change": "Profile Change Approved",
-  "Decline Enterprise Profile Change": "Profile Change Declined",
-  "Resend Account Activation": "Activation Invitation Resent",
-  "Activation Email Queued": "Activation Email Queued",
-  "Account Activated": "Account Activated",
-  "Verify Proposed Account Email": "New Email Verified",
-  "Update Profile": "Profile Updated",
-  "Update Profile Logo": "Profile Photo Updated",
-  "Update Lead Admin": "Lead Admin Updated",
-  "Update Building Capacity": "Building Capacity Updated",
-  "Request Account Update": "Account Update Requested",
-  "Request Contact Number Change": "Contact Number Change Requested",
-  "Request Business Email Change": "Business Email Change Requested",
-  "Cancel Business Email Change": "Business Email Change Cancelled",
+  // Requests
+  "Send Request": "Request Sent",
+  "Request Account Change": "Account Change Requested",
+  "Cancel Account Change": "Account Change Cancelled",
+  "Reply to Request": "Reply Sent",
+  "Add Note for IT": "Note Added for IT",
+  "Request In Progress": "Request In Progress",
+  "Request Resolved": "Request Resolved",
+  "Request Sent": "Request Set Back to Sent",
+  "Reopen Request": "Request Reopened",
+  "Move Request": "Request Moved to Another Group",
+  "Mark Request Urgent": "Request Marked Urgent",
+  "Clear Request Urgency": "Request No Longer Urgent",
+  // Monitoring
+  "Busier Than Usual": "Busier Than Usual",
+  "Back to Usual": "Back to Usual",
+  "Camera Stopped Counting": "Camera Stopped Counting",
+  "Camera Counting Again": "Camera Counting Again",
+  "Desktop App Offline": "Desktop App Offline",
+  "Mark Temporarily Closed": "Marked Temporarily Closed",
+  "Clear Temporary Closure": "Temporary Closure Removed",
+  "Change Opening Hours": "Opening Hours Changed",
+  // Settings & Maintenance
   "Update System Settings": "System Settings Updated",
   "Delete Old Activity": "Old Activity Deleted",
   "Run Retention Cleanup": "Data Retention Cleanup Run",
   "Retry Email Delivery": "Email Delivery Retried",
-};
-
-const ALERT_NAMES: Record<string, string> = {
-  "Maintenance Request": "Maintenance Request",
-  "Password Reset Request": "Password Reset Request",
-  "Submission Delay": "Late Report Alert",
-  "Foot Traffic Alert": "Busy Establishment Alert",
-  "Occupancy Spike": "Crowd Spike Alert",
-  "Failed Login Threshold": "Repeated Failed Sign-in Alert",
+  "Add Camera": "Camera Added",
+  "Remove Camera": "Camera Removed",
+  "Change Camera": "Camera Settings Changed",
+  "Change Counting Area": "Counting Area Changed",
+  "Reset Desktop Data": "Desktop Data Reset",
 };
 
 function metaString(log: SystemLog, key: string) {
@@ -187,11 +139,6 @@ function metaNumber(log: SystemLog, key: string) {
 
 /** A readable, past-tense title for a logged action, such as "Report Submitted". */
 export function activityTitle(log: SystemLog) {
-  if (log.action === "Alert Created" || log.action === "Alert Resolved") {
-    const alertType = metaString(log, "alertType");
-    const name = (alertType && ALERT_NAMES[alertType]) ?? "Alert";
-    return log.action === "Alert Resolved" ? `${name} Resolved` : `${name} Raised`;
-  }
   if (ACTION_TITLES[log.action]) return ACTION_TITLES[log.action];
   if (log.action.startsWith("Final Report ")) return `Consolidated Report ${log.action.slice("Final Report ".length)}`;
   return log.action;
@@ -202,7 +149,7 @@ const ROLE_LABELS: Record<SystemLogActorRole, string> = {
   "IT Personnel": "IT Personnel",
   "LGU Staff": "LGU Staff",
   "Enterprise Account": "Enterprise",
-  System: "System",
+  System: "TANAW",
 };
 
 export function actorRoleLabel(role: SystemLogActorRole) {
@@ -236,22 +183,13 @@ export function formatActivityTime(timestamp: string, timeFormat: SystemTimeForm
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: timeFormat === "12-hour", timeZone: PHILIPPINE_TIME_ZONE }).format(date);
 }
 
-/** How long an unresolved record has been open: "less than a day", "1 day", "3 days". */
-export function openDurationLabel(timestamp: string, now: Date) {
-  const date = validDate(timestamp);
-  if (!date) return "for an unknown time";
-  const days = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
-  if (days < 1) return "less than a day";
-  return days === 1 ? "1 day" : `${days} days`;
-}
-
 function timestampValue(timestamp: string) {
   return validDate(timestamp)?.getTime() ?? 0;
 }
 
-/** Pinned first, then newest first. */
+/** Newest first. */
 export function compareActivity(left: SystemLog, right: SystemLog) {
-  return Number(isPinnedActivity(right)) - Number(isPinnedActivity(left)) || timestampValue(right.timestamp) - timestampValue(left.timestamp) || left.id.localeCompare(right.id);
+  return timestampValue(right.timestamp) - timestampValue(left.timestamp) || left.id.localeCompare(right.id);
 }
 
 export type ActivityFilters = {
@@ -261,18 +199,16 @@ export type ActivityFilters = {
 };
 
 export function activitySearchText(log: SystemLog) {
-  return [activityTitle(log), log.action, log.actor, actorRoleLabel(log.actorRole), log.target, log.summary].join(" ").toLowerCase();
+  return [activityTitle(log), log.action, log.actor, actorRoleLabel(log.actorRole), log.target, log.summary, log.itDetail ?? ""].join(" ").toLowerCase();
 }
 
-/** The activity list: in range (pinned records ignore the range), of the type, matching the search; pinned first, newest first. */
+/** The activity list: in range, of the type, matching the search, newest first. */
 export function filterRecentActivity(logs: readonly SystemLog[], filters: ActivityFilters) {
   const query = filters.query.trim().toLowerCase();
   return logs
     .filter((log) => {
-      if (!isPinnedActivity(log)) {
-        const day = philippineDay(log.timestamp);
-        if (!day || day < filters.range.start || day > filters.range.end) return false;
-      }
+      const day = philippineDay(log.timestamp);
+      if (!day || day < filters.range.start || day > filters.range.end) return false;
       if (filters.type !== "all" && activityKind(log) !== filters.type) return false;
       return !query || activitySearchText(log).includes(query);
     })
@@ -302,50 +238,30 @@ function plural(count: number, noun: string) {
   return `${count} ${count === 1 ? noun : `${noun}s`}`;
 }
 
-/** "All activity · 42 records · 2 unresolved pinned · Nov 1 – 23, 2026" */
+/** "All activity · 42 records" */
 export function activitySummaryParts(items: readonly SystemLog[], type: ActivityTypeFilter, query: string) {
-  const pinned = items.filter(isPinnedActivity).length;
   const count = query.trim() ? `${items.length} matching ${items.length === 1 ? "record" : "records"}` : plural(items.length, "record");
-  return { label: type === "all" ? "All activity" : activityTypeLabel(type), count, pinned: `${pinned} unresolved pinned` };
+  return { label: type === "all" ? "All activity" : activityTypeLabel(type), count };
 }
 
-/** Sample data prefixes source IDs, for example `sample:activity:ticket:<id>`. */
+/** Sample data prefixes source IDs, for example `sample:activity:alert:<id>`. */
 export function activitySourceId(log: SystemLog) {
   return log.sourceId ? log.sourceId.replace(/^sample:activity:[a-z-]+:/, "") : null;
 }
 
-/** The request a help activity belongs to, for the Requests deep link. */
-export function activityRequest(log: SystemLog): { kind: "ticket" | "alert"; id: string } | null {
-  const id = activitySourceId(log);
-  if (!id) return null;
-  if (TICKET_ACTIONS.has(log.action) || /(^|:)ticket:/.test(log.sourceId ?? "")) return { kind: "ticket", id };
-  if (ALERT_ACTIONS.has(log.action) || log.action.startsWith("Alert ") || /(^|:)(alert|technical):/.test(log.sourceId ?? "")) return { kind: "alert", id };
-  return null;
+/** The request a Requests activity belongs to, for the Requests deep link. */
+export function activityRequestId(log: SystemLog) {
+  return activityKind(log) === "requests" ? activitySourceId(log) : null;
 }
 
-/** The ticket code for support requests, otherwise "ACT-" and the start of the log ID. */
+/** The request code for Requests activity, otherwise "ACT-" and the start of the log ID. */
 export function activityReference(log: SystemLog) {
-  if (activityRequest(log)?.kind === "ticket" && log.target.trim()) return log.target.trim();
+  const code = metaString(log, "requestCode");
+  if (code) return code;
   return `ACT-${log.id
     .replace(/[^a-z0-9]/gi, "")
     .slice(0, 8)
     .toUpperCase()}`;
-}
-
-export type ActivityProgress = { label: string; tone: RecordStatusTone };
-
-const STATUS_PROGRESS: Record<string, ActivityProgress> = {
-  New: { label: "Open", tone: "pending" },
-  Open: { label: "Open", tone: "pending" },
-  "In Review": { label: "In progress", tone: "reviewing" },
-  Resolved: { label: "Resolved", tone: "consolidated" },
-};
-
-/** Where a help request stands now (from resolutionStatus), or null when the log does not say. */
-export function activityProgress(log: SystemLog): ActivityProgress | null {
-  if (log.resolutionStatus === "Resolved") return { label: "Resolved", tone: "consolidated" };
-  if (log.resolutionStatus === "Unresolved") return { label: "Not resolved yet", tone: "pending" };
-  return null;
 }
 
 /** The Enterprise Reports month params for a period such as "October 2026": `month=October&year=2026`. */
@@ -358,42 +274,6 @@ export function reportMonthParams(period: string | null) {
 
 export type ActivityField = { label: string; value: string; tone?: RecordStatusTone };
 export type ActivityLink = { label: string; to: string };
-
-const ALERT_TYPE_LABELS: Record<string, string> = {
-  "Maintenance Request": "Maintenance request",
-  "Password Reset Request": "Password reset request",
-  "Submission Delay": "Late enterprise report",
-  "Foot Traffic Alert": "Busy establishment",
-  "Occupancy Spike": "Sudden crowd increase",
-  "Failed Login Threshold": "Repeated failed sign-ins",
-};
-
-function helpFields(log: SystemLog): ActivityField[] {
-  const fields: ActivityField[] = [];
-  const request = activityRequest(log);
-  if (request?.kind === "ticket") fields.push({ label: "Request ID", value: activityReference(log) });
-  const ticketCategory = metaString(log, "category");
-  const alertType = metaString(log, "alertType");
-  if (ticketCategory) fields.push({ label: "Type", value: ticketCategory });
-  else if (alertType) fields.push({ label: "Type", value: ALERT_TYPE_LABELS[alertType] ?? alertType });
-  else if (log.action === "Desktop Application Problem") fields.push({ label: "Type", value: "Desktop app problem" });
-  const place = log.actorRole === "Enterprise Account" ? log.actor : request?.kind === "alert" ? log.target : null;
-  if (place) fields.push({ label: "Location", value: place });
-  const camera = metaString(log, "cameraName");
-  if (camera) fields.push({ label: "Camera", value: camera });
-  const priority = metaString(log, "priority");
-  if (priority) fields.push({ label: "Priority", value: priority });
-  const attachments = metaNumber(log, "attachmentCount");
-  if (attachments !== null) fields.push({ label: "Attachments", value: attachments === 0 ? "None" : plural(attachments, "file") });
-  const progress = activityProgress(log);
-  const statusThen = metaString(log, "status");
-  if (progress) fields.push({ label: "Progress", value: progress.label, tone: progress.tone });
-  if (statusThen && STATUS_PROGRESS[statusThen]) {
-    const recorded = STATUS_PROGRESS[statusThen];
-    fields.push({ label: log.action === "Update Support Ticket Status" ? "Changed to" : "Status when recorded", value: recorded.label, tone: recorded.tone });
-  }
-  return fields;
-}
 
 function reportFields(log: SystemLog): ActivityField[] {
   const fields: ActivityField[] = [];
@@ -426,8 +306,6 @@ function change(previous: string | number | null, next: string | number | null) 
 
 function accountFields(log: SystemLog): ActivityField[] {
   const fields: ActivityField[] = [{ label: "Account", value: log.target || log.actor }];
-  const requestType = metaString(log, "requestType");
-  if (requestType) fields.push({ label: "Change requested", value: requestType });
   const value = change(metaString(log, "previousValue"), metaString(log, "requestedValue"));
   if (value) fields.push({ label: "Change", value });
   const email = change(metaString(log, "previousEmail"), metaString(log, "requestedEmail"));
@@ -436,43 +314,53 @@ function accountFields(log: SystemLog): ActivityField[] {
   if (capacity) fields.push({ label: "Building capacity", value: capacity });
   const resolution = metaString(log, "resolution");
   if (resolution) fields.push({ label: "Decision", value: resolution === "approve" ? "Approved" : resolution === "decline" ? "Declined" : resolution });
-  const status = metaString(log, "status");
-  if (status) fields.push({ label: "Account status", value: status.charAt(0).toUpperCase() + status.slice(1) });
   const barangay = metaString(log, "barangay");
   if (barangay) fields.push({ label: "Barangay", value: barangay });
   return fields;
 }
 
+function requestFields(log: SystemLog): ActivityField[] {
+  const fields: ActivityField[] = [{ label: "Request", value: activityReference(log) }];
+  const group = metaString(log, "requestGroup");
+  if (group) fields.push({ label: "Group", value: group });
+  return fields;
+}
+
 function otherFields(log: SystemLog): ActivityField[] {
-  const fields: ActivityField[] = [{ label: "Account", value: `${log.actor}, ${actorRoleLabel(log.actorRole)}` }];
-  if (log.target && log.target !== log.actor) fields.push({ label: "Affected item", value: log.target });
-  const purpose = metaString(log, "purpose");
-  if (purpose) fields.push({ label: "Email purpose", value: purpose });
+  const fields: ActivityField[] = [];
+  if (log.target && log.target !== log.actor) fields.push({ label: activityKind(log) === "monitoring" ? "Place" : "Affected item", value: log.target });
   const deleted = metaNumber(log, "deletedCount");
   if (deleted !== null) fields.push({ label: "Records deleted", value: deleted.toLocaleString("en-US") });
   const retention = metaNumber(log, "retentionDays");
   if (retention !== null) fields.push({ label: "Kept for", value: plural(retention, "day") });
+  const minutes = metaNumber(log, "minutes");
+  if (minutes !== null) fields.push({ label: "Offline for", value: plural(minutes, "minute") });
   return fields;
 }
 
-/** The DETAILS list in the drawer, built only from what the log carries. */
+/** The DETAILS list in the drawer, built only from what the record carries. */
 export function activityDetailFields(log: SystemLog): ActivityField[] {
   const kind = activityKind(log);
-  if (kind === "help") return helpFields(log);
   if (kind === "reports") return reportFields(log);
   if (kind === "accounts") return accountFields(log);
+  if (kind === "requests") return requestFields(log);
   return otherFields(log);
 }
 
-/** Links from the drawer to the screens that hold the full record. */
-export function activityLinks(log: SystemLog): ActivityLink[] {
+/** Links from the drawer to the screens that hold the full record. `portal` picks the Admin or IT pages. */
+export function activityLinks(log: SystemLog, portal: "admin" | "it" = "admin"): ActivityLink[] {
   const links: ActivityLink[] = [];
   const kind = activityKind(log);
-  const request = kind === "help" ? activityRequest(log) : null;
-  if (isCrowdAlertLog(log)) links.push({ label: "Open the Dashboard", to: routes.admin.dashboard });
-  if (request) links.push({ label: "View details", to: `${routes.admin.requests}?${request.kind}=${encodeURIComponent(request.id)}` });
-  else if (kind === "help") links.push({ label: "Open Requests", to: routes.admin.requests });
-  if (kind === "reports") {
+  const requestId = activityRequestId(log);
+  if (requestId) {
+    links.push(
+      portal === "admin"
+        ? { label: "Open the request", to: `${routes.admin.requests}?request=${encodeURIComponent(requestId)}` }
+        : { label: "Open the request", to: `${routes.it.workCenter}?view=requests&request=${encodeURIComponent(requestId)}` },
+    );
+  }
+  if (kind === "monitoring") links.push({ label: "Open the Dashboard", to: portal === "admin" ? routes.admin.dashboard : routes.it.dashboard });
+  if (portal === "admin" && kind === "reports") {
     const params = new URLSearchParams();
     const month = reportMonthParams(metaString(log, "period"));
     const enterpriseId = metaString(log, "enterpriseId");
@@ -484,9 +372,7 @@ export function activityLinks(log: SystemLog): ActivityLink[] {
     const query = params.toString();
     links.push({ label: "Open Enterprise Reports", to: query ? `${routes.admin.reports}?${query}` : routes.admin.reports });
   }
-  if (log.action === "Approve Enterprise Profile Change" || log.action === "Decline Enterprise Profile Change") links.push({ label: "Open Requests", to: routes.admin.requests });
   const enterpriseId = metaString(log, "enterpriseId");
-  if (enterpriseId) links.push({ label: "Open enterprise details", to: adminEnterpriseDetailsPath(enterpriseId) });
-  else if (log.action === "Create Enterprise Account" || log.action === "Update Enterprise Account") links.push({ label: "Open Registered Enterprises", to: routes.admin.enterprises });
+  if (portal === "admin" && enterpriseId) links.push({ label: "Open enterprise details", to: adminEnterpriseDetailsPath(enterpriseId) });
   return links;
 }

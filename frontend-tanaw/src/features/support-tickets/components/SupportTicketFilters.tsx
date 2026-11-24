@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { FilterSelect } from "@/shared/components/ui";
-import { ticketCategoryFilters, ticketPriorityFilters, ticketStatusFilters, type TicketCategoryFilter, type TicketFilterState, type TicketPriorityFilter, type TicketStatusFilter } from "../model";
+import { ticketGroupFilters, ticketStatusFilters, ticketUrgencyFilters, type TicketFilterState, type TicketGroupFilter, type TicketStatusFilter, type TicketUrgencyFilter } from "../model";
 
 export function SupportTicketFilters({ filters, onChange }: { filters: TicketFilterState; onChange: (update: (current: TicketFilterState) => TicketFilterState) => void }) {
   return (
@@ -10,13 +10,13 @@ export function SupportTicketFilters({ filters, onChange }: { filters: TicketFil
         <input
           value={filters.query}
           onChange={(event) => onChange((current) => ({ ...current, query: event.target.value }))}
-          placeholder="Search ticket ID, enterprise, subject, category, or status"
+          placeholder="Search reference, place, person, request or group"
           className="tanaw-data-search focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect value={filters.status} onChange={(value) => onChange((current) => ({ ...current, status: value as TicketStatusFilter }))} options={ticketStatusFilters} />
-      <FilterSelect value={filters.priority} onChange={(value) => onChange((current) => ({ ...current, priority: value as TicketPriorityFilter }))} options={ticketPriorityFilters} />
-      <FilterSelect value={filters.category} onChange={(value) => onChange((current) => ({ ...current, category: value as TicketCategoryFilter }))} options={ticketCategoryFilters} />
+      <FilterSelect value={filters.urgency} onChange={(value) => onChange((current) => ({ ...current, urgency: value as TicketUrgencyFilter }))} options={ticketUrgencyFilters} />
+      <FilterSelect value={filters.group} onChange={(value) => onChange((current) => ({ ...current, group: value as TicketGroupFilter }))} options={ticketGroupFilters} />
     </div>
   );
 }

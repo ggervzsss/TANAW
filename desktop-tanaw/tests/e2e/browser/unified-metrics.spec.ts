@@ -51,7 +51,7 @@ async function signIn(page: Page, reportCount = 1) {
   });
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.route("**/operational/requests", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await mockMlRequest(page, "*", (request) => {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/context/enterprise") {

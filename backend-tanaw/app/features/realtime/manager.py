@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -191,59 +190,7 @@ class RealtimeConnectionManager:
                 return scope.enterprise_id == identity.enterprise_id
             return event_type == "system_setting.updated"
 
-        if identity.role == "admin" and event_type.startswith("support_ticket."):
-            priority = envelope.payload.get("priority") or envelope.payload.get("ticket_priority")
-            return priority in {"High", "Urgent"}
-
-        if event_type == "activity.created":
-            return _can_view_activity(identity.role, envelope.payload)
         return True
-
-
-def _can_view_activity(role: str, payload: Mapping[str, object]) -> bool:
-    category = payload.get("category")
-    actor_role = payload.get("actor_role")
-    action = payload.get("action")
-    severity = payload.get("severity")
-    if role == "admin":
-        return bool(
-            category in {"Admin Operation", "Staff Submission", "Staff Operation"}
-            or (
-                category == "IT Activity"
-                and (
-                    action
-                    in {
-                        "Approve Enterprise Profile Change",
-                        "Approve Verified Email Change",
-                        "Create Enterprise Account",
-                        "Create LGU Account",
-                        "Decline Enterprise Profile Change",
-                        "Decline Verified Email Change",
-                        "Delete Old Activity",
-                        "Update Account Status",
-                        "Update Enterprise Account",
-                        "Update LGU Account",
-                        "Update Support Ticket Status",
-                        "Update System Settings",
-                    }
-                    or (isinstance(action, str) and action.startswith("Alert "))
-                )
-            )
-            or (
-                category == "System"
-                and (
-                    severity in {"Warning", "Critical"}
-                    or (isinstance(action, str) and action.startswith("Alert "))
-                )
-            )
-            or severity == "Critical"
-        )
-    if role == "it":
-        return bool(
-            category in {"System", "IT Activity", "Enterprise Activity"}
-            or actor_role == "IT Personnel"
-        )
-    return False
 
 
 realtime_manager = RealtimeConnectionManager()

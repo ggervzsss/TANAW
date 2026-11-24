@@ -103,7 +103,7 @@
 .tanaw-dashboard-toggle:focus-visible,
 .tanaw-dashboard-link:focus-visible,
 .tanaw-dashboard-row:focus-visible,
-.tanaw-busy-button:focus-visible {
+.tanaw-map-alerts-button:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: 2px;
 }
@@ -222,7 +222,7 @@ button.tanaw-dashboard-row:hover {
   outline-offset: -2px;
 }
 
-.tanaw-busy {
+.tanaw-map-alerts {
   position: absolute;
   z-index: 1000;
   bottom: 12px;
@@ -233,15 +233,15 @@ button.tanaw-dashboard-row:hover {
   line-height: 1.3;
 }
 
-.tanaw-busy__card,
-.tanaw-busy__panel {
+.tanaw-map-alerts__card,
+.tanaw-map-alerts__panel {
   border: 1px solid var(--dash-rule);
   border-radius: 12px;
   background: var(--tanaw-surface);
   color: var(--tanaw-text);
 }
 
-.tanaw-busy__card {
+.tanaw-map-alerts__card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
@@ -250,13 +250,14 @@ button.tanaw-dashboard-row:hover {
   box-shadow: var(--dash-card-shadow);
 }
 
-.tanaw-busy__panel {
+.tanaw-map-alerts__panel {
   overflow: hidden;
   box-shadow: 0 10px 28px rgb(16 36 27 / 0.16);
 }
 
-.tanaw-busy__icon {
+.tanaw-map-alerts__icon {
   display: grid;
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   place-items: center;
@@ -265,7 +266,22 @@ button.tanaw-dashboard-row:hover {
   color: var(--tanaw-warn-ink);
 }
 
-.tanaw-busy-button {
+.tanaw-map-alerts__icon--camera,
+.tanaw-map-alerts__icon--mixed {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger-text);
+}
+
+.tanaw-map-alerts__title--busy {
+  color: var(--tanaw-warn-ink);
+}
+
+.tanaw-map-alerts__title--camera,
+.tanaw-map-alerts__title--mixed {
+  color: var(--tanaw-danger-text);
+}
+
+.tanaw-map-alerts-button {
   min-height: 32px;
   padding: 0 8px;
   border-radius: 8px;
@@ -274,11 +290,11 @@ button.tanaw-dashboard-row:hover {
   font-weight: 700;
 }
 
-.tanaw-busy-button:hover {
+.tanaw-map-alerts-button:hover {
   background: var(--tanaw-control-hover);
 }
 
-.tanaw-busy-button--icon {
+.tanaw-map-alerts-button--icon {
   display: grid;
   width: 32px;
   padding: 0;
@@ -286,10 +302,10 @@ button.tanaw-dashboard-row:hover {
   color: var(--tanaw-text-muted);
 }
 
-.tanaw-busy-row {
+.tanaw-map-alerts-row {
   display: grid;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 8px;
@@ -299,12 +315,12 @@ button.tanaw-dashboard-row:hover {
   text-decoration: none;
 }
 
-.tanaw-busy-row:hover {
+.tanaw-map-alerts-row:hover {
   background: var(--tanaw-control-hover);
 }
 
-.tanaw-busy-row[aria-pressed="true"] {
-  background: var(--dash-busy-bg);
+.tanaw-map-alerts-row[aria-pressed="true"] {
+  background: var(--tanaw-surface-inset);
 }
 
 /* Popovers: the place picker. */

@@ -5,6 +5,7 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
+    EnterpriseClosure,
     EnterpriseProfile,
     SystemConfiguration,
 )
@@ -33,7 +34,7 @@ from app.features.reporting.models import (
     FinalReportSource,
     ReportSubmissionOperation,
 )
-from app.features.support.models import SupportTicket, SupportTicketMessage
+from app.features.requests.models import Request, RequestMessage, RequestRead
 
 __all__ = [
     "Account",
@@ -45,6 +46,7 @@ __all__ = [
     "ActivityLog",
     "Base",
     "DesktopLocalBackup",
+    "EnterpriseClosure",
     "EnterpriseReportSubmission",
     "EnterpriseProfile",
     "EnterpriseTelemetrySnapshot",
@@ -59,8 +61,9 @@ __all__ = [
     "PasswordResetRateLimitBucket",
     "RealtimeOutbox",
     "ReportSubmissionOperation",
-    "SupportTicket",
-    "SupportTicketMessage",
+    "Request",
+    "RequestMessage",
+    "RequestRead",
     "SystemConfiguration",
     "UserNotification",
 ]

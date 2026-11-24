@@ -52,7 +52,25 @@ export interface paths {
         patch: operations["update_enterprise_account_accounts_enterprises__account_id__patch"];
         trace?: never;
     };
-    "/accounts/enterprises/{account_id}/profile-change-requests/{request_type}": {
+    "/accounts/enterprises/{account_id}/closures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Enterprise Closures */
+        get: operations["list_enterprise_closures_accounts_enterprises__account_id__closures_get"];
+        put?: never;
+        /** Add Enterprise Closure */
+        post: operations["add_enterprise_closure_accounts_enterprises__account_id__closures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/enterprises/{account_id}/closures/{closure_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -62,11 +80,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove Enterprise Closure */
+        delete: operations["remove_enterprise_closure_accounts_enterprises__account_id__closures__closure_id__delete"];
         options?: never;
         head?: never;
-        /** Resolve Enterprise Profile Change Request */
-        patch: operations["resolve_enterprise_profile_change_request_accounts_enterprises__account_id__profile_change_requests__request_type__patch"];
+        patch?: never;
         trace?: never;
     };
     "/accounts/lgu": {
@@ -430,6 +448,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/profile/closures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Own Closures */
+        get: operations["list_own_closures_auth_profile_closures_get"];
+        put?: never;
+        /** Add Own Closure */
+        post: operations["add_own_closure_auth_profile_closures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/profile/closures/{closure_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Own Closure */
+        delete: operations["remove_own_closure_auth_profile_closures__closure_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/profile/contact-number-change": {
         parameters: {
             query?: never;
@@ -464,6 +517,23 @@ export interface paths {
         patch: operations["update_profile_display_image_auth_profile_display_image_patch"];
         trace?: never;
     };
+    "/auth/profile/enterprise-name-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Enterprise Name Change */
+        post: operations["request_enterprise_name_change_auth_profile_enterprise_name_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/profile/lead-admin": {
         parameters: {
             query?: never;
@@ -479,6 +549,23 @@ export interface paths {
         head?: never;
         /** Update Lead Admin Name */
         patch: operations["update_lead_admin_name_auth_profile_lead_admin_patch"];
+        trace?: never;
+    };
+    "/auth/profile/opening-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Own Opening Hours */
+        patch: operations["update_own_opening_hours_auth_profile_opening_hours_patch"];
         trace?: never;
     };
     "/auth/session": {
@@ -507,7 +594,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Support Request */
+        /**
+         * Create Support Request
+         * @description The sign-in page's Contact support form: a Sign-in help request for IT.
+         */
         post: operations["create_support_request_auth_support_request_post"];
         delete?: never;
         options?: never;
@@ -677,7 +767,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Alerts */
+        /**
+         * List Alerts
+         * @description Every alert happening now: busier than usual, and cameras not counting.
+         */
         get: operations["list_alerts_operational_alerts_get"];
         put?: never;
         post?: never;
@@ -685,23 +778,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/operational/alerts/{alert_code}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Alert Status */
-        patch: operations["update_alert_status_operational_alerts__alert_code__status_patch"];
         trace?: never;
     };
     "/operational/desktop/backup": {
@@ -716,6 +792,43 @@ export interface paths {
         /** Save Enterprise Desktop Backup */
         put: operations["save_enterprise_desktop_backup_operational_desktop_backup_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/desktop/connection-gap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Connection Gap
+         * @description The desktop app reports, once it reconnects, how long it could not reach TANAW.
+         */
+        post: operations["report_connection_gap_operational_desktop_connection_gap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/desktop/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Desktop Event */
+        post: operations["report_desktop_event_operational_desktop_events_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -944,7 +1057,25 @@ export interface paths {
         patch: operations["update_intake_report_status_operational_reports_intake__report_id__status_patch"];
         trace?: never;
     };
-    "/operational/requests/messages": {
+    "/operational/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Request Summaries */
+        get: operations["list_request_summaries_operational_requests_get"];
+        put?: never;
+        /** Send Request */
+        post: operations["send_request_operational_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -953,15 +1084,148 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Create Admin Request Message
-         * @description Send IT a message about an alert, support ticket or profile change request.
-         */
-        post: operations["create_admin_request_message_operational_requests_messages_post"];
+        /** Read Requests */
+        post: operations["read_requests_operational_requests_read_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request */
+        get: operations["get_request_operational_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/attachments/{attachment_index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request Attachment */
+        get: operations["get_request_attachment_operational_requests__request_id__attachments__attachment_index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Move Request */
+        patch: operations["move_request_operational_requests__request_id__group_patch"];
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply To Request */
+        post: operations["reply_to_request_operational_requests__request_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Note For It */
+        post: operations["add_note_for_it_operational_requests__request_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen */
+        post: operations["reopen_operational_requests__request_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change Request Status */
+        patch: operations["change_request_status_operational_requests__request_id__status_patch"];
+        trace?: never;
+    };
+    "/operational/requests/{request_id}/urgent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Flag Request */
+        patch: operations["flag_request_operational_requests__request_id__urgent_patch"];
         trace?: never;
     };
     "/operational/telemetry/summary": {
@@ -979,92 +1243,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/operational/tickets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Tickets */
-        get: operations["list_tickets_operational_tickets_get"];
-        put?: never;
-        /** Create Enterprise Support Ticket */
-        post: operations["create_enterprise_support_ticket_operational_tickets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/operational/tickets/{ticket_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Ticket Detail */
-        get: operations["get_ticket_detail_operational_tickets__ticket_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/operational/tickets/{ticket_id}/attachments/{attachment_index}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Ticket Attachment */
-        get: operations["get_ticket_attachment_operational_tickets__ticket_id__attachments__attachment_index__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/operational/tickets/{ticket_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Ticket Message */
-        post: operations["create_ticket_message_operational_tickets__ticket_id__messages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/operational/tickets/{ticket_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Ticket Status */
-        patch: operations["update_ticket_status_operational_tickets__ticket_id__status_patch"];
         trace?: never;
     };
     "/operational/visitor-insights": {
@@ -1203,6 +1381,24 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** AccountChangeSummary */
+        AccountChangeSummary: {
+            /** Canapprove */
+            canApprove: boolean;
+            /** Currentvalue */
+            currentValue?: string | null;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "businessEmail" | "contactNumber" | "enterpriseName";
+            /** Label */
+            label: string;
+            /** Requestedvalue */
+            requestedValue: string;
+            /** Verification */
+            verification?: ("pending_verification" | "verified" | "expired") | null;
+        };
         /** AccountEmailChangeRequestResolution */
         AccountEmailChangeRequestResolution: {
             /**
@@ -1299,7 +1495,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "businessEmail" | "contactNumber";
+            type: "businessEmail" | "contactNumber" | "enterpriseName";
         };
         /** AccountStatusUpdate */
         AccountStatusUpdate: {
@@ -1360,6 +1556,7 @@ export interface components {
             longitude: number | null;
             /** Managername */
             managerName: string | null;
+            openingHours?: components["schemas"]["OpeningHours"] | null;
             /** Phone */
             phone: string | null;
             /** Profilechangerequests */
@@ -1390,18 +1587,18 @@ export interface components {
              */
             actorRole: "Admin" | "IT Personnel" | "LGU Staff" | "Enterprise Account" | "System";
             /**
-             * Category
+             * Group
              * @enum {string}
              */
-            category: "IT Activity" | "Staff Submission" | "Staff Operation" | "Admin Operation" | "Enterprise Activity" | "System";
+            group: "Login & Security" | "Accounts" | "Reports" | "Requests" | "Monitoring" | "Settings & Maintenance";
             /** Id */
             id: string;
+            /** Itdetail */
+            itDetail?: string | null;
             /** Metadata */
             metadata?: {
                 [key: string]: string | number | boolean | null;
             } | null;
-            /** Resolutionstatus */
-            resolutionStatus?: ("Unresolved" | "Resolved") | null;
             /**
              * Severity
              * @enum {string}
@@ -1418,30 +1615,6 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
-        };
-        /**
-         * AdminRequestMessageCreate
-         * @description A note from an Admin to IT about one request on the Admin Requests screen.
-         */
-        AdminRequestMessageCreate: {
-            /** Message */
-            message: string;
-            /** Sourceid */
-            sourceId: string;
-            /**
-             * Sourcetype
-             * @enum {string}
-             */
-            sourceType: "operational.alert" | "support.ticket" | "enterprise.profile";
-        };
-        /**
-         * AdminRequestMessageResult
-         * @description The activity record that keeps the message, and how many IT accounts were notified.
-         */
-        AdminRequestMessageResult: {
-            activity: components["schemas"]["ActivityLogSummary"];
-            /** Recipientcount */
-            recipientCount: number;
         };
         /** AttractionClassification */
         AttractionClassification: {
@@ -1492,6 +1665,7 @@ export interface components {
             lastName?: string | null;
             /** Managername */
             managerName?: string | null;
+            openingHours?: components["schemas"]["OpeningHours"] | null;
             /** Phone */
             phone?: string | null;
             /** Role */
@@ -1512,10 +1686,59 @@ export interface components {
              */
             email: string;
         };
+        /** ClosureCreate */
+        ClosureCreate: {
+            /**
+             * Enddate
+             * Format: date
+             */
+            endDate: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+        };
+        /** ClosureSummary */
+        ClosureSummary: {
+            /** Createdby */
+            createdBy: string;
+            /**
+             * Enddate
+             * Format: date
+             */
+            endDate: string;
+            /** Id */
+            id: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+        };
         /** ContactNumberChangeRequest */
         ContactNumberChangeRequest: {
             /** Phone */
             phone: string;
+        };
+        /** DayHours */
+        DayHours: {
+            /**
+             * Day
+             * @enum {string}
+             */
+            day: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "closed" | "open24h" | "hours";
+            /** Periods */
+            periods?: components["schemas"]["OpeningPeriod"][];
         };
         /** DeliverySummary */
         DeliverySummary: {
@@ -1886,6 +2109,39 @@ export interface components {
              */
             stoppedCameraCount: number;
         };
+        /**
+         * DesktopConnectionGap
+         * @description A period the desktop app could not reach TANAW, reported once it reconnects.
+         */
+        DesktopConnectionGap: {
+            /** Apprunning */
+            appRunning: boolean;
+            /**
+             * Endedat
+             * Format: date-time
+             */
+            endedAt: string;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+        };
+        /**
+         * DesktopEvent
+         * @description Something the enterprise changed in the desktop app, recorded in Activity.
+         */
+        DesktopEvent: {
+            /** Cameraname */
+            cameraName?: string | null;
+            /** Detail */
+            detail?: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "camera_added" | "camera_removed" | "camera_changed" | "counting_area_changed" | "local_data_reset";
+        };
         /** DesktopHealthSummary */
         DesktopHealthSummary: {
             /** Analyticsfps */
@@ -2116,6 +2372,7 @@ export interface components {
             longitude: number;
             /** Managername */
             managerName: string;
+            openingHours?: components["schemas"]["OpeningHours"];
         };
         /** EnterpriseAccountUpdate */
         EnterpriseAccountUpdate: {
@@ -2150,6 +2407,7 @@ export interface components {
             longitude?: number | null;
             /** Managername */
             managerName: string;
+            openingHours?: components["schemas"]["OpeningHours"] | null;
         };
         /** EnterpriseLocationSuggestion */
         EnterpriseLocationSuggestion: {
@@ -2167,6 +2425,11 @@ export interface components {
             name: string;
             /** Placeid */
             placeId: string;
+        };
+        /** EnterpriseNameChangeRequest */
+        EnterpriseNameChangeRequest: {
+            /** Enterprisename */
+            enterpriseName: string;
         };
         /** EnterpriseNotificationCreate */
         EnterpriseNotificationCreate: {
@@ -2191,14 +2454,6 @@ export interface components {
              * @default Staff Follow-up
              */
             type: string;
-        };
-        /** EnterpriseProfileChangeRequestResolution */
-        EnterpriseProfileChangeRequestResolution: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "approve" | "decline";
         };
         /** FinalReportCreate */
         FinalReportCreate: {
@@ -2437,6 +2692,71 @@ export interface components {
             token: string;
             user: components["schemas"]["AuthUser"];
         };
+        /** MapEnterpriseAlert */
+        MapEnterpriseAlert: {
+            /** Camera */
+            camera?: string | null;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "Busier Than Usual" | "Camera Not Counting";
+        };
+        /** MapEnterpriseSummary */
+        MapEnterpriseSummary: {
+            /** Alerts */
+            alerts?: components["schemas"]["MapEnterpriseAlert"][];
+            /** Barangay */
+            barangay: string;
+            /** Cameramonitoring */
+            cameraMonitoring?: {
+                [key: string]: unknown;
+            } | null;
+            /** Category */
+            category: string;
+            /** Closedreason */
+            closedReason?: string | null;
+            /** Contact */
+            contact: string;
+            /** Estimateduniquecount */
+            estimatedUniqueCount?: number | null;
+            /** Fulladdress */
+            fullAddress: string;
+            /** Gatewaystatus */
+            gatewayStatus: string;
+            /** Id */
+            id: string;
+            /** Lastsync */
+            lastSync?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            /** Monitoringstatus */
+            monitoringStatus: string;
+            /** Name */
+            name: string;
+            /** Occupancystatus */
+            occupancyStatus: string;
+            /** Offlinesince */
+            offlineSince?: string | null;
+            /** Opennow */
+            openNow: boolean;
+            /**
+             * Pinstate
+             * @enum {string}
+             */
+            pinState: "normal" | "busy" | "camera" | "offline" | "closed";
+            /** Totalliveoccupancy */
+            totalLiveOccupancy?: number | null;
+        };
         /** NotificationReadUpdate */
         NotificationReadUpdate: {
             /**
@@ -2445,58 +2765,57 @@ export interface components {
              */
             read: boolean;
         };
-        /** OperationalAlertStatusUpdate */
-        OperationalAlertStatusUpdate: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "New" | "In Review" | "Resolved";
+        /** OpeningHours */
+        OpeningHours: {
+            /** Days */
+            days: components["schemas"]["DayHours"][];
         };
-        /** OperationalAlertSummary */
+        /** OpeningPeriod */
+        OpeningPeriod: {
+            /** Close */
+            close: string;
+            /** Open */
+            open: string;
+        };
+        /**
+         * OperationalAlertSummary
+         * @description A live alert, as the topbar alert icon, the map and the Alerts section show it.
+         */
         OperationalAlertSummary: {
-            /** Enterprise */
-            enterprise?: string | null;
+            /** Camera */
+            camera?: string | null;
+            /** Detail */
+            detail?: string | null;
+            /** Endedat */
+            endedAt?: string | null;
+            /** Enterpriseid */
+            enterpriseId?: string | null;
+            /** Enterprisename */
+            enterpriseName?: string | null;
             /** Id */
             id: string;
-            /**
-             * Owner
-             * @enum {string}
-             */
-            owner: "IT" | "Admin" | "System";
-            /** Requester */
-            requester: string;
-            /** Requiredaction */
-            requiredAction: string;
-            /**
-             * Resolutionmode
-             * @enum {string}
-             */
-            resolutionMode: "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
             /**
              * Severity
              * @enum {string}
              */
-            severity: "Info" | "Warning" | "Critical";
+            severity: "Warning" | "Critical";
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
             /**
              * Status
              * @enum {string}
              */
-            status: "New" | "In Review" | "Resolved";
+            status: "Pending" | "Active" | "Ended";
             /** Summary */
             summary: string;
-            /** Time */
-            time: string;
             /**
              * Type
              * @enum {string}
              */
-            type: "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
-            /**
-             * Urgency
-             * @enum {string}
-             */
-            urgency: "Normal" | "Important" | "Urgent";
+            type: "Busier Than Usual" | "Camera Not Counting";
         };
         /** OperationalSummary */
         OperationalSummary: {
@@ -2600,6 +2919,242 @@ export interface components {
              */
             status: "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated";
         };
+        /** RequestAttachmentCreate */
+        RequestAttachmentCreate: {
+            /** Dataurl */
+            dataUrl: string;
+            /** Filename */
+            fileName: string;
+            /**
+             * Mediatype
+             * @enum {string}
+             */
+            mediaType: "image/png" | "image/jpeg" | "image/webp";
+            /** Sizebytes */
+            sizeBytes: number;
+        };
+        /** RequestAttachmentMetadata */
+        RequestAttachmentMetadata: {
+            /** Filename */
+            fileName: string;
+            /** Id */
+            id: string;
+            /**
+             * Mediatype
+             * @enum {string}
+             */
+            mediaType: "image/png" | "image/jpeg" | "image/webp";
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Url */
+            url: string;
+        };
+        /** RequestCreate */
+        RequestCreate: {
+            /** Affectedarea */
+            affectedArea?: string | null;
+            /** Attachments */
+            attachments?: components["schemas"]["RequestAttachmentCreate"][];
+            /** Camera */
+            camera?: string | null;
+            /** Description */
+            description: string;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "Desktop app or camera problem" | "Report problem" | "Other";
+            /** Title */
+            title: string;
+        };
+        /** RequestDetail */
+        RequestDetail: {
+            accountChange?: components["schemas"]["AccountChangeSummary"] | null;
+            /** Affectedarea */
+            affectedArea?: string | null;
+            /** Attachments */
+            attachments?: components["schemas"]["RequestAttachmentMetadata"][];
+            /** Camera */
+            camera?: string | null;
+            /** Closedat */
+            closedAt?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Description */
+            description: string;
+            /** Enterpriseid */
+            enterpriseId?: string | null;
+            /** Enterprisename */
+            enterpriseName?: string | null;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+            /** Id */
+            id: string;
+            /** Messages */
+            messages?: components["schemas"]["RequestMessageSummary"][];
+            /** Requesteremail */
+            requesterEmail?: string | null;
+            /** Requestername */
+            requesterName: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+            /** Title */
+            title: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
+            /**
+             * Updated
+             * @default false
+             */
+            updated: boolean;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Urgent */
+            urgent: boolean;
+        };
+        /** RequestGroupUpdate */
+        RequestGroupUpdate: {
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+        };
+        /** RequestMessageCreate */
+        RequestMessageCreate: {
+            /** Message */
+            message: string;
+        };
+        /** RequestMessageSummary */
+        RequestMessageSummary: {
+            /** Authorid */
+            authorId: string;
+            /** Authorname */
+            authorName: string;
+            /** Authorrole */
+            authorRole: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "message" | "note" | "status";
+            /** Message */
+            message: string;
+            /** Requestid */
+            requestId: string;
+        };
+        /** RequestReadResponse */
+        RequestReadResponse: {
+            /** Readcount */
+            readCount: number;
+        };
+        /** RequestReadUpdate */
+        RequestReadUpdate: {
+            /**
+             * All
+             * @default false
+             */
+            all: boolean;
+            /** Requestids */
+            requestIds?: string[];
+        };
+        /** RequestStatusUpdate */
+        RequestStatusUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+        };
+        /** RequestSummary */
+        RequestSummary: {
+            accountChange?: components["schemas"]["AccountChangeSummary"] | null;
+            /** Affectedarea */
+            affectedArea?: string | null;
+            /** Attachments */
+            attachments?: components["schemas"]["RequestAttachmentMetadata"][];
+            /** Camera */
+            camera?: string | null;
+            /** Closedat */
+            closedAt?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Description */
+            description: string;
+            /** Enterpriseid */
+            enterpriseId?: string | null;
+            /** Enterprisename */
+            enterpriseName?: string | null;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+            /** Id */
+            id: string;
+            /** Requesteremail */
+            requesterEmail?: string | null;
+            /** Requestername */
+            requesterName: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+            /** Title */
+            title: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
+            /**
+             * Updated
+             * @default false
+             */
+            updated: boolean;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Urgent */
+            urgent: boolean;
+        };
+        /** RequestUrgentUpdate */
+        RequestUrgentUpdate: {
+            /** Urgent */
+            urgent: boolean;
+        };
         /** RetentionCleanupCountsResponse */
         RetentionCleanupCountsResponse: {
             /** Activationtokens */
@@ -2689,179 +3244,6 @@ export interface components {
             message: string;
             /** Name */
             name: string;
-        };
-        /** SupportTicketAttachmentCreate */
-        SupportTicketAttachmentCreate: {
-            /** Dataurl */
-            dataUrl: string;
-            /** Filename */
-            fileName: string;
-            /**
-             * Mediatype
-             * @enum {string}
-             */
-            mediaType: "image/png" | "image/jpeg" | "image/webp";
-            /** Sizebytes */
-            sizeBytes: number;
-        };
-        /** SupportTicketAttachmentMetadata */
-        SupportTicketAttachmentMetadata: {
-            /** Filename */
-            fileName: string;
-            /** Id */
-            id: string;
-            /**
-             * Mediatype
-             * @enum {string}
-             */
-            mediaType: "image/png" | "image/jpeg" | "image/webp";
-            /** Sizebytes */
-            sizeBytes: number;
-            /** Url */
-            url: string;
-        };
-        /** SupportTicketCreate */
-        SupportTicketCreate: {
-            /** Affectedarea */
-            affectedArea?: string | null;
-            /** Attachments */
-            attachments?: components["schemas"]["SupportTicketAttachmentCreate"][];
-            /** Cameranode */
-            cameraNode?: string | null;
-            /**
-             * Category
-             * @enum {string}
-             */
-            category: "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
-            /** Description */
-            description: string;
-            /**
-             * Priority
-             * @default Normal
-             * @enum {string}
-             */
-            priority: "Low" | "Normal" | "High" | "Urgent";
-            /** Subject */
-            subject: string;
-        };
-        /** SupportTicketDetail */
-        SupportTicketDetail: {
-            /** Affectedarea */
-            affectedArea?: string | null;
-            /** Attachments */
-            attachments?: components["schemas"]["SupportTicketAttachmentMetadata"][];
-            /** Cameranode */
-            cameraNode?: string | null;
-            /** Category */
-            category: string;
-            /** Code */
-            code: string;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            /** Description */
-            description: string;
-            /** Enterpriseid */
-            enterpriseId: string;
-            /** Enterprisename */
-            enterpriseName: string;
-            /** Id */
-            id: string;
-            /** Messages */
-            messages?: components["schemas"]["SupportTicketMessageSummary"][];
-            /** Priority */
-            priority: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "Open" | "In Review" | "Resolved";
-            /** Subject */
-            subject: string;
-            /** Submittedby */
-            submittedBy: string;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
-        };
-        /** SupportTicketMessageCreate */
-        SupportTicketMessageCreate: {
-            /** Message */
-            message: string;
-        };
-        /** SupportTicketMessageSummary */
-        SupportTicketMessageSummary: {
-            /** Authorid */
-            authorId: string;
-            /** Authorname */
-            authorName: string;
-            /** Authorrole */
-            authorRole: string;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            /** Id */
-            id: string;
-            /** Message */
-            message: string;
-            /** Ticketid */
-            ticketId: string;
-        };
-        /** SupportTicketStatusUpdate */
-        SupportTicketStatusUpdate: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "Open" | "In Review" | "Resolved";
-        };
-        /** SupportTicketSummary */
-        SupportTicketSummary: {
-            /** Affectedarea */
-            affectedArea?: string | null;
-            /** Attachments */
-            attachments?: components["schemas"]["SupportTicketAttachmentMetadata"][];
-            /** Cameranode */
-            cameraNode?: string | null;
-            /** Category */
-            category: string;
-            /** Code */
-            code: string;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            /** Description */
-            description: string;
-            /** Enterpriseid */
-            enterpriseId: string;
-            /** Enterprisename */
-            enterpriseName: string;
-            /** Id */
-            id: string;
-            /** Priority */
-            priority: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "Open" | "In Review" | "Resolved";
-            /** Subject */
-            subject: string;
-            /** Submittedby */
-            submittedBy: string;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
         };
         /** SystemSettingsPayload */
         SystemSettingsPayload: {
@@ -3223,21 +3605,16 @@ export interface operations {
             };
         };
     };
-    resolve_enterprise_profile_change_request_accounts_enterprises__account_id__profile_change_requests__request_type__patch: {
+    list_enterprise_closures_accounts_enterprises__account_id__closures_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 account_id: string;
-                request_type: "businessEmail" | "contactNumber";
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnterpriseProfileChangeRequestResolution"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3245,8 +3622,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountSummary"];
+                    "application/json": components["schemas"]["ClosureSummary"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_enterprise_closure_accounts_enterprises__account_id__closures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_enterprise_closure_accounts_enterprises__account_id__closures__closure_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+                closure_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3986,6 +4428,88 @@ export interface operations {
             };
         };
     };
+    list_own_closures_auth_profile_closures_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureSummary"][];
+                };
+            };
+        };
+    };
+    add_own_closure_auth_profile_closures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_own_closure_auth_profile_closures__closure_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                closure_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     request_contact_number_change_auth_profile_contact_number_change_post: {
         parameters: {
             query?: never;
@@ -4052,6 +4576,39 @@ export interface operations {
             };
         };
     };
+    request_enterprise_name_change_auth_profile_enterprise_name_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnterpriseNameChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountChangeRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_lead_admin_name_auth_profile_lead_admin_patch: {
         parameters: {
             query?: never;
@@ -4062,6 +4619,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LeadAdminNameUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_own_opening_hours_auth_profile_opening_hours_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpeningHours"];
             };
         };
         responses: {
@@ -4439,41 +5029,6 @@ export interface operations {
             };
         };
     };
-    update_alert_status_operational_alerts__alert_code__status_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                alert_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OperationalAlertStatusUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationalAlertSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_enterprise_desktop_backup_operational_desktop_backup_get: {
         parameters: {
             query?: never;
@@ -4518,6 +5073,68 @@ export interface operations {
             };
             /** @description The upload was not based on the saved copy. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_connection_gap_operational_desktop_connection_gap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopConnectionGap"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_desktop_event_operational_desktop_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4635,9 +5252,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["MapEnterpriseSummary"][];
                 };
             };
         };
@@ -4942,7 +5557,27 @@ export interface operations {
             };
         };
     };
-    create_admin_request_message_operational_requests_messages_post: {
+    list_request_summaries_operational_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestSummary"][];
+                };
+            };
+        };
+    };
+    send_request_operational_requests_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4951,7 +5586,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AdminRequestMessageCreate"];
+                "application/json": components["schemas"]["RequestCreate"];
             };
         };
         responses: {
@@ -4961,7 +5596,309 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminRequestMessageResult"];
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_requests_operational_requests_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestReadUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestReadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request_operational_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request_attachment_operational_requests__request_id__attachments__attachment_index__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+                attachment_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_request_operational_requests__request_id__group_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reply_to_request_operational_requests__request_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestMessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_note_for_it_operational_requests__request_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestMessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_operational_requests__request_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_request_status_operational_requests__request_id__status_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    flag_request_operational_requests__request_id__urgent_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestUrgentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
                 };
             };
             /** @description Validation Error */
@@ -4991,192 +5928,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationalSummary"];
-                };
-            };
-        };
-    };
-    list_tickets_operational_tickets_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportTicketSummary"][];
-                };
-            };
-        };
-    };
-    create_enterprise_support_ticket_operational_tickets_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SupportTicketCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportTicketSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_ticket_detail_operational_tickets__ticket_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportTicketDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_ticket_attachment_operational_tickets__ticket_id__attachments__attachment_index__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-                attachment_index: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_ticket_message_operational_tickets__ticket_id__messages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SupportTicketMessageCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportTicketDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_ticket_status_operational_tickets__ticket_id__status_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SupportTicketStatusUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportTicketDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

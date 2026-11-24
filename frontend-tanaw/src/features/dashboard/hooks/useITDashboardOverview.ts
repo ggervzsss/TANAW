@@ -4,7 +4,7 @@ import { useOperationalSummary } from "@/app/hooks/useOperationalSync";
 import { emailDeliveriesQueryKey, listEmailDeliveries } from "@/features/email-deliveries";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { lguAccountsQueryKey, listLguAccounts } from "@/features/lgu-accounts";
-import { listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
+import { listRequests, requestsQueryKey } from "@/shared/services/requests";
 import { buildDashboardOverview, type DashboardOverview } from "../model";
 
 const EMPTY_LIST: never[] = [];
@@ -14,7 +14,7 @@ export function useITDashboardOverview(): DashboardOverview {
   const operationalSummaryQuery = useOperationalSummary();
   const lguAccountsQuery = useQuery({ queryKey: lguAccountsQueryKey, queryFn: listLguAccounts });
   const enterpriseAccountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
-  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
+  const supportTicketsQuery = useQuery({ queryKey: requestsQueryKey, queryFn: listRequests });
   const emailDeliveriesQuery = useQuery({ queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries });
 
   const overview = buildDashboardOverview({
@@ -23,7 +23,7 @@ export function useITDashboardOverview(): DashboardOverview {
     enterpriseAccounts: enterpriseAccountsQuery.data ?? EMPTY_LIST,
     lguAccounts: lguAccountsQuery.data ?? EMPTY_LIST,
     operationalSummary: operationalSummaryQuery.data,
-    supportTickets: supportTicketsQuery.data ?? EMPTY_LIST,
+    requests: supportTicketsQuery.data ?? EMPTY_LIST,
   });
 
   return {

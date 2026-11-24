@@ -87,22 +87,13 @@ async function restoreItSession(page: Page) {
   await page.route("**/activity-logs", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([activity]) }));
 }
 
-test("keeps the enterprise review queue compact and reveals the first invalid custom select inside its modal", async ({ page }, testInfo) => {
+test("reveals the first invalid custom select inside the Register Enterprise modal", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await restoreItSession(page);
   await page.goto("/it/enterprise-accounts");
 
-  const requestQueue = page.locator(".tanaw-request-queue");
-  await expect(requestQueue).toBeVisible();
-  const queueBox = await requestQueue.boundingBox();
-  expect(queueBox).not.toBeNull();
-  expect(queueBox!.height).toBeLessThan(250);
-  await expect(requestQueue).not.toHaveCSS("background-color", "rgb(254, 243, 199)");
-  await expect(requestQueue.getByText("1 pending")).toBeVisible();
-  await expect(requestQueue.getByText("+639171110003")).toBeVisible();
-  await expect(requestQueue.getByText("+639171119999")).toBeVisible();
-  await expect(requestQueue.getByRole("button", { name: "Approve" })).toBeVisible();
-  await expect(requestQueue.getByRole("button", { name: "Decline" })).toBeVisible();
+  // Account changes are approved from Work Center Requests now, not from this page.
+  await expect(page.locator(".tanaw-request-queue")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Register Enterprise" }).click();
   const dialog = page.getByRole("dialog", { name: "Register Enterprise" });
@@ -162,25 +153,6 @@ test("keeps the enterprise review queue compact and reveals the first invalid cu
   await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeFocused();
 });
 
-test("balances Action and Summary in Activity Details and collapses the shared grid at narrow widths", async ({ page }) => {
-  await restoreItSession(page);
-  await page.goto("/it/system-logs");
-  await page.getByText(activity.summary, { exact: true }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Activity Details" });
-  const actionCard = dialog.getByText("Action", { exact: true }).locator("..");
-  const summaryCard = dialog.getByText("Summary", { exact: true }).locator("..");
-  const wideBoxes = await Promise.all([actionCard.boundingBox(), summaryCard.boundingBox()]);
-  expect(wideBoxes[0]).not.toBeNull();
-  expect(wideBoxes[1]).not.toBeNull();
-  expect(Math.abs(wideBoxes[0]!.y - wideBoxes[1]!.y)).toBeLessThan(2);
-
-  await page.setViewportSize({ width: 600, height: 800 });
-  const narrowBoxes = await Promise.all([actionCard.boundingBox(), summaryCard.boundingBox()]);
-  expect(narrowBoxes[0]).not.toBeNull();
-  expect(narrowBoxes[1]).not.toBeNull();
-  expect(narrowBoxes[1]!.y).toBeGreaterThan(narrowBoxes[0]!.y + narrowBoxes[0]!.height);
-});
-
 test("applies pending-account actions, optional LGU contact copy, and readable dark warnings", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await restoreItSession(page);
@@ -226,30 +198,3 @@ test("applies pending-account actions, optional LGU contact copy, and readable d
   await expect(warningPanel).not.toHaveCSS("background-color", "rgb(254, 243, 199)");
 });
 
-test("formats Technical Issue timestamps in Philippine Time", async ({ page }) => {
-  const alert = {
-    id: "ALT-000099",
-    type: "Failed Login Threshold",
-    severity: "Warning",
-    enterprise: "Test Enterprise",
-    requester: "Test User",
-    summary: "The account reached the failed sign-in threshold.",
-    requiredAction: "Review account activity.",
-    resolutionMode: "Remote Review",
-    status: "New",
-    owner: "IT",
-    time: "2026-07-23T12:11:04.071391+00:00",
-  };
-  await restoreItSession(page);
-  await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([alert]) }));
-  await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/accounts/email-deliveries", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.goto(`/it/work-center?view=issues&alert=${alert.id}`);
-
-  const dialog = page.getByRole("dialog", { name: "Technical Issue Details" });
-  const timestamp = dialog.locator("time");
-  await expect(timestamp).toHaveAttribute("datetime", alert.time);
-  await expect(timestamp).toContainText("Jul 23, 2026");
-  await expect(timestamp).toContainText("8:11 PM");
-  await expect(dialog.getByText(alert.time, { exact: true })).toHaveCount(0);
-});

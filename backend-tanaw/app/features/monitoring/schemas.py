@@ -202,39 +202,83 @@ class VisitorInsightsSummary(BaseModel):
     lastUpdatedAt: datetime | None = None
 
 
-OperationalAlertUrgency = Literal["Normal", "Important", "Urgent"]
-
-
 class OperationalAlertSummary(BaseModel):
+    """A live alert, as the topbar alert icon, the map and the Alerts section show it."""
+
     id: str
-    type: Literal[
-        "Maintenance Request",
-        "Password Reset Request",
-        "Submission Delay",
-        "Foot Traffic Alert",
-        "Occupancy Spike",
-        "Failed Login Threshold",
-    ]
-    severity: Literal["Info", "Warning", "Critical"]
-    urgency: OperationalAlertUrgency
-    enterprise: str | None = None
-    requester: str
+    type: Literal["Busier Than Usual", "Camera Not Counting"]
+    severity: Literal["Warning", "Critical"]
+    status: Literal["Pending", "Active", "Ended"]
+    enterpriseId: str | None = None
+    enterpriseName: str | None = None
+    camera: str | None = None
     summary: str
-    requiredAction: str
-    resolutionMode: Literal[
-        "On-site Visit Required",
-        "In-system Action",
-        "Staff Follow-up",
-        "Remote Review",
-        "Admin Monitoring",
-    ]
-    status: Literal["New", "In Review", "Resolved"]
-    owner: Literal["IT", "Admin", "System"]
-    time: str
+    """The plain sentence everyone sees."""
+    detail: str | None = None
+    """Technical details for IT, such as the error and the last count. Left out for the Admin."""
+    startedAt: datetime
+    endedAt: datetime | None = None
 
 
-class OperationalAlertStatusUpdate(BaseModel):
-    status: Literal["New", "In Review", "Resolved"]
+MapPinState = Literal["normal", "busy", "camera", "offline", "closed"]
+
+
+class MapEnterpriseAlert(BaseModel):
+    type: Literal["Busier Than Usual", "Camera Not Counting"]
+    camera: str | None = None
+    summary: str
+    startedAt: datetime
+
+
+class MapEnterpriseSummary(BaseModel):
+    id: str
+    name: str
+    barangay: str
+    category: str
+    fullAddress: str
+    lat: float | None = None
+    lng: float | None = None
+    totalLiveOccupancy: int | None = None
+    estimatedUniqueCount: int | None = None
+    monitoringStatus: str
+    occupancyStatus: str
+    cameraMonitoring: dict[str, object] | None = None
+    contact: str
+    lastSync: str | None = None
+    gatewayStatus: str
+    pinState: MapPinState
+    """normal, busy (yellow), camera (red), offline (gray) or closed (faded)."""
+    openNow: bool
+    offlineSince: datetime | None = None
+    closedReason: str | None = None
+    alerts: list[MapEnterpriseAlert] = Field(default_factory=list)
+
+
+class DesktopConnectionGap(BaseModel):
+    """A period the desktop app could not reach TANAW, reported once it reconnects."""
+
+    startedAt: datetime
+    endedAt: datetime
+    appRunning: bool
+
+    @model_validator(mode="after")
+    def ends_after_start(self) -> DesktopConnectionGap:
+        if self.endedAt <= self.startedAt:
+            raise ValueError("The connection gap must end after it starts.")
+        return self
+
+
+DesktopEventType = Literal[
+    "camera_added", "camera_removed", "camera_changed", "counting_area_changed", "local_data_reset"
+]
+
+
+class DesktopEvent(BaseModel):
+    """Something the enterprise changed in the desktop app, recorded in Activity."""
+
+    type: DesktopEventType
+    cameraName: str | None = Field(default=None, max_length=120)
+    detail: str | None = Field(default=None, max_length=500)
 
 
 DESKTOP_BACKUP_SCHEMA_VERSION = 1

@@ -1,2 +1,1 @@
-export { useAdminRequests, useRequestReadState, useRequestTicketDetail } from "./useAdminRequests";
-export { useTechnicalIssuesPage } from "./useTechnicalIssuesPage";
+export { useAdminRequests, useRequestDetail, useRequestReadMarks } from "./useAdminRequests";

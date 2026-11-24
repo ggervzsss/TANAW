@@ -1,7 +1,7 @@
 import L from "leaflet";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MapEnterprise } from "@/shared/types";
-import { createTooltipHtml, getMapPinState, mapPinColors } from "../utils";
+import { MAP_PIN_ICON_PATHS, createTooltipHtml, getMapPinState, mapPinColors, type MapPinState } from "../utils";
 
 type MutableRef<T> = { current: T };
 
@@ -44,10 +44,10 @@ export function useEnterpriseMarkers({
     });
 
     visibleEnterprises.forEach((enterprise) => {
-      const state = getMapPinState(enterprise.monitoringStatus);
-      const busy = busyEnterpriseIds.has(enterprise.id);
+      const state = getMapPinState(enterprise);
+      const busy = state === "busy" || (state === "normal" && busyEnterpriseIds.has(enterprise.id));
       const before = previous.current.get(enterprise.id);
-      const statusChanged = Boolean(before && getMapPinState(before.enterprise.monitoringStatus) !== state);
+      const statusChanged = Boolean(before && getMapPinState(before.enterprise) !== state);
       const makeIcon = () =>
         L.divIcon({
           className: `tanaw-map-pin${statusChanged ? " is-status-changing" : ""}`,
@@ -102,13 +102,13 @@ export function useEnterpriseMarkers({
   }, [busyEnterpriseIds, focusedEnterpriseId, markersRef, visibleEnterprises]);
 }
 
-function createEnterpriseMarkerHtml(state: string, color: string, busy: boolean) {
+function createEnterpriseMarkerHtml(state: MapPinState, color: string, busy: boolean) {
   return `<span class="tanaw-enterprise-marker${busy ? " is-busy" : ""}" data-tone="${state}" style="--tanaw-marker-color:${color};">
     <span class="tanaw-enterprise-marker__selection" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__halo" aria-hidden="true"></span>
     <span class="tanaw-enterprise-marker__body" aria-hidden="true">
       <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-        <path d="M5.5 20V7.7a1 1 0 0 1 .66-.94l5.5-2.02a1 1 0 0 1 1.34.94V20M13 9h5a1 1 0 0 1 1 1v10M3.5 20h17M8.5 9.5h1M8.5 12.5h1M8.5 15.5h1M15.5 12.5h1M15.5 15.5h1" />
+        <path d="${MAP_PIN_ICON_PATHS[state]}" />
       </svg>
     </span>
     <span class="tanaw-enterprise-marker__tip" aria-hidden="true"></span>

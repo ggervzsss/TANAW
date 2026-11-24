@@ -9,7 +9,7 @@ import { formatFileSize, formatTicketTime } from "../utils/ticket-presentation";
 import { isSupportTicketCategory } from "../model/ticket-form-validation";
 import { clearHiddenTicketFields, supportTicketCategories } from "../model/ticket-category-config";
 import { InputField, SelectField, TicketFieldError, TicketPanelHeader } from "./TicketFormFields";
-import { maxTicketPhotoCount, ticketPriorities, ticketSortOptions } from "../model/ticket-draft";
+import { maxTicketPhotoCount, ticketSortOptions } from "../model/ticket-draft";
 import { useTicketsWorkspace } from "../hooks/useTicketsWorkspace";
 import { ticketFieldClassName } from "../utils/ticket-form-style";
 import { toSentenceCase } from "../../../utils/sentence-case";
@@ -64,13 +64,13 @@ export function TicketsView() {
 
       <div className="tanaw-ticket-layout">
         <Card className="min-w-0 overflow-hidden">
-          <TicketPanelHeader icon={<LifeBuoy size={18} />} title="New Ticket" subtitle="Provide enough detail for remote review or on-site action." />
+          <TicketPanelHeader icon={<LifeBuoy size={18} />} title="New Request" subtitle="Tell IT what happened, in your own words." />
 
           <form ref={formRef} onSubmit={handleSubmit} aria-busy={isSubmitting} noValidate className="space-y-3 bg-(--tanaw-surface) p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <SelectField
                 name="category"
-                label="Category"
+                label="What is it about?"
                 value={form.category}
                 options={[...supportTicketCategories]}
                 onChange={(value) => {
@@ -93,25 +93,13 @@ export function TicketsView() {
                 }}
                 error={fieldErrors.category}
               />
-              <SelectField
-                name="priority"
-                label="Priority"
-                value={form.priority}
-                options={ticketPriorities}
-                onChange={(value) => {
-                  setError("");
-                  clearFieldError("priority");
-                  setForm((current) => ({ ...current, priority: value }));
-                }}
-                error={fieldErrors.priority}
-              />
             </div>
 
             <InputField
               name="subject"
-              label="Subject"
+              label="Title"
               value={form.subject}
-              placeholder="Brief summary of the issue"
+              placeholder="A short summary, for example: Gate camera keeps disconnecting"
               onChange={(value) => {
                 setError("");
                 clearFieldError("subject");
@@ -227,7 +215,7 @@ export function TicketsView() {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition hover:-translate-y-0.5 hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-tanaw-ledger/70"
             >
               {isSubmitting ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
-              {isSubmitting ? "Submitting..." : "Submit Ticket"}
+              {isSubmitting ? "Sending..." : "Send Request"}
             </button>
           </form>
         </Card>
@@ -235,12 +223,12 @@ export function TicketsView() {
         <Card className="min-w-0 overflow-hidden">
           <TicketPanelHeader
             icon={<TicketCheck size={20} />}
-            title="Support Requests"
-            subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`}
+            title="Your Requests"
+            subtitle={`${openTicketCount} open request${openTicketCount === 1 ? "" : "s"}`}
             actions={
               <div className="w-full sm:w-60">
-                <span className="mb-1 block text-[10px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Sort tickets</span>
-                <SelectDropdown value={ticketSort} onChange={(value) => setTicketSort(value as SupportTicketSort)} options={ticketSortOptions} ariaLabel="Sort tickets" size="compact" />
+                <span className="mb-1 block text-[10px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Sort requests</span>
+                <SelectDropdown value={ticketSort} onChange={(value) => setTicketSort(value as SupportTicketSort)} options={ticketSortOptions} ariaLabel="Sort requests" size="compact" />
               </div>
             }
           />
@@ -265,9 +253,9 @@ export function TicketsView() {
                     <div className="min-w-0">
                       <p className="font-mono text-xs font-bold text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
                       <ExpandableText
-                        primary={ticket.subject}
+                        primary={ticket.title}
                         secondary={ticket.description}
-                        ariaLabel="ticket subject and description"
+                        ariaLabel="request title and description"
                         className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100"
                         secondaryClassName="text-xs leading-relaxed text-gray-500 dark:text-slate-300"
                         twoLines
@@ -276,10 +264,10 @@ export function TicketsView() {
                     <TicketStatusBadge status={ticket.status} />
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black">
-                    <TicketBadge tone="info">{toSentenceCase(ticket.category)}</TicketBadge>
-                    <TicketBadge tone={ticket.priority === "Urgent" || ticket.priority === "High" ? "warning" : "neutral"}>{ticket.priority}</TicketBadge>
+                    <TicketBadge tone="info">{toSentenceCase(ticket.group)}</TicketBadge>
+                    {ticket.urgent && <TicketBadge tone="warning">Urgent</TicketBadge>}
                     {ticket.affectedArea && <TicketBadge tone="neutral">{ticket.affectedArea}</TicketBadge>}
-                    {ticket.cameraNode && <TicketBadge tone="neutral">{ticket.cameraNode}</TicketBadge>}
+                    {ticket.camera && <TicketBadge tone="neutral">{ticket.camera}</TicketBadge>}
                     {(ticket.attachments?.length ?? 0) > 0 && (
                       <TicketBadge tone="info">
                         <span className="inline-flex items-center gap-1">
@@ -302,8 +290,8 @@ export function TicketsView() {
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
                 {isLoading ? <RefreshCw size={22} className="animate-spin" /> : <CheckCircle2 size={22} />}
               </div>
-              <p className="mt-4 text-sm font-black text-[#111827] dark:text-slate-100">{isLoading ? "Loading tickets" : "No support tickets"}</p>
-              <p className="mt-1 max-w-80 text-xs leading-relaxed text-gray-500 dark:text-slate-300">Submitted enterprise tickets will appear here with their review status.</p>
+              <p className="mt-4 text-sm font-black text-[#111827] dark:text-slate-100">{isLoading ? "Loading requests" : "No requests yet"}</p>
+              <p className="mt-1 max-w-80 text-xs leading-relaxed text-gray-500 dark:text-slate-300">Requests you send to IT appear here with their status and IT\u2019s replies.</p>
             </div>
           )}
         </Card>

@@ -134,7 +134,7 @@ describe("buildReportRows", () => {
     report("old", "September", 2026),
   ]);
   const reviewers = reviewersByReport(
-    [{ id: "log-1", timestamp: "2026-11-12T10:00:00", category: "Staff Operation", severity: "Success", actor: "Maria Santos", actorRole: "LGU Staff", action: "Report Ready to Consolidate", target: "Bayside Park", summary: "", sourceId: "sent-October-2026" }],
+    [{ id: "log-1", timestamp: "2026-11-12T10:00:00", group: "Reports", severity: "Success", actor: "Maria Santos", actorRole: "LGU Staff", action: "Report Ready to Consolidate", target: "Bayside Park", summary: "", sourceId: "sent-October-2026" }],
     [],
   );
 
@@ -171,7 +171,7 @@ describe("reviewersByReport", () => {
   const log = (sourceId: string, actor: string, action: string, timestamp: string): SystemLog => ({
     id: `${sourceId}-${timestamp}`,
     timestamp,
-    category: "Staff Operation",
+    group: "Reports",
     severity: "Success",
     actor,
     actorRole: "LGU Staff",

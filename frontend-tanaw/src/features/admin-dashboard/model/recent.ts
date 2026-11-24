@@ -1,7 +1,7 @@
+import { activityKindChipLabels, activityKind } from "@/features/system-logs/model/recentActivity";
+import type { Request } from "@/shared/services/requests";
 import type { RecordStatusTone } from "@/shared/ui-kit/lib/recordStatus";
-import type { SupportTicket } from "@/shared/services/supportTickets";
-import type { PriorityAlert, SystemLog } from "@/shared/types";
-import { isCrowdAlertType } from "@/shared/utils/crowdAlerts";
+import type { SystemLog } from "@/shared/types";
 
 /* The two lists at the bottom of the dashboard: the latest activity and the latest requests. */
 
@@ -15,43 +15,24 @@ export function latestActivity(logs: readonly SystemLog[], limit = 3) {
   return [...logs].sort((left, right) => timestamp(right.timestamp) - timestamp(left.timestamp) || left.id.localeCompare(right.id)).slice(0, limit);
 }
 
-/** The short plain-text tag at the end of an activity row. */
-export function activityTag(log: Pick<SystemLog, "action" | "category" | "resolutionStatus">) {
-  const action = log.action.toLowerCase();
-  if (log.resolutionStatus === "Resolved") return "Resolved";
-  if (log.resolutionStatus === "Unresolved") return "Request";
-  if (/sign(ed)?[ -]?in|log(ged)?[ -]?in/.test(action)) return "Login";
-  if (/sign(ed)?[ -]?out|log(ged)?[ -]?out/.test(action)) return "Logout";
-  if (log.category === "Staff Submission" || action.includes("report")) return "Report";
-  if (action.includes("ticket") || action.includes("support") || action.startsWith("alert ")) return "Request";
-  if (/password|account|register|activate|deactivate/.test(action)) return "Account";
-  if (/update|edit|change|save/.test(action)) return "Update";
-  return "Activity";
+/** The short tag at the end of an activity row: its Activity group. */
+export function activityTag(log: Pick<SystemLog, "group">) {
+  return activityKindChipLabels[activityKind(log as SystemLog)];
 }
 
-export type RequestProgress = "Seen by IT" | "In progress" | "Resolved";
+export type RequestProgress = "Sent" | "In progress" | "Resolved" | "Approved" | "Declined";
 
 export const requestProgressTone: Record<RequestProgress, RecordStatusTone> = {
-  "Seen by IT": "pending",
+  Sent: "pending",
   "In progress": "reviewing",
   Resolved: "consolidated",
+  Approved: "consolidated",
+  Declined: "missing",
 };
 
-/** Alert "New" and ticket "Open" read Seen by IT, "In Review" reads In progress. */
-export function requestProgress(status: PriorityAlert["status"] | SupportTicket["status"]): RequestProgress {
-  if (status === "Resolved") return "Resolved";
-  if (status === "In Review") return "In progress";
-  return "Seen by IT";
+export function requestProgress(status: Request["status"]): RequestProgress {
+  return status === "In Progress" ? "In progress" : status;
 }
-
-const alertTitles: Record<PriorityAlert["type"], string> = {
-  "Maintenance Request": "Maintenance request",
-  "Password Reset Request": "Password reset request",
-  "Submission Delay": "Late monthly report",
-  "Foot Traffic Alert": "More visitors than usual",
-  "Occupancy Spike": "Sudden rise in visitors",
-  "Failed Login Threshold": "Repeated failed sign-ins",
-};
 
 export type RecentRequest = {
   key: string;
@@ -63,30 +44,17 @@ export type RecentRequest = {
   search: string;
 };
 
-/**
- * The newest `limit` requests (alerts and support tickets), newest activity first. "More visitors
- * than usual" alerts are left out: the map above shows them, and they are not help requests.
- */
-export function latestRequests(alerts: readonly PriorityAlert[], tickets: readonly SupportTicket[], limit = 3): RecentRequest[] {
-  const items: RecentRequest[] = [
-    ...alerts
-      .filter((alert) => !isCrowdAlertType(alert.type))
-      .map((alert) => ({
-      key: `alert-${alert.id}`,
-      title: alertTitles[alert.type] ?? alert.type,
-      place: alert.enterprise || alert.requester,
-      time: alert.time,
-      progress: requestProgress(alert.status),
-      search: `?${new URLSearchParams({ alert: alert.id })}`,
-    })),
-    ...tickets.map((ticket) => ({
-      key: `ticket-${ticket.id}`,
-      title: ticket.subject,
-      place: ticket.enterpriseName,
-      time: ticket.updatedAt || ticket.createdAt,
-      progress: requestProgress(ticket.status),
-      search: `?${new URLSearchParams({ ticket: ticket.id })}`,
-    })),
-  ];
-  return items.sort((left, right) => timestamp(right.time) - timestamp(left.time) || left.key.localeCompare(right.key)).slice(0, limit);
+/** The newest `limit` requests, by when they last changed. */
+export function latestRequests(requests: readonly Request[], limit = 3): RecentRequest[] {
+  return requests
+    .map((request) => ({
+      key: request.id,
+      title: request.title,
+      place: request.enterpriseName ?? request.requesterName,
+      time: request.updatedAt || request.createdAt,
+      progress: requestProgress(request.status),
+      search: `?${new URLSearchParams({ request: request.id })}`,
+    }))
+    .sort((left, right) => timestamp(right.time) - timestamp(left.time) || left.key.localeCompare(right.key))
+    .slice(0, limit);
 }

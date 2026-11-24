@@ -14,6 +14,7 @@ import {
   validatePhilippineContactNumber,
 } from "@/shared/utils/accountValidation";
 import type { LocationDraft } from "../types";
+import { defaultOpeningHours, sameOpeningHours, validateOpeningHours, type OpeningHours } from "./openingHours";
 
 export type EnterpriseFormState = {
   enterpriseName: string;
@@ -27,6 +28,7 @@ export type EnterpriseFormState = {
   address: string;
   barangay: string;
   buildingCapacity: string;
+  openingHours: OpeningHours;
 };
 
 export type EnterpriseCreateFormState = EnterpriseFormState & {
@@ -50,6 +52,7 @@ const enterpriseFieldOrder: readonly (keyof EnterpriseFormState)[] = [
   "buildingCapacity",
   "address",
   "barangay",
+  "openingHours",
 ];
 
 export function createEmptyEnterpriseForm(): EnterpriseCreateFormState {
@@ -66,6 +69,7 @@ export function createEmptyEnterpriseForm(): EnterpriseCreateFormState {
     address: "",
     barangay: "",
     buildingCapacity: "100",
+    openingHours: defaultOpeningHours(),
   };
 }
 
@@ -83,6 +87,7 @@ export function createEnterpriseEditForm(enterprise: AccountSummary): Enterprise
     barangay: enterprise.barangay ?? "",
     address: enterprise.address ?? "",
     buildingCapacity: String(enterprise.buildingCapacity),
+    openingHours: enterprise.openingHours ?? defaultOpeningHours(),
   };
 }
 
@@ -109,6 +114,8 @@ export function validateEnterpriseForm(form: EnterpriseFormState): EnterpriseFor
   if (!form.address.trim()) errors.address = "Address is required.";
   const capacityError = validateBuildingCapacity(form.buildingCapacity);
   if (capacityError) errors.buildingCapacity = capacityError;
+  const hoursError = validateOpeningHours(form.openingHours);
+  if (hoursError) errors.openingHours = hoursError;
   return errors;
 }
 
@@ -128,6 +135,7 @@ export function toEnterpriseAccountFields(form: EnterpriseFormState) {
     barangay: form.barangay,
     address: form.address.trim(),
     buildingCapacity: Number(form.buildingCapacity),
+    openingHours: form.openingHours,
   };
 }
 
@@ -166,6 +174,7 @@ export function getEnterpriseChanges(enterprise: AccountSummary, payload: Update
   if ((enterprise.barangay ?? "") !== payload.barangay) changes.push(`Barangay: ${enterprise.barangay ?? "Not provided"} -> ${payload.barangay}`);
   if ((enterprise.address ?? "") !== payload.address) changes.push("Registered address will be updated.");
   if (enterprise.buildingCapacity !== payload.buildingCapacity) changes.push(`Building capacity: ${enterprise.buildingCapacity} -> ${payload.buildingCapacity}`);
+  if (payload.openingHours && !sameOpeningHours(enterprise.openingHours, payload.openingHours)) changes.push("Opening hours changed");
   if (payload.latitude != null && payload.longitude != null && (enterprise.latitude !== payload.latitude || enterprise.longitude !== payload.longitude)) {
     const previousLocation = enterprise.latitude !== null && enterprise.longitude !== null ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}` : "Not pinned";
     changes.push(`Map location: ${previousLocation} -> ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`);

@@ -153,7 +153,7 @@ test("presents the IT dashboard metrics and status cards in dark mode", async ({
   await expect(dashboardHeader).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(dashboardHeader.locator(".tanaw-unified-metrics__icon").first()).toHaveCSS("transform", "none");
   await expect(page.getByRole("heading", { name: "Current Work" })).toBeVisible();
-  for (const category of ["Technical Issues", "Support Requests", "Account Requests", "Email Problems"]) {
+  for (const category of ["Live Alerts", "Requests", "Account Changes", "Email Problems"]) {
     await expect(page.getByRole("link", { name: new RegExp(category) })).toBeVisible();
   }
   await expect(page.getByRole("heading", { name: "Desktop Application Status" })).toBeVisible();
@@ -174,13 +174,10 @@ for (const zoom of ["90%", "100%", "110%"]) {
   });
 }
 
-test("unifies the IT Work Center issue and support metrics", async ({ page }) => {
+test("unifies the IT Work Center request metrics", async ({ page }) => {
   const header = await openItPage(page, "/it/work-center");
-  await expectUnifiedHeader(header, ["Needs Attention", "Urgent", "Working on It", "Resolved"]);
-  await expect(page.getByPlaceholder("Search issue, enterprise, person, or suggested action")).toBeVisible();
-
-  await page.goto("/it/work-center?view=support");
-  await expectUnifiedHeader(header, ["Open Requests", "High Priority", "Working on It", "With Photos"]);
+  await expectUnifiedHeader(header, ["Open Requests", "Urgent", "In Progress", "Account Changes"]);
+  await expect(page.getByPlaceholder("Search reference, place, person, request or group")).toBeVisible();
 });
 
 test("unifies the IT account directory metrics", async ({ page }) => {

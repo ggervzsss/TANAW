@@ -175,10 +175,12 @@ async def test_open_space_telemetry_reaches_the_map_and_visitor_history(
             await db.commit()
 
         (map_entry,) = await list_map_enterprises(enterprise, db)
-        assert map_entry["totalLiveOccupancy"] == 0
-        assert map_entry["estimatedUniqueCount"] == 9
-        assert map_entry["monitoringStatus"] == "Fully Monitoring"
-        assert map_entry["cameraMonitoring"]["healthyCameraCount"] == 1
+        assert map_entry.totalLiveOccupancy == 0
+        assert map_entry.estimatedUniqueCount == 9
+        assert map_entry.monitoringStatus == "Fully Monitoring"
+        assert map_entry.cameraMonitoring is not None
+        assert map_entry.cameraMonitoring["healthyCameraCount"] == 1
+        assert map_entry.pinState in {"normal", "closed"}
         assert (
             await db.scalar(
                 select(RealtimeOutbox.sequence).where(
@@ -189,7 +191,7 @@ async def test_open_space_telemetry_reaches_the_map_and_visitor_history(
             is not None
         )
 
-        insights = await get_visitor_insights(db, "7d", enterprise_id=map_entry["id"], now=now)
+        insights = await get_visitor_insights(db, "7d", enterprise_id=map_entry.id, now=now)
         (point,) = insights.series
         assert point.averageVisitors == 2
         assert point.peakVisitors == 4

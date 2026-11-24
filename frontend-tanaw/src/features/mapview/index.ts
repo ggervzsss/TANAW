@@ -10,6 +10,8 @@ export {
   isBoundaryPolygonFeature,
   isPointInsideSanPedro,
   mapInteractionReducer,
+  MAP_PIN_ICON_PATHS,
+  MAP_PIN_STATES,
   mapPinColors,
   mapPinStateLabels,
   normalizeBarangayName,

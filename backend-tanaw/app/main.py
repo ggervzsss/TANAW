@@ -23,6 +23,7 @@ from app.features.maintenance.runtime import (
     start_retention_cleanup_worker,
     stop_retention_cleanup_worker,
 )
+from app.features.monitoring.runtime import start_monitoring_worker, stop_monitoring_worker
 from app.features.realtime.runtime import start_realtime_runtime, stop_realtime_runtime
 
 # PUT is needed by the desktop backup upload; OPTIONS answers preflights.
@@ -47,11 +48,13 @@ def create_lifespan(
         await initialize_location_search_runtime(settings)
         await start_email_outbox_worker(settings)
         await start_retention_cleanup_worker(settings)
+        await start_monitoring_worker(session_factory)
         await start_realtime_runtime(settings)
         try:
             yield
         finally:
             await stop_realtime_runtime()
+            await stop_monitoring_worker()
             await stop_retention_cleanup_worker()
             await stop_email_outbox_worker()
             await close_email_runtime()

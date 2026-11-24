@@ -51,7 +51,7 @@ async def purge_expired_logs(
     await create_activity_log(
         db,
         ActivityLogCreate(
-            category="IT Activity",
+            group="Settings & Maintenance",
             severity="Warning" if deleted_count else "Info",
             actor=account.display_name,
             actorRole=get_actor_role_label(account),

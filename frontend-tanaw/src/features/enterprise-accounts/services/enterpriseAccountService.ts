@@ -1,7 +1,7 @@
 import type { ApiSchemas } from "@/contracts/api";
 import { queryKeys } from "@/shared/constants/queryKeys";
 import { apiClient } from "@/shared/lib/apiClient";
-import type { AccountSummary, ProfileChangeRequestType } from "@/shared/types";
+import type { AccountSummary } from "@/shared/types";
 import type { EnterpriseLocationSuggestion } from "../types";
 
 export type CreateEnterpriseAccountPayload = ApiSchemas["EnterpriseAccountCreate"];
@@ -32,7 +32,25 @@ export async function searchEnterpriseLocations(query: string, signal?: AbortSig
   return response.data;
 }
 
-export async function resolveEnterpriseProfileChangeRequest(accountId: string, requestType: ProfileChangeRequestType, action: "approve" | "decline") {
-  const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}/profile-change-requests/${requestType}`, { action });
+
+export type EnterpriseClosure = ApiSchemas["ClosureSummary"];
+export type EnterpriseClosureCreate = ApiSchemas["ClosureCreate"];
+
+export function enterpriseClosuresQueryKey(accountId: string) {
+  return [...enterpriseAccountsQueryKey, accountId, "closures"];
+}
+
+/** Dates a place is temporarily closed, so it is never shown as offline then. */
+export async function listEnterpriseClosures(accountId: string) {
+  const response = await apiClient.get<EnterpriseClosure[]>(`/accounts/enterprises/${accountId}/closures`);
   return response.data;
+}
+
+export async function addEnterpriseClosure(accountId: string, closure: EnterpriseClosureCreate) {
+  const response = await apiClient.post<EnterpriseClosure>(`/accounts/enterprises/${accountId}/closures`, closure);
+  return response.data;
+}
+
+export async function removeEnterpriseClosure(accountId: string, closureId: string) {
+  await apiClient.delete(`/accounts/enterprises/${accountId}/closures/${closureId}`);
 }

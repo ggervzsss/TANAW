@@ -14,7 +14,7 @@ export function EstablishmentMetrics({ summary, live, filter, loading }: Props) 
       id: "occupancy",
       title: "Current Occupancy",
       value: live?.occupancy,
-      description: live?.state === "partial" ? "people inside · some cameras offline" : "people inside",
+      description: live?.state === "partial" ? "people inside · some cameras not counting" : "people inside",
       icon: ScanFace,
     },
     {

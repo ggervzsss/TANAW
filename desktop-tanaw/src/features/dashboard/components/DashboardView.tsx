@@ -11,7 +11,7 @@ import { countingFromPayload } from "../../reports/model/report-workspace";
 import { useEstablishmentAnalytics } from "../hooks/useEstablishmentAnalytics";
 import { usePeriodOrigins } from "../hooks/usePeriodOrigins";
 import type { TrendFilter } from "../types/dashboard";
-import { periodDemographics } from "../utils/establishment";
+import { camerasNotCountingMessage, periodDemographics } from "../utils/establishment";
 import { emptyDemo, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
 import { DashboardHeader } from "./DashboardHeader";
 import { DemographicsBreakdownChart } from "./DemographicsBreakdownChart";
@@ -76,7 +76,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
     };
   }, [refreshReports, enterpriseId]);
 
-  const offline = live?.state === "partial";
+  const camerasNotCounting = camerasNotCountingMessage(cameras, live);
   return (
     <div className={`overview-layout ${assistantOpen ? "assistant-is-open" : ""}`}>
       <div className="overview-main">
@@ -94,9 +94,9 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
           />
         )}
         <DashboardHeader filter={filter} onFilterChange={setFilter} />
-        {offline && (
+        {camerasNotCounting && (
           <p role="status" className="mx-4.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100">
-            Some cameras are offline. Totals include the cameras that are running.
+            {camerasNotCounting}
           </p>
         )}
         <EstablishmentMetrics summary={summary} live={live} filter={filter} loading={loading} />
@@ -132,7 +132,7 @@ export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName
                       <tr key={camera.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                         <td className="py-3 pr-4">{camera.name}</td>
                         <td className="py-3 pr-4">{cameraModeName(camera.analysisMode)}</td>
-                        <td className="py-3">{counting ? "Counting" : "Offline"}</td>
+                        <td className="py-3">{counting ? "Counting" : "Not counting"}</td>
                       </tr>
                     );
                   })}

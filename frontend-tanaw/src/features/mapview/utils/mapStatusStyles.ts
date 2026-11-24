@@ -1,4 +1,4 @@
-import type { MonitoringStatus, OccupancyStatus } from "@/shared/types";
+import type { MapEnterprise, MonitoringStatus, OccupancyStatus } from "@/shared/types";
 
 export type MonitoringStatusTone = "running" | "partial" | "inactive" | "fault" | "unconfigured";
 
@@ -82,27 +82,45 @@ export function getOccupancyBadgeClass(status: OccupancyStatus) {
   return "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-200";
 }
 
-/** The three pin states the dashboard map shows. */
-export type MapPinState = "ok" | "partial" | "offline";
+/**
+ * What a place's pin shows right now, one state at a time: offline wins (no fresh counts), then a
+ * camera that is not counting, then busier than usual. Outside opening hours, or temporarily
+ * closed, the pin is faded instead of offline.
+ */
+export type MapPinState = "normal" | "busy" | "camera" | "offline" | "closed";
 
+export const MAP_PIN_STATES: readonly MapPinState[] = ["normal", "busy", "camera", "offline", "closed"];
+
+/** DESIGN.md colours: Civic Green, warning amber, danger red, neutral slate. Closed is faded green. */
 export const mapPinColors: Record<MapPinState, string> = {
-  ok: "#1f8a3c",
-  partial: "#b45309",
-  offline: "#2c5d8f",
+  normal: "#1f8a3c",
+  busy: "#d97706",
+  camera: "#dc2626",
+  offline: "#64748b",
+  closed: "#1f8a3c",
 };
 
 export const mapPinStateLabels: Record<MapPinState, string> = {
-  ok: "All cameras running",
-  partial: "Some cameras need attention",
-  offline: "Not reporting",
+  normal: "Open and counting",
+  busy: "Busier than usual",
+  camera: "A camera is not counting",
+  offline: "Desktop app offline",
+  closed: "Closed now",
 };
 
-/**
- * Pin colour by monitoring state: every camera running, some cameras down or delayed, or the
- * enterprise is not reporting at all (stopped, offline or no cameras set up).
- */
-export function getMapPinState(status: MonitoringStatus): MapPinState {
-  if (status === "Fully Monitoring") return "ok";
-  if (status === "Partially Monitoring" || status === "Updates Delayed" || status === "Fault") return "partial";
-  return "offline";
+/** The pin state the server worked out, or one from the monitoring status for older data. */
+export function getMapPinState(enterprise: Pick<MapEnterprise, "pinState" | "monitoringStatus">): MapPinState {
+  if (enterprise.pinState) return enterprise.pinState;
+  if (enterprise.monitoringStatus === "Fault" || enterprise.monitoringStatus === "Partially Monitoring") return "camera";
+  if (enterprise.monitoringStatus === "Offline") return "offline";
+  return "normal";
 }
+
+/** The small icon inside each pin, so the state never depends on colour alone. */
+export const MAP_PIN_ICON_PATHS: Record<MapPinState, string> = {
+  normal: "M5.5 20V7.7a1 1 0 0 1 .66-.94l5.5-2.02a1 1 0 0 1 1.34.94V20M13 9h5a1 1 0 0 1 1 1v10M3.5 20h17M8.5 9.5h1M8.5 12.5h1M8.5 15.5h1M15.5 12.5h1M15.5 15.5h1",
+  busy: "M4 17l5-5 4 4 7-8M15 8h5v5",
+  camera: "M3 3l18 18M10.6 6H14l2 2h3a1 1 0 0 1 1 1v8.4M17 19H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h2.5M9.6 10.6a3 3 0 0 0 4 4",
+  offline: "M3 3l18 18M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 4.2-2.5M12 20h.01M14.6 10.6A10 10 0 0 1 19 12.9M2 8.8a15 15 0 0 1 4.3-2.6M10.7 5.1A15 15 0 0 1 22 8.8",
+  closed: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+};

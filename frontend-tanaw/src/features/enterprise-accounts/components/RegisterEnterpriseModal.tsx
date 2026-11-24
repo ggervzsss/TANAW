@@ -84,6 +84,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             errors={errors}
             enterpriseId={form.enterpriseId}
             onChange={updateField}
+            onOpeningHoursChange={(value) => updateField("openingHours", value)}
             onEnterpriseIdChange={(value) => updateField("enterpriseId", value)}
           />
 

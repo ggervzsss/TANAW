@@ -25,10 +25,7 @@ test("persists independent settings, rolls back failures, and confirms security 
     "security.loginLockMinutes": 5,
     "logs.retentionDays": 180,
     "display.timeFormat": "12-hour",
-    "notifications.cameraSessionErrorAlerts": true,
-    "notifications.gatewayServiceErrorAlerts": true,
-    "notifications.syncDelayAlerts": true,
-    "notifications.failedLoginLockoutAlerts": true,
+    "monitoring.cameraWaitMinutes": 15,
   };
   const patches: Array<Record<string, string | boolean | number>> = [];
   let failNextPatch = false;
@@ -57,26 +54,27 @@ test("persists independent settings, rolls back failures, and confirms security 
   await expect(page.getByRole("heading", { name: "System Settings" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save Changes" })).toHaveCount(0);
 
-  const cameraSwitch = page.getByRole("switch", { name: "Camera Problems" });
-  await cameraSwitch.click();
-  await expect(cameraSwitch).toHaveAttribute("aria-checked", "false");
-  await expect.poll(() => patches.some((patch) => patch["notifications.cameraSessionErrorAlerts"] === false)).toBe(true);
+  // The camera wait time saves right away.
+  const cameraWait = page.getByRole("combobox", { name: "Camera Wait Time" });
+  await expect(cameraWait).toContainText("15 minutes");
+  await cameraWait.click();
+  await page.getByRole("option", { name: "30 minutes" }).click();
+  await expect.poll(() => values["monitoring.cameraWaitMinutes"]).toBe(30);
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("switch")).toHaveCount(0);
 
+  // A failed save rolls back, and a later successful one keeps the retry.
   failNextPatch = true;
-  const desktopSwitch = page.getByRole("switch", { name: "Desktop Application Problems" });
-  await desktopSwitch.click();
+  const timeDisplay = page.getByRole("combobox", { name: "Time Display" });
+  await timeDisplay.click();
+  await page.getByRole("option", { name: "24-hour" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Failed" })).toBeVisible();
-  await expect(desktopSwitch).toHaveAttribute("aria-checked", "true");
-
-  // A later successful setting must not erase the failed setting's retry payload.
-  const syncSwitch = page.getByRole("switch", { name: "Visitor Data Delays" });
-  await syncSwitch.click();
-  await expect(syncSwitch).toHaveAttribute("aria-checked", "false");
-  await expect.poll(() => values["notifications.syncDelayAlerts"]).toBe(false);
-
+  await expect(timeDisplay).toContainText("12-hour");
+  await cameraWait.click();
+  await page.getByRole("option", { name: "60 minutes" }).click();
+  await expect.poll(() => values["monitoring.cameraWaitMinutes"]).toBe(60);
   await page.getByRole("button", { name: "Retry" }).click();
-  await expect(desktopSwitch).toHaveAttribute("aria-checked", "false");
+  await expect.poll(() => values["display.timeFormat"]).toBe("24-hour");
 
   const securitySection = page.getByRole("heading", { name: "Account & Security Settings" }).locator("xpath=../../..");
   await page.getByRole("combobox", { name: "Failed Login Threshold" }).click();

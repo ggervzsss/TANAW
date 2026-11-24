@@ -1,10 +1,11 @@
 import { type PersonNameParts, validateEmail, validateMiddleInitial, validateName, validatePhilippineContactNumber } from "../../../utils/form-validation";
 
-export type EditableProfileField = "managerName" | "email" | "phone" | "buildingCapacity";
+export type EditableProfileField = "managerName" | "email" | "phone" | "buildingCapacity" | "enterpriseName";
 
 export function validateModalValue(field: EditableProfileField, value: string, phoneLocal: string) {
   if (field === "email") return validateEmail(value);
   if (field === "buildingCapacity") return validateBuildingCapacity(value);
+  if (field === "enterpriseName") return validateEnterpriseName(value);
   return validatePhilippineContactNumber(phoneLocal ? `+63${phoneLocal}` : "", true);
 }
 
@@ -46,5 +47,13 @@ function validateBuildingCapacity(value: string) {
   if (!Number.isInteger(capacity)) return "Building capacity must be a whole number.";
   if (capacity < 1) return "Building capacity must be at least 1.";
   if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
+  return "";
+}
+
+function validateEnterpriseName(value: string) {
+  const name = value.trim();
+  if (!name) return "Enter the new enterprise name.";
+  if (name.length < 2) return "The enterprise name must be at least 2 characters.";
+  if (name.length > 120) return "Use 120 characters or fewer.";
   return "";
 }

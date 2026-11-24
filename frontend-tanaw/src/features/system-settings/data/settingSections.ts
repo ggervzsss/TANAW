@@ -1,4 +1,4 @@
-import { Bell, Clock3, FileText, ShieldCheck } from "lucide-react";
+import { Camera, Clock3, FileText, ShieldCheck } from "lucide-react";
 import type { SettingSection } from "../types";
 
 export const settingSections: SettingSection[] = [
@@ -36,39 +36,10 @@ export const settingSections: SettingSection[] = [
     ],
   },
   {
-    id: "notifications",
-    title: "Technical Issue Notifications",
-    description: "Choose which operational problems should notify IT personnel.",
-    icon: Bell,
-    fields: [
-      {
-        key: "cameraSessionErrorAlerts",
-        label: "Camera Problems",
-        description: "Notify IT when a camera problem prevents or interrupts visitor counting.",
-        type: "toggle",
-        value: true,
-      },
-      {
-        key: "gatewayServiceErrorAlerts",
-        label: "Desktop Application Problems",
-        description: "Notify IT when an enterprise desktop application or counting service stops working.",
-        type: "toggle",
-        value: true,
-      },
-      {
-        key: "syncDelayAlerts",
-        label: "Visitor Data Delays",
-        description: "Notify IT when visitor records remain waiting to be sent to TANAW.",
-        type: "toggle",
-        value: true,
-      },
-      {
-        key: "failedLoginLockoutAlerts",
-        label: "Locked Accounts",
-        description: "Notify IT when repeated failed sign-in attempts temporarily lock an account.",
-        type: "toggle",
-        value: true,
-      },
-    ],
+    id: "monitoring",
+    title: "Camera Alerts",
+    description: "Choose how long a camera must stop counting before TANAW shows a Camera not counting alert. Short drops never raise an alert.",
+    icon: Camera,
+    fields: [{ key: "cameraWaitMinutes", label: "Camera Wait Time", type: "select", value: 15, options: [5, 15, 30, 60] }],
   },
 ];

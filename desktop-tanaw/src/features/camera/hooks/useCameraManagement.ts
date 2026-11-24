@@ -26,6 +26,7 @@ import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../../toa
 import { useCameraRuntimeController } from "./useCameraRuntimeController";
 import { createBackoffPoller } from "../../../utils/backoff-poller";
 import { useBackupRestoreGeneration } from "../../sync/hooks/useBackupRestoreGeneration";
+import { reportDesktopEvent } from "../../sync/services/connection-gap";
 
 type CameraManagementOptions = {
   cameras: Camera[];
@@ -262,6 +263,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
       setCameras((current) => current.map((camera) => (camera.id === cameraId ? savedCamera : camera)));
       setCameraError(savedCamera.id, null);
+      void reportDesktopEvent(countingConfigChanged && !hasOtherProfileChanges ? "counting_area_changed" : "camera_changed", { cameraName: savedCamera.name });
     } catch (error) {
       setCameraAction(cameraId);
       const message = shouldUpdateCounting ? getTripwireSaveErrorMessage(error) : toErrorMessage(error);
@@ -396,6 +398,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     setIsValidating(false);
     setShowAddModal(false);
     notifySuccess("Camera added and connection verified.");
+    void reportDesktopEvent("camera_added", { cameraName: verifiedCameraNode.name });
   };
 
   const confirmDeleteCamera = async () => {
@@ -418,6 +421,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       setIsEditMode(false);
       setCameraPendingDelete(null);
       notifySuccess("Camera removed.");
+      void reportDesktopEvent("camera_removed", { cameraName: cameraPendingDelete.name });
     } catch (error) {
       setCameraError(cameraId, toErrorMessage(error));
       notifyError("Camera could not be removed. Check Camera Setup and try again.");

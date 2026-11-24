@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DailyEstablishmentMetrics, EstablishmentHourly, EstablishmentSummary } from "../../../../../src/features/camera/services/establishment.types";
-import { establishmentRange, establishmentTrend, hourlyOccupancyTrend, periodDemographics, rangeMonths } from "../../../../../src/features/dashboard/utils/establishment";
+import { camerasNotCountingMessage, establishmentRange, establishmentTrend, hourlyOccupancyTrend, periodDemographics, rangeMonths } from "../../../../../src/features/dashboard/utils/establishment";
 import { getDemographicTotals } from "../../../../../src/features/reports/utils/demographics";
 
 describe("unified establishment history", () => {
@@ -76,5 +76,25 @@ describe("demographics for the selected period", () => {
 
   it("is empty until counts load", () => {
     expect(periodDemographics(null, {})).toBeNull();
+  });
+});
+
+describe("camerasNotCountingMessage", () => {
+  const cameras = [
+    { id: 1, name: "Gate A" },
+    { id: 2, name: "Lobby" },
+    { id: 3, name: "Hall" },
+    { id: 4, name: "Garden" },
+  ];
+
+  it("names the camera that stopped and how many are still counting", () => {
+    expect(camerasNotCountingMessage(cameras, { state: "partial", missing_camera_ids: [1] })).toBe("Gate A is not counting. 3 of 4 cameras are counting.");
+    expect(camerasNotCountingMessage(cameras, { state: "partial", missing_camera_ids: [1, 2, 3] })).toBe("Gate A, Lobby and Hall are not counting. 1 of 4 cameras is counting.");
+  });
+
+  it("shows nothing while every camera counts, and a general message when the names are unknown", () => {
+    expect(camerasNotCountingMessage(cameras, { state: "estimated", missing_camera_ids: [] })).toBeNull();
+    expect(camerasNotCountingMessage(cameras, null)).toBeNull();
+    expect(camerasNotCountingMessage(cameras, { state: "partial", missing_camera_ids: [9] })).toBe("Some cameras are not counting. Totals include the cameras that are counting.");
   });
 });

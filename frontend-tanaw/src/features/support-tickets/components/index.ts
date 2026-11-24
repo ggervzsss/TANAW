@@ -1,4 +1,4 @@
-export { CategoryBadge, PriorityBadge, TicketStatusBadge } from "./TicketBadges";
+export { GroupBadge, TicketStatusBadge, UrgentBadge } from "./TicketBadges";
 export { SupportTicketFilters } from "./SupportTicketFilters";
 export { TicketAttachments } from "./TicketAttachments";
 export { TicketConversation } from "./TicketConversation";

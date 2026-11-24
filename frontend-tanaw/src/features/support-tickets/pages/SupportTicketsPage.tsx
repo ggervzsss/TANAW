@@ -9,7 +9,7 @@ import { PageHeader } from "@/shared/components/layout";
 import { PageMotion } from "@/shared/components/ui";
 import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { listSupportTickets, supportTicketsQueryKey, type SupportTicket } from "@/shared/services/supportTickets";
+import { isClosedRequest, listRequests, requestsQueryKey, type Request } from "@/shared/services/requests";
 import { SupportTicketFilters, SupportTicketsTable, TicketDetailsModal } from "../components";
 import { filterSupportTickets, initialTicketFilters, isTicketFilterState } from "../model";
 
@@ -19,7 +19,7 @@ type SupportTicketsPageProps = {
   inSettings?: boolean;
 };
 
-const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
+const EMPTY_SUPPORT_TICKETS: Request[] = [];
 
 export function SupportTicketsPage({ mode, embedded = false, inSettings = false }: SupportTicketsPageProps) {
   const { timeFormat } = useSystemDisplayPreferences();
@@ -27,21 +27,21 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
     initialValue: initialTicketFilters,
     isValid: isTicketFilterState,
     namespace: `${mode}-ticket-filters`,
-    version: 1,
+    version: 2,
   });
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const ticketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
+  const ticketsQuery = useQuery({ queryKey: requestsQueryKey, queryFn: listRequests });
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
   const filteredTickets = useMemo(() => filterSupportTickets(tickets, filters), [filters, tickets]);
   const isItResponder = mode === "it";
-  const routeTicketId = searchParams.get("ticket");
+  const routeTicketId = searchParams.get("request");
   const activeTicketId = routeTicketId ?? selectedTicketId;
 
   const clearRouteTicket = () => {
     if (!routeTicketId) return;
     const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("ticket");
+    nextParams.delete("request");
     setSearchParams(nextParams, { replace: true });
   };
 
@@ -59,15 +59,15 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
     <PageMotion className={inSettings ? "tanaw-data-page space-y-3" : "tanaw-data-page pb-12"}>
       {!embedded && (
         <PageHeader
-          title="Support Requests"
-          description={isItResponder ? "Help enterprises with questions and technical problems." : "Read-only supervision for enterprise requests, IT responses, and request status."}
+          title="Requests"
+          description={isItResponder ? "Help people with problems, and approve or decline account changes." : "Requests people sent to IT. IT handles them."}
         />
       )}
 
       {inSettings && ticketsQuery.isError && (
         <Alert
           tone="danger"
-          title="Unable to load support tickets"
+          title="Unable to load requests"
           action={
             <Button variant="secondary" size="sm" onClick={() => void ticketsQuery.refetch()}>
               Retry
@@ -76,12 +76,6 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
         />
       )}
 
-      {inSettings && !isItResponder && <Alert tone="info">Admin can review ticket status, attachments, and conversations. IT handles responses.</Alert>}
-      {!inSettings && !isItResponder && (
-        <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
-          IT personnel handle user responses. Admin can monitor ticket status, attachments, and communication.
-        </div>
-      )}
 
       <SupportTicketMetrics isLoading={ticketsQuery.isLoading} tickets={tickets} />
       <SupportTicketsTable
@@ -98,20 +92,20 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
   );
 }
 
-function SupportTicketMetrics({ isLoading, tickets }: { isLoading: boolean; tickets: SupportTicket[] }) {
-  const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
-  const urgentTickets = tickets.filter((ticket) => ticket.priority === "Urgent" || ticket.priority === "High");
-  const inReviewTickets = tickets.filter((ticket) => ticket.status === "In Review");
-  const ticketsWithAttachments = tickets.filter((ticket) => ticket.attachments.length > 0);
+function SupportTicketMetrics({ isLoading, tickets }: { isLoading: boolean; tickets: Request[] }) {
+  const open = tickets.filter((ticket) => !isClosedRequest(ticket));
+  const urgent = open.filter((ticket) => ticket.urgent);
+  const inProgress = tickets.filter((ticket) => ticket.status === "In Progress");
+  const changes = open.filter((ticket) => ticket.group === "Account change");
 
   return (
     <UnifiedMetricsHeader
-      ariaLabel="Support request summary"
+      ariaLabel="Request summary"
       metrics={[
-        { id: "open", title: "Open Requests", value: activeTickets.length, description: "New or being handled", tone: "success", icon: TicketCheck, isLoading },
-        { id: "priority", title: "High Priority", value: urgentTickets.length, description: "High or urgent queue", tone: "warning", icon: AlertCircle, isLoading },
-        { id: "working", title: "Working on It", value: inReviewTickets.length, description: "Currently handled by IT", tone: "info", icon: Clock3, isLoading },
-        { id: "photos", title: "With Photos", value: ticketsWithAttachments.length, description: "Attachment-backed tickets", tone: "teal", icon: ImageIcon, isLoading },
+        { id: "open", title: "Open Requests", value: open.length, description: "Sent or in progress", tone: "success", icon: TicketCheck, isLoading },
+        { id: "urgent", title: "Urgent", value: urgent.length, description: "Marked urgent by IT", tone: "warning", icon: AlertCircle, isLoading },
+        { id: "working", title: "In Progress", value: inProgress.length, description: "IT is working on these", tone: "info", icon: Clock3, isLoading },
+        { id: "changes", title: "Account Changes", value: changes.length, description: "Waiting for approval", tone: "teal", icon: ImageIcon, isLoading },
       ]}
     />
   );

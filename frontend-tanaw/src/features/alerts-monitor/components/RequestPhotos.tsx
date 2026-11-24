@@ -3,12 +3,12 @@ import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { useTicketAttachmentImageUrl } from "@/features/support-tickets/hooks";
 import { formatFileSize } from "@/features/support-tickets/model";
-import type { SupportTicketAttachment } from "@/shared/services/supportTickets";
+import type { RequestAttachment } from "@/shared/services/requests";
 import { Dialog, cn } from "@/shared/ui-kit";
 
-/** Photos the enterprise attached to a support ticket, as small thumbnails that open a larger view. */
-export function RequestPhotos({ attachments }: { attachments: SupportTicketAttachment[] }) {
-  const [preview, setPreview] = useState<SupportTicketAttachment | null>(null);
+/** Photos the enterprise attached to a request, as small thumbnails that open a larger view. */
+export function RequestPhotos({ attachments }: { attachments: RequestAttachment[] }) {
+  const [preview, setPreview] = useState<RequestAttachment | null>(null);
   if (attachments.length === 0) return null;
 
   return (
@@ -44,7 +44,7 @@ export function RequestPhotos({ attachments }: { attachments: SupportTicketAttac
   );
 }
 
-function AttachmentImage({ attachment, alt, className, large = false }: { attachment: SupportTicketAttachment; alt: string; className: string; large?: boolean }) {
+function AttachmentImage({ attachment, alt, className, large = false }: { attachment: RequestAttachment; alt: string; className: string; large?: boolean }) {
   const { error, imageUrl, isLoading } = useTicketAttachmentImageUrl(attachment);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   if (imageUrl && failedUrl !== imageUrl && !error) return <img src={imageUrl} alt={alt} className={className} onError={() => setFailedUrl(imageUrl)} />;

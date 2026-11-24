@@ -1,3 +1,4 @@
+import { getMapPinState, mapPinStateLabels } from "@/features/mapview/utils/mapStatusStyles";
 import { normalizeBarangayName } from "@/features/mapview/utils/barangayNames";
 import type { MapEnterprise } from "@/shared/types";
 
@@ -43,7 +44,9 @@ export function visiblePins(enterprises: readonly MapEnterprise[], openBarangay:
 /** A pin's accessible name, which also says what selecting it does. */
 export function pinAriaLabel(enterprise: MapEnterprise, options: { busy: boolean; leader: boolean; barangayCount: number }) {
   const parts = [`${enterprise.name}, Barangay ${enterprise.barangay || "Unassigned"}`];
-  if (options.busy) parts.push("Busier than usual");
+  const state = getMapPinState(enterprise);
+  if (state !== "normal") parts.push(mapPinStateLabels[state]);
+  else if (options.busy) parts.push("Busier than usual");
   if (options.leader && options.barangayCount > 1) parts.push("Busiest in its barangay", `Select to see all ${options.barangayCount} enterprises here`);
   else parts.push("Select to show its details link");
   return `${parts.join(". ")}.`;

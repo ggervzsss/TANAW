@@ -16,7 +16,9 @@ def test_contract_bundle_is_deterministic_and_contains_important_rest_apis() -> 
     assert "/operational/reports/intake" in paths
     assert "/operational/reports/final" in paths
     assert "/operational/desktop/telemetry" in paths
-    assert "/operational/tickets" in paths
+    assert "/operational/requests" in paths
+    assert "/operational/alerts" in paths
+    assert "/operational/desktop/connection-gap" in paths
 
 
 def test_realtime_contract_is_derived_from_backend_models() -> None:
@@ -33,6 +35,6 @@ def test_realtime_contract_is_derived_from_backend_models() -> None:
         "enterprise_id",
         "enterprise_account_id",
         "recipient_account_id",
-        "ticket_id",
+        "request_id",
         "report_id",
     }

@@ -1,2 +1,2 @@
-export { PriorityBadge, TicketDetailsModal, TicketStatusBadge } from "./components";
+export { TicketDetailsModal, TicketStatusBadge, UrgentBadge } from "./components";
 export { SupportTicketsPage } from "./pages";

@@ -3,6 +3,7 @@ import { ModalFrame } from "@/shared/components/ui";
 import type { AccountSummary } from "@/shared/types";
 import { useEnterpriseDetails } from "../hooks";
 import { ConfirmEnterpriseActivationModal, ConfirmEnterpriseStatusModal } from "./EnterpriseAccountConfirmations";
+import { EnterpriseClosuresPanel } from "./EnterpriseClosuresPanel";
 import { EnterpriseDetailsEditForm } from "./EnterpriseDetailsEditForm";
 import { EnterpriseDetailsOverview } from "./EnterpriseDetailsOverview";
 
@@ -39,14 +40,17 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
               onSubmit={details.handleEditSubmit}
             />
           ) : (
-            <EnterpriseDetailsOverview
-              canChangeStatus={details.canChangeStatus}
-              details={details.details}
-              enterprise={enterprise}
-              onEdit={() => details.setIsEditing(true)}
-              onResendActivation={() => details.setConfirmMode("activation")}
-              onStatusChange={() => details.setConfirmMode("status")}
-            />
+            <>
+              <EnterpriseDetailsOverview
+                canChangeStatus={details.canChangeStatus}
+                details={details.details}
+                enterprise={enterprise}
+                onEdit={() => details.setIsEditing(true)}
+                onResendActivation={() => details.setConfirmMode("activation")}
+                onStatusChange={() => details.setConfirmMode("status")}
+              />
+              <EnterpriseClosuresPanel accountId={enterprise.id} />
+            </>
           )}
         </div>
       </ModalFrame>

@@ -1,47 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { clearHiddenTicketFields, getSupportTicketCategoryConfig, supportTicketCategories, ticketCategoryPayloadFields } from "../../../../../../src/features/tickets/model/ticket-category-config";
 
-describe("support ticket category field policy", () => {
-  it("maps every supported category intentionally", () => {
-    expect(supportTicketCategories).toEqual(["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"]);
-    expect(getSupportTicketCategoryConfig("Camera Issue")).toEqual({
-      affectedAreaRequired: true,
-      showAffectedArea: true,
-      showCamera: true,
-    });
-    expect(getSupportTicketCategoryConfig("Maintenance").showCamera).toBe(true);
+describe("request group field policy", () => {
+  it("offers the three groups an enterprise picks from", () => {
+    expect(supportTicketCategories).toEqual(["Desktop app or camera problem", "Report problem", "Other"]);
+    expect(getSupportTicketCategoryConfig("Desktop app or camera problem")).toEqual({ affectedAreaRequired: false, showAffectedArea: true, showCamera: true });
     expect(getSupportTicketCategoryConfig("Other").showCamera).toBe(false);
   });
 
-  it("clears and omits camera fields for report and account concerns", () => {
-    for (const category of ["Report Concern", "Account & Security"] as const) {
-      expect(
-        clearHiddenTicketFields(category, {
-          affectedArea: "Lobby",
-          cameraNode: "TAPO C310",
-        }),
-      ).toEqual({ affectedArea: "", cameraNode: "" });
-      expect(
-        ticketCategoryPayloadFields(category, {
-          affectedArea: "Lobby",
-          cameraNode: "TAPO C310",
-        }),
-      ).toEqual({ affectedArea: undefined, cameraNode: undefined });
-    }
+  it("clears and omits the area and camera for report problems", () => {
+    expect(clearHiddenTicketFields("Report problem", { affectedArea: "Lobby", cameraNode: "TAPO C310" })).toEqual({ affectedArea: "", cameraNode: "" });
+    expect(ticketCategoryPayloadFields("Report problem", { affectedArea: "Lobby", cameraNode: "TAPO C310" })).toEqual({ affectedArea: undefined, camera: undefined });
   });
 
-  it("preserves camera fields only for relevant categories", () => {
-    expect(
-      ticketCategoryPayloadFields("Camera Issue", {
-        affectedArea: " Lobby ",
-        cameraNode: " TAPO C310 ",
-      }),
-    ).toEqual({ affectedArea: "Lobby", cameraNode: "TAPO C310" });
-    expect(
-      ticketCategoryPayloadFields("Other", {
-        affectedArea: " Account portal ",
-        cameraNode: "stale camera",
-      }),
-    ).toEqual({ affectedArea: "Account portal", cameraNode: undefined });
+  it("sends the camera only for desktop app or camera problems", () => {
+    expect(ticketCategoryPayloadFields("Desktop app or camera problem", { affectedArea: " Lobby ", cameraNode: " TAPO C310 " })).toEqual({ affectedArea: "Lobby", camera: "TAPO C310" });
+    expect(ticketCategoryPayloadFields("Other", { affectedArea: " Front desk ", cameraNode: "stale camera" })).toEqual({ affectedArea: "Front desk", camera: undefined });
   });
 });

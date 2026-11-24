@@ -12,6 +12,7 @@ from app.features.activity_logs.models import ActivityLog
 from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
 from app.features.monitoring.schemas import DesktopCameraMonitoringSummary
 from app.features.reporting.models import EnterpriseReportSubmission
+from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.activity import create_request_and_user_activity
 from app.features.sample_data.definitions import REPORTING_STAFF_NAME
 from app.features.sample_data.report_workflow import create_activity_logs
@@ -20,7 +21,6 @@ from app.features.sample_data.visitors import (
     create_admin_visitor_history,
     sample_camera_monitoring,
 )
-from app.features.support.models import SupportTicket, SupportTicketMessage
 
 GENERATED_AT = datetime(2026, 11, 24, 6, tzinfo=UTC)
 
@@ -111,13 +111,13 @@ async def test_report_logs_follow_the_live_workflow_and_link_to_the_report() -> 
         log for log in logs if log.action == "Report Returned" and log.source_id == "returned-id"
     )
     assert review.actor == REPORTING_STAFF_NAME
-    assert review.category == "Staff Operation"
+    assert review.activity_group == "Reports"
     assert json.loads(review.metadata_json or "{}")["remarks"] == returned.remarks
     assert all(log.timestamp <= GENERATED_AT for log in logs)
 
 
 @pytest.mark.asyncio
-async def test_request_history_gives_the_admin_resolved_and_open_requests() -> None:
+async def test_request_history_gives_resolved_open_and_approved_requests() -> None:
     lgu = [_lgu(AccountRole.ADMIN), _lgu(AccountRole.IT), _lgu(AccountRole.STAFF)]
     enterprises = [_enterprise(index) for index in range(9)]
     db = MagicMock()
@@ -126,34 +126,43 @@ async def test_request_history_gives_the_admin_resolved_and_open_requests() -> N
     counts = await create_request_and_user_activity(db, lgu, enterprises, GENERATED_AT)
 
     added = [call.args[0] for call in db.add.call_args_list]
-    logs: list[ActivityLog] = db.add_all.call_args.args[0]
-    tickets = [item for item in added if isinstance(item, SupportTicket)]
+    batches = [item for call in db.add_all.call_args_list for item in call.args[0]]
+    logs = [item for item in batches if isinstance(item, ActivityLog)]
+    requests = [item for item in batches if isinstance(item, Request)]
+    messages = [item for item in batches if isinstance(item, RequestMessage)]
     alerts = [item for item in added if isinstance(item, OperationalAlert)]
-    messages = [item for item in added if isinstance(item, SupportTicketMessage)]
-    # The Admin sees High and Urgent tickets and alerts the Admin owns.
-    assert {ticket.priority for ticket in tickets} <= {"High", "Urgent"}
-    assert {ticket.status for ticket in tickets} == {"Resolved", "Open"}
-    assert [(alert.owner, alert.status) for alert in alerts] == [("Admin", "Resolved")]
-    assert messages[0].author_account_id == lgu[1].id
-    assert counts == {"operationalAlerts": 1, "supportTickets": 2, "activityLogs": len(logs)}
+    assert {(request.request_group, request.status) for request in requests} == {
+        ("Desktop app or camera problem", "Resolved"),
+        ("Other", "Sent"),
+        ("Account change", "Approved"),
+    }
+    assert [(alert.alert_type, alert.status) for alert in alerts] == [
+        ("Busier Than Usual", "Ended")
+    ]
+    assert {message.kind for message in messages} == {"status", "message"}
+    assert counts == {"operationalAlerts": 1, "requests": 3, "activityLogs": len(logs)}
 
     actions = {log.action for log in logs}
     assert {
-        "Submit Support Ticket",
-        "Update Support Ticket Status",
-        "Alert Resolved",
+        "Send Request",
+        "Request Account Change",
+        "Request Resolved",
+        "Approve Account Change",
+        "Busier Than Usual",
+        "Back to Usual",
+        "Account Locked",
         "Login",
         "Logout",
         "Password Changed",
         "Create Enterprise Account",
         "Update Enterprise Account",
     } <= actions
-    resolved_ticket = next(ticket for ticket in tickets if ticket.status == "Resolved")
-    assert [
-        json.loads(log.metadata_json or "{}")["status"]
-        for log in sorted(logs, key=lambda item: item.timestamp)
-        if log.source_id == resolved_ticket.id and log.action == "Update Support Ticket Status"
-    ] == ["In Review", "Resolved"]
+    assert {log.activity_group for log in logs} == {
+        "Requests",
+        "Accounts",
+        "Monitoring",
+        "Login & Security",
+    }
     assert all(log.timestamp <= GENERATED_AT for log in logs)
     logins = [log for log in logs if log.action == "Login"]
     assert {log.source_id for log in logins} == {account.id for account in lgu}

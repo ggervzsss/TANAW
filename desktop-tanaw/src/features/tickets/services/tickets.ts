@@ -1,45 +1,48 @@
 import { apiPaths, type ApiSchemas, type ApiSupportTicket, type ApiSupportTicketCreate, type ApiSupportTicketDetail } from "../../../contracts/api";
 import { API_BASE_URL, staffApi } from "../../../lib/axios";
 
-export type SupportTicketCategory = ApiSchemas["SupportTicketCreate"]["category"];
-export type SupportTicketPriority = ApiSchemas["SupportTicketCreate"]["priority"];
-export type SupportTicketStatus = ApiSchemas["SupportTicketStatusUpdate"]["status"];
+/*
+ * Requests (shown as "Requests" on screen): what the enterprise asks IT for. The enterprise picks
+ * a group and writes the problem in its own words; there is no priority, IT marks urgency.
+ */
+export type SupportTicketCategory = ApiSchemas["RequestCreate"]["group"];
+export type SupportTicketStatus = ApiSchemas["RequestSummary"]["status"];
 
-export type SupportTicketAttachment = ApiSchemas["SupportTicketAttachmentMetadata"];
-export type SupportTicketAttachmentCreate = ApiSchemas["SupportTicketAttachmentCreate"];
-export type SupportTicketMessage = ApiSchemas["SupportTicketMessageSummary"];
+export type SupportTicketAttachment = ApiSchemas["RequestAttachmentMetadata"];
+export type SupportTicketAttachmentCreate = ApiSchemas["RequestAttachmentCreate"];
+export type SupportTicketMessage = ApiSchemas["RequestMessageSummary"];
 
-export type SupportTicket = Omit<ApiSupportTicket, "attachments" | "category" | "priority"> & {
-  attachments: SupportTicketAttachment[];
-  category: SupportTicketCategory;
-  priority: SupportTicketPriority;
-};
+export type SupportTicket = Omit<ApiSupportTicket, "attachments"> & { attachments: SupportTicketAttachment[] };
 
-export type SupportTicketDetail = Omit<ApiSupportTicketDetail, "attachments" | "category" | "messages" | "priority"> & SupportTicket & {
+export type SupportTicketDetail = Omit<ApiSupportTicketDetail, "attachments" | "messages"> & SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
-export type SupportTicketSort = "recommended" | "newest" | "oldest" | "priority-high" | "priority-low" | "status" | "recently-updated";
-
-const priorityRank: Record<SupportTicketPriority, number> = {
-  Urgent: 0,
-  High: 1,
-  Normal: 2,
-  Low: 3,
-};
+export type SupportTicketSort = "recommended" | "newest" | "oldest" | "status" | "recently-updated";
 
 const workflowRank: Record<SupportTicketStatus, number> = {
-  Open: 0,
-  "In Review": 1,
+  Sent: 0,
+  "In Progress": 1,
   Resolved: 2,
+  Approved: 2,
+  Declined: 2,
 };
+
+export function isClosedRequest(ticket: Pick<SupportTicket, "status">) {
+  return ticket.status === "Resolved" || ticket.status === "Approved" || ticket.status === "Declined";
+}
 
 export function sortSupportTickets(tickets: readonly SupportTicket[], sort: SupportTicketSort) {
   return [...tickets].sort((left, right) => compareSupportTickets(left, right, sort));
 }
 
 export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
-  return ticket.status !== "Resolved";
+  return !isClosedRequest(ticket);
+}
+
+/** Only a resolved help request can be reopened; an account change is decided once. */
+export function canReopenSupportTicket(ticket: Pick<SupportTicket, "status">) {
+  return ticket.status === "Resolved";
 }
 
 export type SupportTicketCreatePayload = Omit<ApiSupportTicketCreate, "attachments"> & {
@@ -52,17 +55,22 @@ export async function listSupportTickets() {
 }
 
 export async function getSupportTicket(ticketId: string) {
-  const response = await staffApi.get<SupportTicketDetail>(`/operational/tickets/${ticketId}`);
+  const response = await staffApi.get<SupportTicketDetail>(`/operational/requests/${ticketId}`);
   return response.data;
 }
 
 export async function createSupportTicket(payload: SupportTicketCreatePayload) {
-  const response = await staffApi.post<SupportTicket>(apiPaths.supportTickets, payload);
+  const response = await staffApi.post<SupportTicketDetail>(apiPaths.supportTickets, payload);
   return response.data;
 }
 
 export async function replyToSupportTicket(ticketId: string, message: string) {
-  const response = await staffApi.post<SupportTicketDetail>(`/operational/tickets/${ticketId}/messages`, { message });
+  const response = await staffApi.post<SupportTicketDetail>(`/operational/requests/${ticketId}/messages`, { message });
+  return response.data;
+}
+
+export async function reopenSupportTicket(ticketId: string) {
+  const response = await staffApi.post<SupportTicketDetail>(`/operational/requests/${ticketId}/reopen`);
   return response.data;
 }
 
@@ -84,12 +92,12 @@ export async function fetchSupportTicketAttachmentBlob(attachment: SupportTicket
 }
 
 function getSafeAttachmentRequestUrl(url: string) {
-  if (url.startsWith("/operational/tickets/")) return url;
+  if (url.startsWith("/operational/requests/")) return url;
 
   try {
     const parsedUrl = new URL(url);
     const apiUrl = new URL(staffApi.defaults.baseURL ?? API_BASE_URL);
-    if (parsedUrl.origin === apiUrl.origin && parsedUrl.pathname.startsWith("/operational/tickets/")) {
+    if (parsedUrl.origin === apiUrl.origin && parsedUrl.pathname.startsWith("/operational/requests/")) {
       return parsedUrl.toString();
     }
   } catch {
@@ -108,34 +116,18 @@ function compareSupportTickets(left: SupportTicket, right: SupportTicket, sort: 
   if (sort === "newest") return compareTimestamp(right.createdAt, left.createdAt) || stableTicketOrder(left, right);
   if (sort === "oldest") return compareTimestamp(left.createdAt, right.createdAt) || stableTicketOrder(left, right);
   if (sort === "recently-updated") return compareTimestamp(right.updatedAt, left.updatedAt) || stableTicketOrder(left, right);
-  if (sort === "status") {
-    return (
-      workflowRank[left.status] - workflowRank[right.status] ||
-      priorityRank[left.priority] - priorityRank[right.priority] ||
-      compareTimestamp(right.updatedAt, left.updatedAt) ||
-      stableTicketOrder(left, right)
-    );
-  }
-
-  const resolvedDifference = Number(left.status === "Resolved") - Number(right.status === "Resolved");
-  return (
-    resolvedDifference ||
-    (sort === "priority-high" ? priorityRank[left.priority] - priorityRank[right.priority] : priorityRank[right.priority] - priorityRank[left.priority]) ||
-    compareTimestamp(right.updatedAt, left.updatedAt) ||
-    stableTicketOrder(left, right)
-  );
+  return workflowRank[left.status] - workflowRank[right.status] || compareTimestamp(right.updatedAt, left.updatedAt) || stableTicketOrder(left, right);
 }
 
+/** Open requests first (in progress before sent), newest first; closed ones last, latest closed first. */
 function compareRecommended(left: SupportTicket, right: SupportTicket) {
-  const resolvedDifference = Number(left.status === "Resolved") - Number(right.status === "Resolved");
-  if (resolvedDifference !== 0) return resolvedDifference;
-  if (left.status !== "Resolved") {
-    const priorityDifference = priorityRank[left.priority] - priorityRank[right.priority];
-    if (priorityDifference !== 0) return priorityDifference;
-    const statusDifference = workflowRank[left.status] - workflowRank[right.status];
+  const closedDifference = Number(isClosedRequest(left)) - Number(isClosedRequest(right));
+  if (closedDifference !== 0) return closedDifference;
+  if (!isClosedRequest(left)) {
+    const statusDifference = workflowRank[right.status] - workflowRank[left.status];
     if (statusDifference !== 0) return statusDifference;
   }
-  return compareTimestamp(right.status === "Resolved" ? right.updatedAt : right.createdAt, left.status === "Resolved" ? left.updatedAt : left.createdAt) || stableTicketOrder(left, right);
+  return compareTimestamp(isClosedRequest(right) ? right.updatedAt : right.createdAt, isClosedRequest(left) ? left.updatedAt : left.createdAt) || stableTicketOrder(left, right);
 }
 
 function compareTimestamp(left: string, right: string) {

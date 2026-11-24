@@ -13,7 +13,7 @@ from app.features.mail.templates import (
     account_activation_email,
     account_email_change_verification_email,
     password_reset_code_email,
-    support_ticket_reply_email,
+    request_reply_email,
 )
 
 
@@ -101,9 +101,9 @@ def test_transactional_email_html_escapes_user_controlled_values() -> None:
         f"https://tanaw.example/activate-account#token={malicious_value}",
         malicious_value,
     )
-    support = support_ticket_reply_email(
-        ticket_code=malicious_value,
-        subject="Support request",
+    support = request_reply_email(
+        request_code=malicious_value,
+        title="Support request",
         recipient_name=malicious_name,
         author_name=malicious_value,
         message=malicious_value,

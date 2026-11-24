@@ -382,16 +382,29 @@ export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
 }
 
 /** The hover summary of a pin: name, place, camera state and people inside now. */
+function formatClock(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "a while ago";
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(date);
+}
+
 export function createTooltipHtml(enterprise: MapEnterprise) {
   const cameras = enterprise.cameraMonitoring;
   const cameraCount = cameras ? `${cameras.healthyCameraCount} of ${cameras.configuredCameraCount} running` : "No camera data";
   const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "No live count";
   const location = [enterprise.category, enterprise.barangay ? `Barangay ${enterprise.barangay}` : ""].filter(Boolean).join(" · ");
-  const pinState = getMapPinState(enterprise.monitoringStatus);
+  const pinState = getMapPinState(enterprise);
+  // The pin shows one state; the details list everything that applies.
+  const extra = [
+    ...(enterprise.alerts ?? []).map((alert) => alert.summary),
+    pinState === "offline" && enterprise.offlineSince ? `Desktop app offline since ${formatClock(enterprise.offlineSince)}.` : null,
+    pinState === "closed" && enterprise.closedReason ? enterprise.closedReason : null,
+  ].filter((line): line is string => Boolean(line));
   return `<div class="tanaw-map-marker-summary">
     <strong>${escapeHtml(enterprise.name)}</strong>
     ${location ? `<p class="tanaw-map-marker-summary__location">${escapeHtml(location)}</p>` : ""}
     <span class="tanaw-map-marker-summary__status" data-pin-state="${pinState}">${escapeHtml(mapPinStateLabels[pinState])}</span>
+    ${extra.map((line) => `<p class="tanaw-map-marker-summary__note">${escapeHtml(line)}</p>`).join("")}
     <dl>
       <div><dt>Cameras</dt><dd>${cameraCount}</dd></div>
       <div><dt>Inside now</dt><dd>${occupancy}</dd></div>

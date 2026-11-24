@@ -1,4 +1,4 @@
-// Admin Dashboard: map pins and callout, the busy alert, Most Visited, Peak Occupancy and the recent lists.
+// Admin Dashboard: map pins and callout, the legend and live alerts, Most Visited, Peak Occupancy and the recent lists.
 import { expect, test, type Page } from "@playwright/test";
 import type { MapEnterprise, VisitorInsightEnterprise } from "../../src/shared/types";
 import { configureAdminMapSession, mapEnterprise, visitorInsights, waitForMapReady } from "./support/adminMap";
@@ -31,10 +31,6 @@ const plaza: MapEnterprise = {
 };
 const enterprises = [mapEnterprise, plaza];
 
-function busyEntry(enterpriseId: string, name: string, percent: number): VisitorInsightEnterprise {
-  return { enterpriseId, enterpriseName: name, barangay: "San Antonio", currentVisitors: 60, typicalVisitors: 43, differencePercent: percent, activityLevel: "Busier Than Usual" };
-}
-
 /** Daily camera history for one enterprise: yesterday and two days ago. */
 function dailySeries(unique: number, peaks: [number, number]) {
   return [2, 1].map((ago, index) => ({
@@ -46,10 +42,13 @@ function dailySeries(unique: number, peaks: [number, number]) {
   }));
 }
 
-async function openDashboard(page: Page, options: { busy?: () => VisitorInsightEnterprise[]; recent?: boolean; theme?: "dark" | "light"; viewport?: { width: number; height: number } } = {}) {
+async function openDashboard(
+  page: Page,
+  options: { busy?: () => VisitorInsightEnterprise[]; recent?: boolean; theme?: "dark" | "light"; viewport?: { width: number; height: number }; enterprises?: MapEnterprise[]; extraRoutes?: (page: Page) => Promise<void> } = {},
+) {
   await configureAdminMapSession(page, {
-    enterprises,
-    extraRoutes: options.recent ? mockRecentData : undefined,
+    enterprises: options.enterprises ?? enterprises,
+    extraRoutes: options.extraRoutes ?? (options.recent ? mockRecentData : undefined),
     theme: options.theme,
     viewport: options.viewport ?? { width: 1440, height: 900 },
     insights: (params) => {
@@ -121,92 +120,41 @@ async function mockRecentData(page: Page) {
   await page.route("**/activity-logs**", (route) =>
     route.fulfill(
       json([
-        {
-          id: "log-1",
-          timestamp: daysAgo(0).toISOString(),
-          category: "Admin Operation",
-          severity: "Success",
-          actor: "LGU Admin",
-          actorRole: "Admin",
-          action: "Sign In",
-          target: "",
-          summary: "LGU Admin signed in to TANAW.",
-        },
+        { id: "log-1", timestamp: daysAgo(0).toISOString(), group: "Login & Security", severity: "Info", actor: "LGU Admin", actorRole: "Admin", action: "Login", target: "", summary: "LGU Admin signed in to TANAW." },
         {
           id: "log-2",
           timestamp: daysAgo(1).toISOString(),
-          category: "IT Activity",
-          severity: "Info",
+          group: "Requests",
+          severity: "Success",
           actor: "IT",
           actorRole: "IT Personnel",
-          action: "Update Support Ticket Status",
-          target: "",
+          action: "Request Resolved",
+          target: "REQ-000002",
           summary: "Request resolved: Desktop app closes on start-up.",
-          resolutionStatus: "Resolved",
+          sourceId: "request-2",
         },
-        {
-          id: "log-3",
-          timestamp: daysAgo(2).toISOString(),
-          category: "Admin Operation",
-          severity: "Info",
-          actor: "LGU Admin",
-          actorRole: "Admin",
-          action: "Update Enterprise Details",
-          target: "",
-          summary: "Updated details for San Antonio Plaza.",
-        },
-        {
-          id: "log-4",
-          timestamp: daysAgo(9).toISOString(),
-          category: "System",
-          severity: "Info",
-          actor: "System",
-          actorRole: "System",
-          action: "Cleanup",
-          target: "",
-          summary: "An older record that is not shown.",
-        },
+        { id: "log-3", timestamp: daysAgo(2).toISOString(), group: "Accounts", severity: "Info", actor: "LGU Admin", actorRole: "Admin", action: "Update Profile", target: "", summary: "Updated details for San Antonio Plaza." },
+        { id: "log-4", timestamp: daysAgo(9).toISOString(), group: "Settings & Maintenance", severity: "Info", actor: "System", actorRole: "System", action: "Run Retention Cleanup", target: "", summary: "An older record that is not shown." },
       ]),
     ),
   );
-  await page.route("**/operational/alerts", (route) =>
+  const request = (overrides: Record<string, unknown>) => ({
+    group: "Desktop app or camera problem",
+    description: "",
+    urgent: false,
+    enterpriseId: mapEnterprise.id,
+    enterpriseName: mapEnterprise.name,
+    requesterName: "Front desk",
+    attachments: [],
+    unread: false,
+    updated: false,
+    ...overrides,
+  });
+  await page.route("**/operational/requests", (route) =>
     route.fulfill(
       json([
-        {
-          id: "alert-1",
-          type: "Maintenance Request",
-          severity: "Warning",
-          urgency: "Normal",
-          enterprise: "San Antonio Plaza",
-          requester: "San Antonio Plaza",
-          summary: "Visitor counts stopped updating.",
-          requiredAction: "",
-          resolutionMode: "Remote Review",
-          status: "New",
-          owner: "IT",
-          time: daysAgo(0).toISOString(),
-        },
-      ]),
-    ),
-  );
-  await page.route("**/operational/tickets", (route) =>
-    route.fulfill(
-      json([
-        {
-          id: "ticket-1",
-          code: "REQ-1",
-          subject: "Entrance camera keeps disconnecting",
-          enterpriseId: mapEnterprise.id,
-          enterpriseName: mapEnterprise.name,
-          category: "Camera",
-          priority: "Normal",
-          status: "In Review",
-          description: "",
-          submittedBy: "Front desk",
-          attachments: [],
-          createdAt: daysAgo(3).toISOString(),
-          updatedAt: daysAgo(1).toISOString(),
-        },
+        request({ id: "request-1", code: "REQ-000001", title: "Entrance camera keeps disconnecting", status: "In Progress", createdAt: daysAgo(3).toISOString(), updatedAt: daysAgo(1).toISOString() }),
+        request({ id: "request-3", code: "REQ-000003", title: "Visitor counts stopped updating", enterpriseName: "San Antonio Plaza", status: "Sent", createdAt: daysAgo(0).toISOString(), updatedAt: daysAgo(0).toISOString() }),
       ]),
     ),
   );
@@ -234,9 +182,9 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   // The city view shows one pin per barangay: its busiest enterprise.
   await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveCount(1);
   await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveAttribute("aria-label", /^San Antonio Plaza, Barangay San Antonio\. Busiest in its barangay/);
-  await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveAttribute("data-pin-state", "ok");
+  await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveAttribute("data-pin-state", "normal");
 
-  // Most Visited: this month from camera counts, ranked and linked to Enterprise Details.
+  // Most Visited: today from camera counts, ranked and linked to Enterprise Details.
   const mostVisited = page.getByRole("region", { name: "Most Visited" });
   await expect(mostVisited.getByText(/by visitors, from camera counts/)).toBeVisible();
   const ranked = mostVisited.getByRole("list", { name: "Most visited enterprises" }).getByRole("listitem");
@@ -252,8 +200,9 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   await rankBy.getByRole("radio", { name: "Enterprises" }).click();
 
   // A whole past month counts from monthly reports.
-  await mostVisited.getByRole("button", { name: `${MONTHS[today.getMonth()]} ${today.getFullYear()}` }).click();
+  await mostVisited.getByRole("button", { name: "Today", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "Choose a date range for Most Visited and Peak Occupancy" });
+  await picker.getByRole("group", { name: "Quick ranges" }).getByRole("button", { name: "Month" }).click();
   await picker.getByRole("button", { name: "Previous month" }).click();
   await picker.getByRole("button", { name: "Apply" }).click();
   await expect(mostVisited.getByText(/by visitors, from monthly reports/)).toBeVisible();
@@ -288,13 +237,13 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   const activity = page.getByRole("region", { name: "Recent Activity" });
   await expect(activity.getByRole("listitem")).toHaveCount(3);
   await expect(activity.getByRole("listitem").first()).toContainText("LGU Admin signed in to TANAW.");
-  await expect(activity.getByRole("listitem").first()).toContainText("Login");
-  await expect(activity.getByRole("link", { name: /Request resolved/ })).toHaveAttribute("href", "/admin/requests");
+  await expect(activity.getByRole("listitem").first()).toContainText("Login & security");
+  await expect(activity.getByRole("link", { name: /Request resolved/ })).toHaveAttribute("href", "/admin/requests?request=request-2");
   await expect(activity.getByRole("link", { name: "View all activity" })).toHaveAttribute("href", "/admin/activity");
   const requests = page.getByRole("region", { name: "Recent Requests" });
-  await expect(requests.getByRole("link", { name: /Maintenance request, San Antonio Plaza/ })).toHaveAttribute("href", "/admin/requests?alert=alert-1");
-  await expect(requests.getByRole("link", { name: /Entrance camera keeps disconnecting/ })).toHaveAttribute("href", "/admin/requests?ticket=ticket-1");
-  await expect(requests.getByText("Seen by IT")).toBeVisible();
+  await expect(requests.getByRole("link", { name: /Visitor counts stopped updating, San Antonio Plaza/ })).toHaveAttribute("href", "/admin/requests?request=request-3");
+  await expect(requests.getByRole("link", { name: /Entrance camera keeps disconnecting/ })).toHaveAttribute("href", "/admin/requests?request=request-1");
+  await expect(requests.getByText("Sent", { exact: true })).toBeVisible();
   await expect(requests.getByText("In progress")).toBeVisible();
   await expect(requests.getByRole("link", { name: "View all requests" })).toHaveAttribute("href", "/admin/requests");
 
@@ -325,54 +274,63 @@ test("opens a barangay from its busiest pin and links the selected pin to Enterp
 
   await page.getByRole("link", { name: `View details: ${mapEnterprise.name}` }).click();
   await expect(page).toHaveURL(new RegExp(`/admin/enterprises/${mapEnterprise.id}$`));
+  // The details page loads lazily: wait until the Dashboard has really been left before going back.
+  await expect(page.locator("#admin-enterprise-map")).toHaveCount(0);
   await page.goBack();
   await waitForMapReady(page);
   await expect(page.getByRole("heading", { name: "San Pedro, Laguna" })).toBeVisible();
 });
 
-test("shows, expands and dismisses the more-visitors-than-usual alert until the set changes", async ({ page }) => {
-  let busy = [busyEntry(plaza.id, plaza.name, 41), busyEntry("enterprise-unpinned", "Riverside Market", 28)];
-  await page.addInitScript(() => {
-    if (!sessionStorage.getItem("tanaw-e2e-busy-cleared")) {
-      localStorage.removeItem("tanaw-dashboard-busy-dismissed");
-      sessionStorage.setItem("tanaw-e2e-busy-cleared", "yes");
-    }
+test("colours pins by what is happening now, explains them in a legend, and floats live alerts over the map", async ({ page }) => {
+  const busyPlaza: MapEnterprise = { ...plaza, pinState: "busy", alerts: [{ type: "Busier Than Usual", camera: null, summary: "San Antonio Plaza has 60 visitors inside, more than its usual 43 around this time.", startedAt: new Date().toISOString() }] };
+  const cameraPlace: MapEnterprise = { ...mapEnterprise, pinState: "camera" };
+  const liveAlerts = [
+    { id: "ALT-000001", type: "Camera Not Counting", severity: "Critical", status: "Active", enterpriseId: cameraPlace.id, enterpriseName: cameraPlace.name, camera: "Gate A", summary: `The Gate A camera at ${cameraPlace.name} is not counting.`, detail: null, startedAt: new Date().toISOString() },
+    { id: "ALT-000002", type: "Busier Than Usual", severity: "Warning", status: "Active", enterpriseId: plaza.id, enterpriseName: plaza.name, camera: null, summary: busyPlaza.alerts?.[0]?.summary, detail: null, startedAt: new Date().toISOString() },
+  ];
+  await openDashboard(page, {
+    enterprises: [busyPlaza, cameraPlace],
+    extraRoutes: async (target) => {
+      await target.route("**/operational/alerts", (route) => route.fulfill(json(liveAlerts)));
+    },
   });
-  await openDashboard(page, { busy: () => busy });
 
-  const alert = page.locator(".tanaw-busy");
-  await expect(alert).toHaveAttribute("role", "status");
-  // Both monitored enterprises are busy, more than half, so the alert speaks for the whole city.
-  await expect(alert).toContainText("Busier than usual across San Pedro");
-  await expect(alert).toContainText("San Antonio Plaza and Riverside Market");
-  await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon .tanaw-enterprise-marker.is-busy")).toHaveCount(1);
+  // The city view shows one pin per barangay: here the busy plaza, which leads its barangay.
+  await expect(page.locator(`#admin-enterprise-map .leaflet-marker-icon[aria-label^="${plaza.name}"]`)).toHaveAttribute("data-pin-state", "busy");
+  const legend = page.getByRole("list", { name: "Map legend" });
+  await expect(legend.getByRole("listitem")).toHaveText(["Open and counting", "Busier than usual", "A camera is not counting", "Desktop app offline", "Closed now"]);
 
-  await alert.getByRole("button", { name: "View all" }).click();
-  const panel = alert.getByRole("region", { name: "Busier than usual across San Pedro" });
-  await expect(panel.getByRole("button", { name: "Hide" })).toBeFocused();
-  await expect(panel.getByRole("link", { name: /View details: Riverside Market/ })).toHaveAttribute("href", "/admin/enterprises/enterprise-unpinned");
-  await expect(panel).toContainText("Barangay San Antonio, not pinned on the map");
-  const showPlaza = panel.getByRole("button", { name: /Show San Antonio Plaza on the map/ });
-  await showPlaza.click();
-  await expect(showPlaza).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("link", { name: "View details: San Antonio Plaza" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
-  await expect(alert.getByRole("button", { name: "View all" })).toBeFocused();
+  // The live alerts float over the bottom of the map; there is no separate section under it.
+  await expect(page.getByRole("heading", { name: "Alerts", exact: true })).toHaveCount(0);
+  const overlay = page.locator(".tanaw-dashboard-map .tanaw-map-alerts");
+  await expect(overlay).toContainText("2 live alerts");
+  await expect(overlay).toContainText(`${cameraPlace.name} and ${plaza.name}`);
+  const mapBox = (await page.locator(".tanaw-dashboard-map").boundingBox())!;
+  const cardBox = (await overlay.locator(".tanaw-map-alerts__card").boundingBox())!;
+  expect(cardBox.y + cardBox.height).toBeGreaterThan(mapBox.y + mapBox.height - 40);
+  expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height);
+  await overlay.getByRole("button", { name: "View all" }).click();
+  const rows = overlay.getByRole("list", { name: "Live alerts" }).getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Camera not counting");
+  await expect(rows.first()).toContainText(`${cameraPlace.name} · Gate A`);
+  await expect(rows.nth(1)).toContainText("Busier than usual");
+  await overlay.getByRole("button", { name: `Show ${plaza.name} on the map, busier than usual` }).click();
+  await expect(page.getByRole("link", { name: `View details: ${plaza.name}` })).toBeVisible();
+  await overlay.getByRole("button", { name: "Hide" }).click();
+  await expect(overlay.getByRole("list", { name: "Live alerts" })).toHaveCount(0);
 
-  await alert.getByRole("button", { name: "Dismiss these alerts until something changes" }).click();
-  await expect(alert).toBeEmpty();
-  await page.reload();
-  await waitForMapReady(page);
-  await expect(page.locator(".tanaw-busy")).toBeEmpty();
-
-  busy = [busyEntry(plaza.id, plaza.name, 64)];
-  await page.reload();
-  await waitForMapReady(page);
-  await expect(alert).toContainText("More visitors than usual");
-  await expect(alert).toContainText("San Antonio Plaza, 64% above usual. 60 inside, usual for this hour is 43");
-  await alert.getByRole("button", { name: "Show" }).click();
-  await expect(page.getByRole("link", { name: "View details: San Antonio Plaza" })).toBeVisible();
+  // The Admin has no notification bell: the topbar alert icon replaces it.
+  await expect(page.getByRole("button", { name: /Notifications/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Alerts: 2 live alerts" }).click();
+  const dialog = page.getByRole("dialog", { name: "Alerts" });
+  await expect(dialog.getByRole("listitem")).toHaveCount(2);
+  await dialog.getByRole("link", { name: "Show on map" }).first().click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`place=${cameraPlace.id}$`));
+  // "Show on map" opens the place, inside its barangay.
+  await expect(page.getByRole("link", { name: `View details: ${cameraPlace.name}` })).toBeVisible();
+  await expect(page.locator(`#admin-enterprise-map .leaflet-marker-icon[aria-label^="${cameraPlace.name}"]`)).toHaveAttribute("data-pin-state", "camera");
 });
 
 test("stacks into one column on narrow screens and reads well in dark mode", async ({ page }, testInfo) => {

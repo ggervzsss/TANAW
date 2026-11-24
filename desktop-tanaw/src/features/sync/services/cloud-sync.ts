@@ -136,9 +136,21 @@ export async function syncDesktopTelemetry() {
     },
   };
 
-  await staffApi.post(apiPaths.desktopTelemetry, payload);
+  try {
+    await staffApi.post(apiPaths.desktopTelemetry, payload);
+  } catch (error) {
+    throw new CloudCheckInError(error);
+  }
   await markLocalEventsSynced(baseUrl);
   return payload;
+}
+
+/** The check-in itself failed to reach TANAW, as opposed to the local camera service. */
+export class CloudCheckInError extends Error {
+  constructor(readonly cause: unknown) {
+    super("The check-in could not be sent to TANAW.");
+    this.name = "CloudCheckInError";
+  }
 }
 
 /** Backend answers that will not change on retry: the report itself was refused. */

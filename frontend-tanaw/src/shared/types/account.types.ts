@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@/contracts/api";
 
-export type ProfileChangeRequestType = "businessEmail" | "contactNumber";
+export type ProfileChangeRequestType = "businessEmail" | "contactNumber" | "enterpriseName";
 
 export type AccountProfileChangeRequest = {
   type: ProfileChangeRequestType;
@@ -33,6 +33,8 @@ export type AccountSummary = {
   enterpriseId: string | null;
   gatewayStatus: string | null;
   buildingCapacity: number;
+  /** Per-day opening hours, entered by IT at account creation. */
+  openingHours?: ApiSchemas["OpeningHours"] | null;
   displayName: string;
   role: string;
   title: string;

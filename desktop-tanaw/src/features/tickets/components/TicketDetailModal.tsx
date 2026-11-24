@@ -3,7 +3,7 @@ import { AlertCircle, ImageIcon, MessageSquare, Paperclip, RefreshCw, Send, X } 
 import { ModalPortal } from "../../../components/ModalPortal";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import type { SystemTimeFormat } from "../../../utils/date-time";
-import { canReplyToSupportTicket, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
+import { canReopenSupportTicket, canReplyToSupportTicket, reopenSupportTicket, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
 import { useTicketAttachmentImageUrl } from "../hooks/useTicketAttachmentImageUrl";
 import { TicketBadge, TicketStatusBadge } from "./TicketPresentation";
 import { formatFileSize, formatTicketTime, getTicketRequestError } from "../utils/ticket-presentation";
@@ -22,6 +22,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
   const conversationRef = useRef<HTMLDivElement>(null);
   const latestMessageId = ticket?.messages[ticket.messages.length - 1]?.id;
   const previousMessageIdRef = useRef<string | undefined>(latestMessageId);
@@ -54,6 +55,20 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
     setHasNewMessage(false);
   };
 
+  async function handleReopen() {
+    if (!ticket || !canReopenSupportTicket(ticket)) return;
+    setIsReopening(true);
+    try {
+      const updatedTicket = await reopenSupportTicket(ticket.id);
+      onTicketUpdated(updatedTicket);
+      notifySuccess(`${updatedTicket.code} is open again.`);
+    } catch (requestError) {
+      notifyError(getTicketRequestError(requestError, "Unable to reopen the request."));
+    } finally {
+      setIsReopening(false);
+    }
+  }
+
   async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = reply.trim();
@@ -70,7 +85,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
       setReply("");
       notifySuccess(`Reply added to ${updatedTicket.code}.`);
     } catch (requestError) {
-      const messageText = getTicketRequestError(requestError, "Unable to send the ticket reply.");
+      const messageText = getTicketRequestError(requestError, "Unable to send the reply.");
       setReplyError(messageText);
       notifyError(messageText);
     } finally {
@@ -84,7 +99,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
         <section
           role="dialog"
           aria-modal="true"
-          aria-label={ticket?.subject ?? "Support ticket details"}
+          aria-label={ticket?.title ?? "Request details"}
           className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.5)]"
           onPointerDown={(event) => event.stopPropagation()}
         >
@@ -92,12 +107,12 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
           <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 px-6 py-5 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
             <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
             <div className="min-w-0">
-              <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">{ticket?.code ?? "Support Ticket"}</p>
-              <h3 className="truncate text-xl font-black tracking-tight text-[#111827] dark:text-white">{ticket?.subject ?? "Ticket Details"}</h3>
+              <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">{ticket?.code ?? "Request"}</p>
+              <h3 className="truncate text-xl font-black tracking-tight text-[#111827] dark:text-white">{ticket?.title ?? "Request Details"}</h3>
             </div>
             <button
               type="button"
-              aria-label="Close ticket details"
+              aria-label="Close request details"
               onClick={onClose}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-tanaw-ledger focus:ring-4 focus:ring-tanaw-ledger/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
             >
@@ -109,8 +124,8 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
             {isLoading && (
               <div className="flex min-h-72 flex-col items-center justify-center text-center">
                 <RefreshCw size={28} className="animate-spin text-tanaw-ledger dark:text-emerald-200" />
-                <p className="mt-3 text-sm font-black text-[#111827] dark:text-slate-100">Loading ticket details</p>
-                <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-300">Fetching backend-backed support ticket data.</p>
+                <p className="mt-3 text-sm font-black text-[#111827] dark:text-slate-100">Loading the request</p>
+                <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-300">Getting the latest replies from IT.</p>
               </div>
             )}
 
@@ -128,23 +143,23 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-mono text-xs font-bold tracking-wide text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
-                        <h4 className="mt-1 text-lg font-black text-[#111827] dark:text-slate-100">{ticket.subject}</h4>
+                        <h4 className="mt-1 text-lg font-black text-[#111827] dark:text-slate-100">{ticket.title}</h4>
                         <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">{ticket.description}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <TicketStatusBadge status={ticket.status} />
-                        <TicketBadge tone={ticket.priority === "Urgent" || ticket.priority === "High" ? "warning" : "neutral"}>{ticket.priority}</TicketBadge>
+                        {ticket.urgent && <TicketBadge tone="warning">Urgent</TicketBadge>}
                       </div>
                     </div>
                   </section>
 
                   <section className="grid gap-3 sm:grid-cols-2">
-                    <DetailTile label="Enterprise" value={ticket.enterpriseName} />
-                    <DetailTile label="Enterprise ID" value={ticket.enterpriseId} mono />
-                    <DetailTile label="Category" value={ticket.category} />
-                    <DetailTile label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
+                    <DetailTile label="Enterprise" value={ticket.enterpriseName ?? ticket.requesterName} />
+                    <DetailTile label="Enterprise ID" value={ticket.enterpriseId ?? "Not linked"} mono />
+                    <DetailTile label="Group" value={ticket.group} />
+                    <DetailTile label="Sent" value={formatTicketTime(ticket.createdAt, timeFormat)} />
                     {ticket.affectedArea ? <DetailTile label="Affected Area" value={ticket.affectedArea} /> : null}
-                    {ticket.cameraNode ? <DetailTile label="Camera" value={ticket.cameraNode} /> : null}
+                    {ticket.camera ? <DetailTile label="Camera" value={ticket.camera} /> : null}
                   </section>
 
                   <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
@@ -174,7 +189,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                       </div>
                     ) : (
                       <p className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm font-semibold text-gray-500 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-300">
-                        No photos were attached to this ticket.
+                        No photos were attached to this request.
                       </p>
                     )}
                   </section>
@@ -195,8 +210,8 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                       if (isNearConversationBottomRef.current) setHasNewMessage(false);
                     }}
                   >
-                    <ConversationItem authorName={ticket.submittedBy} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
-                    {ticket.messages.map((message) => (
+                    <ConversationItem authorName={ticket.requesterName} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
+                    {ticket.messages.filter((message) => message.kind !== "status").map((message) => (
                       <ConversationItem
                         key={message.id}
                         authorName={message.authorName}
@@ -218,7 +233,18 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                   ) : null}
                   {!canReplyToSupportTicket(ticket) ? (
                     <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
-                      This ticket is resolved. The conversation is now closed. Contact IT by creating a new ticket if further assistance is needed.
+                      {canReopenSupportTicket(ticket) ? "This request is resolved, so the conversation is closed. Reopen it if the problem came back." : `This request is ${ticket.status.toLowerCase()}. The conversation is closed.`}
+                      {canReopenSupportTicket(ticket) && (
+                        <button
+                          type="button"
+                          disabled={isReopening}
+                          onClick={() => void handleReopen()}
+                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-tanaw-ledger transition hover:bg-emerald-100 disabled:opacity-70 dark:border-emerald-300/30 dark:bg-[#172033] dark:text-emerald-100"
+                        >
+                          {isReopening ? <RefreshCw size={15} className="animate-spin" /> : null}
+                          Reopen request
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>

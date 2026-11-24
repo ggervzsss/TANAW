@@ -1,24 +1,67 @@
+"""What is open right now in the sample portals: live alerts, open requests and IT's work.
+
+Live alerts: one place busier than usual and one camera that is not counting. Requests: one in
+each way a request starts (from the desktop app, from the sign-in page, and an account change
+that needs IT's approval). Every record matches what the live workflow would have written.
+"""
+
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole
+from app.features.accounts.service import PENDING_CONTACT_NUMBER_CHANGE_KEY
 from app.features.activity_logs.models import ActivityLog
+from app.features.auth.profile_helpers import set_pending_account_change
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 from app.features.monitoring.models import OperationalAlert
 from app.features.notifications.models import UserNotification
-from app.features.sample_data.dataset import (
-    SAMPLE_CAMERA_PREFIX,
-    SAMPLE_SOURCE_PREFIX,
-)
-from app.features.sample_data.definitions import (
-    AdminVisitorScenario,
-)
-from app.features.sample_data.helpers import (
-    sample_uuid,
-)
-from app.features.support.models import SupportTicket
+from app.features.requests.models import Request, RequestMessage
+from app.features.sample_data.dataset import SAMPLE_SOURCE_PREFIX
+from app.features.sample_data.definitions import AdminVisitorScenario
+from app.features.sample_data.helpers import sample_uuid
+
+
+def _name(account: Account) -> str:
+    profile = account.enterprise_profile
+    return profile.enterprise_name if profile is not None else account.display_name
+
+
+def _manager(account: Account) -> str:
+    profile = account.enterprise_profile
+    return (profile.manager_name if profile is not None else None) or account.display_name
+
+
+def sample_log(
+    id_parts: tuple[str, ...],
+    at: datetime,
+    *,
+    group: str,
+    severity: str,
+    actor: str,
+    actor_role: str,
+    action: str,
+    target: str,
+    summary: str,
+    source_id: str | None,
+    it_detail: str | None = None,
+    metadata: dict[str, str | int | None] | None = None,
+) -> ActivityLog:
+    return ActivityLog(
+        id=sample_uuid(*id_parts),
+        timestamp=at,
+        activity_group=group,
+        severity=severity,
+        actor=actor,
+        actor_role=actor_role,
+        action=action,
+        target=target,
+        summary=summary,
+        source_id=source_id,
+        it_detail=it_detail,
+        metadata_json=json.dumps(metadata, sort_keys=True) if metadata else None,
+    )
 
 
 async def create_portal_workflow_data(
@@ -34,179 +77,277 @@ async def create_portal_workflow_data(
         raise SystemExit("At least three generated enterprises are required for operations data.")
 
     busy_enterprise = visitor_scenario.enterprise
-    support_enterprise, routine_support_enterprise = enterprises[:2]
-    busy_profile = busy_enterprise.enterprise_profile
-    support_profile = support_enterprise.enterprise_profile
-    routine_support_profile = routine_support_enterprise.enterprise_profile
-    if busy_profile is None or support_profile is None or routine_support_profile is None:
-        raise SystemExit("Sample operations data requires enterprise profiles.")
+    camera_enterprise, report_enterprise, change_enterprise = enterprises[:3]
+    logs: list[ActivityLog] = []
 
-    alert_created_at = range_end - timedelta(minutes=18)
-    difference_percent = round(
+    # Live alert: busier than usual.
+    busy_at = range_end - timedelta(minutes=18)
+    difference = round(
         (visitor_scenario.current_visitors - visitor_scenario.typical_visitors)
         / visitor_scenario.typical_visitors
         * 100
     )
-    alert = OperationalAlert(
+    busy_alert = OperationalAlert(
         id=sample_uuid("operations-alert", busy_enterprise.id),
         alert_code="ALT-SAMPLE-001",
-        alert_type="Foot Traffic Alert",
-        severity="Critical" if difference_percent >= 100 else "Warning",
-        enterprise=busy_profile.enterprise_name,
-        requester=busy_profile.enterprise_name,
+        alert_type="Busier Than Usual",
+        severity="Critical" if difference >= 100 else "Warning",
+        enterprise_profile_id=busy_enterprise.id,
+        enterprise=_name(busy_enterprise),
         summary=(
-            f"{busy_profile.enterprise_name} currently has {visitor_scenario.current_visitors} "
-            f"visitors, compared with its usual {visitor_scenario.typical_visitors} around this "
-            "day and time."
+            f"{_name(busy_enterprise)} has {visitor_scenario.current_visitors} visitors inside, "
+            f"more than its usual {visitor_scenario.typical_visitors} around this time."
         ),
-        required_action=(
-            "Review the live map and coordinate with the establishment, traffic team, or "
-            "public-safety personnel if support is needed."
-        ),
-        resolution_mode="Admin Monitoring",
-        status="New",
-        owner="Admin",
+        detail=f"{difference}% above usual · Usual from the past 5 weeks",
+        status="Active",
         source_id=f"visitor-activity:{busy_enterprise.id}",
-        created_at=alert_created_at,
-        updated_at=alert_created_at,
+        started_at=busy_at,
+        active_at=busy_at,
+        created_at=busy_at,
+        updated_at=busy_at,
     )
-    db.add(alert)
 
-    technical_enterprise = enterprises[2]
-    technical_profile = technical_enterprise.enterprise_profile
-    if technical_profile is None:
-        raise SystemExit("Sample IT work data requires an enterprise profile.")
-    technical_alert_created_at = range_end - timedelta(minutes=12)
-    technical_alert = OperationalAlert(
-        id=sample_uuid("operations-alert", technical_enterprise.id, "desktop"),
+    # Live alert: a camera that is not counting.
+    camera_at = range_end - timedelta(minutes=12)
+    camera_alert = OperationalAlert(
+        id=sample_uuid("operations-alert", camera_enterprise.id, "camera"),
         alert_code="ALT-SAMPLE-002",
-        alert_type="Maintenance Request",
+        alert_type="Camera Not Counting",
         severity="Critical",
-        enterprise=technical_profile.enterprise_name,
-        requester=technical_profile.enterprise_name,
-        summary="The entrance camera stopped sending visitor counts from the desktop application.",
-        required_action="Check the camera connection and restart monitoring from the enterprise desktop application.",
-        resolution_mode="Remote Review",
-        status="New",
-        owner="IT",
-        source_id=f"telemetry:{technical_enterprise.id}:{SAMPLE_CAMERA_PREFIX}visitor-3",
-        created_at=technical_alert_created_at,
-        updated_at=technical_alert_created_at,
+        enterprise_profile_id=camera_enterprise.id,
+        enterprise=_name(camera_enterprise),
+        camera="Entrance",
+        summary=(
+            f"The Entrance camera at {_name(camera_enterprise)} is not counting. "
+            "2 of 3 cameras are counting."
+        ),
+        detail="Camera: Entrance · Error: the connection was refused · Last count: 2:40 PM",
+        status="Active",
+        source_id=f"camera:{camera_enterprise.id}:3",
+        started_at=camera_at - timedelta(minutes=15),
+        active_at=camera_at,
+        created_at=camera_at - timedelta(minutes=15),
+        updated_at=camera_at,
     )
-    db.add(technical_alert)
+    db.add_all([busy_alert, camera_alert])
+    for alert, action in (
+        (busy_alert, "Busier Than Usual"),
+        (camera_alert, "Camera Stopped Counting"),
+    ):
+        logs.append(
+            sample_log(
+                ("activity-alert", alert.id),
+                alert.active_at or alert.started_at,
+                group="Monitoring",
+                severity="Warning",
+                actor="TANAW",
+                actor_role="System",
+                action=action,
+                target=alert.enterprise or "",
+                summary=alert.summary,
+                source_id=alert.id,
+                it_detail=alert.detail,
+                metadata={"alertCode": alert.alert_code, "alertType": alert.alert_type},
+            )
+        )
 
-    high_ticket_created_at = range_end - timedelta(hours=2)
-    high_ticket = SupportTicket(
-        id=sample_uuid("operations-ticket", support_enterprise.id, "high"),
-        ticket_code="TCK-SAMPLE-001",
-        enterprise_profile_id=support_enterprise.id,
-        enterprise_name=support_profile.enterprise_name,
-        category="Camera Issue",
-        priority="High",
-        subject="Entrance camera has an intermittent view",
+    # A camera problem the enterprise asked IT about. IT is on it, and the Admin left a note.
+    camera_sent = range_end - timedelta(hours=2)
+    camera_request = Request(
+        id=sample_uuid("operations-request", camera_enterprise.id, "camera"),
+        request_code="REQ-SAMPLE-001",
+        request_group="Desktop app or camera problem",
+        title="Entrance camera keeps disconnecting",
         description=(
-            "The entrance camera view becomes unavailable several times during operating hours."
+            "The entrance camera drops off every few minutes. While it is disconnected, one of "
+            "our cameras is not counting."
         ),
+        status="In Progress",
+        urgent=True,
+        enterprise_profile_id=camera_enterprise.id,
+        enterprise_name=_name(camera_enterprise),
+        requester_name=_manager(camera_enterprise),
         affected_area="Main entrance",
-        camera_node="Entrance Camera",
-        status="In Review",
-        created_at=high_ticket_created_at,
-        updated_at=range_end - timedelta(hours=1),
+        camera="Entrance",
+        created_at=camera_sent,
+        updated_at=range_end - timedelta(minutes=40),
     )
-    routine_ticket = SupportTicket(
-        id=sample_uuid("operations-ticket", routine_support_enterprise.id, "normal"),
-        ticket_code="TCK-SAMPLE-002",
-        enterprise_profile_id=routine_support_enterprise.id,
-        enterprise_name=routine_support_profile.enterprise_name,
-        category="Report Concern",
-        priority="Normal",
-        subject="Question about the monthly report notes",
-        description="The enterprise requested guidance on the notes included in its report.",
-        affected_area="Reports",
-        status="Open",
-        created_at=range_end - timedelta(hours=5),
-        updated_at=range_end - timedelta(hours=5),
+    # A report problem nobody has picked up yet.
+    report_sent = range_end - timedelta(hours=5)
+    report_request = Request(
+        id=sample_uuid("operations-request", report_enterprise.id, "report"),
+        request_code="REQ-SAMPLE-002",
+        request_group="Report problem",
+        title="October report upload failed",
+        description='The October report will not upload. The app says "Sign in again to send this report".',
+        status="Sent",
+        enterprise_profile_id=report_enterprise.id,
+        enterprise_name=_name(report_enterprise),
+        requester_name=_manager(report_enterprise),
+        created_at=report_sent,
+        updated_at=report_sent,
     )
-    db.add_all([high_ticket, routine_ticket])
+    # An account change waiting for IT's approval.
+    change_sent = range_end - timedelta(hours=4)
+    new_number = "+639185550177"
+    set_pending_account_change(
+        change_enterprise,
+        PENDING_CONTACT_NUMBER_CHANGE_KEY,
+        {"phone": new_number, "requestedAt": change_sent.astimezone(UTC).isoformat()},
+    )
+    change_request = Request(
+        id=sample_uuid("operations-request", change_enterprise.id, "contact"),
+        request_code="REQ-SAMPLE-003",
+        request_group="Account change",
+        title="Change of contact number",
+        description=f"{_name(change_enterprise)} asked to change its contact number to {new_number}.",
+        status="Sent",
+        enterprise_profile_id=change_enterprise.id,
+        enterprise_name=_name(change_enterprise),
+        requester_name=_manager(change_enterprise),
+        change_field="contactNumber",
+        change_value=new_number,
+        created_at=change_sent,
+        updated_at=change_sent,
+    )
+    # Someone who could not sign in used the sign-in page's Contact support form.
+    help_sent = range_end - timedelta(hours=1, minutes=10)
+    help_request = Request(
+        id=sample_uuid("operations-request", "sign-in-help"),
+        request_code="REQ-SAMPLE-004",
+        request_group="Sign-in help",
+        title="Sign-in help",
+        description="I forgot the password of our desktop app and the reset email does not arrive.",
+        status="Sent",
+        requester_name="Joy Villanueva",
+        requester_email="joy.villanueva@sample.tanaw.local",
+        created_at=help_sent,
+        updated_at=help_sent,
+    )
+    requests = [camera_request, report_request, change_request, help_request]
+    db.add_all(requests)
+    await db.flush()
+    db.add_all(
+        [
+            RequestMessage(
+                id=sample_uuid("operations-request-message", camera_request.id, "status"),
+                request_id=camera_request.id,
+                author_account_id=it_account.id,
+                author_name=it_account.display_name,
+                author_role=it_account.role.value,
+                kind="status",
+                message="In Progress",
+                created_at=camera_sent + timedelta(minutes=25),
+            ),
+            RequestMessage(
+                id=sample_uuid("operations-request-message", camera_request.id, "reply"),
+                request_id=camera_request.id,
+                author_account_id=it_account.id,
+                author_name=it_account.display_name,
+                author_role=it_account.role.value,
+                kind="message",
+                message="I am checking the cable and the network switch now. Please keep the desktop app open.",
+                created_at=camera_sent + timedelta(minutes=40),
+            ),
+            RequestMessage(
+                id=sample_uuid("operations-request-message", camera_request.id, "note"),
+                request_id=camera_request.id,
+                author_account_id=admin.id,
+                author_name=admin.display_name,
+                author_role=admin.role.value,
+                kind="note",
+                message="Please update me here as soon as this is fixed.",
+                created_at=range_end - timedelta(minutes=40),
+            ),
+        ]
+    )
+    for request in requests:
+        sender = request.enterprise_name or request.requester_name
+        logs.append(
+            sample_log(
+                ("activity-request-sent", request.id),
+                request.created_at,
+                group="Requests",
+                severity="Info",
+                actor=sender,
+                actor_role="Enterprise Account" if request.enterprise_profile_id else "System",
+                action="Request Account Change" if request.change_field else "Send Request",
+                target=request.request_code,
+                summary=(
+                    f"{sender} asked to change its contact number."
+                    if request.change_field
+                    else f"{sender} asked for help signing in."
+                    if request.request_group == "Sign-in help"
+                    else f"{sender} sent a request: {request.title}."
+                ),
+                source_id=request.id,
+                it_detail=f"{request.request_code} · {request.request_group}",
+                metadata={"requestCode": request.request_code},
+            )
+        )
+    logs.append(
+        sample_log(
+            ("activity-request-progress", camera_request.id),
+            camera_sent + timedelta(minutes=25),
+            group="Requests",
+            severity="Info",
+            actor=it_account.display_name,
+            actor_role="IT Personnel",
+            action="Request In Progress",
+            target=camera_request.request_code,
+            summary=f"{it_account.display_name} marked {_name(camera_enterprise)}'s request in progress.",
+            source_id=camera_request.id,
+            it_detail=f"{camera_request.request_code}: Sent → In Progress.",
+        )
+    )
+    logs.append(
+        sample_log(
+            ("activity-request-note", camera_request.id),
+            range_end - timedelta(minutes=40),
+            group="Requests",
+            severity="Info",
+            actor=admin.display_name,
+            actor_role="Admin",
+            action="Add Note for IT",
+            target=camera_request.request_code,
+            summary=f"{admin.display_name} added a note for IT on {_name(camera_enterprise)}'s request.",
+            source_id=camera_request.id,
+            it_detail="Please update me here as soon as this is fixed.",
+        )
+    )
 
-    admin_notifications = [
-        UserNotification(
-            id=sample_uuid("operations-notification", admin.id, alert.id),
-            recipient_account_id=admin.id,
-            recipient_role=admin.role.value,
-            title=f"{busy_profile.enterprise_name} needs attention.",
-            message=alert.summary,
-            notification_type="High Visitor Activity",
-            severity="Critical",
-            source_type="operational.alert",
-            source_id=alert.alert_code,
-            created_by_account_id=busy_enterprise.id,
-            created_by_name=busy_profile.enterprise_name,
-            created_at=alert_created_at,
-        ),
-        UserNotification(
-            id=sample_uuid("operations-notification", admin.id, high_ticket.id),
-            recipient_account_id=admin.id,
-            recipient_role=admin.role.value,
-            title=f"{support_profile.enterprise_name} submitted an important support request.",
-            message=f"{high_ticket.subject}. IT is reviewing the request.",
-            notification_type="Enterprise Support Ticket",
-            severity="Warning",
-            source_type="support.ticket",
-            source_id=high_ticket.id,
-            created_by_account_id=support_enterprise.id,
-            created_by_name=support_profile.enterprise_name,
-            created_at=high_ticket_created_at,
-        ),
-    ]
     it_notifications = [
         UserNotification(
-            id=sample_uuid("operations-notification", it_account.id, ticket.id),
+            id=sample_uuid("operations-notification", it_account.id, request.id),
             recipient_account_id=it_account.id,
             recipient_role=it_account.role.value,
-            title=f"{ticket.enterprise_name} submitted support ticket {ticket.ticket_code}.",
-            message=ticket.subject,
-            notification_type="Enterprise Support Ticket",
-            severity="Warning" if ticket.priority == "High" else "Info",
-            source_type="support.ticket",
-            source_id=ticket.id,
-            created_by_account_id=ticket.enterprise_profile_id,
-            created_by_name=ticket.enterprise_name,
-            created_at=ticket.created_at,
+            title=f"{request.enterprise_name or request.requester_name} sent request {request.request_code}.",
+            message=f"{request.request_group}: {request.title}.",
+            notification_type="Request",
+            severity="Warning" if request.urgent else "Info",
+            source_type="request",
+            source_id=request.id,
+            created_by_account_id=request.enterprise_profile_id,
+            created_by_name=request.enterprise_name or request.requester_name,
+            created_at=request.created_at,
         )
-        for ticket in (high_ticket, routine_ticket)
+        for request in requests
     ]
-    it_notifications.append(
-        UserNotification(
-            id=sample_uuid("operations-notification", it_account.id, technical_alert.id),
-            recipient_account_id=it_account.id,
-            recipient_role=it_account.role.value,
-            title=f"{technical_profile.enterprise_name} has a technical issue.",
-            message=f"{technical_alert.summary} {technical_alert.required_action}",
-            notification_type="Technical Issue",
-            severity="Critical",
-            source_type="operational.alert",
-            source_id=technical_alert.alert_code,
-            created_by_account_id=technical_enterprise.id,
-            created_by_name=technical_profile.enterprise_name,
-            created_at=technical_alert_created_at,
-        )
-    )
 
     failed_email_created_at = range_end - timedelta(hours=3)
     failed_email = EmailOutbox(
-        id=sample_uuid("operations-email", support_enterprise.id, "activation-failure"),
-        account_id=support_enterprise.id,
+        id=sample_uuid("operations-email", report_enterprise.id, "activation-failure"),
+        account_id=report_enterprise.id,
         purpose="account_activation",
-        source_id=f"{SAMPLE_SOURCE_PREFIX}email:activation:{support_enterprise.id}",
-        recipient=support_enterprise.email,
+        source_id=f"{SAMPLE_SOURCE_PREFIX}email:activation:{report_enterprise.id}",
+        recipient=report_enterprise.email,
         sender="TANAW <no-reply@tanaw.local>",
         template_name=EmailTemplateName.ACCOUNT_ACTIVATION.value,
         template_version="v1",
         secret_version="v1",
-        template_payload_json=json.dumps({"recipientName": support_enterprise.display_name}),
+        template_payload_json=json.dumps({"recipientName": report_enterprise.display_name}),
         tags_json=json.dumps({"sample": True}),
-        idempotency_key=f"{SAMPLE_SOURCE_PREFIX}email:activation:{support_enterprise.id}",
+        idempotency_key=f"{SAMPLE_SOURCE_PREFIX}email:activation:{report_enterprise.id}",
         provider="brevo",
         status=EmailOutboxStatus.TERMINAL_FAILED.value,
         attempt_count=3,
@@ -226,7 +367,7 @@ async def create_portal_workflow_data(
             id=sample_uuid("operations-notification", it_account.id, failed_email.id),
             recipient_account_id=it_account.id,
             recipient_role=it_account.role.value,
-            title=f"Email to {support_enterprise.email} needs attention.",
+            title=f"Email to {report_enterprise.email} needs attention.",
             message="The account activation email could not be delivered after three attempts.",
             notification_type="Email Problem",
             severity="Warning",
@@ -236,120 +377,12 @@ async def create_portal_workflow_data(
             created_at=failed_email_created_at,
         )
     )
-    it_notifications.append(
-        UserNotification(
-            id=sample_uuid(
-                "operations-notification", it_account.id, technical_enterprise.id, "contact"
-            ),
-            recipient_account_id=it_account.id,
-            recipient_role=it_account.role.value,
-            title=f"{technical_profile.enterprise_name} requested a contact number change.",
-            message="A new enterprise contact number is waiting for IT review.",
-            notification_type="Enterprise Profile Change Request",
-            severity="Info",
-            source_type="enterprise.profile.contact",
-            source_id=technical_enterprise.id,
-            created_by_account_id=technical_enterprise.id,
-            created_by_name=technical_profile.enterprise_name,
-            created_at=range_end - timedelta(hours=4),
-        )
-    )
-    db.add_all([*admin_notifications, *it_notifications])
-    profile_request_enterprise = enterprises[2]
-    profile_request_name = (
-        profile_request_enterprise.enterprise_profile.enterprise_name
-        if profile_request_enterprise.enterprise_profile
-        else profile_request_enterprise.display_name
-    )
-    db.add_all(
-        [
-            ActivityLog(
-                id=sample_uuid("activity-admin-alert", alert.id),
-                timestamp=alert_created_at,
-                category="Admin Operation",
-                severity=alert.severity,
-                actor="TANAW",
-                actor_role="System",
-                action="Alert Created",
-                target=busy_profile.enterprise_name,
-                summary=alert.summary,
-                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:alert:{alert.id}",
-                metadata_json=json.dumps(
-                    {"alertType": alert.alert_type, "status": alert.status}, sort_keys=True
-                ),
-            ),
-            ActivityLog(
-                id=sample_uuid("activity-support-escalation", high_ticket.id),
-                timestamp=high_ticket_created_at,
-                category="Enterprise Activity",
-                severity="Warning",
-                actor=support_profile.enterprise_name,
-                actor_role="Enterprise Account",
-                action="Submit Important Support Request",
-                target=high_ticket.ticket_code,
-                summary=(
-                    f"{support_profile.enterprise_name} submitted an important support request "
-                    "for IT review."
-                ),
-                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:ticket:{high_ticket.id}",
-            ),
-            ActivityLog(
-                id=sample_uuid("activity-support-status", high_ticket.id),
-                timestamp=high_ticket.updated_at,
-                category="IT Activity",
-                severity="Success",
-                actor=it_account.display_name,
-                actor_role="IT Personnel",
-                action="Update Support Ticket Status",
-                target=high_ticket.ticket_code,
-                summary=(
-                    f"{it_account.display_name} updated {high_ticket.ticket_code} from Open "
-                    "to In Review."
-                ),
-                source_id=high_ticket.id,
-                metadata_json=json.dumps(
-                    {"ticketCode": high_ticket.ticket_code, "status": "In Review"}, sort_keys=True
-                ),
-            ),
-            ActivityLog(
-                id=sample_uuid("activity-account-request", profile_request_enterprise.id),
-                timestamp=range_end - timedelta(hours=4),
-                category="Enterprise Activity",
-                severity="Info",
-                actor=profile_request_name,
-                actor_role="Enterprise Account",
-                action="Request Account Update",
-                target=profile_request_name,
-                summary=f"{profile_request_name} requested a contact-number update for IT review.",
-                source_id=(
-                    f"{SAMPLE_SOURCE_PREFIX}activity:account-request:"
-                    f"{profile_request_enterprise.id}"
-                ),
-            ),
-            ActivityLog(
-                id=sample_uuid("activity-technical-issue", technical_alert.id),
-                timestamp=technical_alert_created_at,
-                category="Enterprise Activity",
-                severity="Critical",
-                actor=technical_profile.enterprise_name,
-                actor_role="Enterprise Account",
-                action="Desktop Application Problem",
-                target=technical_profile.enterprise_name,
-                summary=technical_alert.summary,
-                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:technical:{technical_alert.id}",
-                metadata_json=json.dumps(
-                    {"alertType": technical_alert.alert_type, "status": technical_alert.status},
-                    sort_keys=True,
-                ),
-            ),
-        ]
-    )
+    db.add_all([*it_notifications, *logs])
     await db.flush()
     return {
-        "adminNotifications": len(admin_notifications),
         "itNotifications": len(it_notifications),
         "operationalAlerts": 2,
-        "supportTickets": 2,
+        "requests": len(requests),
         "emailProblems": 1,
-        "activityLogs": 5,
+        "activityLogs": len(logs),
     }

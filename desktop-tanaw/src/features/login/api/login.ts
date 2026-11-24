@@ -81,6 +81,12 @@ export async function requestContactNumberChange(phone: string) {
   return response.data;
 }
 
+/** The enterprise name changes only after IT approves the request. */
+export async function requestEnterpriseNameChange(enterpriseName: string) {
+  const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/enterprise-name-change", { enterpriseName });
+  return response.data;
+}
+
 export async function logout() {
   await staffApi.post(apiPaths.authLogout);
 }
@@ -102,4 +108,28 @@ function normalizeEnterpriseRole(user: ApiAuthUser): "enterprise" {
     throw new Error("The enterprise desktop received a non-enterprise session.");
   }
   return user.role;
+}
+
+export type OpeningHoursPayload = import("../../../contracts/api").ApiSchemas["OpeningHours"];
+export type ClosurePayload = import("../../../contracts/api").ApiSchemas["ClosureCreate"];
+export type ClosureSummary = import("../../../contracts/api").ApiSchemas["ClosureSummary"];
+
+/** Opening hours change right away; they decide when the place can show as offline. */
+export async function updateOpeningHours(openingHours: OpeningHoursPayload) {
+  const response = await staffApi.patch<ApiAuthUser>("/auth/profile/opening-hours", openingHours);
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
+export async function listClosures() {
+  const response = await staffApi.get<ClosureSummary[]>("/auth/profile/closures");
+  return response.data;
+}
+
+export async function addClosure(closure: ClosurePayload) {
+  const response = await staffApi.post<ClosureSummary>("/auth/profile/closures", closure);
+  return response.data;
+}
+
+export async function removeClosure(closureId: string) {
+  await staffApi.delete(`/auth/profile/closures/${closureId}`);
 }

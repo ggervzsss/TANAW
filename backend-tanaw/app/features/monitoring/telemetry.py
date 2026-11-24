@@ -16,7 +16,7 @@ from app.features.monitoring.schemas import (
 )
 
 STALE_GATEWAY_SECONDS = 120
-OFFLINE_GATEWAY_SECONDS = 900
+OFFLINE_GATEWAY_SECONDS = 600
 
 
 async def ingest_telemetry(
@@ -55,6 +55,7 @@ async def ingest_telemetry(
     )
     db.add(snapshot)
     if update_account_gateway:
+        profile.last_check_in_at = datetime.now(UTC)
         profile.gateway_status = (
             "Offline" if snapshot.error or snapshot.status == "error" else "Connected"
         )

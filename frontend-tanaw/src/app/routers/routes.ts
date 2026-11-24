@@ -29,7 +29,6 @@ export const routes = {
     reports: "/admin/reports",
     activity: "/admin/activity",
     requests: "/admin/requests",
-    notifications: "/admin/notifications",
     profile: "/admin/settings/profile",
     security: "/admin/settings/security",
     displayPreferences: "/admin/settings/appearance",

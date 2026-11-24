@@ -1,32 +1,29 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { adminEnterpriseDetailsPath } from "@/app/routers/routes";
-import type { SupportTicketDetail } from "@/shared/services/supportTickets";
-import type { SystemLog } from "@/shared/types";
+import type { Request, RequestDetail as RequestTimeline } from "@/shared/services/requests";
 import { cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import {
+  accountChangeSentence,
   buildRequestUpdates,
   formatRequestWhen,
   handledByLabel,
-  messageRecipientsLabel,
-  progressDotClass,
-  progressLabels,
-  progressTextClass,
   requestHandler,
+  requestPlace,
   requestStatusNote,
-  type AdminRequest,
+  statusDotClass,
+  statusLabels,
+  statusTextClass,
   type RequestUpdateKind,
 } from "../model";
-import { MessageItComposer } from "./MessageItComposer";
-import { RequestAlertActions } from "./RequestAlertActions";
+import { NoteForItComposer } from "./NoteForItComposer";
 import { RequestPhotos } from "./RequestPhotos";
 
 type RequestDetailProps = {
-  request: AdminRequest;
-  logs: readonly SystemLog[];
-  ticket: SupportTicketDetail | null;
-  ticketLoading: boolean;
+  request: Request;
+  detail: RequestTimeline | null;
+  detailLoading: boolean;
   timeFormat: SystemTimeFormat;
   now: Date;
 };
@@ -49,30 +46,36 @@ const dotFill: Record<RequestUpdateKind, string> = {
   review: "bg-(--tanaw-warn-ink)",
 };
 
-/** The right pane: what happened, the details, the latest updates and the Message IT composer. */
-export function RequestDetail({ request, logs, ticket, ticketLoading, timeFormat, now }: RequestDetailProps) {
-  const handler = requestHandler(request, logs, ticket);
-  const updates = buildRequestUpdates(request, logs, ticket);
+/** The right pane: what happened, the details, the latest updates and the note for IT. */
+export function RequestDetail({ request, detail, detailLoading, timeFormat, now }: RequestDetailProps) {
+  const handler = requestHandler(detail);
+  const updates = buildRequestUpdates(request, detail);
   const formatWhen = (value: string | null) => formatRequestWhen(value, now, timeFormat);
-  const statusLabel = progressLabels[request.progress];
+  const statusLabel = statusLabels[request.status];
+  const change = accountChangeSentence(request);
+  const place = requestPlace(request);
+  const sentBy = request.enterpriseName ? `${request.requesterName}, ${request.enterpriseName}` : request.requesterName;
 
   return (
     <article aria-labelledby="request-detail-title" className="min-w-0 py-1.5">
-      <p className={cn("text-[0.8125rem] font-bold", progressTextClass[request.progress])}>{statusLabel}</p>
+      <p className="flex flex-wrap items-center gap-2 text-[0.8125rem] font-bold">
+        <span className={statusTextClass[request.status]}>{statusLabel}</span>
+        {request.urgent && <span className="rounded-full bg-(--tanaw-danger-bg) px-2 text-(--tanaw-danger-text)">Urgent</span>}
+      </p>
       <h2 id="request-detail-title" className="mt-2 font-display text-[1.875rem] leading-[1.15] font-bold text-(--tanaw-text) max-sm:text-2xl">
         {request.title}
       </h2>
       <p className="mt-2.5 flex items-center gap-2 text-[0.90625rem] text-(--tanaw-text-secondary)">
-        <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", progressDotClass[request.progress])} />
+        <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", statusDotClass[request.status])} />
         {requestStatusNote(request, handler, (value) => formatWhen(value))}
       </p>
 
       <h3 className="mt-6 text-base font-bold">What happened</h3>
-      <p className="mt-1.5 max-w-[68ch] leading-relaxed whitespace-pre-line text-(--tanaw-text-secondary)">{request.what}</p>
-      {request.suggestedAction && (
+      <p className="mt-1.5 max-w-[68ch] leading-relaxed whitespace-pre-line text-(--tanaw-text-secondary)">{request.description}</p>
+      {change && (
         <p className="mt-2 max-w-[68ch] text-sm leading-relaxed text-(--tanaw-text-secondary)">
-          <span className="font-semibold text-(--tanaw-text)">Suggested response: </span>
-          {request.suggestedAction}
+          <span className="font-semibold text-(--tanaw-text)">Change asked for: </span>
+          {change}
         </p>
       )}
 
@@ -84,28 +87,28 @@ export function RequestDetail({ request, logs, ticket, ticketLoading, timeFormat
               to={adminEnterpriseDetailsPath(request.enterpriseId)}
               className="rounded-sm text-(--tanaw-accent-ink) no-underline hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
             >
-              {request.place}
+              {place}
             </Link>
           ) : (
-            request.place
+            place
           )}
         </DetailItem>
-        <DetailItem label="Type">{request.type}</DetailItem>
-        <DetailItem label="Sent by">{request.sentBy}</DetailItem>
+        <DetailItem label="Group">{request.group}</DetailItem>
+        <DetailItem label="Sent by">{sentBy}</DetailItem>
         <DetailItem label="Handled by">{handledByLabel(request, handler)}</DetailItem>
         <DetailItem label="Status">{statusLabel}</DetailItem>
         <DetailItem label="Reference number">
-          <span className="tabular-nums">{request.reference ?? "Not assigned"}</span>
+          <span className="tabular-nums">{request.code}</span>
         </DetailItem>
-        {request.area && <DetailItem label="Affected area">{request.area}</DetailItem>}
+        {request.requesterEmail && <DetailItem label="Reply to">{request.requesterEmail}</DetailItem>}
+        {request.affectedArea && <DetailItem label="Affected area">{request.affectedArea}</DetailItem>}
         {request.camera && <DetailItem label="Camera">{request.camera}</DetailItem>}
       </dl>
 
-      <RequestPhotos attachments={request.attachments} />
-      <RequestAlertActions key={request.key} request={request} />
+      <RequestPhotos attachments={request.attachments ?? []} />
 
       <h3 className="mt-5.5 text-base font-bold">Latest updates</h3>
-      <ol aria-busy={ticketLoading || undefined} className="mt-2.5 list-none pl-2">
+      <ol aria-busy={detailLoading || undefined} className="mt-2.5 list-none pl-2">
         {updates.map((update, index) => (
           <li key={update.id} className="relative border-l-2 border-(--tanaw-border-soft) pb-3.5 pl-5.5 last:pb-1">
             <span
@@ -119,9 +122,9 @@ export function RequestDetail({ request, logs, ticket, ticketLoading, timeFormat
           </li>
         ))}
       </ol>
-      {ticketLoading && <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">Loading the ticket conversation.</p>}
+      {detailLoading && <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">Loading the request's updates.</p>}
 
-      <MessageItComposer key={request.key} request={request} recipients={messageRecipientsLabel(request, handler)} />
+      <NoteForItComposer key={request.id} request={request} recipients={handler.name && request.status !== "Sent" ? `${handler.name} and the IT team` : "the IT team"} />
     </article>
   );
 }

@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LOCAL_DATA_CHANGED_EVENT, type LocalBackupRestoreResult, type MlCameraStates } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifySuccess } from "../../toasts/services/toast-service";
+import { usePersistentIssue } from "../../toasts/services/persistent-issue";
+import { createConnectionTracker, isConnectionFailure, reportConnectionGap } from "../services/connection-gap";
 import { DESKTOP_REPORT_SYNC_EVENT, DESKTOP_SAMPLE_PREPARED_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
 import { DESKTOP_BACKUP_RESTORED_EVENT, captureBackupSession, createDesktopBackupRunner, type BackupSession } from "../services/local-backup";
@@ -39,9 +41,22 @@ type LiveTelemetryState = {
   timerId: number | undefined;
 };
 
+export const NO_CONNECTION_MESSAGE = "No connection to TANAW. Visitor counts are saved on this computer and will be sent when the connection is back.";
+
+function browserStorage() {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function useDesktopCloudSync(contextReady: boolean) {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.user?.role);
+  const enterpriseScope = useAuthStore((state) => state.user?.enterpriseId ?? state.user?.id ?? "enterprise");
+  const [connectionLost, setConnectionLost] = useState(false);
+  usePersistentIssue({ id: "tanaw-server-connection", title: "No connection to TANAW", message: connectionLost ? NO_CONNECTION_MESSAGE : null, tone: "warning" });
   const syncStateRef = useRef({ preparation: false, reports: false, telemetry: false });
   const liveTelemetryRef = useRef<LiveTelemetryState>({
     lastSignature: null,
@@ -54,6 +69,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
     if (!token || role !== "enterprise" || !contextReady) return undefined;
 
     let isDisposed = false;
+    const connection = createConnectionTracker(enterpriseScope, browserStorage());
     // Each sign-in reconciles and backs up its own establishment. Its work is pinned to
     // this session and cancelled when the effect ends (sign-out, account switch, rebind).
     const backupState: { changeTimerId: number | undefined } = { changeTimerId: undefined };
@@ -101,8 +117,12 @@ export function useDesktopCloudSync(contextReady: boolean) {
 
       try {
         await syncDesktopTelemetry();
-      } catch {
-        // The desktop should continue operating offline; the next interval retries.
+        const gap = connection.succeeded(Date.now());
+        if (!isDisposed) setConnectionLost(false);
+        if (gap) void reportConnectionGap(gap).catch(() => undefined);
+      } catch (error) {
+        // The desktop keeps counting offline; the next interval retries.
+        if (isConnectionFailure(error) && connection.failed(Date.now()) && !isDisposed) setConnectionLost(true);
       } finally {
         syncStateRef.current.telemetry = false;
         if (liveTelemetryRef.current.queued && !isDisposed) {
@@ -199,6 +219,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
 
     return () => {
       isDisposed = true;
+      setConnectionLost(false);
       clearLiveTelemetryTimer();
       unsubscribeFromReportEvents?.();
       window.clearInterval(preparationIntervalId);
@@ -210,7 +231,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
       window.removeEventListener(LOCAL_DATA_CHANGED_EVENT, scheduleBackupAfterChange);
     };
-  }, [contextReady, role, token]);
+  }, [contextReady, enterpriseScope, role, token]);
 }
 
 function liveCameraStatesSignature(states: MlCameraStates) {

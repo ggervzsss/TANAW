@@ -55,12 +55,12 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[22px] border border-(--tanaw-border) bg-white text-(--tanaw-green)">
             <Headphones className="h-6 w-6" />
           </div>
-          <p className="text-sm font-semibold text-(--tanaw-text)">Send your sign-in concern directly to the TANAW support queue.</p>
+          <p className="text-sm font-semibold text-(--tanaw-text)">Tell IT what is stopping you from signing in. IT gets a Sign-in help request and replies by email.</p>
           <p className="mt-2 text-sm text-(--tanaw-muted)">IT and Admin personnel will receive the request and use your registered email to follow up.</p>
         </div>
 
         {submitted ? (
-          <div className="mt-5 rounded-[28px] border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-950">Support request sent to TANAW support.</div>
+          <div className="mt-5 rounded-[28px] border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-950">Request sent. IT will reply to your email.</div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-5 space-y-3">
             <input
@@ -98,7 +98,7 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
               disabled={isSubmitting}
               className="w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? "Recording..." : "Record support request"}
+              {isSubmitting ? "Sending..." : "Send request"}
             </button>
           </form>
         )}

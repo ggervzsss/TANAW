@@ -13,27 +13,19 @@ import {
   actorRoleLabel,
   formatActivityDate,
   formatActivityTime,
-  isPinnedActivity,
-  openDurationLabel,
 } from "../model/recentActivity";
-import { ACTIVITY_DRAWER_ID, ActivityTypeChip, UnresolvedChip } from "./RecentActivityList";
+import { ACTIVITY_DRAWER_ID, ActivityTypeChip } from "./RecentActivityList";
 
 const sectionLabel = "text-[0.8125rem] font-bold tracking-[0.08em] text-(--tanaw-text-secondary) uppercase";
 const navButton =
   "inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-(--tanaw-control-border) bg-(--tanaw-surface) px-3.5 text-sm font-semibold text-(--tanaw-text) transition-colors hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-(--tanaw-surface)";
-
-function resolutionSentence(log: SystemLog) {
-  if (log.resolutionStatus === "Unresolved") return "IT has not marked this resolved yet, so it stays pinned at the top of Recent Activity.";
-  if (log.resolutionStatus === "Resolved") return "IT has marked this resolved.";
-  return null;
-}
 
 /** The activity details drawer, docked right. Escape, the scrim and the close button close it. */
 export function RecentActivityDrawer({
   log,
   position,
   total,
-  now,
+  portal = "admin",
   timeFormat,
   onClose,
   onPrevious,
@@ -43,7 +35,8 @@ export function RecentActivityDrawer({
   /** 0-based index in the filtered list, or -1 when the activity is outside it. */
   position: number;
   total: number;
-  now: Date;
+  /** Which portal's pages the links open. */
+  portal?: "admin" | "it";
   timeFormat: SystemTimeFormat;
   onClose: () => void;
   onPrevious: () => void;
@@ -53,10 +46,8 @@ export function RecentActivityDrawer({
   const titleId = useId();
   const whenId = useId();
   useDialogFocus(panelRef, onClose);
-  const pinned = isPinnedActivity(log);
   const fields = activityDetailFields(log);
-  const links = activityLinks(log);
-  const resolution = resolutionSentence(log);
+  const links = activityLinks(log, portal);
   const time = formatActivityTime(log.timestamp, timeFormat);
 
   return (
@@ -78,7 +69,6 @@ export function RecentActivityDrawer({
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <ActivityTypeChip log={log} />
-                {pinned && <UnresolvedChip>Unresolved, open {openDurationLabel(log.timestamp, now)}</UnresolvedChip>}
               </div>
               <button
                 type="button"
@@ -119,8 +109,16 @@ export function RecentActivityDrawer({
                 What happened
               </h3>
               <p className="mt-2 leading-relaxed wrap-break-word">{log.summary}</p>
-              {resolution && <p className="mt-2 leading-relaxed text-(--tanaw-text-secondary)">{resolution}</p>}
             </section>
+
+            {log.itDetail && (
+              <section aria-labelledby={`${titleId}-it`} className="mt-6">
+                <h3 id={`${titleId}-it`} className={sectionLabel}>
+                  Technical details
+                </h3>
+                <p className="mt-2 rounded-xl bg-(--tanaw-surface-inset) px-4 py-3 text-[0.9375rem] leading-relaxed wrap-break-word">{log.itDetail}</p>
+              </section>
+            )}
 
             {fields.length > 0 && (
               <section aria-labelledby={`${titleId}-details`} className="mt-6">

@@ -4,10 +4,10 @@ import { isRealtimeEnvelope, realtimeOrderingKey, type RealtimeEnvelope } from "
 const ticketEvent: RealtimeEnvelope = {
   schema_version: 1,
   event_id: "evt-1",
-  event_type: "support_ticket.message.created",
+  event_type: "request.message.created",
   occurred_at: "2026-07-23T12:00:00Z",
   sequence: 42,
-  scope: { enterprise_account_id: "enterprise-a", ticket_id: "ticket-1" },
+  scope: { enterprise_account_id: "enterprise-a", request_id: "request-1" },
   actor: { user_id: "staff-1", role: "staff" },
   payload: { message_id: "message-1" },
 };
@@ -23,14 +23,14 @@ describe("realtime event contract", () => {
     expect(isRealtimeEnvelope({ ...ticketEvent, sequence: 0 })).toBe(false);
   });
 
-  it("orders ticket events by ticket rather than individual messages", () => {
-    expect(realtimeOrderingKey(ticketEvent)).toBe("support_ticket:ticket-1");
+  it("orders request events by request rather than individual messages", () => {
+    expect(realtimeOrderingKey(ticketEvent)).toBe("request:request-1");
     expect(
       realtimeOrderingKey({
         ...ticketEvent,
         event_id: "evt-2",
         payload: { message_id: "message-2" },
       }),
-    ).toBe("support_ticket:ticket-1");
+    ).toBe("request:request-1");
   });
 });

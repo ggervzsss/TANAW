@@ -1,22 +1,22 @@
 import { isEmailProblem, type EmailDelivery } from "@/features/email-deliveries";
-import type { AccountSummary } from "@/shared/types";
-import type { SupportTicket } from "@/shared/services/supportTickets";
-import type { OperationalSummary, PriorityAlert } from "@/shared/types";
+import { isClosedRequest, type Request } from "@/shared/services/requests";
+import type { AccountSummary, LiveAlert, OperationalSummary } from "@/shared/types";
 
 type DashboardOverviewInput = {
-  alerts: PriorityAlert[];
+  alerts: LiveAlert[];
   emailDeliveries: EmailDelivery[];
   enterpriseAccounts: AccountSummary[];
   lguAccounts: AccountSummary[];
   operationalSummary?: OperationalSummary;
-  supportTickets: SupportTicket[];
+  requests: Request[];
 };
 
 export function buildDashboardOverview(input: DashboardOverviewInput) {
-  const itIssues = input.alerts.filter((alert) => alert.owner === "IT" && alert.status !== "Resolved");
-  const urgentIssueCount = itIssues.filter((alert) => alert.urgency === "Urgent").length;
-  const openSupportRequestCount = input.supportTickets.filter((ticket) => ticket.status !== "Resolved").length;
-  const pendingAccountRequestCount = input.enterpriseAccounts.reduce((total, account) => total + account.profileChangeRequests.length, 0);
+  const itIssues = input.alerts;
+  const open = input.requests.filter((request) => !isClosedRequest(request));
+  const urgentIssueCount = open.filter((request) => request.urgent).length;
+  const openSupportRequestCount = open.filter((request) => request.group !== "Account change").length;
+  const pendingAccountRequestCount = open.filter((request) => request.group === "Account change").length;
   const emailProblemCount = input.emailDeliveries.filter(isEmailProblem).length;
   const unavailableDesktopAppCount = input.operationalSummary ? input.operationalSummary.delayedGateways + input.operationalSummary.offlineGateways : 0;
 

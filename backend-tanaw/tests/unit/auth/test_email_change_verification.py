@@ -36,7 +36,7 @@ async def test_email_change_verification_records_a_valid_activity_role(
     async def validate_activity_log(*_args: object, **kwargs: object) -> None:
         ActivityLogCreate.model_validate(
             {
-                "category": kwargs["category"],
+                "group": kwargs["group"],
                 "severity": kwargs["severity"],
                 "actor": kwargs["actor"],
                 "actorRole": kwargs["actor_role"],
@@ -54,6 +54,7 @@ async def test_email_change_verification_records_a_valid_activity_role(
         verify_email_change,
     )
     monkeypatch.setattr(activation_router, "record_auth_log", record_auth_log)
+    monkeypatch.setattr(activation_router, "touch_account_change_request", AsyncMock())
 
     response = await activation_router.verify_email_change_link(
         AccountEmailChangeVerifyRequest(token="valid-verification-token"),

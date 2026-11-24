@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.activity_logs.models import ActivityLog
 from app.features.auth import session_router
 from app.features.auth.service import LoginLockoutPolicy
 from app.features.monitoring.models import OperationalAlert
@@ -33,18 +34,7 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
         async def default_lockout_policy(_: AsyncSession) -> LoginLockoutPolicy:
             return LoginLockoutPolicy()
 
-        async def lockout_notifications_enabled(
-            _: AsyncSession, __: str, *, default: bool = True
-        ) -> bool:
-            del default
-            return True
-
         monkeypatch.setattr(session_router, "get_login_lockout_policy", default_lockout_policy)
-        monkeypatch.setattr(
-            session_router,
-            "system_setting_enabled",
-            lockout_notifications_enabled,
-        )
         yield runtime
 
 
@@ -53,51 +43,15 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
         account_ids = list(
             await db.scalars(select(Account.id).where(Account.email.like(TEST_EMAIL_PATTERN)))
         )
-        alert_rows = list(
-            (
-                await db.execute(
-                    select(OperationalAlert.id, OperationalAlert.alert_code).where(
-                        OperationalAlert.source_id.like(
-                            f"failed-login-threshold:{TEST_ACCOUNT_ID_PREFIX}%"
-                        )
-                    )
-                )
-            ).all()
-        )
-        alert_ids = [row.id for row in alert_rows]
-        alert_codes = [row.alert_code for row in alert_rows]
-        notification_ids = (
-            list(
-                await db.scalars(
-                    select(UserNotification.id).where(
-                        UserNotification.source_type == "operational.alert",
-                        UserNotification.source_id.in_(alert_codes),
-                    )
-                )
-            )
-            if alert_codes
-            else []
-        )
-
         outbox_conditions = []
         if account_ids:
             outbox_conditions.append(
                 RealtimeOutbox.payload["account_id"].as_string().in_(account_ids)
             )
-        if alert_ids:
-            outbox_conditions.append(RealtimeOutbox.payload["alert_id"].as_string().in_(alert_ids))
-        if notification_ids:
-            outbox_conditions.append(
-                RealtimeOutbox.payload["notification_id"].as_string().in_(notification_ids)
-            )
         if outbox_conditions:
             await db.execute(delete(RealtimeOutbox).where(or_(*outbox_conditions)))
-        if notification_ids:
-            await db.execute(
-                delete(UserNotification).where(UserNotification.id.in_(notification_ids))
-            )
-        if alert_ids:
-            await db.execute(delete(OperationalAlert).where(OperationalAlert.id.in_(alert_ids)))
+        if account_ids:
+            await db.execute(delete(ActivityLog).where(ActivityLog.source_id.in_(account_ids)))
         if account_ids:
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
         await db.commit()
@@ -153,7 +107,7 @@ def _create_test_app(runtime: PostgresRuntime) -> FastAPI:
 
 
 @pytest.mark.asyncio
-async def test_failed_login_threshold_persists_lockout_alert_and_it_notification(
+async def test_failed_login_threshold_records_a_lockout_in_activity(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     locked_account, it_recipient = await _create_test_accounts(postgres_runtime)
@@ -193,25 +147,30 @@ async def test_failed_login_threshold_persists_lockout_alert_and_it_notification
         assert stored_account.locked_until is not None
         assert stored_account.locked_until > datetime.now(UTC)
 
-        alerts = list(
+        # A lockout is a heads-up in Activity, not an alert, and sends no notification.
+        lockouts = list(
             await db.scalars(
-                select(OperationalAlert).where(
-                    OperationalAlert.source_id == f"failed-login-threshold:{locked_account.id}",
-                    OperationalAlert.alert_type == "Failed Login Threshold",
-                    OperationalAlert.status != "Resolved",
+                select(ActivityLog).where(
+                    ActivityLog.source_id == locked_account.id,
+                    ActivityLog.action == "Account Locked",
                 )
             )
         )
-        assert len(alerts) == 1
-
+        assert len(lockouts) == 1
+        assert lockouts[0].activity_group == "Login & Security"
+        assert not list(
+            await db.scalars(
+                select(OperationalAlert).where(
+                    OperationalAlert.source_id.like(f"%{locked_account.id}%")
+                )
+            )
+        )
         notifications = list(
             await db.scalars(
                 select(UserNotification).where(
                     UserNotification.recipient_account_id == it_recipient.id,
-                    UserNotification.source_type == "operational.alert",
-                    UserNotification.source_id == alerts[0].alert_code,
                     UserNotification.notification_type == "Locked Account",
                 )
             )
         )
-        assert len(notifications) == 1
+        assert notifications == []

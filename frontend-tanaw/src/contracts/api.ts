@@ -10,7 +10,8 @@ export const apiPaths = {
   finalReports: "/operational/reports/final",
   intakeReports: "/operational/reports/intake",
   notifications: "/operational/notifications",
-  supportTickets: "/operational/tickets",
+  requests: "/operational/requests",
+  alerts: "/operational/alerts",
   telemetrySummary: "/operational/telemetry/summary",
   visitorRanking: "/operational/visitor-insights/ranking",
 } as const satisfies Record<string, keyof ApiOperations>;
@@ -20,7 +21,7 @@ export type ApiLoginResponse = ApiSchemas["LoginResponse"];
 export type ApiFinalReport = ApiSchemas["FinalReportSummary"];
 export type ApiIntakeReport = ApiSchemas["IntakeReportSummary"];
 export type ApiNotification = ApiSchemas["UserNotificationSummary"];
-export type ApiSupportTicket = ApiSchemas["SupportTicketSummary"];
-export type ApiSupportTicketDetail = ApiSchemas["SupportTicketDetail"];
+export type ApiRequest = ApiSchemas["RequestSummary"];
+export type ApiRequestDetail = ApiSchemas["RequestDetail"];
 export type ApiTelemetrySnapshot = ApiSchemas["TelemetrySnapshotSummary"];
 export type ApiVisitorRanking = ApiSchemas["VisitorRankingSummary"];

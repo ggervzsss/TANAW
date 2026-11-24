@@ -16,26 +16,25 @@ function event(eventType: RealtimeEnvelope["event_type"]): RealtimeEnvelope {
 }
 
 describe("realtime query routing", () => {
-  it("invalidates only the ticket query family for a ticket message", async () => {
+  it("refreshes requests and Activity for a request message", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
-    await routeRealtimeEvent(queryClient, event("support_ticket.message.created"));
+    await routeRealtimeEvent(queryClient, event("request.message.created"));
 
-    expect(invalidateQueries).toHaveBeenCalledOnce();
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["operational", "support-tickets"],
-      refetchType: "active",
-    });
+    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["operational", "requests"], refetchType: "active" });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["activity-logs"], refetchType: "active" });
   });
 
-  it("updates alert data, dashboard counters, and activity history", async () => {
+  it("updates live alerts, map pins, dashboard counters, and activity history", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await routeRealtimeEvent(queryClient, event("alert.status.changed"));
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["operational", "map-enterprises"], refetchType: "active" });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["activity-logs"],
       refetchType: "active",
@@ -119,8 +118,8 @@ describe("telemetry updates in a hidden tab", () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
-    await routeRealtimeEvent(queryClient, event("support_ticket.message.created"));
+    await routeRealtimeEvent(queryClient, event("request.message.created"));
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["operational", "support-tickets"], refetchType: "active" });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["operational", "requests"], refetchType: "active" });
   });
 });

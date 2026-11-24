@@ -1,5 +1,5 @@
 import { MessageSquare, RefreshCw, Send } from "lucide-react";
-import { canReplyToSupportTicket, type SupportTicketDetail } from "@/shared/services/supportTickets";
+import { canReplyToRequest, type RequestDetail } from "@/shared/services/requests";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { useTicketConversation } from "../hooks";
 import { authorRoleLabel, formatTicketTime } from "../model";
@@ -11,7 +11,7 @@ type TicketConversationProps = {
   onReplySubmit: () => void;
   reply: string;
   replyError: string;
-  ticket: SupportTicketDetail;
+  ticket: RequestDetail;
   timeFormat: SystemTimeFormat;
 };
 
@@ -25,9 +25,9 @@ export function TicketConversation({ isItResponder, isReplyPending, onReplyChang
         Conversation
       </h4>
       <div ref={conversationRef} onScroll={handleScroll} className="mt-4 max-h-80 space-y-3 overflow-y-auto overscroll-contain pr-1">
-        <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
-        {ticket.messages.map((message) => (
-          <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
+        <ConversationItem authorName={ticket.requesterName} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
+        {(ticket.messages ?? []).filter((message) => message.kind !== "status").map((message) => (
+          <ConversationItem key={message.id} authorName={message.kind === "note" ? `${message.authorName} (note for IT)` : message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
         ))}
       </div>
       <p className="sr-only" aria-live="polite">
@@ -43,10 +43,10 @@ export function TicketConversation({ isItResponder, isReplyPending, onReplyChang
         </button>
       )}
 
-      {!canReplyToSupportTicket(ticket) ? (
+      {!canReplyToRequest(ticket) ? (
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
-          This ticket is resolved. The conversation is now closed.
-          {isItResponder ? " Reopen the ticket to continue the conversation." : ""}
+          This request is closed, so the conversation is closed too.
+          {isItResponder && ticket.status === "Resolved" ? " Reopen it to continue the conversation." : ""}
         </div>
       ) : isItResponder ? (
         <div className="mt-4 border-t border-slate-100 pt-4">

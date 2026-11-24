@@ -31,7 +31,7 @@ async function mockEnterprise(page: Page) {
   await mockMlRequest(page, "*", () => mlResponse({ status: 503, body: JSON.stringify({ detail: "Unavailable in help test" }) }));
 }
 
-test("searches Enterprise guidance, opens related articles, and links to Support Tickets", async ({ page }) => {
+test("searches Enterprise guidance, opens related articles, and links to Requests", async ({ page }) => {
   await mockEnterprise(page);
   await page.goto("/#/enterprise/help");
   const search = page.getByRole("searchbox", { name: "Search help articles" });
@@ -41,7 +41,7 @@ test("searches Enterprise guidance, opens related articles, and links to Support
   await page.getByText("Troubleshoot a camera connection").click();
   await expect(page).toHaveURL(/article=camera-troubleshooting/);
   await expect(page.getByRole("heading", { name: "What to check" })).toBeVisible();
-  await page.getByRole("button", { name: "Open Support Tickets" }).click();
+  await page.getByRole("button", { name: "Open Requests" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/settings\/support$/);
   await page.getByRole("button", { name: "Back from General Settings" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/help\?article=camera-troubleshooting$/);

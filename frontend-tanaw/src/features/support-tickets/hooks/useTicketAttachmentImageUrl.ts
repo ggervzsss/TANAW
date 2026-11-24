@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchSupportTicketAttachmentBlob, isSafeSupportTicketImage, type SupportTicketAttachment } from "@/shared/services/supportTickets";
+import { fetchRequestAttachmentBlob, isSafeRequestImage, type RequestAttachment } from "@/shared/services/requests";
 
 type AttachmentImageState = {
   attachmentKey: string;
@@ -8,16 +8,16 @@ type AttachmentImageState = {
   isLoading: boolean;
 };
 
-export function useTicketAttachmentImageUrl(attachment: SupportTicketAttachment) {
+export function useTicketAttachmentImageUrl(attachment: RequestAttachment) {
   const attachmentKey = getAttachmentPreviewKey(attachment);
   const [state, setState] = useState<AttachmentImageState>({ attachmentKey: "", error: "", imageUrl: null, isLoading: false });
 
   useEffect(() => {
     let disposed = false;
     let objectUrl: string | null = null;
-    if (!isSafeSupportTicketImage(attachment)) return undefined;
+    if (!isSafeRequestImage(attachment)) return undefined;
 
-    void fetchSupportTicketAttachmentBlob(attachment)
+    void fetchRequestAttachmentBlob(attachment)
       .then((blob) => {
         if (disposed) return;
         objectUrl = URL.createObjectURL(blob);
@@ -34,11 +34,11 @@ export function useTicketAttachmentImageUrl(attachment: SupportTicketAttachment)
     };
   }, [attachment, attachmentKey]);
 
-  if (!isSafeSupportTicketImage(attachment)) return { error: "Unsupported image type", imageUrl: null, isLoading: false };
+  if (!isSafeRequestImage(attachment)) return { error: "Unsupported image type", imageUrl: null, isLoading: false };
   if (state.attachmentKey !== attachmentKey) return { error: "", imageUrl: null, isLoading: true };
   return state;
 }
 
-function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
+function getAttachmentPreviewKey(attachment: RequestAttachment) {
   return [attachment.id, attachment.url, attachment.fileName, attachment.mediaType, attachment.sizeBytes].join(":");
 }

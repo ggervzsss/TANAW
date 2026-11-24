@@ -1,16 +1,15 @@
 // Generated from FastAPI/Pydantic contracts. Do not edit manually.
 export const realtimeEventTypes = [
-  "support_ticket.created",
-  "support_ticket.updated",
-  "support_ticket.message.created",
-  "support_ticket.status.changed",
+  "request.created",
+  "request.updated",
+  "request.message.created",
+  "request.status.changed",
   "notification.created",
   "notification.updated",
   "alert.created",
   "alert.updated",
   "alert.status.changed",
   "alert.resolved",
-  "alert.reopened",
   "account_request.created",
   "account_request.updated",
   "account_request.approved",
@@ -78,7 +77,7 @@ export interface components {
          * RealtimeEventType
          * @enum {string}
          */
-        RealtimeEventType: "support_ticket.created" | "support_ticket.updated" | "support_ticket.message.created" | "support_ticket.status.changed" | "notification.created" | "notification.updated" | "alert.created" | "alert.updated" | "alert.status.changed" | "alert.resolved" | "alert.reopened" | "account_request.created" | "account_request.updated" | "account_request.approved" | "account_request.declined" | "enterprise.created" | "enterprise.updated" | "user.created" | "user.updated" | "user.status.changed" | "activity.created" | "report.created" | "report.updated" | "report.processing" | "report.finalized" | "report.archived" | "report.failed" | "email_delivery.updated" | "dev_log.created" | "telemetry.updated" | "system_setting.updated";
+        RealtimeEventType: "request.created" | "request.updated" | "request.message.created" | "request.status.changed" | "notification.created" | "notification.updated" | "alert.created" | "alert.updated" | "alert.status.changed" | "alert.resolved" | "account_request.created" | "account_request.updated" | "account_request.approved" | "account_request.declined" | "enterprise.created" | "enterprise.updated" | "user.created" | "user.updated" | "user.status.changed" | "activity.created" | "report.created" | "report.updated" | "report.processing" | "report.finalized" | "report.archived" | "report.failed" | "email_delivery.updated" | "dev_log.created" | "telemetry.updated" | "system_setting.updated";
         /** RealtimeHeartbeat */
         RealtimeHeartbeat: {
             /**
@@ -132,10 +131,10 @@ export interface components {
              */
             report_id: string | null;
             /**
-             * Ticket Id
+             * Request Id
              * @default null
              */
-            ticket_id: string | null;
+            request_id: string | null;
         };
     };
     responses: never;

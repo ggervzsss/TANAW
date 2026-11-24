@@ -32,7 +32,7 @@ const settingsSections = {
   profile: { label: "Profile Information", icon: User },
   security: { label: "Password & Security", icon: Shield },
   appearance: { label: "Appearance", icon: Monitor },
-  support: { label: "Support Tickets", icon: LifeBuoy },
+  support: { label: "Requests", icon: LifeBuoy },
   developer: { label: "Developer Settings", icon: CodeXml },
   system: { label: "System Settings", icon: SlidersHorizontal },
 };

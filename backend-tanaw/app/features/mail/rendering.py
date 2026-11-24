@@ -30,9 +30,9 @@ from app.features.mail.templates import (
     account_email_change_verification_email,
     business_email_change_email,
     password_reset_code_email,
-    support_ticket_reply_email,
+    request_reply_email,
 )
-from app.features.support.models import SupportTicket, SupportTicketMessage
+from app.features.requests.models import Request, RequestMessage
 
 
 class EmailRenderCancelled(ValueError):
@@ -245,20 +245,20 @@ async def _email_change_source(
 async def _render_support_reply(
     db: AsyncSession, outbox: EmailOutbox, payload: dict[str, str]
 ) -> EmailContent:
-    ticket_id = _required(payload, "ticketId")
+    request_id = _required(payload, "requestId")
     message_id = _required(payload, "messageId")
-    ticket = await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id))
+    request = await db.scalar(select(Request).where(Request.id == request_id))
     message = await db.scalar(
-        select(SupportTicketMessage).where(
-            SupportTicketMessage.id == message_id,
-            SupportTicketMessage.ticket_id == ticket_id,
+        select(RequestMessage).where(
+            RequestMessage.id == message_id,
+            RequestMessage.request_id == request_id,
         )
     )
-    if ticket is None or message is None or ticket.enterprise_profile_id != outbox.account_id:
-        raise EmailRenderCancelled("The support reply is no longer available.")
-    return support_ticket_reply_email(
-        ticket_code=ticket.ticket_code,
-        subject=ticket.subject,
+    if request is None or message is None or request.enterprise_profile_id != outbox.account_id:
+        raise EmailRenderCancelled("The request reply is no longer available.")
+    return request_reply_email(
+        request_code=request.request_code,
+        title=request.title,
         recipient_name=_required(payload, "recipientName"),
         author_name=message.author_name,
         message=message.message,

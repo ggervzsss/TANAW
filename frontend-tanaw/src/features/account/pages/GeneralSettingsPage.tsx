@@ -19,7 +19,7 @@ const descriptions = {
   profile: "Edit your profile photo and contact information.",
   security: "Update the password you use to sign in to TANAW.",
   appearance: "Choose a theme and adjust the readability of your workspace.",
-  support: "Review enterprise support requests, conversations, and status.",
+  support: "Requests people sent to IT, with their conversations and status.",
   system: "Manage account safety, activity history, Philippine time display, and technical issue notifications.",
 };
 

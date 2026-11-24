@@ -93,12 +93,27 @@
   content: "";
 }
 
-.tanaw-map-marker-summary__status[data-pin-state="ok"]::before {
+.tanaw-map-marker-summary__status[data-pin-state="normal"]::before,
+.tanaw-map-marker-summary__status[data-pin-state="closed"]::before {
   background: #1f8a3c;
 }
 
-.tanaw-map-marker-summary__status[data-pin-state="partial"]::before {
-  background: #b45309;
+.tanaw-map-marker-summary__status[data-pin-state="busy"]::before {
+  background: #d97706;
+}
+
+.tanaw-map-marker-summary__status[data-pin-state="camera"]::before {
+  background: #dc2626;
+}
+
+.tanaw-map-marker-summary__status[data-pin-state="offline"]::before {
+  background: #64748b;
+}
+
+.tanaw-map-marker-summary__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .tanaw-map-marker-summary dl {
@@ -398,8 +413,9 @@
   stroke-width: 1.8;
 }
 
-.tanaw-enterprise-marker[data-tone="unconfigured"] .tanaw-enterprise-marker__body {
-  border-style: dashed;
+/* Closed now, or temporarily closed: a faded pin, never an offline one. */
+.tanaw-enterprise-marker[data-tone="closed"] {
+  opacity: 0.45;
 }
 
 .tanaw-enterprise-marker__tip {

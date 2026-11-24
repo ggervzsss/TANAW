@@ -107,20 +107,28 @@ OPERATIONAL_ALERT_CODE_SEQUENCE = Sequence(
 
 
 class OperationalAlert(Base):
+    """A live alert: a place busier than usual, or a camera that is not counting.
+
+    Camera alerts start as Pending and become Active once the problem has lasted the camera
+    wait time set by IT; an alert Ends by itself when its problem clears.
+    """
+
     __tablename__ = "operational_alerts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     alert_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
-    alert_type: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    alert_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    enterprise_profile_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     enterprise: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    requester: Mapped[str] = mapped_column(String(120), nullable=False)
+    camera: Mapped[str | None] = mapped_column(String(120), nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    required_action: Mapped[str] = mapped_column(Text, nullable=False)
-    resolution_mode: Mapped[str] = mapped_column(String(80), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="New")
-    owner: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="IT")
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Pending")
     source_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True, nullable=False
     )

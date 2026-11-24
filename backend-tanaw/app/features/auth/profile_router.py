@@ -16,12 +16,14 @@ from app.features.accounts.schemas import (
     BuildingCapacityUpdate,
     BusinessEmailChangeRequest,
     ContactNumberChangeRequest,
+    EnterpriseNameChangeRequest,
     LeadAdminNameUpdate,
     ProfileDisplayImageUpdate,
     ProfileUpdate,
 )
 from app.features.accounts.service import (
     PENDING_CONTACT_NUMBER_CHANGE_KEY,
+    PENDING_ENTERPRISE_NAME_CHANGE_KEY,
     set_display_image_data_url,
     to_auth_user,
 )
@@ -37,7 +39,6 @@ from app.features.auth.email_change import (
     get_active_account_email_change_request,
     request_account_email_change,
 )
-from app.features.auth.policies import get_auth_log_category
 from app.features.auth.profile_helpers import (
     enterprise_label,
     require_enterprise_account,
@@ -49,6 +50,10 @@ from app.features.auth.schemas import (
 from app.features.notifications.service import (
     create_role_notifications,
     mark_source_notifications_read,
+)
+from app.features.requests.service import (
+    cancel_account_change_request,
+    open_account_change_request,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +101,6 @@ async def update_profile(
         )
 
     profile = account.enterprise_profile
-    account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
         if profile is None:
             raise RuntimeError("Enterprise account is missing its profile.")
@@ -105,17 +109,18 @@ async def update_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Manager and enterprise names are required.",
             )
-        if payload.phone is None:
+        # The enterprise name and contact number change only after IT approves a request.
+        if payload.enterpriseName.strip() != profile.enterprise_name or (
+            payload.phone is not None and payload.phone != account.phone
+        ):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Contact number is required.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Enterprise name and contact number changes need IT's approval.",
             )
         profile.manager_name = payload.managerName
-        enterprise_name = payload.enterpriseName.strip()
-        profile.enterprise_name = enterprise_name
-        account.display_name = enterprise_name
         profile.address = payload.address
     else:
+        account.phone = payload.phone
         if payload.firstName is None or payload.lastName is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -130,7 +135,7 @@ async def update_profile(
     await db.refresh(account)
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Accounts",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -153,7 +158,7 @@ async def update_profile_display_image(
     await db.refresh(account)
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Accounts",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -177,7 +182,7 @@ async def update_lead_admin_name(
     await db.refresh(account)
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Accounts",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -202,7 +207,7 @@ async def update_building_capacity(
     await db.refresh(account)
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Accounts",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -240,15 +245,23 @@ async def request_business_email_change(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=response_status, detail=str(exc)) from exc
+    change = await open_account_change_request(
+        db,
+        account,
+        "businessEmail",
+        email_request.requested_email,
+        email_change_request_id=email_request.id,
+    )
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Requests",
         severity="Info",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
-        action="Request Business Email Change",
-        target=account.email,
-        summary=f"{account.display_name} requested verified ownership of a new business email.",
+        action="Request Account Change",
+        target=change.request_code,
+        summary=f"{account.display_name} asked to change its business email.",
+        it_detail=f"New address: {email_request.requested_email}. It must be verified first.",
         source_id=account.id,
         metadata={
             "requestId": email_request.id,
@@ -326,15 +339,16 @@ async def cancel_business_email_change(
         )
     except AccountEmailChangeError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await cancel_account_change_request(db, account.id, "businessEmail")
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Requests",
         severity="Info",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
-        action="Cancel Business Email Change",
+        action="Cancel Account Change",
         target=account.email,
-        summary=f"{account.display_name} cancelled a pending business email change.",
+        summary=f"{account.display_name} cancelled its business email change.",
         source_id=account.id,
         metadata={"requestId": request.id, "requestedEmail": request.requested_email},
     )
@@ -369,16 +383,18 @@ async def request_contact_number_change(
         {"phone": payload.phone, "requestedAt": datetime.now(UTC).isoformat()},
     )
     await db.flush()
+    change = await open_account_change_request(db, account, "contactNumber", payload.phone)
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Requests",
         severity="Info",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
-        action="Request Contact Number Change",
-        target=account.email,
-        summary=f"{account.display_name} requested a contact number change.",
-        source_id=account.id,
+        action="Request Account Change",
+        target=change.request_code,
+        summary=f"{account.display_name} asked to change its contact number.",
+        source_id=change.id,
+        it_detail=f"New contact number: {payload.phone}.",
     )
     enterprise = enterprise_label(account)
     await notify_enterprise_account_change(
@@ -392,4 +408,51 @@ async def request_contact_number_change(
     return AccountChangeRequestResponse(
         status="pending",
         message="Contact number change request sent to IT for review.",
+    )
+
+
+@router.post("/profile/enterprise-name-change", response_model=AccountChangeRequestResponse)
+async def request_enterprise_name_change(
+    payload: EnterpriseNameChangeRequest,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountChangeRequestResponse:
+    profile = require_enterprise_account(account)
+    name = " ".join(payload.enterpriseName.split())
+    if name == profile.enterprise_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This is already the enterprise name.",
+        )
+    set_pending_account_change(
+        account,
+        PENDING_ENTERPRISE_NAME_CHANGE_KEY,
+        {"name": name, "requestedAt": datetime.now(UTC).isoformat()},
+    )
+    await db.flush()
+    change = await open_account_change_request(db, account, "enterpriseName", name)
+    await record_auth_log(
+        db,
+        group="Requests",
+        severity="Info",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Request Account Change",
+        target=change.request_code,
+        summary=f"{account.display_name} asked to change its enterprise name.",
+        source_id=change.id,
+        it_detail=f"New enterprise name: {name}.",
+    )
+    enterprise = enterprise_label(account)
+    await notify_enterprise_account_change(
+        db,
+        account,
+        title=f"{enterprise} asked to change its enterprise name.",
+        message=f"{enterprise} asked to change its name to {name}. IT approval is required.",
+        notification_type="Enterprise Profile Change Request",
+        source_type="enterprise.profile.name",
+    )
+    return AccountChangeRequestResponse(
+        status="pending",
+        message="Enterprise name change sent to IT for approval.",
     )

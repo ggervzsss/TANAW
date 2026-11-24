@@ -14,7 +14,7 @@ from app.features.accounts.dependencies import (
     get_account_from_access_token,
     get_current_account,
 )
-from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
+from app.features.accounts.models import Account, AccountStatus, SystemConfiguration
 from app.features.accounts.schemas import (
     AuthUser,
 )
@@ -36,7 +36,6 @@ from app.features.auth.http_session import (
     token_remember_preference,
 )
 from app.features.auth.policies import (
-    get_auth_log_category,
     is_login_scope_allowed,
 )
 from app.features.auth.schemas import (
@@ -53,12 +52,6 @@ from app.features.auth.service import (
     resolve_login_lockout_policy,
 )
 from app.features.auth.system_settings import load_system_settings_values
-from app.features.monitoring.alerts import create_operational_alert, to_operational_alert_summary
-from app.features.notifications.service import (
-    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
-    create_role_notifications,
-    system_setting_enabled,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -66,41 +59,31 @@ SYSTEM_SETTINGS_ID = "default"
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> None:
-    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_LOCKOUT_KEY):
-        return
-
-    alert = await create_operational_alert(
+async def record_account_lockout(
+    db: AsyncSession, account: Account, policy: LoginLockoutPolicy
+) -> None:
+    """A lockout is a heads-up in Activity, not an alert: it ends by itself after the lock time."""
+    await record_auth_log(
         db,
-        alert_type="Failed Login Threshold",
+        group="Login & Security",
         severity="Warning",
-        requester=account.display_name,
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Account Locked",
+        target=account.email,
         summary=(
-            f"{account.display_name} reached the failed sign-in threshold and was "
-            "temporarily locked."
+            f"{account.display_name}'s account was locked for {policy.lock_minutes} minutes "
+            "after too many wrong passwords."
         ),
-        required_action="Review account activity and contact the user if the lockout is suspicious.",
-        resolution_mode="Remote Review",
-        owner="IT",
-        enterprise=(
-            account.enterprise_profile.enterprise_name
-            if account.enterprise_profile is not None
-            else None
+        source_id=account.id,
+        it_detail=(
+            f"{policy.attempt_limit} failed sign-ins in a row. "
+            f"Locked for {policy.lock_minutes} minutes."
         ),
-        source_id=f"failed-login-threshold:{account.id}",
-    )
-    alert_summary = to_operational_alert_summary(alert)
-    await create_role_notifications(
-        db,
-        recipient_roles=[AccountRole.IT],
-        title=f"{account.display_name}'s account is temporarily locked.",
-        message=f"{alert_summary.summary} {alert_summary.requiredAction}",
-        notification_type="Locked Account",
-        severity="Warning",
-        actor=account,
-        source_type="operational.alert",
-        source_id=alert_summary.id,
-        replace_existing_for_source=True,
+        metadata={
+            "attemptLimit": policy.attempt_limit,
+            "lockMinutes": policy.lock_minutes,
+        },
     )
 
 
@@ -153,7 +136,7 @@ async def login(
         if lockout_candidate is not None:
             remaining = register_failed_login(lockout_candidate, policy=lockout_policy)
             if remaining > 0:
-                await notify_failed_login_threshold(db, lockout_candidate)
+                await record_account_lockout(db, lockout_candidate, lockout_policy)
             await db.commit()
             if remaining > 0:
                 raise HTTPException(
@@ -176,7 +159,7 @@ async def login(
     )
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Login & Security",
         severity="Info",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -237,7 +220,7 @@ async def logout(
 ) -> dict[str, str]:
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Login & Security",
         severity="Info",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),

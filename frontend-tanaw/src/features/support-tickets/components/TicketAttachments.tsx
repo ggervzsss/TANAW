@@ -2,12 +2,12 @@ import { ImageIcon, Paperclip, RefreshCw } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { ModalFrame } from "@/shared/components/ui";
-import { isSafeSupportTicketImage, type SupportTicketAttachment } from "@/shared/services/supportTickets";
+import { isSafeRequestImage, type RequestAttachment } from "@/shared/services/requests";
 import { useTicketAttachmentImageUrl } from "../hooks";
 import { formatFileSize } from "../model";
 
-export function TicketAttachments({ attachments }: { attachments: SupportTicketAttachment[] }) {
-  const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
+export function TicketAttachments({ attachments }: { attachments: RequestAttachment[] }) {
+  const [previewAttachment, setPreviewAttachment] = useState<RequestAttachment | null>(null);
 
   return (
     <>
@@ -46,7 +46,7 @@ export function TicketAttachments({ attachments }: { attachments: SupportTicketA
   );
 }
 
-function TicketAttachmentPreview({ attachment, onClose }: { attachment: SupportTicketAttachment; onClose: () => void }) {
+function TicketAttachmentPreview({ attachment, onClose }: { attachment: RequestAttachment; onClose: () => void }) {
   return (
     <ModalFrame title={attachment.fileName} eyebrow="Ticket Photo" onClose={onClose} maxWidthClassName="max-w-4xl">
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
@@ -60,12 +60,12 @@ function TicketAttachmentPreview({ attachment, onClose }: { attachment: SupportT
   );
 }
 
-function TicketAttachmentImage({ alt, attachment, className, isFullPreview = false }: { alt: string; attachment: SupportTicketAttachment; className: string; isFullPreview?: boolean }) {
+function TicketAttachmentImage({ alt, attachment, className, isFullPreview = false }: { alt: string; attachment: RequestAttachment; className: string; isFullPreview?: boolean }) {
   const { error, imageUrl, isLoading } = useTicketAttachmentImageUrl(attachment);
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const renderError = imageUrl && failedImageUrl === imageUrl ? "Image could not be rendered" : "";
 
-  if (!isSafeSupportTicketImage(attachment)) return <AttachmentImageFallback className={className} isFullPreview={isFullPreview} message="Unsupported image type" />;
+  if (!isSafeRequestImage(attachment)) return <AttachmentImageFallback className={className} isFullPreview={isFullPreview} message="Unsupported image type" />;
   if (error || renderError) return <AttachmentImageFallback className={className} isFullPreview={isFullPreview} message={renderError || error || "Image could not be loaded"} />;
   if (isLoading || !imageUrl) return <AttachmentImageFallback className={className} icon="loading" isFullPreview={isFullPreview} message="Loading image" />;
   return <img src={imageUrl} alt={alt} className={className} onError={() => setFailedImageUrl(imageUrl)} />;

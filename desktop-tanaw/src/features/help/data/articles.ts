@@ -24,7 +24,7 @@ export const helpArticles: HelpArticle[] = [
     sections: [
       { heading: "Problem", paragraphs: ["A configured camera is unavailable or visitor counting stops."] },
       { heading: "What to check", steps: ["Confirm that the camera itself is powered and reachable.", "Review the camera status shown in Camera Setup.", "Check the current system issue notice for a local counting-service problem.", "Retry the camera connection after the source is available."] },
-      { heading: "When to contact support", paragraphs: ["Create a Support Ticket if the source is reachable but TANAW still cannot connect or process the camera."] },
+      { heading: "When to contact support", paragraphs: ["Send IT a request if the camera is reachable but TANAW still cannot connect to it or count with it."] },
     ],
     relatedArticleIds: ["camera-connection", "support-tickets"],
     supportView: "tickets",
@@ -53,14 +53,14 @@ export const helpArticles: HelpArticle[] = [
   },
   {
     id: "support-tickets",
-    title: "Create and follow a Support Ticket",
-    summary: "Send a support request, include useful context, and follow replies without creating duplicate tickets.",
+    title: "Send and follow a request",
+    summary: "Ask IT for help, include useful details, and follow their replies without sending the same request twice.",
     category: "Troubleshooting",
-    keywords: ["ticket", "support", "reply", "attachment", "issue"],
+    keywords: ["request", "ticket", "support", "reply", "attachment", "issue"],
     commonIssue: true,
     sections: [
-      { heading: "Create a ticket", steps: ["Open Support Tickets from the account menu.", "Choose the category that best matches the problem.", "Describe what happened and attach relevant non-sensitive evidence when useful.", "Submit the ticket once."] },
-      { heading: "Follow progress", paragraphs: ["Open the existing ticket to read IT replies and continue the conversation. Resolved tickets remain available in history."] },
+      { heading: "Send a request", steps: ["Open Requests from the account menu.", "Choose what the request is about: the desktop app or a camera, a report, or something else.", "Describe what happened in your own words and attach photos when they help.", "Send the request once."] },
+      { heading: "Follow progress", paragraphs: ["Open the request to read IT\u2019s replies and continue the conversation. A resolved request stays in your list, and you can reopen it if the problem comes back."] },
     ],
     relatedArticleIds: ["camera-troubleshooting", "reports-and-sync"],
     supportView: "tickets",

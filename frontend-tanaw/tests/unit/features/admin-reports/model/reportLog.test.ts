@@ -23,7 +23,7 @@ const intake: IntakeReport = {
 };
 
 function log(action: string, actor: string, timestamp: string, metadata?: SystemLog["metadata"]): SystemLog {
-  return { id: `${action}-${timestamp}`, timestamp, category: "Staff Operation", severity: "Success", actor, actorRole: "LGU Staff", action, target: "", summary: "", sourceId: "r-oct", metadata };
+  return { id: `${action}-${timestamp}`, timestamp, group: "Reports", severity: "Success", actor, actorRole: "LGU Staff", action, target: "", summary: "", sourceId: "r-oct", metadata };
 }
 
 const entryFor = (reports: IntakeReport[]) => buildMonthEntry("market", october, indexReports(reports), new Map(), today);

@@ -48,7 +48,7 @@ async def run_retention_now(
     await create_activity_log(
         db,
         ActivityLogCreate(
-            category="IT Activity",
+            group="Settings & Maintenance",
             severity="Info",
             actor=actor.display_name,
             actorRole="IT Personnel",

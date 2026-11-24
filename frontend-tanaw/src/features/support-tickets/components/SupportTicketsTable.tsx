@@ -2,17 +2,17 @@ import { Eye, Paperclip, TicketCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
-import type { SupportTicket } from "@/shared/services/supportTickets";
+import type { Request } from "@/shared/services/requests";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatTicketTime } from "../model";
-import { CategoryBadge, PriorityBadge, TicketStatusBadge } from "./TicketBadges";
+import { GroupBadge, TicketStatusBadge, UrgentBadge } from "./TicketBadges";
 
 type SupportTicketsTableProps = {
   isItResponder: boolean;
   isLoading: boolean;
   onOpenTicket: (ticketId: string) => void;
   timeFormat: SystemTimeFormat;
-  tickets: SupportTicket[];
+  tickets: Request[];
   toolbar: ReactNode;
 };
 
@@ -33,7 +33,7 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
           </colgroup>
           <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
-              {["Ticket ID", "Enterprise", "Subject", "Category", "Priority", "Status", "Submitted"].map((heading) => (
+              {["Reference", "From", "Request", "Group", "Urgent", "Status", "Sent"].map((heading) => (
                 <th key={heading} className="px-4 py-4 whitespace-nowrap">
                   {heading}
                 </th>
@@ -49,8 +49,8 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
                 <td colSpan={7}>
                   <EmptyState
                     icon={TicketCheck}
-                    title={isLoading ? "Loading support tickets" : "No support tickets"}
-                    description={isLoading ? "Fetching enterprise ticket records." : "Enterprise-submitted tickets will appear here for review."}
+                    title={isLoading ? "Loading requests" : "No requests"}
+                    description={isLoading ? "Fetching requests." : "Requests from enterprises and from the sign-in page appear here."}
                   />
                 </td>
               </tr>
@@ -60,21 +60,22 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
       </div>
 
       <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
-        <span>Showing {tickets.length} tickets</span>
-        <span>{isItResponder ? "IT response queue" : "Read-only supervision"}</span>
+        <span>Showing {tickets.length} requests</span>
+        <span>{isItResponder ? "IT request queue" : "Read only"}</span>
       </div>
     </Panel>
   );
 }
 
-function TicketRow({ ticket, onOpen, timeFormat }: { ticket: SupportTicket; onOpen: () => void; timeFormat: SystemTimeFormat }) {
+function TicketRow({ ticket, onOpen, timeFormat }: { ticket: Request; onOpen: () => void; timeFormat: SystemTimeFormat }) {
+  const attachments = ticket.attachments ?? [];
   return (
     <tr onClick={onOpen} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
       <td className="px-4 py-4 align-top font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
       <td className="px-4 py-4 align-top">
         <ExpandableTableText
-          primary={ticket.enterpriseName}
-          secondary={ticket.enterpriseId}
+          primary={ticket.enterpriseName ?? ticket.requesterName}
+          secondary={ticket.enterpriseId ?? ticket.requesterEmail ?? ""}
           ariaLabel="ticket enterprise and ID"
           className="font-bold text-gray-950"
           secondaryClassName="font-mono text-[10px] font-semibold text-gray-500"
@@ -82,25 +83,25 @@ function TicketRow({ ticket, onOpen, timeFormat }: { ticket: SupportTicket; onOp
       </td>
       <td className="px-4 py-4 align-top">
         <ExpandableTableText
-          primary={ticket.subject}
+          primary={ticket.title}
           secondary={ticket.description}
           ariaLabel="ticket subject and description"
           className="font-bold text-gray-950"
           secondaryClassName="text-xs leading-relaxed text-gray-500"
           twoLines
         />
-        {ticket.attachments.length > 0 && (
+        {attachments.length > 0 && (
           <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
             <Paperclip size={11} />
-            {ticket.attachments.length} photo{ticket.attachments.length === 1 ? "" : "s"}
+            {attachments.length} photo{attachments.length === 1 ? "" : "s"}
           </p>
         )}
       </td>
       <td className="px-4 py-4 align-top">
-        <CategoryBadge category={ticket.category} />
+        <GroupBadge group={ticket.group} />
       </td>
       <td className="px-4 py-4 align-top">
-        <PriorityBadge priority={ticket.priority} />
+        {ticket.urgent ? <UrgentBadge /> : <span className="text-xs text-gray-400">No</span>}
       </td>
       <td className="px-4 py-4 align-top">
         <TicketStatusBadge status={ticket.status} />

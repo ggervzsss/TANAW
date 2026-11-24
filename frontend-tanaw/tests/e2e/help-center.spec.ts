@@ -59,11 +59,11 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
   await expect(page).toHaveURL(/\/staff\/help\/staff-submit-reports$/);
 });
 
-test("offers the existing Support Tickets path from Admin help", async ({ page }) => {
+test("offers the Requests path from Admin help", async ({ page }) => {
   await mockPortal(page, "admin");
   await page.goto("/admin/help/admin-operations-center");
   await expect(page.getByRole("heading", { name: "Follow up a request in Requests" })).toBeVisible();
-  await page.getByRole("link", { name: "Open Support Tickets" }).click();
+  await page.getByRole("link", { name: "Open Requests" }).click();
   await expect(page).toHaveURL(/\/admin\/settings\/support$/);
   await page.getByRole("button", { name: "Back from General Settings" }).click();
   await expect(page).toHaveURL(/\/admin\/help\/admin-operations-center$/);

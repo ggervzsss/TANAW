@@ -85,7 +85,7 @@ async def ingest_desktop_report_submission(
     await notify_staff_report_submission(db, account, report)
     await record_operational_log(
         db,
-        category="Staff Submission",
+        group="Reports",
         severity="Success",
         actor=enterprise_name(account),
         actor_role="Enterprise Account",
@@ -165,7 +165,7 @@ async def update_intake_report_status(
 
     await record_operational_log(
         db,
-        category="Staff Operation",
+        group="Reports",
         severity="Warning" if payload.status == "Returned" else "Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
@@ -212,7 +212,7 @@ async def generate_final_report(
 
     await record_operational_log(
         db,
-        category="Staff Operation",
+        group="Reports",
         severity="Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
@@ -241,7 +241,7 @@ async def return_final_report_revision(
 
     await record_operational_log(
         db,
-        category="Staff Operation",
+        group="Reports",
         severity="Warning",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
@@ -274,7 +274,7 @@ async def update_final_report_workflow_status(
 
     await record_operational_log(
         db,
-        category="Staff Operation",
+        group="Reports",
         severity="Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",

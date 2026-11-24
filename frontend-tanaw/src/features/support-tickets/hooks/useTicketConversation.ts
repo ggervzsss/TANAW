@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { SupportTicketDetail } from "@/shared/services/supportTickets";
+import type { RequestDetail } from "@/shared/services/requests";
 
-export function useTicketConversation(ticket: SupportTicketDetail | undefined) {
+export function useTicketConversation(ticket: RequestDetail | undefined) {
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const conversationRef = useRef<HTMLDivElement>(null);
   const wasNearBottomRef = useRef(true);
   const previousMessageIdRef = useRef<string | null>(null);
-  const latestMessage = ticket?.messages.at(-1);
+  const latestMessage = ticket?.messages?.at(-1);
 
   const scrollToLatest = () => {
     const conversation = conversationRef.current;
@@ -30,7 +30,7 @@ export function useTicketConversation(ticket: SupportTicketDetail | undefined) {
       setHasNewMessage(true);
     }
     if (!isInitialLoad && latestMessage) {
-      setAnnouncement(`New support ticket reply from ${latestMessage.authorName}`);
+      setAnnouncement(`New update on this request from ${latestMessage.authorName}`);
     }
   }, [latestMessage, ticket]);
 

@@ -37,12 +37,20 @@ export type MapEnterprise = {
   monitoringStatus: MonitoringStatus;
   occupancyStatus: OccupancyStatus;
   cameraMonitoring: CameraMonitoringSummary | null;
-  operatingHours?: string;
   contact?: string;
   trend?: "Up" | "Stable" | "Down";
-  lastSync?: string;
+  lastSync?: string | null;
   gatewayStatus?: GatewayStatus;
+  /** What the pin shows: normal, busy (yellow), camera (red), offline (gray) or closed (faded). */
+  pinState?: MapPinStatus;
+  openNow?: boolean;
+  offlineSince?: string | null;
+  closedReason?: string | null;
+  alerts?: MapEnterpriseAlert[];
 };
+
+export type MapPinStatus = ApiSchemas["MapEnterpriseSummary"]["pinState"];
+export type MapEnterpriseAlert = ApiSchemas["MapEnterpriseAlert"];
 
 export type VisitorInsightRange = "today" | "7d" | "30d";
 export type VisitorActivityLevel = "Usual" | "Busier Than Usual" | "No Recent Baseline";
@@ -81,44 +89,29 @@ export type VisitorInsights = {
   lastUpdatedAt: string | null;
 };
 
-export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
-export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
-export type PriorityAlertStatus = "New" | "In Review" | "Resolved";
-export type PriorityAlertOwner = "IT" | "Admin" | "System";
-export type TechnicalIssueUrgency = "Normal" | "Important" | "Urgent";
-
-export type PriorityAlert = {
-  id: string;
-  type: PriorityAlertType;
-  severity: AlertSeverity;
-  urgency: TechnicalIssueUrgency;
-  enterprise?: string;
-  requester: string;
-  summary: string;
-  requiredAction: string;
-  resolutionMode: PriorityAlertResolutionMode;
-  status: PriorityAlertStatus;
-  owner: PriorityAlertOwner;
-  time: string;
-};
+/** A live alert: a place busier than usual, or a camera that is not counting. */
+export type LiveAlert = ApiSchemas["OperationalAlertSummary"];
+export type LiveAlertType = LiveAlert["type"];
 
 export type OperationalSummary = ApiSchemas["OperationalSummary"];
 
-export type SystemLogCategory = "IT Activity" | "Staff Submission" | "Staff Operation" | "Admin Operation" | "Enterprise Activity" | "System";
+/** The six groups Activity is filtered by, the same for the Admin and IT. */
+export type ActivityGroup = ApiSchemas["ActivityLogSummary"]["group"];
 export type SystemLogActorRole = "Admin" | "IT Personnel" | "LGU Staff" | "Enterprise Account" | "System";
 
 export type SystemLog = {
   id: string;
   timestamp: string;
-  category: SystemLogCategory;
+  group: ActivityGroup;
   severity: LogSeverity;
   actor: string;
   actorRole: SystemLogActorRole;
   action: string;
   target: string;
   summary: string;
-  sourceId?: string;
-  resolutionStatus?: "Unresolved" | "Resolved" | null;
+  /** Technical details for IT, such as the camera or the error. Never sent to the Admin. */
+  itDetail?: string | null;
+  sourceId?: string | null;
   metadata?: Record<string, string | number | boolean | null>;
 };
 

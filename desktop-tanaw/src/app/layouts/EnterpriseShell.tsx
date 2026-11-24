@@ -14,6 +14,7 @@ import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess, notifyWarning } from "../../features/toasts/services/toast-service";
 import { useBackupRestoreGeneration } from "../../features/sync/hooks/useBackupRestoreGeneration";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
+import { reportDesktopEvent } from "../../features/sync/services/connection-gap";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord } from "../../types/enterprise";
@@ -176,6 +177,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
     const status = await getMlServiceStatus();
     await resetUnreadableLocalData(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, enterpriseId);
     notifySuccess("Local data was reset. TANAW is starting with fresh local data.");
+    void reportDesktopEvent("local_data_reset");
     setMlContextAttempt((attempt) => attempt + 1);
   }, [user?.enterpriseId, user?.id]);
 

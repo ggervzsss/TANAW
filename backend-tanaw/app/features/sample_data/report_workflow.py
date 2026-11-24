@@ -360,7 +360,7 @@ async def create_activity_logs(
             ActivityLog(
                 id=sample_uuid("activity-final-report", final_report.id),
                 timestamp=final_report.generated_on,
-                category="Staff Operation",
+                activity_group="Reports",
                 severity="Success",
                 actor=REPORTING_STAFF_NAME,
                 actor_role="LGU Staff",
@@ -389,7 +389,7 @@ def _submission_log(
     return ActivityLog(
         id=sample_uuid("activity-report", report.id, variant),
         timestamp=at,
-        category="Staff Submission",
+        activity_group="Reports",
         severity="Success",
         actor=report.enterprise_name,
         actor_role="Enterprise Account",
@@ -414,7 +414,7 @@ def _review_log(
     return ActivityLog(
         id=sample_uuid("activity-review", report.id, status, at.isoformat()),
         timestamp=at,
-        category="Staff Operation",
+        activity_group="Reports",
         severity="Warning" if status == "Returned" else "Success",
         actor=REPORTING_STAFF_NAME,
         actor_role="LGU Staff",

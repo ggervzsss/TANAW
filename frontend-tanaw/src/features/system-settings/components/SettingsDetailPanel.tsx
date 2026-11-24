@@ -111,7 +111,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
       <div className="divide-y divide-(--tanaw-border-soft)">
         {sections.map((section) => {
           const Icon = section.icon;
-          const isImmediateSection = section.id === "display" || section.id === "notifications";
+          const isImmediateSection = section.id === "display" || section.id === "monitoring";
           const sectionKeys = section.fields.map((field) => settingKey(section.id, field));
           const isDirty = sectionKeys.some((key) => saveStateByKey[key] === "dirty");
           const isSaving = sectionKeys.some((key) => saveStateByKey[key] === "saving");
@@ -253,6 +253,7 @@ function formatSelectOption(field: SettingField, option: string | number) {
   if (field.type !== "select") return String(option);
   if (field.key === "loginAttemptLimit") return `${option} attempts`;
   if (field.key === "loginLockMinutes") return `${option} minutes`;
+  if (field.key === "cameraWaitMinutes") return `${option} minutes`;
   if (field.key === "retentionDays") return `${option} days`;
   if (field.key === "timeFormat") return option === "24-hour" ? "24-hour" : "12-hour (AM/PM)";
   return String(option);

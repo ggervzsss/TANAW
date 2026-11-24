@@ -52,7 +52,7 @@ async function setup(page: Page, configured = true, mixed = false, frame = { wid
   await page.route("**/auth/session", (route) => route.fulfill({ status: signedIn ? 200 : 401, json: signedIn ? { token: "area-test", user } : { detail: "Sign in" } }));
   await page.route("**/auth/me", (route) => route.fulfill({ json: user }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ json: [] }));
-  await page.route("**/operational/tickets", (route) => route.fulfill({ json: [] }));
+  await page.route("**/operational/requests", (route) => route.fulfill({ json: [] }));
   await page.route("**/e2e-camera.svg", (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}"><rect width="100%" height="100%" fill="#123"/></svg>` }),
   );

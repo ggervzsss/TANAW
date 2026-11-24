@@ -93,7 +93,6 @@ export function AppRouter() {
           {legacyPortalRedirects.admin.map(([path, target]) => (
             <Route key={path} path={path} element={<Navigate to={target} replace />} />
           ))}
-          <Route path="notifications" element={<NotificationsPage role="admin" />} />
           <Route path="settings/:section?" element={<GeneralSettingsPage role="admin" />} />
           <Route path="profile" element={<Navigate to={routes.admin.profile} replace />} />
           <Route path="security" element={<Navigate to={routes.admin.security} replace />} />

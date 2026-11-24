@@ -41,7 +41,7 @@ export async function signIn(page: Page, configureMl?: () => Promise<void>, reme
   await page.route("**/auth/session", (route) => route.fulfill(signedIn ? json({ token, user }) : json({ detail: "Not authenticated" }, 401)));
   await page.route("**/auth/me", (route) => route.fulfill(json(user)));
   await page.route("**/operational/notifications", (route) => route.fulfill(json([])));
-  await page.route("**/operational/tickets", (route) => route.fulfill(json([])));
+  await page.route("**/operational/requests", (route) => route.fulfill(json([])));
   await mockMlRequest(page, "*", (request) => {
     if (new URL(request.url).pathname === "/context/enterprise") {
       return mlResponse({ status: 200, body: JSON.stringify({ enterprise_id: user.enterpriseId, enterprise_name: user.enterpriseName }) });

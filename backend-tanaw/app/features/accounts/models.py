@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -119,6 +120,10 @@ class EnterpriseProfile(Base):
     building_capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     gateway_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     gateway_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    opening_hours_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_check_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -126,6 +131,34 @@ class EnterpriseProfile(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     account: Mapped[Account] = relationship(back_populates="enterprise_profile")
+
+
+class EnterpriseClosure(Base):
+    """Dates a place is temporarily closed, so it is never shown as offline then."""
+
+    __tablename__ = "enterprise_closures"
+    __table_args__ = (
+        CheckConstraint("end_date >= start_date", name="ck_enterprise_closures_dates"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    enterprise_profile_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_profiles.account_id",
+            name="fk_enterprise_closures_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=False,
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_by_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class AccountEmailChangeRequest(Base):

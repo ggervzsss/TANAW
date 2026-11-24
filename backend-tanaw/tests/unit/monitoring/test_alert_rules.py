@@ -4,13 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.monitoring.alerts import (
-    can_manage_operational_alert,
-    list_operational_alerts,
-    to_operational_alert_summary,
-    visitor_activity_condition,
-)
-from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
+from app.features.monitoring.alerts import visitor_activity_condition
+from app.features.monitoring.models import EnterpriseTelemetrySnapshot
 from app.features.monitoring.router import (
     monitoring_status_from_telemetry,
     occupancy_status_from_telemetry,
@@ -28,40 +23,7 @@ from app.features.monitoring.visitor_insights import (
     visitor_insight_series,
 )
 from app.features.notifications.models import UserNotification
-from app.features.notifications.service import (
-    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
-    NOTIFY_SYNC_DELAY_KEY,
-    create_role_notifications,
-    resolve_system_setting_enabled,
-)
-
-
-@pytest.mark.parametrize(
-    ("stored_severity", "urgency"),
-    [("Info", "Normal"), ("Warning", "Important"), ("Critical", "Urgent")],
-)
-def test_operational_alert_api_exposes_canonical_urgency(
-    stored_severity: str, urgency: str
-) -> None:
-    alert = OperationalAlert(
-        id="ALT-URGENCY",
-        alert_code="ALT-URGENCY",
-        alert_type="Maintenance Request",
-        owner="IT",
-        severity=stored_severity,
-        status="New",
-        enterprise="Enterprise One",
-        requester="Enterprise One",
-        summary="Camera unavailable",
-        required_action="Check the camera connection.",
-        resolution_mode="Remote Review",
-        created_at=datetime.now(UTC),
-    )
-
-    summary = to_operational_alert_summary(alert)
-
-    assert summary.urgency == urgency
-    assert summary.severity == stored_severity
+from app.features.notifications.service import create_role_notifications
 
 
 def test_visitor_activity_requires_three_matching_baseline_days() -> None:
@@ -272,40 +234,6 @@ def _telemetry_summary(
     )
 
 
-def test_alert_management_follows_operational_ownership() -> None:
-    admin = Account(role=AccountRole.ADMIN)
-    it_account = Account(role=AccountRole.IT)
-    admin_alert = OperationalAlert(owner="Admin")
-    it_alert = OperationalAlert(owner="IT")
-
-    assert can_manage_operational_alert(admin, admin_alert)
-    assert not can_manage_operational_alert(admin, it_alert)
-    assert can_manage_operational_alert(it_account, it_alert)
-    assert not can_manage_operational_alert(it_account, admin_alert)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("role", "visible_owners"),
-    [
-        (AccountRole.ADMIN, ("Admin", "System")),
-        (AccountRole.IT, ("IT", "System")),
-    ],
-)
-async def test_alert_list_is_scoped_to_operational_owner(
-    role: AccountRole, visible_owners: tuple[str, str]
-) -> None:
-    db = MagicMock()
-    db.scalars = AsyncMock(return_value=[])
-
-    assert await list_operational_alerts(db, Account(role=role)) == []
-
-    statement = db.scalars.await_args.args[0]
-    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
-    for owner in visible_owners:
-        assert f"'{owner}'" in sql
-
-
 def test_fresh_gateway_snapshot_remains_connected_while_records_finish_syncing() -> None:
     snapshot = EnterpriseTelemetrySnapshot(
         enterprise_profile_id="account-1",
@@ -327,26 +255,6 @@ def test_fresh_gateway_snapshot_remains_connected_while_records_finish_syncing()
     snapshot.received_at = datetime.now(UTC)
 
     assert gateway_status_for_snapshot(snapshot) == "Connected"
-
-
-def test_notification_setting_uses_stable_key_value() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {NOTIFY_SYNC_DELAY_KEY: False},
-            NOTIFY_SYNC_DELAY_KEY,
-        )
-        is False
-    )
-
-
-def test_notification_setting_ignores_invalid_values() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {NOTIFY_GATEWAY_SERVICE_ERROR_KEY: "false"},
-            NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
-        )
-        is True
-    )
 
 
 @pytest.mark.asyncio

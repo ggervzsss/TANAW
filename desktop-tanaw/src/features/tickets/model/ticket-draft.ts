@@ -1,16 +1,14 @@
-import type { SupportTicketAttachment, SupportTicketAttachmentCreate, SupportTicketPriority, SupportTicketSort } from "../services/tickets";
-import { isSupportTicketCategory, isSupportTicketPriority, type TicketFormState } from "./ticket-form-validation";
+import type { SupportTicketAttachment, SupportTicketAttachmentCreate, SupportTicketSort } from "../services/tickets";
+import { isSupportTicketCategory, type TicketFormState } from "./ticket-form-validation";
 
-export const ticketPriorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
 export const maxTicketPhotoCount = 5;
 export const emptyTicketPhotos: SupportTicketAttachmentCreate[] = [];
 
 export const emptyTicketForm: TicketFormState = {
   affectedArea: "",
   cameraNode: "",
-  category: "Camera Issue",
+  category: "Desktop app or camera problem",
   description: "",
-  priority: "Normal",
   subject: "",
 };
 
@@ -19,8 +17,6 @@ export const ticketSortOptions: [SupportTicketSort, string][] = [
   ["recommended", "Recommended"],
   ["newest", "Newest first"],
   ["oldest", "Oldest first"],
-  ["priority-high", "Priority: Urgent to Low"],
-  ["priority-low", "Priority: Low to Urgent"],
   ["status", "Status"],
   ["recently-updated", "Recently updated"],
 ];
@@ -45,7 +41,7 @@ export async function readTicketPhoto(file: File): Promise<SupportTicketAttachme
 
   return {
     dataUrl,
-    fileName: file.name.replace(/\\/g, "/").split("/").pop() || "ticket-photo",
+    fileName: file.name.replace(/\\/g, "/").split("/").pop() || "request-photo",
     mediaType: file.type as SupportTicketAttachment["mediaType"],
     sizeBytes: file.size,
   };
@@ -60,8 +56,6 @@ export function isTicketFormState(value: unknown): value is TicketFormState {
     typeof form.category === "string" &&
     isSupportTicketCategory(form.category) &&
     typeof form.description === "string" &&
-    typeof form.priority === "string" &&
-    isSupportTicketPriority(form.priority) &&
     typeof form.subject === "string"
   );
 }

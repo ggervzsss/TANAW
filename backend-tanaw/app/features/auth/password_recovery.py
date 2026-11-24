@@ -229,7 +229,7 @@ async def verify_password_reset_code(db: AsyncSession, challenge_id: str, code: 
         _add_challenge_security_log(
             db,
             fingerprint,
-            action="Password Recovery Verification Rejected",
+            action="Password Recovery Rejected",
             outcome="expired_or_exhausted",
             severity="Warning",
         )
@@ -244,7 +244,7 @@ async def verify_password_reset_code(db: AsyncSession, challenge_id: str, code: 
         _add_challenge_security_log(
             db,
             fingerprint,
-            action="Password Recovery Verification Rejected",
+            action="Password Recovery Rejected",
             outcome="invalid_code",
             severity="Warning",
             metadata={"attemptCount": challenge.attempts},
@@ -263,13 +263,6 @@ async def verify_password_reset_code(db: AsyncSession, challenge_id: str, code: 
         template_name=EmailTemplateName.PASSWORD_RESET,
         source_ids=[challenge.id],
         reason="The password recovery code was already verified.",
-    )
-    _add_challenge_security_log(
-        db,
-        fingerprint,
-        action="Password Recovery Code Verified",
-        outcome="verified",
-        severity="Success",
     )
     await db.commit()
     return reset_token
@@ -308,7 +301,7 @@ async def reset_password_with_token(
         _add_challenge_security_log(
             db,
             fingerprint,
-            action="Password Recovery Reset Rejected",
+            action="Password Recovery Rejected",
             outcome="expired",
             severity="Warning",
         )
@@ -323,7 +316,7 @@ async def reset_password_with_token(
         _add_challenge_security_log(
             db,
             fingerprint,
-            action="Password Recovery Reset Rejected",
+            action="Password Recovery Rejected",
             outcome="invalid_token",
             severity="Warning",
             metadata={"attemptCount": challenge.reset_attempts},
@@ -339,7 +332,7 @@ async def reset_password_with_token(
         _add_challenge_security_log(
             db,
             fingerprint,
-            action="Password Recovery Reset Rejected",
+            action="Password Recovery Rejected",
             outcome="account_unavailable",
             severity="Warning",
         )
@@ -360,13 +353,6 @@ async def reset_password_with_token(
         account.id,
         invalidated_at=now,
         except_challenge_id=challenge.id,
-    )
-    _add_challenge_security_log(
-        db,
-        fingerprint,
-        action="Password Recovery Reset Completed",
-        outcome="password_changed",
-        severity="Success",
     )
     await db.commit()
     await db.refresh(account)
@@ -424,7 +410,7 @@ def _add_request_security_log(
         event_metadata.update(metadata)
     db.add(
         ActivityLog(
-            category="System",
+            activity_group="Login & Security",
             severity="Warning" if outcome == "rate_limited" else "Info",
             actor="TANAW Security",
             actor_role="System",
@@ -451,7 +437,7 @@ def _add_challenge_security_log(
         event_metadata.update(metadata)
     db.add(
         ActivityLog(
-            category="System",
+            activity_group="Login & Security",
             severity=severity,
             actor="TANAW Security",
             actor_role="System",

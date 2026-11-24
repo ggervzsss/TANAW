@@ -36,6 +36,8 @@ export {
   getMonitoringStatusPresentation,
   getOccupancyBadgeClass,
   getOccupancyRingColor,
+  MAP_PIN_ICON_PATHS,
+  MAP_PIN_STATES,
   mapPinColors,
   mapPinStateLabels,
   monitoringStatusLegend,

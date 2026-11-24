@@ -3,6 +3,8 @@ import { attractionClassifications, otherAttractionCode } from "@/contracts/gene
 import { sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { PERSON_NAME_MAX_LENGTH, normalizeMiddleInitial } from "@/shared/utils/accountValidation";
 import type { EnterpriseFormErrors, EnterpriseFormState } from "../model";
+import type { OpeningHours } from "../model/openingHours";
+import { OpeningHoursField } from "./OpeningHoursField";
 
 const attractionOptions = attractionClassifications.map((item) => ({
   value: item.code,
@@ -15,12 +17,13 @@ type EnterpriseAccountFieldsProps = {
   errors: EnterpriseFormErrors;
   form: EnterpriseFormState;
   mode: "create" | "edit";
-  onChange: (field: keyof EnterpriseFormState, value: string) => void;
+  onChange: (field: Exclude<keyof EnterpriseFormState, "openingHours">, value: string) => void;
+  onOpeningHoursChange: (value: OpeningHours) => void;
   enterpriseId?: string;
   onEnterpriseIdChange?: (value: string) => void;
 };
 
-export function EnterpriseAccountFields({ enterpriseId = "", errors, form, mode, onChange, onEnterpriseIdChange }: EnterpriseAccountFieldsProps) {
+export function EnterpriseAccountFields({ enterpriseId = "", errors, form, mode, onChange, onOpeningHoursChange, onEnterpriseIdChange }: EnterpriseAccountFieldsProps) {
   return (
     <>
       <FormField name="enterpriseName" label="Enterprise Name" value={form.enterpriseName} onChange={(value) => onChange("enterpriseName", value)} error={errors.enterpriseName} required />
@@ -112,6 +115,7 @@ export function EnterpriseAccountFields({ enterpriseId = "", errors, form, mode,
           <AddressField form={form} errors={errors} onChange={onChange} />
         </>
       )}
+      <OpeningHoursField value={form.openingHours} onChange={onOpeningHoursChange} error={errors.openingHours} />
     </>
   );
 }

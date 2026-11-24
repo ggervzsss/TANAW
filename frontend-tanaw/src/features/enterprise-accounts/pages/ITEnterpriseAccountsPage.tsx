@@ -6,7 +6,7 @@ import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import type { AccountSummary } from "@/shared/types";
-import { EnterpriseAccountsMetrics, EnterpriseAccountsTable, EnterpriseAccountsToolbar, EnterpriseDetailsModal, EnterpriseProfileRequestsPanel, RegisterEnterpriseModal } from "../components";
+import { EnterpriseAccountsMetrics, EnterpriseAccountsTable, EnterpriseAccountsToolbar, EnterpriseDetailsModal, RegisterEnterpriseModal } from "../components";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "../services";
 import type { EnterpriseStatusFilter } from "../types";
 import { filterEnterpriseAccounts } from "../utils";
@@ -25,16 +25,12 @@ export function ITEnterpriseAccountsPage() {
   const currentSelectedEnterprise = selectedEnterprise ? (accounts.find((account) => account.id === selectedEnterprise.id) ?? selectedEnterprise) : null;
   const barangays = ["All Barangays", ...sanPedroBarangays];
   const filteredEnterprises = useMemo(() => filterEnterpriseAccounts(accounts, query, status, barangay), [accounts, barangay, query, status]);
-  const handleEnterpriseUpdated = (updatedEnterprise: AccountSummary) => {
-    setSelectedEnterprise((current) => (current?.id === updatedEnterprise.id ? updatedEnterprise : current));
-  };
 
   return (
     <PageMotion>
       <PageHeader title="Enterprise Accounts" description="Register establishments, send secure activation links, and manage account access." />
 
       <EnterpriseAccountsMetrics accounts={accounts} isLoading={accountsQuery.isLoading} />
-      <EnterpriseProfileRequestsPanel accounts={accounts} canResolve onAccountUpdated={handleEnterpriseUpdated} />
 
       <Panel className="mt-6 overflow-hidden">
         <EnterpriseAccountsToolbar

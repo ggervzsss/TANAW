@@ -53,7 +53,7 @@ test("integrates Enterprise display and Help Center navigation at practical wind
   await menu.getByRole("button", { name: "General Settings" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/settings$/);
   await expect(page.getByRole("heading", { name: "Profile Information" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Support Tickets" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Requests", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Developer Settings" })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
@@ -75,9 +75,11 @@ test("integrates Enterprise display and Help Center navigation at practical wind
   const save = page.getByRole("button", { name: "Save Changes", exact: true });
   await expect(save).toBeDisabled();
   await expect(save).toBeInViewport();
-  await panel.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+  // The last section scrolls into view while the Save button stays on screen.
+  const lastSection = panel.getByText("Temporary closures", { exact: true });
+  await lastSection.scrollIntoViewIfNeeded();
+  await expect(lastSection).toBeInViewport();
   await expect(save).toBeInViewport();
-  await expect(panel.getByText("Enterprise ID", { exact: true })).toBeInViewport();
   await page.setViewportSize({ width: 800, height: 600 });
   await page.getByLabel("Upload establishment logo", { exact: true }).setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("not an image") });
   await expect(page.getByText("Upload a PNG, JPG, or WebP image.")).toBeVisible();

@@ -84,7 +84,7 @@ async def create_enterprise_notification(
     await create_activity_log(
         db,
         ActivityLogCreate(
-            category="Staff Operation",
+            group="Reports",
             severity="Success",
             actor=actor.display_name,
             actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",

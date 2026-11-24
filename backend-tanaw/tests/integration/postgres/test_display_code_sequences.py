@@ -14,12 +14,18 @@ from app.features.accounts.models import (
     AccountStatus,
     EnterpriseProfile,
 )
-from app.features.monitoring.alerts import create_operational_alert
+from app.features.monitoring.alerts import _next_alert_code, evaluate_camera_alerts
 from app.features.monitoring.models import OperationalAlert
+from app.features.monitoring.schemas import (
+    DesktopCameraMonitoringItem,
+    DesktopCameraMonitoringSummary,
+    DesktopMetricsSummary,
+    DesktopTelemetryIngest,
+)
 from app.features.realtime.models import RealtimeOutbox
-from app.features.support.models import SupportTicket
-from app.features.support.schemas import SupportTicketCreate
-from app.features.support.service import create_support_ticket
+from app.features.requests.models import Request
+from app.features.requests.schemas import RequestCreate
+from app.features.requests.service import create_request
 from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-display-code-pg-%@example.com"
@@ -44,29 +50,27 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
         )
         ticket_ids = list(
             await db.scalars(
-                select(SupportTicket.id).where(
-                    SupportTicket.subject.startswith(TEST_SUBJECT_PREFIX)
-                )
+                select(Request.id).where(Request.title.startswith(TEST_SUBJECT_PREFIX))
             )
         )
         alert_ids = list(
             await db.scalars(
                 select(OperationalAlert.id).where(
-                    OperationalAlert.requester.startswith(TEST_ALERT_REQUESTER_PREFIX)
+                    OperationalAlert.enterprise.startswith(TEST_ALERT_REQUESTER_PREFIX)
                 )
             )
         )
         outbox_conditions = []
         if ticket_ids:
             outbox_conditions.append(
-                RealtimeOutbox.payload["ticket_id"].as_string().in_(ticket_ids)
+                RealtimeOutbox.payload["request_id"].as_string().in_(ticket_ids)
             )
         if alert_ids:
             outbox_conditions.append(RealtimeOutbox.payload["alert_id"].as_string().in_(alert_ids))
         if outbox_conditions:
             await db.execute(delete(RealtimeOutbox).where(or_(*outbox_conditions)))
         if ticket_ids:
-            await db.execute(delete(SupportTicket).where(SupportTicket.id.in_(ticket_ids)))
+            await db.execute(delete(Request).where(Request.id.in_(ticket_ids)))
         if alert_ids:
             await db.execute(delete(OperationalAlert).where(OperationalAlert.id.in_(alert_ids)))
         if account_ids:
@@ -100,13 +104,11 @@ async def _create_enterprise(runtime: PostgresRuntime, *, label: str) -> str:
     return account.id
 
 
-def _ticket_payload(label: str) -> SupportTicketCreate:
-    return SupportTicketCreate(
-        category="Other",
-        priority="Normal",
-        subject=f"{TEST_SUBJECT_PREFIX} {label}",
-        description="Verify PostgreSQL-backed support ticket display code allocation.",
-        affectedArea="Enterprise portal",
+def _ticket_payload(label: str) -> RequestCreate:
+    return RequestCreate(
+        group="Other",
+        title=f"{TEST_SUBJECT_PREFIX} {label}",
+        description="Verify PostgreSQL-backed request display code allocation.",
     )
 
 
@@ -121,28 +123,45 @@ async def _create_ticket(
     async with runtime.sessions() as db:
         account = await db.get(Account, account_id)
         assert account is not None
-        ticket = await create_support_ticket(db, account, _ticket_payload(label))
+        request = await create_request(db, account, _ticket_payload(label))
         await db.commit()
-        return ticket.id, ticket.code
+        return request.id, request.request_code
 
 
-async def _create_alert(
-    runtime: PostgresRuntime, *, label: str, source_id: str | None = None
-) -> tuple[str, str]:
+def _new_alert(code: str, label: str) -> OperationalAlert:
+    return OperationalAlert(
+        alert_code=code,
+        alert_type="Camera Not Counting",
+        severity="Critical",
+        enterprise=f"{TEST_ALERT_REQUESTER_PREFIX} {label}",
+        summary="Verify PostgreSQL-backed operational alert display code allocation.",
+        status="Active",
+        source_id=f"display-code-{uuid4()}",
+        started_at=datetime.now(UTC),
+    )
+
+
+async def _create_alert(runtime: PostgresRuntime, *, label: str) -> tuple[str, str]:
     async with runtime.sessions() as db:
-        alert = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Warning",
-            requester=f"{TEST_ALERT_REQUESTER_PREFIX} {label}",
-            summary="Verify PostgreSQL-backed operational alert display code allocation.",
-            required_action="Inspect the test alert.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=source_id,
-        )
+        alert = _new_alert(await _next_alert_code(db), label)
+        db.add(alert)
         await db.commit()
         return alert.id, alert.alert_code
+
+
+def _camera_error(camera_id: int) -> DesktopTelemetryIngest:
+    return DesktopTelemetryIngest(
+        metrics=DesktopMetricsSummary(),
+        monitoring=DesktopCameraMonitoringSummary(
+            status="error",
+            configuredCameraCount=2,
+            cameras=[
+                DesktopCameraMonitoringItem(
+                    cameraId=camera_id, cameraName=f"Camera {camera_id}", status="error"
+                )
+            ],
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -158,10 +177,10 @@ async def test_support_ticket_sequence_allocates_monotonic_formatted_codes(
     )
 
     assert first_id != second_id
-    assert _code_number(second_code, "TCK") == _code_number(first_code, "TCK") + 1
+    assert _code_number(second_code, "REQ") == _code_number(first_code, "REQ") + 1
     async with postgres_runtime.sessions() as db:
-        assert await db.scalar(text("SELECT to_regclass('support_ticket_code_sequence')")) == (
-            "support_ticket_code_sequence"
+        assert await db.scalar(text("SELECT to_regclass('request_code_sequence')")) == (
+            "request_code_sequence"
         )
 
 
@@ -187,7 +206,7 @@ async def test_concurrent_support_tickets_receive_unique_codes(
 
     assert len(codes) == CONCURRENT_CREATIONS
     assert len(set(codes)) == CONCURRENT_CREATIONS
-    assert all(_code_number(code, "TCK") > 0 for code in codes)
+    assert all(_code_number(code, "REQ") > 0 for code in codes)
 
 
 @pytest.mark.asyncio
@@ -199,62 +218,45 @@ async def test_support_ticket_deletion_and_rollback_do_not_reuse_codes(
         postgres_runtime, account_id=account_id, label="deleted"
     )
     async with postgres_runtime.sessions() as db:
-        await db.execute(delete(SupportTicket).where(SupportTicket.id == deleted_id))
+        await db.execute(delete(Request).where(Request.id == deleted_id))
         await db.commit()
 
     async with postgres_runtime.sessions() as db:
         account = await db.get(Account, account_id)
         assert account is not None
-        rolled_back = await create_support_ticket(db, account, _ticket_payload("rolled-back"))
-        rolled_back_code = rolled_back.code
+        rolled_back = await create_request(db, account, _ticket_payload("rolled-back"))
+        rolled_back_code = rolled_back.request_code
         await db.rollback()
 
     _, next_code = await _create_ticket(postgres_runtime, account_id=account_id, label="after-gaps")
-    assert _code_number(rolled_back_code, "TCK") > _code_number(deleted_code, "TCK")
-    assert _code_number(next_code, "TCK") > _code_number(rolled_back_code, "TCK")
+    assert _code_number(rolled_back_code, "REQ") > _code_number(deleted_code, "REQ")
+    assert _code_number(next_code, "REQ") > _code_number(rolled_back_code, "REQ")
 
 
 @pytest.mark.asyncio
 async def test_operational_alert_sequence_allocates_only_for_new_formatted_codes(
     postgres_runtime: PostgresRuntime,
 ) -> None:
-    source_id = f"display-code-reuse-{uuid4()}"
+    account_id = await _create_enterprise(postgres_runtime, label="alert-reuse")
+    now = datetime.now(UTC)
     async with postgres_runtime.sessions() as db:
-        first = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Warning",
-            requester=f"{TEST_ALERT_REQUESTER_PREFIX} reuse-first",
-            summary="Initial alert summary.",
-            required_action="Inspect the test alert.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=source_id,
+        account = await db.get(Account, account_id)
+        assert account is not None
+        account.display_name = f"{TEST_ALERT_REQUESTER_PREFIX} reuse"
+        assert account.enterprise_profile is not None
+        account.enterprise_profile.enterprise_name = f"{TEST_ALERT_REQUESTER_PREFIX} reuse"
+        [(_, first)] = await evaluate_camera_alerts(
+            db, account, _camera_error(1), now=now, wait_minutes=0
         )
-        reused = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Critical",
-            requester=f"{TEST_ALERT_REQUESTER_PREFIX} reuse-second",
-            summary="Updated alert summary.",
-            required_action="Inspect the updated test alert.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=source_id,
+        await evaluate_camera_alerts(db, account, _camera_error(1), now=now, wait_minutes=0)
+        reused = await db.scalar(
+            select(OperationalAlert).where(OperationalAlert.source_id == first.source_id)
         )
-        following = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Warning",
-            requester=f"{TEST_ALERT_REQUESTER_PREFIX} following",
-            summary="Following alert summary.",
-            required_action="Inspect the following test alert.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=f"display-code-following-{uuid4()}",
-        )
+        following = _new_alert(await _next_alert_code(db), "following")
+        db.add(following)
         await db.commit()
 
+    assert reused is not None
     assert reused.id == first.id
     assert reused.alert_code == first.alert_code
     assert _code_number(following.alert_code, "ALT") == _code_number(first.alert_code, "ALT") + 1
@@ -272,11 +274,7 @@ async def test_concurrent_operational_alerts_receive_unique_codes(
 
     async def create_one(index: int) -> str:
         await start.wait()
-        _, code = await _create_alert(
-            postgres_runtime,
-            label=f"concurrent-{index}",
-            source_id=f"display-code-concurrent-{uuid4()}",
-        )
+        _, code = await _create_alert(postgres_runtime, label=f"concurrent-{index}")
         return code
 
     tasks = [asyncio.create_task(create_one(index)) for index in range(CONCURRENT_CREATIONS)]
@@ -298,16 +296,9 @@ async def test_operational_alert_deletion_and_rollback_do_not_reuse_codes(
         await db.commit()
 
     async with postgres_runtime.sessions() as db:
-        rolled_back = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Warning",
-            requester=f"{TEST_ALERT_REQUESTER_PREFIX} rolled-back",
-            summary="Rolled-back alert summary.",
-            required_action="Inspect the rolled-back test alert.",
-            resolution_mode="Remote Review",
-            owner="IT",
-        )
+        rolled_back = _new_alert(await _next_alert_code(db), "rolled-back")
+        db.add(rolled_back)
+        await db.flush()
         rolled_back_code = rolled_back.alert_code
         await db.rollback()
 

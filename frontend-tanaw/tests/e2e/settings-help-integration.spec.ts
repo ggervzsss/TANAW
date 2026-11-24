@@ -64,7 +64,7 @@ for (const { role, path, previousTitle } of [
     await expect(profile.getByText(userFor(role).email, { exact: true })).toHaveCount(1);
     await expect(profile.getByRole("button", { name: "Edit email" })).toHaveCount(0);
     await expect(main.getByRole("button", { name: "Save Changes" })).toBeInViewport();
-    await expect(main.getByRole("button", { name: "Support Tickets" })).toHaveCount(role === "staff" ? 0 : 1);
+    await expect(main.getByRole("button", { name: "Requests", exact: true })).toHaveCount(role === "staff" ? 0 : 1);
     await expect(main.getByRole("button", { name: "System Settings" })).toHaveCount(role === "it" ? 1 : 0);
     await expect(main.getByRole("button", { name: "Developer Settings" })).toHaveCount(0);
     await expect(workspace).toBeFocused();
@@ -163,7 +163,7 @@ test("restricts Admin settings and saves profile changes through the existing AP
   await expect(page).toHaveURL(/\/admin\/settings$/);
   await expect(page.getByRole("button", { name: "System Settings" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Developer Settings" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Support Tickets" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Requests", exact: true })).toBeVisible();
   const branding = page.locator("[data-portal-role-label]").locator("..");
   await expect(branding.getByRole("link")).toHaveCount(0);
   await expect(branding.getByRole("button")).toHaveCount(0);
@@ -195,6 +195,6 @@ test("restricts Admin settings and saves profile changes through the existing AP
   await expect(page.getByText("Profile updated.")).toBeVisible();
   await expect(save).toBeDisabled();
   await expect(page.getByRole("button", { name: "Open account menu" })).toHaveText(/Updated User/);
-  await page.getByRole("button", { name: "Support Tickets", exact: true }).click();
-  await expect(page.getByText("Admin can review ticket status, attachments, and conversations.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Requests", exact: true }).click();
+  await expect(page.getByText("Requests people sent to IT, with their conversations and status.", { exact: true })).toBeVisible();
 });

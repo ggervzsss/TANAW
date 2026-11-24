@@ -1,79 +1,46 @@
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
-import { activityLogsQueryKey } from "@/features/system-logs/hooks/useActivityLogs";
-import { listActivityLogs } from "@/features/system-logs/services/activityLogService";
-import { useAlerts } from "@/shared/hooks/useAlerts";
-import { getSupportTicket, listSupportTickets, supportTicketsQueryKey, type SupportTicket } from "@/shared/services/supportTickets";
-import type { AccountSummary, SystemLog } from "@/shared/types";
-import { buildAdminRequests, loadReadState, markAllRequestsRead, markRequestRead, saveReadState, type AdminRequest, type RequestReadState } from "../model";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { getRequest, listRequests, markRequestsRead, requestDetailQueryKey, requestsQueryKey, type Request } from "@/shared/services/requests";
 
-const EMPTY_TICKETS: SupportTicket[] = [];
-const EMPTY_ACCOUNTS: AccountSummary[] = [];
-const EMPTY_LOGS: SystemLog[] = [];
+const EMPTY: Request[] = [];
 
-/** Alerts, High and Urgent tickets and pending profile changes, merged into one list. */
+/** Every request, with this account's New and Updated marks from the server. */
 export function useAdminRequests() {
-  const alertsQuery = useAlerts();
-  const ticketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
-  const accountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
-  const logsQuery = useQuery({ queryKey: activityLogsQueryKey, queryFn: listActivityLogs });
-
-  const tickets = ticketsQuery.data ?? EMPTY_TICKETS;
-  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
-  const { alerts } = alertsQuery;
-  const requests = useMemo(() => buildAdminRequests({ alerts, tickets, accounts }), [accounts, alerts, tickets]);
-  const queries = [alertsQuery, ticketsQuery, accountsQuery];
-
+  const query = useQuery({ queryKey: requestsQueryKey, queryFn: listRequests });
   return {
-    requests,
-    logs: logsQuery.data ?? EMPTY_LOGS,
-    isLoading: queries.some((query) => query.isLoading),
-    /** A source failed and nothing could be shown from it. */
-    failedSources: [alertsQuery.isError && "alerts", ticketsQuery.isError && "support tickets", accountsQuery.isError && "account requests"].filter((name): name is string => Boolean(name)),
-    retry: () => {
-      for (const query of queries) if (query.isError) void query.refetch();
-    },
+    requests: query.data ?? EMPTY,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    retry: () => void query.refetch(),
   };
 }
 
-/** The selected ticket's conversation, for Latest updates and who is handling it. */
-export function useRequestTicketDetail(request: AdminRequest | null) {
-  const ticketId = request?.kind === "ticket" ? request.sourceId : null;
+/** The selected request's timeline. */
+export function useRequestDetail(request: Request | null) {
   return useQuery({
-    queryKey: [...supportTicketsQueryKey, ticketId],
-    queryFn: () => getSupportTicket(ticketId ?? ""),
-    enabled: Boolean(ticketId),
+    queryKey: requestDetailQueryKey(request?.id ?? ""),
+    queryFn: () => getRequest(request?.id ?? ""),
+    enabled: Boolean(request),
   });
 }
 
-function browserStorage() {
-  try {
-    return typeof window === "undefined" ? null : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-/** Read marks for this Admin, kept in this browser only (the API has no per-Admin read flag). */
-export function useRequestReadState(userId: string) {
-  const [state, setState] = useState<{ userId: string; seen: RequestReadState }>(() => ({ userId, seen: loadReadState(browserStorage(), userId) }));
-  const seen = state.userId === userId ? state.seen : loadReadState(browserStorage(), userId);
-
+/** Read marks: opening a request marks it read; "Mark all as read" marks every request. */
+export function useRequestReadMarks(selected: Request | null, ready: boolean) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: markRequestsRead,
+    onMutate: (ids) => {
+      queryClient.setQueryData<Request[]>(requestsQueryKey, (current) =>
+        current?.map((request) => (ids === "all" || ids.includes(request.id) ? { ...request, unread: false, updated: false } : request)),
+      );
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: requestsQueryKey }),
+  });
+  const needsMark = Boolean(selected && (selected.unread || selected.updated));
+  const selectedId = selected?.id;
+  const { mutate } = mutation;
   useEffect(() => {
-    if (state.userId === userId) saveReadState(browserStorage(), userId, state.seen);
-  }, [state, userId]);
-
-  const markRead = useCallback(
-    (request: AdminRequest) =>
-      setState((current) => {
-        const base = current.userId === userId ? current.seen : loadReadState(browserStorage(), userId);
-        const next = markRequestRead(base, request);
-        return next === base && current.userId === userId ? current : { userId, seen: next };
-      }),
-    [userId],
-  );
-  const markAllRead = useCallback((requests: readonly AdminRequest[]) => setState({ userId, seen: markAllRequestsRead(requests) }), [userId]);
-
-  return { readState: seen, markRead, markAllRead };
+    if (ready && needsMark && selectedId) mutate([selectedId]);
+  }, [mutate, needsMark, ready, selectedId]);
+  return { markAllRead: () => mutate("all") };
 }

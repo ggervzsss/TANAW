@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import AccountSummary, ProfileChangeRequestType
 from app.features.accounts.service import (
+    clear_pending_profile_change_request,
     get_account_by_email,
+    get_pending_profile_change_request,
     to_account_summary_with_requests,
 )
 from app.features.activity_logs.service import record_activity_log as record_account_log
@@ -23,8 +25,15 @@ from app.features.notifications.service import (
     create_user_notification,
     mark_source_notifications_read,
 )
+from app.features.requests.service import close_account_change_request
 
 logger = logging.getLogger(__name__)
+
+PROFILE_CHANGE_SOURCE_TYPES: dict[str, str] = {
+    "businessEmail": "enterprise.profile.email",
+    "contactNumber": "enterprise.profile.contact",
+    "enterpriseName": "enterprise.profile.name",
+}
 
 
 def ensure_account_can_deactivate(account: Account, next_status: AccountStatus) -> None:
@@ -130,7 +139,8 @@ async def ensure_unique_account_email(
 def get_profile_request_requested_value(
     pending_request: dict[str, str], request_type: ProfileChangeRequestType
 ) -> str:
-    return pending_request["email" if request_type == "businessEmail" else "phone"]
+    key = {"businessEmail": "email", "contactNumber": "phone", "enterpriseName": "name"}
+    return pending_request[key[request_type]]
 
 
 def get_profile_request_current_value(
@@ -138,11 +148,18 @@ def get_profile_request_current_value(
 ) -> str:
     if request_type == "businessEmail":
         return account.email
+    if request_type == "enterpriseName":
+        profile = account.enterprise_profile
+        return profile.enterprise_name if profile is not None else account.display_name
     return account.phone or ""
 
 
 def profile_request_label(request_type: ProfileChangeRequestType) -> str:
-    return "Business Email" if request_type == "businessEmail" else "Contact Number"
+    return {
+        "businessEmail": "Business Email",
+        "contactNumber": "Contact Number",
+        "enterpriseName": "Enterprise Name",
+    }[request_type]
 
 
 def email_change_http_exception(exc: AccountEmailChangeError) -> HTTPException:
@@ -176,13 +193,17 @@ async def resolve_verified_email_change_request(
 
     approved = action == "approve"
     resolution_label = "approved" if approved else "declined"
+    if account.role == AccountRole.ENTERPRISE:
+        await close_account_change_request(
+            db, account.id, "businessEmail", approved=approved, actor=actor
+        )
     await record_account_log(
         db,
-        category="IT Activity",
+        group="Accounts",
         severity="Success" if approved else "Info",
         actor=actor.display_name,
         actor_role="IT Personnel",
-        action=f"{action.title()} Verified Email Change",
+        action=f"{action.title()} Account Change",
         target=account.display_name,
         summary=(
             f"{actor.display_name} {resolution_label} {account.display_name}'s verified "
@@ -262,10 +283,78 @@ async def notify_enterprise_profile_change_resolution(
         notification_type="Enterprise Profile Change Request",
         severity="Success" if approved else "Info",
         actor=actor,
-        source_type=(
-            "enterprise.profile.email"
-            if request_type == "businessEmail"
-            else "enterprise.profile.contact"
-        ),
+        source_type=PROFILE_CHANGE_SOURCE_TYPES[request_type],
         source_id=account.id,
     )
+
+
+async def resolve_enterprise_profile_change(
+    db: AsyncSession,
+    *,
+    account: Account,
+    actor: Account,
+    request_type: ProfileChangeRequestType,
+    action: str,
+) -> AccountSummary:
+    """Approve or decline a pending contact number or enterprise name change."""
+    if request_type == "businessEmail":
+        return await resolve_verified_email_change_request(
+            db, account_id=account.id, actor=actor, action=action
+        )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
+    pending_request = get_pending_profile_change_request(account, request_type)
+    if pending_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account change request not found.",
+        )
+    previous_value = get_profile_request_current_value(account, request_type)
+    requested_value = get_profile_request_requested_value(pending_request, request_type)
+    approved = action == "approve"
+    if approved and request_type == "contactNumber":
+        account.phone = requested_value
+    if approved and request_type == "enterpriseName":
+        profile.enterprise_name = requested_value
+        account.display_name = requested_value
+    clear_pending_profile_change_request(account, request_type)
+    await db.flush()
+    await db.refresh(account)
+    await close_account_change_request(db, account.id, request_type, approved=approved, actor=actor)
+
+    request_label = profile_request_label(request_type)
+    resolution_label = "approved" if approved else "declined"
+    await record_account_log(
+        db,
+        group="Accounts",
+        severity="Success" if approved else "Info",
+        actor=actor.display_name,
+        actor_role="IT Personnel",
+        action=f"{action.title()} Account Change",
+        target=profile.enterprise_name,
+        summary=(
+            f"{actor.display_name} {resolution_label} {profile.enterprise_name}'s "
+            f"{request_label.lower()} change."
+        ),
+        source_id=account.id,
+        it_detail=f"{request_label}: {previous_value or 'none'} → {requested_value}.",
+        metadata={
+            "requestType": request_type,
+            "previousValue": previous_value,
+            "requestedValue": requested_value,
+            "resolution": action,
+        },
+    )
+    await notify_enterprise_profile_change_resolution(
+        db,
+        account=account,
+        actor=actor,
+        request_type=request_type,
+        requested_value=requested_value,
+        approved=approved,
+    )
+    await mark_it_account_request_complete(
+        db, source_type=PROFILE_CHANGE_SOURCE_TYPES[request_type], account_id=account.id
+    )
+    return await to_account_summary_with_requests(db, account)

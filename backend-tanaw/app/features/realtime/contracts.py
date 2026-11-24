@@ -7,17 +7,16 @@ type JSONValue = None | bool | int | float | str | list[JSONValue] | dict[str, J
 
 
 class RealtimeEventType(StrEnum):
-    SUPPORT_TICKET_CREATED = "support_ticket.created"
-    SUPPORT_TICKET_UPDATED = "support_ticket.updated"
-    SUPPORT_TICKET_MESSAGE_CREATED = "support_ticket.message.created"
-    SUPPORT_TICKET_STATUS_CHANGED = "support_ticket.status.changed"
+    REQUEST_CREATED = "request.created"
+    REQUEST_UPDATED = "request.updated"
+    REQUEST_MESSAGE_CREATED = "request.message.created"
+    REQUEST_STATUS_CHANGED = "request.status.changed"
     NOTIFICATION_CREATED = "notification.created"
     NOTIFICATION_UPDATED = "notification.updated"
     ALERT_CREATED = "alert.created"
     ALERT_UPDATED = "alert.updated"
     ALERT_STATUS_CHANGED = "alert.status.changed"
     ALERT_RESOLVED = "alert.resolved"
-    ALERT_REOPENED = "alert.reopened"
     ACCOUNT_REQUEST_CREATED = "account_request.created"
     ACCOUNT_REQUEST_UPDATED = "account_request.updated"
     ACCOUNT_REQUEST_APPROVED = "account_request.approved"
@@ -46,7 +45,7 @@ class RealtimeScope(BaseModel):
     enterprise_id: str | None = None
     enterprise_account_id: str | None = None
     recipient_account_id: str | None = None
-    ticket_id: str | None = None
+    request_id: str | None = None
     report_id: str | None = None
 
 

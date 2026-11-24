@@ -1,6 +1,4 @@
-export { AlertDetailsModal, AlertStatusBadge, ResolutionBadge, SeverityBadge, UrgencyBadge } from "./PriorityAlertComponents";
-export { TechnicalIssuesSummary } from "./TechnicalIssuesSummary";
-export { TechnicalIssuesTable } from "./TechnicalIssuesTable";
-export { TechnicalIssuesToolbar } from "./TechnicalIssuesToolbar";
+export { NoteForItComposer } from "./NoteForItComposer";
 export { RequestDetail } from "./RequestDetail";
 export { RequestList } from "./RequestList";
+export { RequestPhotos } from "./RequestPhotos";

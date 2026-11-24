@@ -9,6 +9,7 @@ import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
+import { AlertsButton } from "@/features/live-alerts";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
 import { getRoleHelpPath, getRoleSettingsPath, isRoleSettingsPath } from "@/app/routers/roleRoutes";
 import type { UserRole } from "@/shared/types/role.types";
@@ -193,6 +194,10 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
           </button>
 
           <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
+            {(role === "admin" || role === "it") && (
+              <AlertsButton dashboardPath={role === "admin" ? routes.admin.dashboard : null} className={"tanaw-topbar-compact-control " + topbarIconButton} />
+            )}
+            {role !== "admin" && (
             <div ref={notificationMenuRef} className="sm:relative">
               <PortalNotificationDropdown
                 isOpen={showNotifications}
@@ -210,6 +215,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
                 triggerClassName={"tanaw-topbar-compact-control " + topbarIconButton}
               />
             </div>
+            )}
 
             <TopbarAccount
               account={{ name: authUser?.displayName ?? "TANAW User", email: authUser?.email, image: authUser?.displayImageDataUrl, role: roleAccessLabel[role] }}

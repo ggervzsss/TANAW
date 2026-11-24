@@ -1,12 +1,10 @@
-"""Requests and everyday portal activity for the Admin portal's Requests and Recent Activity.
+"""Requests and everyday activity a few working days leave behind.
 
-The operations data in ``portal_workflow`` covers what is open right now. This module adds what
-a few working days leave behind: requests handled and resolved earlier, sign-ins, a password
-change and enterprise account changes. Every log uses the same category, action and source ID as
-the live workflow that would have written it, so the portals read it the same way.
+The operations data in ``portal_workflow`` covers what is open right now. This module adds
+requests handled earlier, an ended busier-than-usual alert, sign-ins, a password change and
+enterprise account changes. Each record matches what the live workflow would have written.
 """
 
-import json
 from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,14 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.accounts.models import Account, AccountRole
 from app.features.activity_logs.models import ActivityLog
 from app.features.monitoring.models import OperationalAlert
+from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.helpers import sample_uuid
-from app.features.support.models import SupportTicket, SupportTicketMessage
+from app.features.sample_data.portal_workflow import sample_log
 
-_AUTH_CATEGORY = {
-    AccountRole.ADMIN: "Admin Operation",
-    AccountRole.IT: "IT Activity",
-    AccountRole.STAFF: "Staff Operation",
-}
 _ACTOR_ROLE = {
     AccountRole.ADMIN: "Admin",
     AccountRole.IT: "IT Personnel",
@@ -43,131 +37,205 @@ async def create_request_and_user_activity(
 
     logs: list[ActivityLog] = []
 
-    # An urgent camera request two days ago that IT took on and resolved the same day.
+    # A camera problem two days ago that IT took on and resolved the same day.
     camera_enterprise = enterprises[3]
     camera_opened = range_end - timedelta(days=2, hours=3)
-    camera_ticket = SupportTicket(
-        id=sample_uuid("history-ticket", camera_enterprise.id, "camera"),
-        ticket_code="TCK-SAMPLE-003",
-        enterprise_profile_id=camera_enterprise.id,
-        enterprise_name=_name(camera_enterprise),
-        category="Camera Issue",
-        priority="Urgent",
-        subject="Visitor counts stopped updating",
+    camera_request = Request(
+        id=sample_uuid("history-request", camera_enterprise.id, "camera"),
+        request_code="REQ-SAMPLE-005",
+        request_group="Desktop app or camera problem",
+        title="Visitor counts stopped updating",
         description=(
             "The desktop app shows the camera feed, but the visitor count has not changed since "
             "this morning."
         ),
-        affected_area="Main entrance",
-        camera_node="Main Entrance",
         status="Resolved",
+        enterprise_profile_id=camera_enterprise.id,
+        enterprise_name=_name(camera_enterprise),
+        requester_name=_manager(camera_enterprise),
+        affected_area="Main entrance",
+        camera="Main Entrance",
         created_at=camera_opened,
         updated_at=camera_opened + timedelta(hours=5),
+        closed_at=camera_opened + timedelta(hours=5),
     )
-    db.add(camera_ticket)
-    db.add(
-        SupportTicketMessage(
-            id=sample_uuid("history-ticket-message", camera_ticket.id),
-            ticket_id=camera_ticket.id,
-            author_account_id=it_account.id,
-            author_name=it_account.display_name,
-            author_role=it_account.role.value,
-            message=(
-                "We restarted counting remotely and the counts are updating again. Please tell us "
-                "if they stop."
+    # A question about the report that is still waiting.
+    other_enterprise = enterprises[4]
+    other_opened = range_end - timedelta(days=1, hours=2)
+    other_request = Request(
+        id=sample_uuid("history-request", other_enterprise.id, "other"),
+        request_code="REQ-SAMPLE-006",
+        request_group="Other",
+        title="Update the listed opening hours",
+        description="We now open at 9:00 AM instead of 10:00 AM. Please update what TANAW shows.",
+        status="Sent",
+        enterprise_profile_id=other_enterprise.id,
+        enterprise_name=_name(other_enterprise),
+        requester_name=_manager(other_enterprise),
+        created_at=other_opened,
+        updated_at=other_opened,
+    )
+    # An enterprise name change IT approved last week.
+    renamed = enterprises[6]
+    rename_opened = range_end - timedelta(days=6, hours=1)
+    rename_request = Request(
+        id=sample_uuid("history-request", renamed.id, "name"),
+        request_code="REQ-SAMPLE-007",
+        request_group="Account change",
+        title="Change of enterprise name",
+        description=f"{_name(renamed)} asked to change its enterprise name to {_name(renamed)}.",
+        status="Approved",
+        enterprise_profile_id=renamed.id,
+        enterprise_name=_name(renamed),
+        requester_name=_manager(renamed),
+        change_field="enterpriseName",
+        change_value=_name(renamed),
+        created_at=rename_opened,
+        updated_at=rename_opened + timedelta(hours=3),
+        closed_at=rename_opened + timedelta(hours=3),
+    )
+    db.add_all([camera_request, other_request, rename_request])
+    await db.flush()
+    db.add_all(
+        [
+            _status(camera_request, it_account, "In Progress", camera_opened + timedelta(hours=1)),
+            RequestMessage(
+                id=sample_uuid("history-request-message", camera_request.id),
+                request_id=camera_request.id,
+                author_account_id=it_account.id,
+                author_name=it_account.display_name,
+                author_role=it_account.role.value,
+                kind="message",
+                message=(
+                    "We restarted counting remotely and the counts are updating again. Please "
+                    "tell us if they stop."
+                ),
+                created_at=camera_opened + timedelta(hours=4, minutes=40),
             ),
-            created_at=camera_opened + timedelta(hours=4, minutes=40),
+            _status(camera_request, it_account, "Resolved", camera_opened + timedelta(hours=5)),
+            _status(rename_request, it_account, "Approved", rename_opened + timedelta(hours=3)),
+        ]
+    )
+    for request in (camera_request, other_request, rename_request):
+        logs.append(
+            sample_log(
+                ("history-request-sent", request.id),
+                request.created_at,
+                group="Requests",
+                severity="Info",
+                actor=request.enterprise_name or request.requester_name,
+                actor_role="Enterprise Account",
+                action="Request Account Change" if request.change_field else "Send Request",
+                target=request.request_code,
+                summary=(
+                    f"{request.enterprise_name} asked to change its enterprise name."
+                    if request.change_field
+                    else f"{request.enterprise_name} sent a request: {request.title}."
+                ),
+                source_id=request.id,
+                it_detail=f"{request.request_code} · {request.request_group}",
+            )
+        )
+    logs.append(
+        sample_log(
+            ("history-request-resolved", camera_request.id),
+            camera_opened + timedelta(hours=5),
+            group="Requests",
+            severity="Success",
+            actor=it_account.display_name,
+            actor_role="IT Personnel",
+            action="Request Resolved",
+            target=camera_request.request_code,
+            summary=f"{it_account.display_name} marked {_name(camera_enterprise)}'s request resolved.",
+            source_id=camera_request.id,
+            it_detail=f"{camera_request.request_code}: In Progress → Resolved.",
         )
     )
-    logs.append(_ticket_submitted(camera_ticket, camera_opened))
     logs.append(
-        _ticket_status(
-            camera_ticket, it_account, "Open", "In Review", camera_opened + timedelta(hours=1)
-        )
-    )
-    logs.append(
-        _ticket_status(
-            camera_ticket, it_account, "In Review", "Resolved", camera_opened + timedelta(hours=5)
+        sample_log(
+            ("history-account-change-approved", rename_request.id),
+            rename_opened + timedelta(hours=3),
+            group="Accounts",
+            severity="Success",
+            actor=it_account.display_name,
+            actor_role="IT Personnel",
+            action="Approve Account Change",
+            target=_name(renamed),
+            summary=f"{it_account.display_name} approved {_name(renamed)}'s enterprise name change.",
+            source_id=renamed.id,
         )
     )
 
-    # An important account request from yesterday that IT has not picked up yet.
-    account_enterprise = enterprises[4]
-    account_opened = range_end - timedelta(days=1, hours=2)
-    account_ticket = SupportTicket(
-        id=sample_uuid("history-ticket", account_enterprise.id, "account"),
-        ticket_code="TCK-SAMPLE-004",
-        enterprise_profile_id=account_enterprise.id,
-        enterprise_name=_name(account_enterprise),
-        category="Account & Security",
-        priority="High",
-        subject="Account for weekend front-desk staff",
-        description="We need a second sign-in for the staff who run the front desk on weekends.",
-        affected_area="Front desk",
-        status="Open",
-        created_at=account_opened,
-        updated_at=account_opened,
-    )
-    db.add(account_ticket)
-    logs.append(_ticket_submitted(account_ticket, account_opened))
-
-    # A busy-visitors alert two days ago. TANAW raises these from camera counts and clears them
-    # when visitors return to their usual level; the Admin Dashboard shows them, not Requests.
+    # A busier-than-usual alert two days ago that ended when visitors went back to usual.
     busy_enterprise = enterprises[5]
     busy_raised = range_end - timedelta(days=2, hours=6)
     busy_alert = OperationalAlert(
         id=sample_uuid("history-alert", busy_enterprise.id, "busy"),
         alert_code="ALT-SAMPLE-003",
-        alert_type="Foot Traffic Alert",
+        alert_type="Busier Than Usual",
         severity="Warning",
+        enterprise_profile_id=busy_enterprise.id,
         enterprise=_name(busy_enterprise),
-        requester=_name(busy_enterprise),
         summary=(
-            f"{_name(busy_enterprise)} had 96 visitors, compared with its usual 62 around this day "
-            "and time. The latest visitor level has returned to its usual range."
+            f"{_name(busy_enterprise)} has 96 visitors inside, more than its usual 62 around "
+            "this time."
         ),
-        required_action=(
-            "Review the live map and coordinate with the establishment if support is needed."
-        ),
-        resolution_mode="Admin Monitoring",
-        status="Resolved",
-        owner="Admin",
+        detail="55% above usual · Usual from the past 5 weeks",
+        status="Ended",
         source_id=f"visitor-activity:{busy_enterprise.id}:history",
+        started_at=busy_raised,
+        active_at=busy_raised,
+        ended_at=busy_raised + timedelta(hours=2),
         created_at=busy_raised,
         updated_at=busy_raised + timedelta(hours=2),
     )
     db.add(busy_alert)
     logs.append(
-        _log(
-            ("history-alert-created", busy_alert.id),
+        sample_log(
+            ("history-alert-started", busy_alert.id),
             busy_raised,
-            category="Admin Operation",
+            group="Monitoring",
             severity="Warning",
             actor="TANAW",
             actor_role="System",
-            action="Alert Created",
-            target=_name(busy_enterprise),
-            summary=(
-                f"{_name(busy_enterprise)} had 96 visitors, compared with its usual 62 around this "
-                "day and time."
-            ),
-            source_id=busy_alert.id,
-            metadata={"alertType": busy_alert.alert_type, "status": "New"},
-        )
-    )
-    logs.append(
-        _log(
-            ("history-alert-resolved", busy_alert.id),
-            busy_raised + timedelta(hours=2),
-            category="Admin Operation",
-            severity="Success",
-            actor="TANAW",
-            actor_role="System",
-            action="Alert Resolved",
+            action="Busier Than Usual",
             target=_name(busy_enterprise),
             summary=busy_alert.summary,
             source_id=busy_alert.id,
-            metadata={"alertType": busy_alert.alert_type, "status": "Resolved"},
+            it_detail=busy_alert.detail,
+        )
+    )
+    logs.append(
+        sample_log(
+            ("history-alert-ended", busy_alert.id),
+            busy_raised + timedelta(hours=2),
+            group="Monitoring",
+            severity="Success",
+            actor="TANAW",
+            actor_role="System",
+            action="Back to Usual",
+            target=_name(busy_enterprise),
+            summary=f"{_name(busy_enterprise)} is back to its usual number of visitors.",
+            source_id=busy_alert.id,
+        )
+    )
+    # A lockout, recorded as a heads-up rather than an alert.
+    logs.append(
+        sample_log(
+            ("history-lockout", staff.id),
+            range_end - timedelta(days=1, hours=7),
+            group="Login & Security",
+            severity="Warning",
+            actor=staff.display_name,
+            actor_role="LGU Staff",
+            action="Account Locked",
+            target=staff.email,
+            summary=(
+                f"{staff.display_name}'s account was locked for 5 minutes after too many "
+                "wrong passwords."
+            ),
+            source_id=staff.id,
+            it_detail="3 failed sign-ins in a row. Locked for 5 minutes.",
         )
     )
 
@@ -204,26 +272,29 @@ async def create_request_and_user_activity(
     # IT created each enterprise account when it registered, and later updated one of them.
     for enterprise in enterprises:
         logs.append(
-            _log(
+            sample_log(
                 ("history-enterprise-created", enterprise.id),
                 enterprise.created_at,
-                category="IT Activity",
+                group="Accounts",
                 severity="Success",
                 actor=it_account.display_name,
                 actor_role="IT Personnel",
                 action="Create Enterprise Account",
                 target=_name(enterprise),
-                summary=f"{it_account.display_name} created enterprise account {_name(enterprise)}.",
+                summary=(
+                    f"{it_account.display_name} registered enterprise account {_name(enterprise)} "
+                    "and sent the activation email."
+                ),
                 source_id=enterprise.id,
                 metadata={"enterpriseId": _enterprise_id(enterprise)},
             )
         )
     updated_enterprise = enterprises[7]
     logs.append(
-        _log(
+        sample_log(
             ("history-enterprise-updated", updated_enterprise.id),
             range_end - timedelta(days=4, hours=2),
-            category="IT Activity",
+            group="Accounts",
             severity="Success",
             actor=it_account.display_name,
             actor_role="IT Personnel",
@@ -239,7 +310,7 @@ async def create_request_and_user_activity(
 
     db.add_all(logs)
     await db.flush()
-    return {"operationalAlerts": 1, "supportTickets": 2, "activityLogs": len(logs)}
+    return {"operationalAlerts": 1, "requests": 3, "activityLogs": len(logs)}
 
 
 def _account_with_role(accounts: list[Account], role: AccountRole) -> Account:
@@ -254,45 +325,34 @@ def _name(enterprise: Account) -> str:
     return profile.enterprise_name if profile is not None else enterprise.display_name
 
 
+def _manager(enterprise: Account) -> str:
+    profile = enterprise.enterprise_profile
+    return (profile.manager_name if profile is not None else None) or enterprise.display_name
+
+
 def _enterprise_id(enterprise: Account) -> str | None:
     profile = enterprise.enterprise_profile
     return profile.enterprise_id if profile is not None else None
 
 
-def _log(
-    id_parts: tuple[str, ...],
-    at: datetime,
-    *,
-    category: str,
-    severity: str,
-    actor: str,
-    actor_role: str,
-    action: str,
-    target: str,
-    summary: str,
-    source_id: str,
-    metadata: dict[str, str | None] | None = None,
-) -> ActivityLog:
-    return ActivityLog(
-        id=sample_uuid(*id_parts),
-        timestamp=at,
-        category=category,
-        severity=severity,
-        actor=actor,
-        actor_role=actor_role,
-        action=action,
-        target=target,
-        summary=summary,
-        source_id=source_id,
-        metadata_json=json.dumps(metadata, sort_keys=True) if metadata else None,
+def _status(request: Request, actor: Account, status: str, at: datetime) -> RequestMessage:
+    return RequestMessage(
+        id=sample_uuid("history-request-status", request.id, status),
+        request_id=request.id,
+        author_account_id=actor.id,
+        author_name=actor.display_name,
+        author_role=actor.role.value,
+        kind="status",
+        message=status,
+        created_at=at,
     )
 
 
 def _auth_log(account: Account, action: str, summary: str, at: datetime) -> ActivityLog:
-    return _log(
+    return sample_log(
         ("history-auth", account.id, action, at.isoformat()),
         at,
-        category=_AUTH_CATEGORY[account.role],
+        group="Login & Security",
         severity="Info",
         actor=account.display_name,
         actor_role=_ACTOR_ROLE[account.role],
@@ -300,42 +360,4 @@ def _auth_log(account: Account, action: str, summary: str, at: datetime) -> Acti
         target=account.email,
         summary=summary,
         source_id=account.id,
-    )
-
-
-def _ticket_submitted(ticket: SupportTicket, at: datetime) -> ActivityLog:
-    return _log(
-        ("history-ticket-submitted", ticket.id),
-        at,
-        category="Enterprise Activity",
-        severity="Warning" if ticket.priority in {"High", "Urgent"} else "Info",
-        actor=ticket.enterprise_name,
-        actor_role="Enterprise Account",
-        action="Submit Support Ticket",
-        target=ticket.ticket_code,
-        summary=f"{ticket.enterprise_name} submitted {ticket.ticket_code}: {ticket.subject}.",
-        source_id=ticket.id,
-        metadata={
-            "ticketCode": ticket.ticket_code,
-            "category": ticket.category,
-            "priority": ticket.priority,
-        },
-    )
-
-
-def _ticket_status(
-    ticket: SupportTicket, it_account: Account, previous: str, status: str, at: datetime
-) -> ActivityLog:
-    return _log(
-        ("history-ticket-status", ticket.id, status),
-        at,
-        category="IT Activity",
-        severity="Success",
-        actor=it_account.display_name,
-        actor_role="IT Personnel",
-        action="Update Support Ticket Status",
-        target=ticket.ticket_code,
-        summary=f"{it_account.display_name} updated {ticket.ticket_code} from {previous} to {status}.",
-        source_id=ticket.id,
-        metadata={"ticketCode": ticket.ticket_code, "status": status},
     )

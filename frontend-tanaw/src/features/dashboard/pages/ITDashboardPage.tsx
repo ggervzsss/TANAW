@@ -1,5 +1,6 @@
 import { PageHeader } from "@/shared/components/layout";
 import { PageMotion } from "@/shared/components/ui";
+import { LiveAlertsSection } from "../components/LiveAlertsSection";
 import { CurrentWorkPanel, DashboardMetrics, DashboardSidePanels } from "../components";
 import { useITDashboardOverview } from "../hooks";
 
@@ -13,6 +14,7 @@ export function ITDashboardPage() {
         <CurrentWorkPanel overview={overview} />
         <DashboardSidePanels overview={overview} />
       </div>
+      <LiveAlertsSection />
     </PageMotion>
   );
 }

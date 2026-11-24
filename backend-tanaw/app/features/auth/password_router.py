@@ -38,9 +38,6 @@ from app.features.auth.password_recovery import (
     reset_password_with_token,
     verify_password_reset_code,
 )
-from app.features.auth.policies import (
-    get_auth_log_category,
-)
 from app.features.auth.recovery_rate_limit import PasswordResetRateLimitExceeded
 from app.features.auth.schemas import (
     ForgotPasswordRequest,
@@ -84,7 +81,7 @@ async def change_password(
 
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Login & Security",
         severity="Success",
         actor=account.display_name,
         actor_role=get_actor_role_label(account),
@@ -177,7 +174,7 @@ async def forgot_password_reset(
 
     await record_auth_log(
         db,
-        category=get_auth_log_category(account),
+        group="Login & Security",
         severity="Success",
         actor="Account Recovery",
         actor_role="System",

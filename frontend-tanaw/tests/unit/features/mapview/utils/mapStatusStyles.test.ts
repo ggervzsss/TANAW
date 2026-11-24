@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   getDarkMonitoringBadgeClass,
   getMapPinState,
+  MAP_PIN_ICON_PATHS,
   mapPinColors,
+  mapPinStateLabels,
   getMonitoringStatusColor,
   getMonitoringStatusLabel,
   getMonitoringStatusPresentation,
@@ -72,16 +74,24 @@ describe("enterprise map monitoring styles", () => {
 });
 
 describe("dashboard pin states", () => {
-  it.each([
-    ["Fully Monitoring", "ok"],
-    ["Partially Monitoring", "partial"],
-    ["Updates Delayed", "partial"],
-    ["Fault", "partial"],
-    ["Stopped", "offline"],
-    ["Offline", "offline"],
-    ["Not Configured", "offline"],
-  ] as const)("colours %s pins as %s", (status, state) => {
-    expect(getMapPinState(status)).toBe(state);
+  it.each(["normal", "busy", "camera", "offline", "closed"] as const)("uses the state the server worked out: %s", (state) => {
+    expect(getMapPinState({ pinState: state, monitoringStatus: "Fully Monitoring" })).toBe(state);
     expect(mapPinColors[state]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(mapPinStateLabels[state]).not.toBe("");
+    expect(MAP_PIN_ICON_PATHS[state]).not.toBe("");
+  });
+
+  it.each([
+    ["Fully Monitoring", "normal"],
+    ["Partially Monitoring", "camera"],
+    ["Fault", "camera"],
+    ["Offline", "offline"],
+  ] as const)("falls back to the monitoring status for %s when no pin state is sent", (status, state) => {
+    expect(getMapPinState({ monitoringStatus: status })).toBe(state);
+  });
+
+  it("gives each state its own colour, except closed, which is a faded normal pin", () => {
+    expect(new Set([mapPinColors.normal, mapPinColors.busy, mapPinColors.camera, mapPinColors.offline]).size).toBe(4);
+    expect(mapPinColors.closed).toBe(mapPinColors.normal);
   });
 });

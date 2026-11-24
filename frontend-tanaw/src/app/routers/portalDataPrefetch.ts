@@ -13,20 +13,20 @@ import {
   operationalReportsQueryKey,
   operationalSummaryQueryKey,
 } from "@/app/hooks/useOperationalSync";
-import { listAlerts } from "@/shared/services/alerts";
+import { listLiveAlerts } from "@/shared/services/alerts";
 import { getOperationalSummary, listFinalReports, listIntakeReports, listOperationalMapEnterprises, listUserNotifications } from "@/shared/services/operationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
-import { listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
+import { listRequests, requestsQueryKey } from "@/shared/services/requests";
 import { getSystemSettings, systemSettingsQueryKey } from "@/shared/services/systemSettingsService";
 import { routes } from "./routes";
 
 type Prefetch = { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> };
 
-const alerts: Prefetch = { queryKey: alertsQueryKey, queryFn: listAlerts };
+const alerts: Prefetch = { queryKey: alertsQueryKey, queryFn: listLiveAlerts };
 const activityLogs: Prefetch = { queryKey: activityLogsQueryKey, queryFn: listActivityLogs };
 const enterpriseAccounts: Prefetch = { queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts };
 const lguAccounts: Prefetch = { queryKey: lguAccountsQueryKey, queryFn: listLguAccounts };
-const supportTickets: Prefetch = { queryKey: supportTicketsQueryKey, queryFn: listSupportTickets };
+const requests: Prefetch = { queryKey: requestsQueryKey, queryFn: listRequests };
 const emailDeliveries: Prefetch = { queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries };
 const operationalSummary: Prefetch = { queryKey: operationalSummaryQueryKey, queryFn: getOperationalSummary };
 const operationalReports: Prefetch = { queryKey: operationalReportsQueryKey, queryFn: listIntakeReports };
@@ -37,19 +37,18 @@ const reportEnterprises: Prefetch = { queryKey: ["report-enterprises"], queryFn:
 const systemSettings: Prefetch = { queryKey: systemSettingsQueryKey, queryFn: getSystemSettings };
 
 const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
-  [routes.admin.dashboard]: [operationalMap, activityLogs, alerts, supportTickets],
+  [routes.admin.dashboard]: [operationalMap, activityLogs, alerts, requests],
   [routes.admin.enterprises]: [operationalMap, enterpriseAccounts],
   [routes.admin.reports]: [operationalReports, reportEnterprises, enterpriseAccounts, operationalMap, activityLogs, operationalFinalReports],
   [routes.admin.activity]: [activityLogs],
-  [routes.admin.requests]: [alerts, enterpriseAccounts, supportTickets],
-  [routes.admin.notifications]: [operationalNotifications],
-  [routes.it.dashboard]: [alerts, operationalSummary, lguAccounts, enterpriseAccounts, supportTickets, emailDeliveries],
+  [routes.admin.requests]: [requests],
+  [routes.it.dashboard]: [alerts, operationalSummary, lguAccounts, enterpriseAccounts, requests, emailDeliveries],
   [routes.it.enterpriseAccounts]: [enterpriseAccounts],
   [routes.it.lguAccounts]: [lguAccounts],
   [routes.it.notifications]: [operationalNotifications],
   [routes.it.systemLogs]: [activityLogs],
   [routes.it.systemSettings]: [systemSettings],
-  [routes.it.workCenter]: [alerts, enterpriseAccounts, supportTickets, emailDeliveries],
+  [routes.it.workCenter]: [alerts, enterpriseAccounts, requests, emailDeliveries],
   [routes.staff.reports]: [operationalReports, reportEnterprises],
   [routes.staff.consolidatedReports]: [operationalFinalReports],
   [routes.staff.notifications]: [operationalNotifications],

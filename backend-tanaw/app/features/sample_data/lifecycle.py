@@ -12,6 +12,7 @@ from app.features.reporting.models import (
     FinalReport,
     FinalReportSource,
 )
+from app.features.requests.models import Request
 from app.features.sample_data.accounts import create_accounts, resolve_target_enterprise
 from app.features.sample_data.activity import create_request_and_user_activity
 from app.features.sample_data.dataset import (
@@ -36,7 +37,6 @@ from app.features.sample_data.report_workflow import (
     create_staff_report_notifications,
 )
 from app.features.sample_data.visitors import create_admin_visitor_history
-from app.features.support.models import SupportTicket
 
 
 async def sample_dataset_present(db: AsyncSession) -> bool:
@@ -106,10 +106,9 @@ async def generate_sample_data(
         "intakeReports": len(reports["reports"]),
         "finalReports": len(final_reports),
         "staffNotifications": notifications,
-        "adminNotifications": operations["adminNotifications"],
         "itNotifications": operations["itNotifications"],
         "operationalAlerts": operations["operationalAlerts"] + history["operationalAlerts"],
-        "supportTickets": operations["supportTickets"] + history["supportTickets"],
+        "requests": operations["requests"] + history["requests"],
         "emailProblems": operations["emailProblems"],
         "activityLogs": logs + operations["activityLogs"] + history["activityLogs"],
         "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
@@ -156,13 +155,17 @@ async def remove_sample_data(db: AsyncSession) -> dict:
             select(OperationalAlert.id).where(OperationalAlert.alert_code.startswith("ALT-SAMPLE-"))
         )
     )
-    ticket_ids = list(
+    request_ids = list(
         await db.scalars(
-            select(SupportTicket.id).where(SupportTicket.enterprise_profile_id.in_(account_ids))
+            select(Request.id).where(
+                Request.enterprise_profile_id.in_(account_ids)
+                | Request.request_code.startswith("REQ-SAMPLE-")
+            )
         )
     )
     notification_filters = [
         UserNotification.source_id.in_(intake_report_ids),
+        UserNotification.source_id.in_(request_ids),
         UserNotification.recipient_account_id.in_(account_ids),
         UserNotification.created_by_account_id.in_(account_ids),
     ]
@@ -194,18 +197,17 @@ async def remove_sample_data(db: AsyncSession) -> dict:
             | ActivityLog.source_id.in_(final_report_ids)
             | ActivityLog.source_id.in_(account_ids)
             | ActivityLog.source_id.in_(alert_ids)
-            | ActivityLog.source_id.in_(ticket_ids)
+            | ActivityLog.source_id.in_(request_ids)
         )
     )
     alerts_result = await db.execute(
         delete(OperationalAlert).where(
             OperationalAlert.source_id.startswith(SAMPLE_SOURCE_PREFIX)
             | OperationalAlert.alert_code.startswith("ALT-SAMPLE-")
+            | OperationalAlert.enterprise_profile_id.in_(account_ids)
         )
     )
-    tickets_result = await db.execute(
-        delete(SupportTicket).where(SupportTicket.enterprise_profile_id.in_(account_ids))
-    )
+    requests_result = await db.execute(delete(Request).where(Request.id.in_(request_ids)))
     accounts_result = await db.execute(delete(Account).where(Account.id.in_(account_ids)))
     counts = {
         "finalReportSources": len(final_report_ids),
@@ -215,7 +217,7 @@ async def remove_sample_data(db: AsyncSession) -> dict:
         "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
         "activityLogs": affected_row_count(activity_logs_result),
         "operationalAlerts": affected_row_count(alerts_result),
-        "supportTickets": affected_row_count(tickets_result),
+        "requests": affected_row_count(requests_result),
         "accounts": affected_row_count(accounts_result),
     }
     await db.commit()

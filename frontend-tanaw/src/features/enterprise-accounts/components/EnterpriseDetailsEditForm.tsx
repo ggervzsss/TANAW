@@ -51,7 +51,7 @@ export function EnterpriseDetailsEditForm(props: Props) {
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-5">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <EnterpriseAccountFields mode="edit" form={form} errors={errors} onChange={onFieldChange} />
+        <EnterpriseAccountFields mode="edit" form={form} errors={errors} onChange={onFieldChange} onOpeningHoursChange={(value) => onFieldChange("openingHours", value)} />
         <section
           data-field-name="location"
           tabIndex={-1}

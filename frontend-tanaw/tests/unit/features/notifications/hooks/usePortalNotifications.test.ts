@@ -22,32 +22,23 @@ function notification(overrides: Partial<BackendNotification>): BackendNotificat
 }
 
 describe("Admin notification destinations", () => {
-  it("opens the exact situation in Requests", () => {
-    const target = getBackendNotificationTargetPath("admin", notification({ sourceType: "operational.alert", sourceId: "ALT-000001" }));
-
-    expect(target).toBe("/admin/requests?alert=ALT-000001");
+  it("opens a request's notification on the Requests page", () => {
+    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "request", sourceId: "request-1" }))).toBe("/admin/requests?request=request-1");
   });
 
-  it("opens the Dashboard for more-visitors-than-usual alerts, which are not requests", () => {
-    expect(getBackendNotificationTargetPath("admin", notification({ type: "High Visitor Activity", sourceType: "operational.alert", sourceId: "ALT-000003" }))).toBe("/admin/dashboard");
-  });
-
-  it("opens support tickets and account requests in Requests", () => {
-    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "support.ticket", sourceId: "ticket-1" }))).toBe("/admin/requests?ticket=ticket-1");
-    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "enterprise.profile.contact", sourceId: "account-1" }))).toBe("/admin/requests?account=account-1");
+  it("opens anything else on the Dashboard, since the Admin has no notification bell", () => {
+    expect(getBackendNotificationTargetPath("admin", notification({ sourceType: "operational.alert", sourceId: "ALT-000003" }))).toBe("/admin/dashboard");
   });
 });
 
 describe("IT notification destinations", () => {
-  it("opens the exact technical issue and support request in the Work Center", () => {
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "operational.alert", sourceId: "ALT-000002", recipientRole: "it" }))).toBe("/it/work-center?view=issues&alert=ALT-000002");
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "support.ticket", sourceId: "ticket-2", recipientRole: "it" }))).toBe("/it/work-center?view=support&ticket=ticket-2");
+  it("opens the exact request in the Work Center", () => {
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "request", sourceId: "request-2", recipientRole: "it" }))).toBe("/it/work-center?view=requests&request=request-2");
   });
 
-  it("opens account requests and email problems in their Work Center views", () => {
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }))).toBe(
-      "/it/work-center?view=accounts&account=enterprise-1",
-    );
+  it("opens account changes, email problems and offline places where IT handles them", () => {
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }))).toBe("/it/work-center?view=requests");
     expect(getBackendNotificationTargetPath("it", notification({ sourceType: "email.delivery", sourceId: "email-1", recipientRole: "it" }))).toBe("/it/work-center?view=email");
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.offline", sourceId: "e:2026-11-23", recipientRole: "it" }))).toBe("/it/dashboard");
   });
 });

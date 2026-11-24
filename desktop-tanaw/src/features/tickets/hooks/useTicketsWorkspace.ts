@@ -7,7 +7,7 @@ import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field
 import { useScopedPageState } from "../../../hooks/useScopedPageState";
 import { createSupportTicket, getSupportTicket, listSupportTickets, sortSupportTickets, type SupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
 import { getTicketRequestError } from "../utils/ticket-presentation";
-import { type TicketFormErrors, type TicketFormField, isSupportTicketCategory, isSupportTicketPriority, ticketFormFieldOrder, validateTicketForm } from "../model/ticket-form-validation";
+import { type TicketFormErrors, type TicketFormField, isSupportTicketCategory, ticketFormFieldOrder, validateTicketForm } from "../model/ticket-form-validation";
 import { getSupportTicketCategoryConfig, ticketCategoryPayloadFields } from "../model/ticket-category-config";
 import { emptyTicketForm, emptyTicketPhotos, initialTicketSort, isSupportTicketSort, isTicketFormState, isTicketPhotoDraft, maxTicketPhotoCount, readTicketPhoto } from "../model/ticket-draft";
 
@@ -58,7 +58,7 @@ export function useTicketsWorkspace() {
     try {
       setTickets(await listSupportTickets());
     } catch (requestError) {
-      setError(getTicketRequestError(requestError, "Unable to load support tickets."));
+      setError(getTicketRequestError(requestError, "Unable to load your requests."));
     } finally {
       setIsLoading(false);
     }
@@ -69,11 +69,11 @@ export function useTicketsWorkspace() {
   }, [refreshTickets]);
 
   useRealtimeEvent((event) => {
-    if (!event.event_type.startsWith("support_ticket.")) return;
+    if (!event.event_type.startsWith("request.")) return;
     void listSupportTickets()
       .then(setTickets)
       .catch(() => undefined);
-    if (selectedTicketId && (!event.scope.ticket_id || event.scope.ticket_id === selectedTicketId)) {
+    if (selectedTicketId && (!event.scope.request_id || event.scope.request_id === selectedTicketId)) {
       void getSupportTicket(selectedTicketId)
         .then(setSelectedTicket)
         .catch(() => undefined);
@@ -97,7 +97,7 @@ export function useTicketsWorkspace() {
       .catch((requestError) => {
         if (!disposed) {
           setSelectedTicket(null);
-          setSelectedTicketError(getTicketRequestError(requestError, "Unable to load ticket details."));
+          setSelectedTicketError(getTicketRequestError(requestError, "Unable to load the request."));
         }
       })
       .finally(() => {
@@ -116,7 +116,7 @@ export function useTicketsWorkspace() {
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setError("");
-      notifyWarning("Please correct the highlighted ticket fields.");
+      notifyWarning("Please correct the highlighted fields.");
       window.requestAnimationFrame(() =>
         focusFirstInvalidField(
           formElement,
@@ -125,7 +125,7 @@ export function useTicketsWorkspace() {
       );
       return;
     }
-    if (!isSupportTicketCategory(form.category) || !isSupportTicketPriority(form.priority)) return;
+    if (!isSupportTicketCategory(form.category)) return;
 
     setIsSubmitting(true);
     setError("");
@@ -133,10 +133,9 @@ export function useTicketsWorkspace() {
       const categoryFields = ticketCategoryPayloadFields(form.category, form);
       const ticket = await createSupportTicket({
         ...categoryFields,
-        category: form.category,
+        group: form.category,
         description: form.description.trim(),
-        priority: form.priority,
-        subject: form.subject.trim(),
+        title: form.subject.trim(),
         attachments: photos,
       });
       setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
@@ -144,9 +143,9 @@ export function useTicketsWorkspace() {
       clearPhotoDraft();
       setFieldErrors({});
       setPhotoError("");
-      notifySuccess(`Ticket ${ticket.code} submitted.`);
+      notifySuccess(`Request ${ticket.code} sent.`);
     } catch (requestError) {
-      const message = getTicketRequestError(requestError, "Unable to submit support ticket.");
+      const message = getTicketRequestError(requestError, "Unable to send the request.");
       setError(message);
       notifyError(message);
     } finally {

@@ -22,6 +22,7 @@ from app.features.notifications.service import (
 )
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import DesktopReportSubmissionIngest
+from app.features.requests.models import Request
 from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import prepared_counts
 from app.features.sample_data.definitions import (
@@ -44,7 +45,6 @@ from app.features.sample_data.report_workflow import (
     prepare_staff_notification_reports,
 )
 from app.features.sample_data.visitors import create_admin_visitor_history
-from app.features.support.models import SupportTicket
 
 
 def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
@@ -464,56 +464,45 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
     )
 
     added_records = [call.args[0] for call in db.add.call_args_list]
-    alerts = [record for record in added_records if isinstance(record, OperationalAlert)]
-    alert = next(record for record in alerts if record.owner == "Admin")
-    technical_alert = next(record for record in alerts if record.owner == "IT")
+    batches = [item for call in db.add_all.call_args_list for item in call.args[0]]
+    alerts = [item for item in batches if isinstance(item, OperationalAlert)]
+    busy = next(alert for alert in alerts if alert.alert_type == "Busier Than Usual")
+    camera = next(alert for alert in alerts if alert.alert_type == "Camera Not Counting")
     failed_email = next(record for record in added_records if isinstance(record, EmailOutbox))
-    tickets = db.add_all.call_args_list[0].args[0]
-    notifications = db.add_all.call_args_list[1].args[0]
-    assert isinstance(alert, OperationalAlert)
-    assert alert.owner == "Admin"
-    assert alert.alert_type == "Foot Traffic Alert"
-    assert alert.source_id == "visitor-activity:enterprise-1"
-    assert "84 visitors" in alert.summary
-    assert "usual 40" in alert.summary
-    assert technical_alert.alert_code == "ALT-SAMPLE-002"
-    assert technical_alert.severity == "Critical"
+    requests = [item for item in batches if isinstance(item, Request)]
+    notifications = [item for item in batches if isinstance(item, UserNotification)]
+    assert busy.status == camera.status == "Active"
+    assert busy.source_id == "visitor-activity:enterprise-1"
+    assert "84 visitors" in busy.summary
+    assert "usual 40" in busy.summary
+    assert camera.alert_code == "ALT-SAMPLE-002"
+    assert camera.camera == "Entrance"
     assert failed_email.status == "terminal_failed"
-    assert [ticket.priority for ticket in tickets if isinstance(ticket, SupportTicket)] == [
-        "High",
-        "Normal",
+    assert [(request.request_group, request.status) for request in requests] == [
+        ("Desktop app or camera problem", "In Progress"),
+        ("Report problem", "Sent"),
+        ("Account change", "Sent"),
+        ("Sign-in help", "Sent"),
     ]
-    admin_notifications = [
-        notification
-        for notification in notifications
-        if isinstance(notification, UserNotification)
-        and notification.recipient_role == AccountRole.ADMIN.value
-    ]
-    assert [notification.source_type for notification in admin_notifications] == [
-        "operational.alert",
-        "support.ticket",
-    ]
-    it_notifications = [
-        notification
-        for notification in notifications
-        if isinstance(notification, UserNotification)
-        and notification.recipient_role == AccountRole.IT.value
-    ]
-    assert {notification.source_type for notification in it_notifications} == {
-        "operational.alert",
-        "support.ticket",
+    change = next(request for request in requests if request.change_field)
+    assert (
+        json.loads(enterprises[2].preferences_json or "{}")["pendingContactNumberChange"]["phone"]
+        == change.change_value
+    )
+    # The Admin has no notification bell; only IT gets notifications.
+    assert {notification.recipient_role for notification in notifications} == {AccountRole.IT.value}
+    assert {notification.source_type for notification in notifications} == {
+        "request",
         "email.delivery",
-        "enterprise.profile.contact",
     }
     assert counts == {
-        "adminNotifications": 2,
         "itNotifications": 5,
         "operationalAlerts": 2,
-        "supportTickets": 2,
+        "requests": 4,
         "emailProblems": 1,
-        "activityLogs": 5,
+        "activityLogs": 8,
     }
-    db.flush.assert_awaited_once()
+    assert db.flush.await_count == 2
 
 
 def _account(account_id: str, role: AccountRole) -> Account:

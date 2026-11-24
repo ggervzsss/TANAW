@@ -227,23 +227,24 @@ def password_reset_code_email(
     return EmailContent(subject="TANAW password reset verification code", text=text, html=html)
 
 
-def support_ticket_reply_email(
-    *, ticket_code: str, subject: str, recipient_name: str, author_name: str, message: str
+def request_reply_email(
+    *, request_code: str, title: str, recipient_name: str, author_name: str, message: str
 ) -> EmailContent:
-    email_subject = f"[{ticket_code}] Re: {subject}"
+    email_subject = f"[{request_code}] Re: {title}"
     text = (
         f"Hello {recipient_name},\n\n"
-        f"{author_name} replied to your TANAW support ticket {ticket_code}:\n\n"
+        f"{author_name} replied to your TANAW request {request_code}:\n\n"
         f"{message}\n\n"
-        "Open Support Tickets in TANAW to view and continue the conversation."
+        "Open Requests in the TANAW desktop app to view and continue the conversation."
     )
     html = _layout(
-        f"Support ticket {escape(ticket_code)}",
+        f"Request {escape(request_code)}",
         f"""
         <p>Hello {escape(recipient_name)},</p>
-        <p><strong>{escape(author_name)}</strong> replied to your TANAW support ticket.</p>
+        <p><strong>{escape(author_name)}</strong> replied to your TANAW request.</p>
         <div class="card"><p>{escape(message)}</p></div>
-        <p class="muted">Open Support Tickets in TANAW to view and continue the conversation.</p>
+        <p class="muted">Open Requests in the TANAW desktop app to view and continue the
+        conversation.</p>
         """,
     )
     return EmailContent(subject=email_subject, text=text, html=html)
@@ -254,7 +255,7 @@ def business_email_change_email(account: Account | EmailRecipient, new_email: st
         f"Hello {account.display_name},\n\n"
         "A request was submitted to change the TANAW business email for your account "
         f"to {new_email}. TANAW IT and Admin will review the request.\n\n"
-        "If you did not request this change, submit a support request through TANAW immediately."
+        "If you did not request this change, send a request through TANAW immediately."
     )
     html = _layout(
         "TANAW business email change request",
@@ -262,7 +263,7 @@ def business_email_change_email(account: Account | EmailRecipient, new_email: st
         <p>Hello {escape(account.display_name)},</p>
         <p>A request was submitted to change the TANAW business email for your account to <strong>{escape(new_email)}</strong>.</p>
         <p>TANAW IT and Admin will review the request.</p>
-        <p class="muted">If you did not request this change, submit a support request through TANAW immediately.</p>
+        <p class="muted">If you did not request this change, send a request through TANAW immediately.</p>
         """,
     )
     return EmailContent(subject="TANAW business email change request", text=text, html=html)

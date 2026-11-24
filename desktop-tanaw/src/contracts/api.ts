@@ -12,7 +12,7 @@ export const apiPaths = {
   desktopSamplePreparation: "/operational/desktop/sample-preparation",
   desktopTelemetry: "/operational/desktop/telemetry",
   finalReports: "/operational/reports/final",
-  supportTickets: "/operational/tickets",
+  supportTickets: "/operational/requests",
 } as const satisfies Record<string, keyof ApiOperations>;
 
 export type ApiAuthUser = ApiSchemas["AuthUser"];
@@ -23,6 +23,6 @@ export type ApiDesktopBackupUpload = ApiSchemas["DesktopBackupUpload"];
 export type ApiDesktopReportSubmission = ApiSchemas["DesktopReportSubmissionIngest"];
 export type ApiDesktopTelemetry = ApiSchemas["DesktopTelemetryIngest"];
 export type ApiFinalReport = ApiSchemas["FinalReportSummary"];
-export type ApiSupportTicket = ApiSchemas["SupportTicketSummary"];
-export type ApiSupportTicketCreate = ApiSchemas["SupportTicketCreate"];
-export type ApiSupportTicketDetail = ApiSchemas["SupportTicketDetail"];
+export type ApiSupportTicket = ApiSchemas["RequestSummary"];
+export type ApiSupportTicketCreate = ApiSchemas["RequestCreate"];
+export type ApiSupportTicketDetail = ApiSchemas["RequestDetail"];

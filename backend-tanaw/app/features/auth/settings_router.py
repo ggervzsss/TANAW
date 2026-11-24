@@ -93,7 +93,7 @@ async def update_system_settings(
     await db.refresh(record)
     await record_auth_log(
         db,
-        category="IT Activity",
+        group="Settings & Maintenance",
         severity="Success",
         actor=account.display_name,
         actor_role="IT Personnel",

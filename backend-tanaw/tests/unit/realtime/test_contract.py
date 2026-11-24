@@ -50,11 +50,11 @@ def test_enterprise_tenant_and_recipient_scopes_are_enforced() -> None:
         enterprise_id="enterprise-a",
     )
     ticket_event = envelope(
-        RealtimeEventType.SUPPORT_TICKET_MESSAGE_CREATED,
+        RealtimeEventType.REQUEST_MESSAGE_CREATED,
         scope=RealtimeScope(
             enterprise_account_id="enterprise-account-b",
             enterprise_id="enterprise-b",
-            ticket_id="ticket-b",
+            request_id="request-b",
         ),
     )
     notification = envelope(
@@ -66,19 +66,13 @@ def test_enterprise_tenant_and_recipient_scopes_are_enforced() -> None:
     assert not RealtimeConnectionManager._is_authorized(identity, notification, ["enterprise"])
 
 
-def test_admin_only_receives_escalated_ticket_events() -> None:
+def test_admin_receives_every_request_and_activity_event() -> None:
     identity = RealtimeIdentity(account_id="admin-1", role="admin")
-    normal = envelope(
-        RealtimeEventType.SUPPORT_TICKET_UPDATED,
-        payload={"priority": "Normal"},
-    )
-    urgent = envelope(
-        RealtimeEventType.SUPPORT_TICKET_UPDATED,
-        payload={"priority": "Urgent"},
-    )
+    request_update = envelope(RealtimeEventType.REQUEST_UPDATED, payload={"group": "Other"})
+    activity = envelope(RealtimeEventType.ACTIVITY_CREATED, payload={"group": "Login & Security"})
 
-    assert not RealtimeConnectionManager._is_authorized(identity, normal, ["admin"])
-    assert RealtimeConnectionManager._is_authorized(identity, urgent, ["admin"])
+    assert RealtimeConnectionManager._is_authorized(identity, request_update, ["admin"])
+    assert RealtimeConnectionManager._is_authorized(identity, activity, ["admin", "it"])
 
 
 @pytest.mark.asyncio

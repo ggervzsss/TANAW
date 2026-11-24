@@ -10,6 +10,7 @@ import {
   getBusinessEmailChangeStatus,
   requestBusinessEmailChange,
   requestContactNumberChange,
+  requestEnterpriseNameChange,
   updateBuildingCapacity,
   updateLeadAdminName,
   updateProfileImage,
@@ -19,6 +20,7 @@ import { readProfileImageFile } from "../../../utils/image-upload";
 import { PHILIPPINE_MOBILE_ERROR, type PersonNameParts, formatPersonName, normalizeEmail, normalizeMiddleInitial, parsePersonName, toPhilippineLocalDigits } from "../../../utils/form-validation";
 
 import { ProfileDisplayField, ProfileEditModal, ReadOnlyIdentityField } from "./ProfileEditor";
+import { OpeningHoursSettings, PendingAccountChanges, TemporaryClosuresSettings } from "./ProfileHoursSettings";
 import { getInitials, getRequestErrorMessage, validateModalValue, validateStructuredName, type EditableProfileField } from "../model/profile-edit";
 
 type AccountChangeStatus = {
@@ -39,6 +41,8 @@ export function ProfileView() {
   const [modalError, setModalError] = useState("");
   const [isModalSaving, setIsModalSaving] = useState(false);
   const [accountChangeStatus, setAccountChangeStatus] = useState<AccountChangeStatus | null>(null);
+  const [accountChangesVersion, setAccountChangesVersion] = useState(0);
+  const onAccountChangeRequested = () => setAccountChangesVersion((version) => version + 1);
   const [pendingEmailChange, setPendingEmailChange] = useState<BusinessEmailChangeStatus | null>(null);
   const [isEmailChangeCancelling, setIsEmailChangeCancelling] = useState(false);
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? user?.name ?? "Enterprise Account";
@@ -190,9 +194,12 @@ export function ProfileView() {
             </div>
           ) : null}
 
+          <PendingAccountChanges refreshKey={accountChangesVersion} />
+
           <div className="tanaw-profile-layout">
-            <SettingsGroup title="Contact and operations" description="Edit each field individually. Phone changes follow the account review process.">
+            <SettingsGroup title="Contact and operations" description="Edit each field individually. Contact number and enterprise name changes need IT's approval.">
               <div className="tanaw-settings-fields">
+                <ProfileDisplayField label="Enterprise Name" value={enterpriseName} onEdit={() => openEditModal("enterpriseName")} />
                 <ProfileDisplayField label="Lead Admin Name" value={managerName} onEdit={() => openEditModal("managerName")} />
                 <ProfileDisplayField label="Contact Number" value={phoneDisplay} onEdit={() => openEditModal("phone")} />
                 <ProfileDisplayField label="Building Capacity" value={buildingCapacity.toLocaleString() + " people"} onEdit={() => openEditModal("buildingCapacity")} />
@@ -217,6 +224,8 @@ export function ProfileView() {
                 )}
               </dl>
             </SettingsGroup>
+            <OpeningHoursSettings />
+            <TemporaryClosuresSettings />
           </div>
           {saveError && <Alert tone="danger">{saveError}</Alert>}
         </fieldset>
@@ -288,6 +297,9 @@ export function ProfileView() {
     } else if (field === "phone") {
       setModalValue("");
       setModalPhoneLocal(toPhilippineLocalDigits(user?.phone ?? ""));
+    } else if (field === "enterpriseName") {
+      setModalValue(enterpriseName);
+      setModalPhoneLocal("");
     } else {
       setModalValue(String(buildingCapacity));
       setModalPhoneLocal("");
@@ -308,6 +320,7 @@ export function ProfileView() {
     if (field === "managerName") return managerName;
     if (field === "email") return user?.email ?? "Not provided";
     if (field === "buildingCapacity") return `${buildingCapacity.toLocaleString()} people`;
+    if (field === "enterpriseName") return enterpriseName;
     return phoneDisplay;
   }
 
@@ -344,7 +357,13 @@ export function ProfileView() {
       } else if (activeModal === "phone") {
         const response = await requestContactNumberChange(`+63${modalPhoneLocal}`);
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifyInfo("Contact number change request recorded.");
+        notifyInfo("Contact number change sent to IT for approval.");
+        onAccountChangeRequested();
+      } else if (activeModal === "enterpriseName") {
+        const response = await requestEnterpriseNameChange(modalValue.trim());
+        setAccountChangeStatus({ message: response.message, tone: "info" });
+        notifyInfo("Enterprise name change sent to IT for approval.");
+        onAccountChangeRequested();
       } else {
         const updated = await updateBuildingCapacity(Number(modalValue));
         updateUser(updated);

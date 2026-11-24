@@ -123,7 +123,7 @@ test("keeps keyboard focus inside sign-in dialogs and returns it on Escape", asy
 
   for (const { triggerName, dialogName, field, submitName } of [
     { triggerName: "Forgot password?", dialogName: "Forgot password", field: "Enter registered email", submitName: "Continue" },
-    { triggerName: "Contact support", dialogName: "Contact support", field: "Your name", submitName: "Record support request" },
+    { triggerName: "Contact support", dialogName: "Contact support", field: "Your name", submitName: "Send request" },
   ]) {
     const trigger = page.getByRole("button", { name: triggerName, exact: true });
     await trigger.press("Enter");

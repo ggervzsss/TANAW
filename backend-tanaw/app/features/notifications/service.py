@@ -17,10 +17,6 @@ from app.features.notifications.models import UserNotification
 from app.features.notifications.schemas import UserNotificationSummary
 
 SYSTEM_SETTINGS_ID = "default"
-NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
-NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
-NOTIFY_SYNC_DELAY_KEY = "notifications.syncDelayAlerts"
-NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
 STAFF_REPORT_SUBMITTED_NOTIFICATION = "Enterprise Report Submitted"
 STAFF_REPORT_RESUBMITTED_NOTIFICATION = "Enterprise Report Resubmitted"
 STAFF_REPORT_NOTIFICATION_TYPES = (

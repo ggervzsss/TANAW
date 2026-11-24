@@ -14,7 +14,7 @@ class ActivityLog(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    category: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    activity_group: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     actor: Mapped[str] = mapped_column(String(120), nullable=False)
     actor_role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
@@ -22,4 +22,5 @@ class ActivityLog(Base):
     target: Mapped[str] = mapped_column(String(255), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    it_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)

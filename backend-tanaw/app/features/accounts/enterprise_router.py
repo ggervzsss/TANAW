@@ -23,6 +23,7 @@ from app.features.accounts.location_validation import (
     is_inside_san_pedro,
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
+from app.features.accounts.opening_hours import dump_opening_hours
 from app.features.accounts.schemas import (
     AccountSummary,
     EnterpriseAccountCreate,
@@ -135,6 +136,7 @@ async def create_enterprise_account(
             enterprise_id=enterprise_id,
             gateway_status="Not Linked",
             building_capacity=payload.buildingCapacity,
+            opening_hours_json=dump_opening_hours(payload.openingHours),
         ),
     )
     profile = account.enterprise_profile
@@ -142,30 +144,22 @@ async def create_enterprise_account(
         raise RuntimeError("Enterprise account was created without a profile.")
     await record_account_log(
         db,
-        category="IT Activity",
+        group="Accounts",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Create Enterprise Account",
         target=profile.enterprise_name,
-        summary=f"{actor.display_name} registered enterprise account {profile.enterprise_name}.",
+        summary=(
+            f"{actor.display_name} registered enterprise account {profile.enterprise_name} "
+            "and sent the activation email."
+        ),
         source_id=account.id,
         metadata={
             "enterpriseId": profile.enterprise_id,
             "barangay": profile.barangay,
             "buildingCapacity": profile.building_capacity,
         },
-    )
-    await record_account_log(
-        db,
-        category="System",
-        severity="Info",
-        actor="TANAW System",
-        actor_role="System",
-        action="Activation Email Queued",
-        target=account.email,
-        summary=f"The system queued an account activation email for enterprise {profile.enterprise_name}.",
-        source_id=account.id,
     )
     return await to_account_summary_with_requests(db, account)
 
@@ -236,6 +230,8 @@ async def update_enterprise_account(
     profile.barangay = payload.barangay
     profile.address = payload.address
     profile.building_capacity = payload.buildingCapacity
+    if payload.openingHours is not None:
+        profile.opening_hours_json = dump_opening_hours(payload.openingHours)
     if payload.latitude is not None and payload.longitude is not None:
         profile.latitude = payload.latitude
         profile.longitude = payload.longitude
@@ -267,7 +263,7 @@ async def update_enterprise_account(
 
     await record_account_log(
         db,
-        category="IT Activity",
+        group="Accounts",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",

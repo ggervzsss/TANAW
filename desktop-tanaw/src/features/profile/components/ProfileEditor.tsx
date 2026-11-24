@@ -66,16 +66,19 @@ export function ProfileEditModal({
 }: ProfileEditModalProps) {
   const isPhone = field === "phone";
   const isName = field === "managerName";
-  const title = field === "managerName" ? "Update Lead Admin Name" : field === "email" ? "Change Business Email" : field === "phone" ? "Change Contact Number" : "Update Building Capacity";
-  const label = field === "managerName" ? "New lead admin name" : field === "email" ? "New business email" : field === "phone" ? "New contact number" : "Building capacity";
+  const title =
+    field === "managerName" ? "Update Lead Admin Name" : field === "email" ? "Change Business Email" : field === "phone" ? "Change Contact Number" : field === "enterpriseName" ? "Change Enterprise Name" : "Update Building Capacity";
+  const label = field === "managerName" ? "New lead admin name" : field === "email" ? "New business email" : field === "phone" ? "New contact number" : field === "enterpriseName" ? "New enterprise name" : "Building capacity";
   const description =
     field === "managerName"
       ? "This updates the primary enterprise contact name after validation."
       : field === "email"
         ? "TANAW sends a single-use verification link to the proposed address and a warning to your current address. IT can approve the change only after ownership is verified."
         : field === "phone"
-          ? "This sends a contact number change request to IT and Admin for review."
-          : "This updates the occupancy capacity used by TANAW alerts.";
+          ? "This sends IT a request to approve the new contact number. It changes once IT approves it."
+          : field === "enterpriseName"
+            ? "This sends IT a request to approve the new name. Reports you already sent keep the name they were sent with."
+            : "This updates the occupancy capacity used by TANAW alerts.";
 
   return (
     <ModalPortal>
@@ -175,10 +178,10 @@ export function ProfileEditModal({
                 ) : (
                   <input
                     type={field === "email" ? "email" : field === "buildingCapacity" ? "number" : "text"}
-                    autoComplete={field === "email" ? "email" : field === "buildingCapacity" ? "off" : "name"}
+                    autoComplete={field === "email" ? "email" : field === "buildingCapacity" ? "off" : "organization"}
                     autoFocus
                     value={value}
-                    maxLength={field === "email" ? 254 : undefined}
+                    maxLength={field === "email" ? 254 : field === "enterpriseName" ? 120 : undefined}
                     aria-invalid={Boolean(error)}
                     onChange={(event) => onValueChange(event.target.value)}
                     className={`focus:border-tanaw-ledger focus:ring-tanaw-ledger/12 w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:ring-2 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
@@ -186,7 +189,7 @@ export function ProfileEditModal({
                 )}
                 {(error || !isPhone) && (
                   <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
-                    {error || (field === "email" ? "Enter a valid email address." : "Use a whole number from 1 to 100,000.")}
+                    {error || (field === "email" ? "Enter a valid email address." : field === "enterpriseName" ? "Use the name your visitors know you by." : "Use a whole number from 1 to 100,000.")}
                   </p>
                 )}
               </label>

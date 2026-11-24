@@ -2,71 +2,56 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { routes } from "@/app/routers/routes";
-import { useAuthStore } from "@/app/store/authStore";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { Alert, Button, PortalPageHeader, SearchField, Select, Spinner } from "@/shared/ui-kit";
 import { RequestDetail, RequestList } from "../components";
-import { useAdminRequests, useRequestReadState, useRequestTicketDetail } from "../hooks";
+import type { Request } from "@/shared/services/requests";
+import { useAdminRequests, useRequestDetail, useRequestReadMarks } from "../hooks";
 import {
-  REQUEST_LINK_PARAMS,
-  REQUEST_TYPES,
+  REQUEST_PARAM,
   countUnread,
   filterRequests,
   findLinkedRequest,
+  groupFilterOptions,
   groupRequestsByDay,
   hasActiveFilters,
-  hasRequestLink,
   initialRequestFilters,
   isRequestFilters,
-  progressFilterOptions,
-  requestSearchParams,
+  statusFilterOptions,
   unreadLabel,
-  type AdminRequest,
   type RequestFilters,
 } from "../model";
 
-const typeOptions = [["all", "All types"] as const, ...REQUEST_TYPES.map((type) => [type, type] as const)];
-
 /**
- * Admin Requests (`/admin/requests`): alerts, High and Urgent support tickets and enterprise profile
- * changes in one list, with the selected request's details and a Message IT composer beside it.
- * The selected request lives in the address: `?alert=<code>`, `?ticket=<id>` or
- * `?account=<accountId>[&change=businessEmail|contactNumber]`, which notifications also use.
- * Read and unread are remembered per Admin in this browser, since the API has no read flag for them.
+ * Admin Requests (`/admin/requests`): every request people sent to IT, with the selected request's
+ * details and a note-for-IT box beside it. The selected request lives in the address as
+ * `?request=<id>`. New and Updated marks come from the server, so they follow the account.
  */
 export function AdminRequestsPage() {
   const { timeFormat } = useSystemDisplayPreferences();
-  const userId = useAuthStore((state) => state.user?.id ?? "anonymous");
   const [searchParams, setSearchParams] = useSearchParams();
   const now = useMinuteClock();
-  const { requests, logs, isLoading, failedSources, retry } = useAdminRequests();
-  const { readState, markRead, markAllRead } = useRequestReadState(userId);
+  const { requests, isLoading, isError, retry } = useAdminRequests();
   const [filters, setFilters] = useScopedPageState<RequestFilters>({
     initialValue: initialRequestFilters,
     isValid: isRequestFilters,
     namespace: "admin-requests-filters",
-    version: 1,
+    version: 2,
   });
 
   const visible = useMemo(() => filterRequests(requests, filters), [filters, requests]);
   const groups = useMemo(() => groupRequestsByDay(visible, now), [now, visible]);
   const linked = useMemo(() => findLinkedRequest(requests, searchParams), [requests, searchParams]);
-  const linkMissing = hasRequestLink(searchParams) && !linked && !isLoading;
+  const linkMissing = searchParams.has(REQUEST_PARAM) && !linked && !isLoading;
   const selected = linked ?? visible[0] ?? null;
-  const unread = countUnread(requests, readState);
-  const progressOptions = useMemo(() => progressFilterOptions(requests), [requests]);
-  const ticketQuery = useRequestTicketDetail(selected);
+  const unread = countUnread(requests);
+  const statusOptions = useMemo(() => statusFilterOptions(requests), [requests]);
+  const detailQuery = useRequestDetail(selected);
+  const { markAllRead } = useRequestReadMarks(selected, !isLoading);
 
-  // Wait for every source: while alerts are in and tickets are not, the "newest" request is a
-  // different one, and opening it by default would mark something read the Admin never saw.
-  useEffect(() => {
-    if (selected && !isLoading) markRead(selected);
-  }, [isLoading, markRead, selected]);
-
-  const select = (request: AdminRequest) => {
+  const select = (request: Request) => {
     const next = new URLSearchParams(searchParams);
-    for (const name of REQUEST_LINK_PARAMS) next.delete(name);
-    for (const [name, value] of Object.entries(requestSearchParams(request))) next.set(name, value);
+    next.set(REQUEST_PARAM, request.id);
     setSearchParams(next, { replace: true });
   };
 
@@ -82,13 +67,13 @@ export function AdminRequestsPage() {
       <PortalPageHeader
         back={{ to: routes.admin.dashboard, label: "Dashboard" }}
         title="Requests"
-        description="Help requests from enterprises and staff."
+        description="What people asked IT for: help, and account changes that need IT's approval. IT handles them; you can add a note for IT."
         actions={
           <div className="flex items-center gap-4">
             <p role="status" className="text-sm font-bold text-(--tanaw-text)">
               {isLoading ? "Checking requests" : unreadLabel(unread)}
             </p>
-            <Button variant="link" size="sm" className="text-sm font-semibold" disabled={unread === 0} onClick={() => markAllRead(requests)}>
+            <Button variant="link" size="sm" className="text-sm font-semibold" disabled={unread === 0} onClick={markAllRead}>
               Mark all as read
             </Button>
           </div>
@@ -100,28 +85,28 @@ export function AdminRequestsPage() {
           <label htmlFor="requests-search" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
             Search
           </label>
-          <SearchField id="requests-search" label="Search" value={filters.query} onChange={(query) => updateFilters({ query })} placeholder="Location, request or reference number" />
+          <SearchField id="requests-search" label="Search" value={filters.query} onChange={(query) => updateFilters({ query })} placeholder="Place, request or reference number" />
         </div>
         <div>
           <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
-            Type
+            Group
           </span>
-          <Select ariaLabel="Type" value={filters.type} options={typeOptions} onChange={(type) => updateFilters({ type: type as RequestFilters["type"] })} />
+          <Select ariaLabel="Group" value={filters.group} options={groupFilterOptions} onChange={(group) => updateFilters({ group: group as RequestFilters["group"] })} />
         </div>
         <div>
           <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
-            Progress
+            Status
           </span>
-          <Select ariaLabel="Progress" value={filters.progress} options={progressOptions} onChange={(progress) => updateFilters({ progress: progress as RequestFilters["progress"] })} />
+          <Select ariaLabel="Status" value={filters.status} options={statusOptions} onChange={(status) => updateFilters({ status: status as RequestFilters["status"] })} />
         </div>
       </div>
       <p className="mt-2.5 text-sm text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : summary}</p>
 
-      {failedSources.length > 0 && (
+      {isError && (
         <Alert
           tone="danger"
           className="mt-3"
-          title={`Some requests could not be loaded: ${failedSources.join(", ")}.`}
+          title="Requests could not be loaded."
           action={
             <Button variant="secondary" size="sm" onClick={retry}>
               Try again
@@ -133,18 +118,17 @@ export function AdminRequestsPage() {
       <div className="mt-3.5 grid grid-cols-[26rem_minmax(0,1fr)] items-start gap-x-9 gap-y-6 border-t border-(--tanaw-border-soft) pt-3.5 max-[980px]:grid-cols-1">
         <RequestList
           groups={groups}
-          selectedKey={selected?.key ?? null}
-          readState={readState}
+          selectedId={selected?.id ?? null}
           timeFormat={timeFormat}
           onSelect={select}
           empty={<ListEmptyState isLoading={isLoading} filtered={filtered} onClear={clearFilters} />}
         />
         <div className="sticky top-4 min-w-0 max-[980px]:static">
           {linkMissing && (
-            <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been closed, or it is not shared with Admins." />
+            <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />
           )}
           {selected ? (
-            <RequestDetail request={selected} logs={logs} ticket={ticketQuery.data ?? null} ticketLoading={ticketQuery.isLoading} timeFormat={timeFormat} now={now} />
+            <RequestDetail request={selected} detail={detailQuery.data ?? null} detailLoading={detailQuery.isLoading} timeFormat={timeFormat} now={now} />
           ) : (
             !isLoading && <p className="py-1.5 text-sm text-(--tanaw-text-secondary)">Select a request to see its details.</p>
           )}
@@ -167,14 +151,14 @@ function ListEmptyState({ isLoading, filtered, onClear }: { isLoading: boolean; 
     return (
       <div className="px-4 py-6">
         <p className="font-bold">No requests yet.</p>
-        <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Help requests from enterprises and staff appear here.</p>
+        <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Requests from enterprises and from the sign-in page appear here.</p>
       </div>
     );
   }
   return (
     <div className="px-4 py-6">
       <p className="font-bold">No requests match these filters.</p>
-      <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Try another type or progress, or clear the search.</p>
+      <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Try another group or status, or clear the search.</p>
       <Button variant="link" size="sm" className="mt-1.5 text-sm font-semibold" onClick={onClear}>
         Clear filters
       </Button>

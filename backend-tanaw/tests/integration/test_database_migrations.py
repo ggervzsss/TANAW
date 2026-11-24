@@ -55,7 +55,7 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 20
+    assert len(relationships) == 24
     assert {
         ("enterprise_profiles", ("account_id",), ("accounts.id",)),
         (
@@ -89,15 +89,16 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
             ("enterprise_report_submissions.id",),
         ),
         ("user_notifications", ("recipient_account_id",), ("accounts.id",)),
+        ("requests", ("enterprise_profile_id",), ("enterprise_profiles.account_id",)),
+        ("requests", ("email_change_request_id",), ("account_email_change_requests.id",)),
+        ("request_messages", ("author_account_id",), ("accounts.id",)),
+        ("request_messages", ("request_id",), ("requests.id",)),
+        ("request_reads", ("account_id",), ("accounts.id",)),
+        ("request_reads", ("request_id",), ("requests.id",)),
         (
-            "support_tickets",
+            "enterprise_closures",
             ("enterprise_profile_id",),
             ("enterprise_profiles.account_id",),
-        ),
-        (
-            "support_ticket_messages",
-            ("author_account_id",),
-            ("accounts.id",),
         ),
         ("email_outbox", ("account_id",), ("accounts.id",)),
     } <= relationships

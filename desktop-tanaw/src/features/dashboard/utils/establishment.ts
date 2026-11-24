@@ -1,6 +1,6 @@
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { DAY_MS, philippineDayStart, type SystemTimeFormat } from "../../../utils/date-time";
-import type { EstablishmentHourly, EstablishmentSummary } from "../../camera/services/establishment.types";
+import type { EstablishmentHourly, EstablishmentLive, EstablishmentSummary } from "../../camera/services/establishment.types";
 import { monthlyDemoFromDays, reportDays } from "../../reports/model/daily-origins";
 import type { TrendFilter } from "../types/dashboard";
 
@@ -66,4 +66,19 @@ export function periodDemographics(summary: EstablishmentSummary | null, origins
   const months = [...new Set(summary.days.map((day) => day.business_date.slice(0, 7)))].map(monthLabel);
   const days = months.flatMap((period) => reportDays(period, metrics, origins)).filter((day) => dates.has(day.date));
   return { demo: monthlyDemoFromDays(days), unconfirmedDays: days.filter((day) => day.unique && !day.origins).length };
+}
+
+function listNames(names: string[]) {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** Names the cameras that are not counting, e.g. "Gate A is not counting. 3 of 4 cameras are counting." */
+export function camerasNotCountingMessage(cameras: Array<{ id: number; name: string }>, live: Pick<EstablishmentLive, "state" | "missing_camera_ids"> | null) {
+  if (live?.state !== "partial") return null;
+  const missing = new Set(live.missing_camera_ids);
+  const stopped = cameras.filter((camera) => missing.has(camera.id)).map((camera) => camera.name);
+  if (stopped.length === 0 || cameras.length === 0) return "Some cameras are not counting. Totals include the cameras that are counting.";
+  const counting = cameras.length - stopped.length;
+  return `${listNames(stopped)} ${stopped.length === 1 ? "is" : "are"} not counting. ${counting} of ${cameras.length} cameras ${counting === 1 ? "is" : "are"} counting.`;
 }

@@ -18,6 +18,7 @@ from app.features.accounts.models import (
     AccountStatus,
     EnterpriseProfile,
 )
+from app.features.accounts.opening_hours import parse_opening_hours
 from app.features.accounts.schemas import (
     AccountProfileChangeRequest,
     AccountSummary,
@@ -35,6 +36,7 @@ from app.features.mail.dev_log import DevDeliveryEvent
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
 PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
+PENDING_ENTERPRISE_NAME_CHANGE_KEY = "pendingEnterpriseNameChange"
 
 PROFILE_CHANGE_REQUEST_CONFIG: dict[ProfileChangeRequestType, tuple[str, str, str]] = {
     "businessEmail": (
@@ -46,6 +48,11 @@ PROFILE_CHANGE_REQUEST_CONFIG: dict[ProfileChangeRequestType, tuple[str, str, st
         PENDING_CONTACT_NUMBER_CHANGE_KEY,
         "Contact Number",
         "phone",
+    ),
+    "enterpriseName": (
+        PENDING_ENTERPRISE_NAME_CHANGE_KEY,
+        "Enterprise Name",
+        "name",
     ),
 }
 
@@ -122,6 +129,7 @@ def to_auth_user(account: Account) -> AuthUser:
         barangay=profile.barangay if profile else None,
         address=profile.address if profile else None,
         buildingCapacity=profile.building_capacity if profile else 100,
+        openingHours=parse_opening_hours(profile.opening_hours_json) if profile else None,
         displayImageDataUrl=display_image_data_url
         if isinstance(display_image_data_url, str)
         else None,
@@ -155,6 +163,7 @@ def to_account_summary(
         enterpriseId=profile.enterprise_id if profile else None,
         gatewayStatus=profile.gateway_status if profile else None,
         buildingCapacity=profile.building_capacity if profile else 100,
+        openingHours=parse_opening_hours(profile.opening_hours_json) if profile else None,
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,

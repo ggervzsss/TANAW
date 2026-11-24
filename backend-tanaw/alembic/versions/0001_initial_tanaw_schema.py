@@ -30,8 +30,8 @@ TRIGGER_TABLES = (
     "final_reports",
     "operational_alerts",
     "user_notifications",
-    "support_tickets",
-    "support_ticket_messages",
+    "requests",
+    "request_messages",
     "system_configuration",
 )
 
@@ -98,7 +98,7 @@ def upgrade() -> None:
         sa.Column(
             "timestamp", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
         ),
-        sa.Column("category", sa.String(length=40), nullable=False),
+        sa.Column("activity_group", sa.String(length=40), nullable=False),
         sa.Column("severity", sa.String(length=20), nullable=False),
         sa.Column("actor", sa.String(length=120), nullable=False),
         sa.Column("actor_role", sa.String(length=40), nullable=False),
@@ -106,13 +106,16 @@ def upgrade() -> None:
         sa.Column("target", sa.String(length=255), nullable=False),
         sa.Column("summary", sa.Text(), nullable=False),
         sa.Column("source_id", sa.String(length=120), nullable=True),
+        sa.Column("it_detail", sa.Text(), nullable=True),
         sa.Column("metadata_json", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
         op.f("ix_activity_logs_actor_role"), "activity_logs", ["actor_role"], unique=False
     )
-    op.create_index(op.f("ix_activity_logs_category"), "activity_logs", ["category"], unique=False)
+    op.create_index(
+        op.f("ix_activity_logs_activity_group"), "activity_logs", ["activity_group"], unique=False
+    )
     op.execute("CREATE SEQUENCE final_report_code_sequence START WITH 1")
     op.create_table(
         "final_reports",
@@ -154,16 +157,18 @@ def upgrade() -> None:
         "operational_alerts",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("alert_code", sa.String(length=40), nullable=False),
-        sa.Column("alert_type", sa.String(length=80), nullable=False),
+        sa.Column("alert_type", sa.String(length=40), nullable=False),
         sa.Column("severity", sa.String(length=20), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=True),
         sa.Column("enterprise", sa.String(length=120), nullable=True),
-        sa.Column("requester", sa.String(length=120), nullable=False),
+        sa.Column("camera", sa.String(length=120), nullable=True),
         sa.Column("summary", sa.Text(), nullable=False),
-        sa.Column("required_action", sa.Text(), nullable=False),
-        sa.Column("resolution_mode", sa.String(length=80), nullable=False),
+        sa.Column("detail", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("owner", sa.String(length=20), nullable=False),
         sa.Column("source_id", sa.String(length=120), nullable=True),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("active_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -188,7 +193,10 @@ def upgrade() -> None:
         op.f("ix_operational_alerts_created_at"), "operational_alerts", ["created_at"], unique=False
     )
     op.create_index(
-        op.f("ix_operational_alerts_owner"), "operational_alerts", ["owner"], unique=False
+        op.f("ix_operational_alerts_enterprise_profile_id"),
+        "operational_alerts",
+        ["enterprise_profile_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_operational_alerts_severity"), "operational_alerts", ["severity"], unique=False
@@ -496,6 +504,8 @@ def upgrade() -> None:
         sa.Column("building_capacity", sa.Integer(), nullable=False),
         sa.Column("gateway_id", sa.String(length=120), nullable=True),
         sa.Column("gateway_status", sa.String(length=40), nullable=True),
+        sa.Column("opening_hours_json", sa.Text(), nullable=True),
+        sa.Column("last_check_in_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -521,6 +531,35 @@ def upgrade() -> None:
         "enterprise_profiles",
         ["enterprise_id"],
         unique=True,
+    )
+    op.create_table(
+        "enterprise_closures",
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=False),
+        sa.Column("reason", sa.String(length=160), nullable=True),
+        sa.Column("created_by_name", sa.String(length=120), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint("end_date >= start_date", name="ck_enterprise_closures_dates"),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_enterprise_closures_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_enterprise_closures_enterprise_profile_id"),
+        "enterprise_closures",
+        ["enterprise_profile_id"],
+        unique=False,
     )
     op.create_table(
         "password_reset_challenges",
@@ -891,21 +930,26 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("enterprise_profile_id"),
     )
-    op.execute("CREATE SEQUENCE support_ticket_code_sequence START WITH 1")
+    op.execute("CREATE SEQUENCE request_code_sequence START WITH 1")
     op.create_table(
-        "support_tickets",
+        "requests",
         sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("ticket_code", sa.String(length=40), nullable=False),
-        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
-        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
-        sa.Column("category", sa.String(length=60), nullable=False),
-        sa.Column("priority", sa.String(length=20), nullable=False),
-        sa.Column("subject", sa.String(length=160), nullable=False),
+        sa.Column("request_code", sa.String(length=40), nullable=False),
+        sa.Column("request_group", sa.String(length=40), nullable=False),
+        sa.Column("title", sa.String(length=160), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False),
+        sa.Column("urgent", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=True),
+        sa.Column("enterprise_name", sa.String(length=120), nullable=True),
+        sa.Column("requester_name", sa.String(length=120), nullable=False),
+        sa.Column("requester_email", sa.String(length=254), nullable=True),
         sa.Column("affected_area", sa.String(length=120), nullable=True),
-        sa.Column("camera_node", sa.String(length=120), nullable=True),
+        sa.Column("camera", sa.String(length=120), nullable=True),
         sa.Column("attachments_json", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=30), nullable=False),
+        sa.Column("change_field", sa.String(length=40), nullable=True),
+        sa.Column("change_value", sa.String(length=255), nullable=True),
+        sa.Column("email_change_request_id", sa.String(length=64), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -918,32 +962,39 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["enterprise_profile_id"],
             ["enterprise_profiles.account_id"],
-            name="fk_support_tickets_enterprise_profile_id",
-            ondelete="RESTRICT",
+            name="fk_requests_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["email_change_request_id"],
+            ["account_email_change_requests.id"],
+            name="fk_requests_email_change_request_id",
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(op.f("ix_requests_created_at"), "requests", ["created_at"], unique=False)
     op.create_index(
-        op.f("ix_support_tickets_category"), "support_tickets", ["category"], unique=False
-    )
-    op.create_index(
-        op.f("ix_support_tickets_created_at"), "support_tickets", ["created_at"], unique=False
-    )
-    op.create_index(
-        op.f("ix_support_tickets_enterprise_profile_id"),
-        "support_tickets",
+        op.f("ix_requests_enterprise_profile_id"),
+        "requests",
         ["enterprise_profile_id"],
         unique=False,
     )
+    op.create_index(op.f("ix_requests_request_code"), "requests", ["request_code"], unique=True)
+    op.create_index(op.f("ix_requests_request_group"), "requests", ["request_group"], unique=False)
+    op.create_index(op.f("ix_requests_status"), "requests", ["status"], unique=False)
     op.create_index(
-        op.f("ix_support_tickets_priority"), "support_tickets", ["priority"], unique=False
-    )
-    op.create_index(op.f("ix_support_tickets_status"), "support_tickets", ["status"], unique=False)
-    op.create_index(
-        op.f("ix_support_tickets_ticket_code"), "support_tickets", ["ticket_code"], unique=True
+        "uq_requests_open_account_change",
+        "requests",
+        ["enterprise_profile_id", "change_field"],
+        unique=True,
+        postgresql_where=sa.text(
+            "change_field IS NOT NULL AND status NOT IN ('Approved', 'Declined')"
+        ),
     )
     op.create_table(
         "final_report_sources",
@@ -996,12 +1047,13 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
-        "support_ticket_messages",
+        "request_messages",
         sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("ticket_id", sa.String(length=36), nullable=False),
+        sa.Column("request_id", sa.String(length=36), nullable=False),
         sa.Column("author_account_id", sa.String(length=36), nullable=False),
         sa.Column("author_name", sa.String(length=120), nullable=False),
         sa.Column("author_role", sa.String(length=40), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column(
             "created_at",
@@ -1012,34 +1064,58 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["author_account_id"],
             ["accounts.id"],
-            name="fk_support_ticket_messages_author_account_id",
+            name="fk_request_messages_author_account_id",
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["ticket_id"],
-            ["support_tickets.id"],
-            name="fk_support_ticket_messages_ticket_id",
+            ["request_id"],
+            ["requests.id"],
+            name="fk_request_messages_request_id",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_support_ticket_messages_author_account_id"),
-        "support_ticket_messages",
+        op.f("ix_request_messages_author_account_id"),
+        "request_messages",
         ["author_account_id"],
         unique=False,
     )
     op.create_index(
-        op.f("ix_support_ticket_messages_created_at"),
-        "support_ticket_messages",
+        op.f("ix_request_messages_created_at"),
+        "request_messages",
         ["created_at"],
         unique=False,
     )
     op.create_index(
-        op.f("ix_support_ticket_messages_ticket_id"),
-        "support_ticket_messages",
-        ["ticket_id"],
+        op.f("ix_request_messages_request_id"),
+        "request_messages",
+        ["request_id"],
         unique=False,
+    )
+    op.create_table(
+        "request_reads",
+        sa.Column("account_id", sa.String(length=36), nullable=False),
+        sa.Column("request_id", sa.String(length=36), nullable=False),
+        sa.Column(
+            "read_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["account_id"],
+            ["accounts.id"],
+            name="fk_request_reads_account_id",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["request_id"],
+            ["requests.id"],
+            name="fk_request_reads_request_id",
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("account_id", "request_id"),
     )
     op.create_table(
         "realtime_outbox",
@@ -1117,38 +1193,37 @@ def upgrade() -> None:
             payload_value jsonb := '{}'::jsonb;
             audience_value jsonb := '[]'::jsonb;
             coalesce_value text := NULL;
-            ticket_enterprise_account_id text;
-            ticket_priority text;
+            request_enterprise_account_id text;
         BEGIN
-            IF TG_TABLE_NAME = 'support_tickets' THEN
+            IF TG_TABLE_NAME = 'requests' THEN
                 IF TG_OP = 'INSERT' THEN
-                    event_type_value := 'support_ticket.created';
+                    event_type_value := 'request.created';
                 ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
-                    event_type_value := 'support_ticket.status.changed';
+                    event_type_value := 'request.status.changed';
                 ELSE
-                    event_type_value := 'support_ticket.updated';
+                    event_type_value := 'request.updated';
                 END IF;
                 scope_value := jsonb_build_object(
                     'enterprise_account_id', NEW.enterprise_profile_id,
-                    'ticket_id', NEW.id
+                    'request_id', NEW.id
                 );
                 payload_value := jsonb_build_object(
-                    'ticket_id', NEW.id,
+                    'request_id', NEW.id,
                     'status', NEW.status,
-                    'priority', NEW.priority,
+                    'group', NEW.request_group,
                     'updated_at', NEW.updated_at
                 );
                 audience_value := '["admin","it","enterprise"]'::jsonb;
 
-            ELSIF TG_TABLE_NAME = 'support_ticket_messages' THEN
-                SELECT enterprise_profile_id, priority
-                  INTO ticket_enterprise_account_id, ticket_priority
-                  FROM support_tickets
-                 WHERE id = NEW.ticket_id;
-                event_type_value := 'support_ticket.message.created';
+            ELSIF TG_TABLE_NAME = 'request_messages' THEN
+                SELECT enterprise_profile_id
+                  INTO request_enterprise_account_id
+                  FROM requests
+                 WHERE id = NEW.request_id;
+                event_type_value := 'request.message.created';
                 scope_value := jsonb_build_object(
-                    'enterprise_account_id', ticket_enterprise_account_id,
-                    'ticket_id', NEW.ticket_id
+                    'enterprise_account_id', request_enterprise_account_id,
+                    'request_id', NEW.request_id
                 );
                 actor_value := jsonb_build_object(
                     'user_id', NEW.author_account_id,
@@ -1156,14 +1231,18 @@ def upgrade() -> None:
                 );
                 payload_value := jsonb_build_object(
                     'message_id', NEW.id,
-                    'ticket_id', NEW.ticket_id,
+                    'request_id', NEW.request_id,
                     'author_id', NEW.author_account_id,
                     'author_name', NEW.author_name,
                     'author_role', NEW.author_role,
-                    'ticket_priority', ticket_priority,
+                    'kind', NEW.kind,
                     'created_at', NEW.created_at
                 );
-                audience_value := '["admin","it","enterprise"]'::jsonb;
+                IF NEW.kind = 'note' THEN
+                    audience_value := '["admin","it"]'::jsonb;
+                ELSE
+                    audience_value := '["admin","it","enterprise"]'::jsonb;
+                END IF;
 
             ELSIF TG_TABLE_NAME = 'user_notifications' THEN
                 event_type_value := CASE
@@ -1190,10 +1269,8 @@ def upgrade() -> None:
             ELSIF TG_TABLE_NAME = 'operational_alerts' THEN
                 IF TG_OP = 'INSERT' THEN
                     event_type_value := 'alert.created';
-                ELSIF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'Resolved' THEN
+                ELSIF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'Ended' THEN
                     event_type_value := 'alert.resolved';
-                ELSIF OLD.status IS DISTINCT FROM NEW.status AND OLD.status = 'Resolved' THEN
-                    event_type_value := 'alert.reopened';
                 ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
                     event_type_value := 'alert.status.changed';
                 ELSE
@@ -1201,16 +1278,12 @@ def upgrade() -> None:
                 END IF;
                 payload_value := jsonb_build_object(
                     'alert_id', NEW.id,
-                    'owner', NEW.owner,
+                    'alert_type', NEW.alert_type,
                     'severity', NEW.severity,
                     'status', NEW.status,
                     'updated_at', NEW.updated_at
                 );
-                audience_value := CASE NEW.owner
-                    WHEN 'Admin' THEN '["admin"]'::jsonb
-                    WHEN 'IT' THEN '["it"]'::jsonb
-                    ELSE '["admin","it"]'::jsonb
-                END;
+                audience_value := '["admin","it"]'::jsonb;
 
             ELSIF TG_TABLE_NAME = 'account_email_change_requests' THEN
                 IF TG_OP = 'INSERT' THEN
@@ -1282,7 +1355,7 @@ def upgrade() -> None:
                 event_type_value := 'activity.created';
                 payload_value := jsonb_build_object(
                     'activity_id', NEW.id,
-                    'category', NEW.category,
+                    'group', NEW.activity_group,
                     'severity', NEW.severity,
                     'actor_role', NEW.actor_role,
                     'action', NEW.action,
@@ -1409,7 +1482,7 @@ def upgrade() -> None:
     )
 
     for table_name in TRIGGER_TABLES:
-        operations = "INSERT OR UPDATE" if table_name != "support_ticket_messages" else "INSERT"
+        operations = "INSERT OR UPDATE" if table_name != "request_messages" else "INSERT"
         op.execute(
             f"""
             CREATE TRIGGER trg_{table_name}_realtime
@@ -1433,16 +1506,11 @@ def downgrade() -> None:
     )
     op.drop_index("ix_realtime_outbox_pending", table_name="realtime_outbox")
     op.drop_table("realtime_outbox")
-    op.drop_index(
-        op.f("ix_support_ticket_messages_ticket_id"), table_name="support_ticket_messages"
-    )
-    op.drop_index(
-        op.f("ix_support_ticket_messages_created_at"), table_name="support_ticket_messages"
-    )
-    op.drop_index(
-        op.f("ix_support_ticket_messages_author_account_id"), table_name="support_ticket_messages"
-    )
-    op.drop_table("support_ticket_messages")
+    op.drop_table("request_reads")
+    op.drop_index(op.f("ix_request_messages_request_id"), table_name="request_messages")
+    op.drop_index(op.f("ix_request_messages_created_at"), table_name="request_messages")
+    op.drop_index(op.f("ix_request_messages_author_account_id"), table_name="request_messages")
+    op.drop_table("request_messages")
     op.drop_index(
         op.f("ix_final_report_sources_intake_report_id"), table_name="final_report_sources"
     )
@@ -1450,14 +1518,14 @@ def downgrade() -> None:
         op.f("ix_final_report_sources_final_report_id"), table_name="final_report_sources"
     )
     op.drop_table("final_report_sources")
-    op.drop_index(op.f("ix_support_tickets_ticket_code"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_status"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_priority"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_enterprise_profile_id"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_created_at"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_category"), table_name="support_tickets")
-    op.drop_table("support_tickets")
-    op.execute("DROP SEQUENCE support_ticket_code_sequence")
+    op.drop_index("uq_requests_open_account_change", table_name="requests")
+    op.drop_index(op.f("ix_requests_status"), table_name="requests")
+    op.drop_index(op.f("ix_requests_request_group"), table_name="requests")
+    op.drop_index(op.f("ix_requests_request_code"), table_name="requests")
+    op.drop_index(op.f("ix_requests_enterprise_profile_id"), table_name="requests")
+    op.drop_index(op.f("ix_requests_created_at"), table_name="requests")
+    op.drop_table("requests")
+    op.execute("DROP SEQUENCE request_code_sequence")
     op.drop_index(
         op.f("ix_enterprise_telemetry_snapshots_received_at"),
         table_name="enterprise_telemetry_snapshots",
@@ -1534,6 +1602,10 @@ def downgrade() -> None:
         op.f("ix_password_reset_challenges_account_id"), table_name="password_reset_challenges"
     )
     op.drop_table("password_reset_challenges")
+    op.drop_index(
+        op.f("ix_enterprise_closures_enterprise_profile_id"), table_name="enterprise_closures"
+    )
+    op.drop_table("enterprise_closures")
     op.drop_index(op.f("ix_enterprise_profiles_enterprise_id"), table_name="enterprise_profiles")
     op.drop_table("enterprise_profiles")
     op.drop_index("ix_email_outbox_status_next_attempt", table_name="email_outbox")
@@ -1607,7 +1679,9 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_operational_alerts_status"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_source_id"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_severity"), table_name="operational_alerts")
-    op.drop_index(op.f("ix_operational_alerts_owner"), table_name="operational_alerts")
+    op.drop_index(
+        op.f("ix_operational_alerts_enterprise_profile_id"), table_name="operational_alerts"
+    )
     op.drop_index(op.f("ix_operational_alerts_created_at"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_alert_type"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_alert_code"), table_name="operational_alerts")
@@ -1618,7 +1692,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_final_reports_generated_on"), table_name="final_reports")
     op.drop_table("final_reports")
     op.execute("DROP SEQUENCE final_report_code_sequence")
-    op.drop_index(op.f("ix_activity_logs_category"), table_name="activity_logs")
+    op.drop_index(op.f("ix_activity_logs_activity_group"), table_name="activity_logs")
     op.drop_index(op.f("ix_activity_logs_actor_role"), table_name="activity_logs")
     op.drop_table("activity_logs")
     op.drop_index(op.f("ix_accounts_email"), table_name="accounts")

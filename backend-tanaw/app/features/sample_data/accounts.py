@@ -1,13 +1,20 @@
-import json
 import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.date_time import PHILIPPINE_TIME_ZONE
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
-from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseClosure,
+    EnterpriseProfile,
+)
+from app.features.accounts.opening_hours import WEEKDAYS, DayHours, OpeningHours, OpeningPeriod
 from app.features.accounts.service import generate_enterprise_id, normalize_enterprise_id_seed
 from app.features.sample_data.dataset import SAMPLE_ACCOUNT_EMAILS
 from app.features.sample_data.definitions import ENTERPRISES, LGU_ACCOUNTS
@@ -49,6 +56,7 @@ async def create_accounts(
         lgu_accounts.append(account)
 
     enterprise_accounts: list[Account] = []
+    closures: list[EnterpriseClosure] = []
     for index, enterprise in enumerate(ENTERPRISES, start=1):
         ensure_email_available(
             await db.scalar(select(Account).where(Account.email == enterprise.email)),
@@ -81,23 +89,65 @@ async def create_accounts(
                 building_capacity=180 + index * 40,
                 gateway_id=f"GW-SP-{index:04d}",
                 gateway_status="Connected",
+                opening_hours_json=sample_opening_hours(index).model_dump_json(),
+                # One place's desktop app has been silent for two hours, so it shows as offline.
+                last_check_in_at=datetime.now(UTC)
+                - (timedelta(hours=2) if index == SAMPLE_OFFLINE_INDEX else timedelta(seconds=20)),
             ),
         )
-        if index == 3:
-            account.preferences_json = json.dumps(
-                {
-                    "pendingContactNumberChange": {
-                        "phone": "+639171119999",
-                        "requestedAt": datetime.now(UTC).isoformat(),
-                    }
-                },
-                sort_keys=True,
+        if index == SAMPLE_CLOSED_INDEX:
+            today = datetime.now(UTC).astimezone(PHILIPPINE_TIME_ZONE).date()
+            closures.append(
+                EnterpriseClosure(
+                    id=sample_uuid("closure", enterprise.email),
+                    enterprise_profile_id=account.id,
+                    start_date=today,
+                    end_date=today + timedelta(days=3),
+                    reason="Closed for renovation",
+                    created_by_name=enterprise.manager,
+                )
             )
         db.add(account)
         enterprise_accounts.append(account)
 
     await db.flush()
+    db.add_all(closures)
+    await db.flush()
     return {"lgu": lgu_accounts, "enterprises": enterprise_accounts}
+
+
+SAMPLE_OFFLINE_INDEX = 6
+SAMPLE_CLOSED_INDEX = 5
+
+
+def sample_opening_hours(index: int) -> OpeningHours:
+    """Varied hours: regular days, a midday break with Sundays closed, and open 24 hours."""
+    style = index % 4
+    if style == 2:
+        return OpeningHours(days=[DayHours(day=day, mode="open24h") for day in WEEKDAYS])
+    if style == 1:
+        return OpeningHours(
+            days=[
+                DayHours(day=day, mode="closed")
+                if day == "sunday"
+                else DayHours(
+                    day=day,
+                    mode="hours",
+                    periods=[
+                        OpeningPeriod(open="09:00", close="12:00"),
+                        OpeningPeriod(open="13:00", close="18:00"),
+                    ],
+                )
+                for day in WEEKDAYS
+            ]
+        )
+    opens, closes = ("07:00", "20:00") if style == 3 else ("08:00", "17:00")
+    return OpeningHours(
+        days=[
+            DayHours(day=day, mode="hours", periods=[OpeningPeriod(open=opens, close=closes)])
+            for day in WEEKDAYS
+        ]
+    )
 
 
 def ensure_email_available(existing: Account | None, email: str) -> None:

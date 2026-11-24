@@ -41,10 +41,11 @@ function invalidateWhenVisible(queryClient: QueryClient, queryKey: QueryKey) {
 
 export function routeRealtimeEvent(queryClient: QueryClient, event: RealtimeEnvelope) {
   const eventType = event.event_type;
-  if (eventType.startsWith("support_ticket.")) {
-    const tickets = queryClient.invalidateQueries({ queryKey: ["operational", "support-tickets"], ...active });
-    if (eventType === "support_ticket.message.created") return tickets;
-    return Promise.all([tickets, queryClient.invalidateQueries({ queryKey: ["activity-logs"], ...active })]);
+  if (eventType.startsWith("request.")) {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["operational", "requests"], ...active }),
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"], ...active }),
+    ]);
   }
   if (eventType.startsWith("notification.")) {
     return queryClient.invalidateQueries({ queryKey: ["operational", "notifications"], ...active });
@@ -52,6 +53,7 @@ export function routeRealtimeEvent(queryClient: QueryClient, event: RealtimeEnve
   if (eventType.startsWith("alert.")) {
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: ["operational-alerts"], ...active }),
+      queryClient.invalidateQueries({ queryKey: ["operational", "map-enterprises"], ...active }),
       queryClient.invalidateQueries({ queryKey: ["operational", "summary"], ...active }),
       queryClient.invalidateQueries({ queryKey: ["activity-logs"], ...active }),
     ]);

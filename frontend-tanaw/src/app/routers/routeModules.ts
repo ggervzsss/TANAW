@@ -47,7 +47,6 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.admin.reports]: modules.adminReports,
   [routes.admin.activity]: modules.systemLogs,
   [routes.admin.requests]: modules.alerts,
-  [routes.admin.notifications]: modules.notifications,
   [routes.admin.generalSettings]: modules.settings,
   [routes.it.dashboard]: modules.dashboard,
   [routes.it.enterpriseAccounts]: modules.enterpriseAccounts,

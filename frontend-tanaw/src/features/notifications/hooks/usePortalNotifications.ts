@@ -4,7 +4,6 @@ import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalNotifications } from "@/app/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
 import type { UserRole } from "@/shared/types/role.types";
-import { CROWD_NOTIFICATION_TYPE } from "@/shared/utils/crowdAlerts";
 import { isStaffReportSubmissionNotification } from "@/shared/utils/notificationRules";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
@@ -32,7 +31,8 @@ const READ_STORAGE_LIMIT = 500;
 const EMPTY_BACKEND_NOTIFICATIONS: BackendNotification[] = [];
 
 const viewAllPathByRole: Record<UserRole, string | undefined> = {
-  admin: routes.admin.notifications,
+  // The Admin has no notification bell; the topbar alert icon replaces it.
+  admin: undefined,
   it: routes.it.notifications,
   staff: routes.staff.notifications,
   enterprise: undefined,
@@ -134,16 +134,12 @@ function toneFromNotificationSeverity(severity: BackendNotificationSeverity): Po
 
 function notificationSourceLabel(notification: BackendNotification, role: UserRole) {
   if (role === "it") {
-    if (notification.sourceType === "operational.alert") return "Technical Issue";
-    if (notification.sourceType === "support.ticket") return "Support Request";
+    if (notification.sourceType === "request") return "Request";
     if (notification.sourceType === "email.delivery") return "Email Problem";
-    if (notification.sourceType?.startsWith("enterprise.profile")) return "Account Request";
+    if (notification.sourceType === "enterprise.offline") return "Desktop App Offline";
+    if (notification.sourceType?.startsWith("enterprise.profile")) return "Account Change";
     return notification.type;
   }
-  if (role !== "admin") return notification.type;
-  if (notification.sourceType === "operational.alert") return "Current Situation";
-  if (notification.sourceType === "support.ticket") return "Escalated Support";
-  if (notification.sourceType?.startsWith("enterprise.profile")) return "Account Request";
   return notification.type;
 }
 
@@ -159,28 +155,13 @@ function notificationStatusLabel(severity: BackendNotificationSeverity, role: Us
 
 export function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
-  if (role === "admin") {
-    // Busier-than-usual alerts live on the Dashboard map, not in Requests.
-    if (notification.type === CROWD_NOTIFICATION_TYPE) return routes.admin.dashboard;
-    if (notification.sourceType === "operational.alert") {
-      return adminRequestsPath("alert", notification.sourceId);
-    }
-    if (text.includes("enterprise.profile") || text.includes("profile change request")) {
-      return adminRequestsPath("account", notification.sourceId);
-    }
-    if (text.includes("support") || text.includes("ticket")) {
-      return adminRequestsPath("ticket", notification.sourceId);
-    }
-    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activity : routes.admin.requests;
-  }
+  // The Admin has no bell any more; these links only matter for notifications already stored.
+  if (role === "admin") return notification.sourceType === "request" ? requestPath(routes.admin.requests, notification.sourceId) : routes.admin.dashboard;
   if (role === "it") {
-    if (notification.sourceType === "operational.alert") return itWorkCenterPath("issues", "alert", notification.sourceId);
     if (notification.sourceType === "email.delivery") return itWorkCenterPath("email");
-    if (text.includes("enterprise.profile") || text.includes("profile change request")) {
-      return itWorkCenterPath("accounts", "account", notification.sourceId);
-    }
-    if (text.includes("support") || text.includes("ticket")) return itWorkCenterPath("support", "ticket", notification.sourceId);
-    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : itWorkCenterPath("issues");
+    if (notification.sourceType === "request" || text.includes("enterprise.profile") || text.includes("profile change request")) return itWorkCenterPath("requests", notification.sourceType === "request" ? notification.sourceId : null);
+    if (notification.sourceType === "enterprise.offline") return routes.it.dashboard;
+    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : itWorkCenterPath("requests");
   }
   if (role === "staff") {
     if (text.includes("consolidated") || text.includes("final report")) return routes.staff.consolidatedReports;
@@ -191,15 +172,14 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
   return undefined;
 }
 
-/** Requests deep link: `alert`, `ticket` or `account` (an enterprise profile change request) selects that request. */
-function adminRequestsPath(itemKey: "alert" | "ticket" | "account", itemId?: string | null) {
-  if (!itemId) return routes.admin.requests;
-  return `${routes.admin.requests}?${new URLSearchParams({ [itemKey]: itemId }).toString()}`;
+/** Requests deep link: `?request=<id>` selects that request. */
+function requestPath(base: string, requestId?: string | null) {
+  return requestId ? `${base}?${new URLSearchParams({ request: requestId }).toString()}` : base;
 }
 
-function itWorkCenterPath(view: "issues" | "support" | "accounts" | "email", itemKey?: "alert" | "ticket" | "account", itemId?: string | null) {
+function itWorkCenterPath(view: "requests" | "alerts" | "email", requestId?: string | null) {
   const params = new URLSearchParams({ view });
-  if (itemKey && itemId) params.set(itemKey, itemId);
+  if (requestId) params.set("request", requestId);
   return `${routes.it.workCenter}?${params.toString()}`;
 }
 

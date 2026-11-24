@@ -10,6 +10,7 @@ from app.core.password_policy import (
     validate_password_policy,
 )
 from app.features.accounts.attractions import AttractionClassification, AttractionSelection
+from app.features.accounts.opening_hours import OpeningHours, default_opening_hours
 from app.features.accounts.options import (
     SAN_PEDRO_ADDRESS_SUFFIX,
     SAN_PEDRO_BARANGAYS,
@@ -18,7 +19,7 @@ from app.features.accounts.options import (
 PHILIPPINE_MOBILE_ERROR = "Enter a valid Philippine mobile number starting with +63."
 NAME_ERROR = "Use letters, spaces, hyphen, or apostrophe only."
 
-ProfileChangeRequestType = Literal["businessEmail", "contactNumber"]
+ProfileChangeRequestType = Literal["businessEmail", "contactNumber", "enterpriseName"]
 
 
 class AccountProfileChangeRequest(BaseModel):
@@ -96,6 +97,7 @@ class AuthUser(BaseModel):
     address: str | None = None
     displayImageDataUrl: str | None = None
     buildingCapacity: int = 100
+    openingHours: OpeningHours | None = None
 
 
 class LguAccountCreate(BaseModel):
@@ -134,6 +136,8 @@ class EnterpriseAccountCreate(AttractionSelection):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     buildingCapacity: int = Field(default=100, ge=1, le=100_000)
+    openingHours: OpeningHours = Field(default_factory=default_opening_hours)
+    """Set by IT in the Create Enterprise Account form; 8:00 AM to 5:00 PM daily if left out."""
 
     @field_validator("enterpriseName")
     @classmethod
@@ -216,6 +220,7 @@ class AccountSummary(BaseModel):
     enterpriseId: str | None
     gatewayStatus: str | None
     buildingCapacity: int
+    openingHours: OpeningHours | None = None
     displayName: str
     role: str
     title: str
@@ -276,6 +281,7 @@ class EnterpriseAccountUpdate(AttractionSelection):
     barangay: str = Field(min_length=1, max_length=120)
     address: str = Field(min_length=1, max_length=255)
     buildingCapacity: int = Field(default=100, ge=1, le=100_000)
+    openingHours: OpeningHours | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
@@ -428,6 +434,10 @@ class BusinessEmailChangeRequest(BaseModel):
         if isinstance(value, str):
             return normalize_email_value(value)
         return value
+
+
+class EnterpriseNameChangeRequest(BaseModel):
+    enterpriseName: str = Field(min_length=2, max_length=120)
 
 
 class ContactNumberChangeRequest(BaseModel):

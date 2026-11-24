@@ -13,7 +13,7 @@ const descriptions = {
   profile: "Manage your establishment’s identity and primary contact details.",
   security: "Update the password you use to sign in to your enterprise account.",
   appearance: "Choose a theme and adjust the readability of your workspace.",
-  support: "Submit camera, reporting, maintenance, or account concerns and track IT responses.",
+  support: "Ask IT for help with the desktop app, a camera or a report, and follow their replies.",
   developer: "Configure detection models and diagnostic overlays for cameras on this computer.",
 };
 

@@ -86,24 +86,16 @@ async def create_lgu_account(
     )
     await record_account_log(
         db,
-        category="IT Activity",
+        group="Accounts",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Create LGU Account",
         target=account.email,
-        summary=f"{actor.display_name} created {account.title} account {account.display_name}.",
-        source_id=account.id,
-    )
-    await record_account_log(
-        db,
-        category="System",
-        severity="Info",
-        actor="TANAW System",
-        actor_role="System",
-        action="Activation Email Queued",
-        target=account.email,
-        summary=f"The system queued an account activation email for {account.display_name}.",
+        summary=(
+            f"{actor.display_name} created {account.title} account {account.display_name} "
+            "and sent the activation email."
+        ),
         source_id=account.id,
     )
     return await to_account_summary_with_requests(db, account)
@@ -187,7 +179,7 @@ async def update_lgu_account(
 
     await record_account_log(
         db,
-        category="IT Activity",
+        group="Accounts",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",

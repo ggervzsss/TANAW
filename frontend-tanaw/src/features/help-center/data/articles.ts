@@ -51,7 +51,7 @@ export const helpArticles: HelpArticle[] = [
     summary: "Review alerts, enterprise support requests and account changes, and send instructions to IT.",
     roles: ["admin"],
     category: "Requests",
-    keywords: ["alert", "support ticket", "operations", "monitoring", "issue"],
+    keywords: ["alert", "request", "operations", "monitoring", "issue"],
     commonIssue: true,
     sections: [
       { heading: "What to check", steps: ["Open Requests from Dashboard or the notification bell.", "Filter by type or progress, or search by location or reference number.", "Select a request to read what happened, its details and its latest updates."] },

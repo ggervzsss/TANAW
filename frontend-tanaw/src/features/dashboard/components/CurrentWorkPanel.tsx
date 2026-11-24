@@ -40,31 +40,31 @@ export function CurrentWorkPanel({ overview }: { overview: DashboardOverview }) 
       <div className="divide-y divide-slate-200/75 dark:divide-slate-700/70">
         <WorkItem
           icon={AlertTriangle}
-          label="Technical Issues"
+          label="Live Alerts"
           count={overview.itIssueCount}
-          description={
-            overview.urgentIssueCount > 0
-              ? `${overview.urgentIssueCount} urgent ${overview.urgentIssueCount === 1 ? "issue needs" : "issues need"} immediate attention.`
-              : "Camera, desktop application, and data update problems."
-          }
-          href={`${routes.it.workCenter}?view=issues`}
+          description="Cameras not counting and places busier than usual, right now."
+          href={`${routes.it.workCenter}?view=alerts`}
           tone="danger"
-          urgentCount={overview.urgentIssueCount}
         />
         <WorkItem
           icon={TicketCheck}
-          label="Support Requests"
+          label="Requests"
           count={overview.openSupportRequestCount}
-          description="Questions and problems sent by enterprises."
-          href={`${routes.it.workCenter}?view=support`}
+          description={
+            overview.urgentIssueCount > 0
+              ? `${overview.urgentIssueCount} marked urgent.`
+              : "Problems and sign-in help people asked for."
+          }
+          href={`${routes.it.workCenter}?view=requests`}
           tone="support"
+          urgentCount={overview.urgentIssueCount}
         />
         <WorkItem
           icon={UserRoundCog}
-          label="Account Requests"
+          label="Account Changes"
           count={overview.pendingAccountRequestCount}
-          description="Enterprise details waiting for review."
-          href={`${routes.it.workCenter}?view=accounts`}
+          description="Business email, contact number or name changes waiting for approval."
+          href={`${routes.it.workCenter}?view=requests`}
           tone="account"
         />
         <WorkItem
