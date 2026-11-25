@@ -30,7 +30,7 @@ export function PortalBrand({ role }: { role: UserRole }) {
   return (
     <div className="flex shrink-0 items-center gap-4">
       <div className="flex items-center gap-4 max-[360px]:gap-1.5 max-sm:min-h-11 max-sm:gap-2">
-        <img src={TANAW_LOGO} alt="" className="h-10 w-14 rounded-lg object-cover max-sm:h-7 max-sm:w-10" />
+        <img src={TANAW_LOGO} alt="" className="size-12 shrink-0 rounded-full bg-white object-cover shadow-[0_0_0_2px_rgb(255_255_255/0.35),0_8px_20px_rgb(0_0_0/0.24)] max-sm:size-9" />
         <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
       </div>
       <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />

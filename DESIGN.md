@@ -12,7 +12,8 @@ without touching the other. Keep the brand values below in step across both.
 ## Shared identity
 
 **Logo.** The standalone TANAW eagle logo is a 2048 × 2048 PNG with dark green artwork on a white
-background. Use it in topbars and sign-in or account verification headers. Each app keeps a local
+background. Use it in topbars and sign-in or account verification headers. In a topbar it sits
+whole in a 48 px white circle (36 px on phones) with a faint white ring. Each app keeps a local
 copy in its assets directory ([web portal](frontend-tanaw/assets/tanaw-logo.png) and
 [desktop app](desktop-tanaw/assets/tanaw-logo.png)).
 
