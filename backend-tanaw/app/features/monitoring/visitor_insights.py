@@ -1,7 +1,7 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from statistics import fmean
 
 from sqlalchemy import func, or_, select
@@ -24,6 +24,13 @@ from app.features.monitoring.schemas import (
 )
 from app.features.monitoring.telemetry import list_latest_telemetry
 
+CAMERA_HISTORY_DAYS = 30
+"""How many days of camera counts the portal reads, today included."""
+
+
+class InvalidInsightRangeError(ValueError):
+    pass
+
 
 @dataclass(frozen=True)
 class HourlyVisitorObservation:
@@ -43,8 +50,17 @@ async def get_visitor_insights(
     *,
     enterprise_id: str | None = None,
     barangay: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
     now: datetime | None = None,
 ) -> VisitorInsightsSummary:
+    """Visitor activity for a scope.
+
+    ``range_value`` picks today or the last 7 or 30 days. ``start`` and ``end`` (Philippine days,
+    both or neither) pick the days instead: one day gives one point per hour, more give one point
+    per day. Days outside the camera history are left out of the series.
+    """
+    validate_insight_days(start, end)
     current_time = ensure_aware(now or datetime.now(UTC))
     local_now = current_time.astimezone(PHILIPPINE_TIME_ZONE)
     observations = await load_hourly_visitor_observations(db, current_time)
@@ -96,7 +112,11 @@ async def get_visitor_insights(
         else None
     )
     difference_percent = visitor_difference_percent(current_visitors, typical_visitors)
-    series = visitor_insight_series(observations, range_value, local_now)
+    series = (
+        visitor_insight_series_between(observations, start, end, local_now)
+        if start is not None and end is not None
+        else visitor_insight_series(observations, range_value, local_now)
+    )
     unusually_busy = [
         item for item in enterprise_insights if item.activityLevel == "Busier Than Usual"
     ]
@@ -107,7 +127,9 @@ async def get_visitor_insights(
     )
 
     return VisitorInsightsSummary(
-        range=range_value,
+        range=None if start is not None else range_value,
+        start=start,
+        end=end,
         scopeType=scope_type,  # type: ignore[arg-type]
         scopeId=scope_id,
         scopeName=scope_name,
@@ -229,36 +251,75 @@ def visitor_enterprise_insight(
     )
 
 
+def validate_insight_days(start: date | None, end: date | None) -> None:
+    if (start is None) != (end is None):
+        raise InvalidInsightRangeError("Give both a start and an end date.")
+    if start is not None and end is not None and start > end:
+        raise InvalidInsightRangeError("The start date must be on or before the end date.")
+
+
+def camera_history_days(start: date, end: date, today: date) -> tuple[date, date] | None:
+    """The part of a range inside the camera history, or None when the range lies outside it."""
+    first = max(start, today - timedelta(days=CAMERA_HISTORY_DAYS - 1))
+    last = min(end, today)
+    return (first, last) if first <= last else None
+
+
 def visitor_insight_series(
     observations: Sequence[HourlyVisitorObservation],
     range_value: VisitorInsightRange,
     local_now: datetime,
 ) -> list[VisitorInsightPoint]:
+    today = local_now.date()
     if range_value == "today":
-        start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        grouped: dict[datetime, list[HourlyVisitorObservation]] = defaultdict(list)
-        for observation in observations:
-            if observation.start_at >= start_at:
-                grouped[observation.start_at].append(observation)
-        return [
-            VisitorInsightPoint(
-                startAt=bucket,
-                label=bucket.strftime("%I %p").lstrip("0"),
-                averageVisitors=rounded_sum([item.average_visitors for item in items]),
-                peakVisitors=rounded_sum([item.peak_visitors for item in items]),
-                estimatedUniqueCount=rounded_sum([item.estimated_unique_count for item in items]),
-            )
-            for bucket, items in sorted(grouped.items())
-        ]
-
+        return hourly_points(observations, today)
     days = 7 if range_value == "7d" else 30
-    start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
-        days=days - 1
-    )
+    return daily_points(observations, today - timedelta(days=days - 1), today)
+
+
+def visitor_insight_series_between(
+    observations: Sequence[HourlyVisitorObservation],
+    start: date,
+    end: date,
+    local_now: datetime,
+) -> list[VisitorInsightPoint]:
+    """Hourly points for a one-day range, daily points otherwise, inside the camera history only."""
+    days = camera_history_days(start, end, local_now.date())
+    if days is None:
+        return []
+    if start == end:
+        return hourly_points(observations, start)
+    return daily_points(observations, *days)
+
+
+def hourly_points(
+    observations: Sequence[HourlyVisitorObservation], day: date
+) -> list[VisitorInsightPoint]:
+    """One point per hour of the day that has camera counts."""
+    grouped: dict[datetime, list[HourlyVisitorObservation]] = defaultdict(list)
+    for observation in observations:
+        if observation.start_at.date() == day:
+            grouped[observation.start_at].append(observation)
+    return [
+        VisitorInsightPoint(
+            startAt=bucket,
+            label=bucket.strftime("%I %p").lstrip("0"),
+            averageVisitors=rounded_sum([item.average_visitors for item in items]),
+            peakVisitors=rounded_sum([item.peak_visitors for item in items]),
+            estimatedUniqueCount=rounded_sum([item.estimated_unique_count for item in items]),
+        )
+        for bucket, items in sorted(grouped.items())
+    ]
+
+
+def daily_points(
+    observations: Sequence[HourlyVisitorObservation], first: date, last: date
+) -> list[VisitorInsightPoint]:
+    """One point per day from ``first`` to ``last`` that has camera counts."""
     daily_enterprise: dict[tuple[datetime, str], list[HourlyVisitorObservation]] = defaultdict(list)
     for observation in observations:
         day = observation.start_at.replace(hour=0, minute=0, second=0, microsecond=0)
-        if day >= start_at:
+        if first <= day.date() <= last:
             daily_enterprise[(day, observation.enterprise_id)].append(observation)
 
     daily_totals: dict[datetime, list[tuple[float | None, int | None, int | None]]] = defaultdict(

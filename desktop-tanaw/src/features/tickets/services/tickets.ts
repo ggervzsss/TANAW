@@ -3,7 +3,8 @@ import { API_BASE_URL, staffApi } from "../../../lib/axios";
 
 /*
  * Requests (shown as "Requests" on screen): what the enterprise asks IT for. The enterprise picks
- * a group and writes the problem in its own words; there is no priority, IT marks urgency.
+ * a group and writes the problem in its own words. A request is In Progress from the moment it is
+ * sent until IT resolves it (or approves an account change).
  */
 export type SupportTicketCategory = ApiSchemas["RequestCreate"]["group"];
 export type SupportTicketStatus = ApiSchemas["RequestSummary"]["status"];
@@ -21,15 +22,13 @@ export type SupportTicketDetail = Omit<ApiSupportTicketDetail, "attachments" | "
 export type SupportTicketSort = "recommended" | "newest" | "oldest" | "status" | "recently-updated";
 
 const workflowRank: Record<SupportTicketStatus, number> = {
-  Sent: 0,
-  "In Progress": 1,
-  Resolved: 2,
-  Approved: 2,
-  Declined: 2,
+  "In Progress": 0,
+  Resolved: 1,
+  Approved: 1,
 };
 
 export function isClosedRequest(ticket: Pick<SupportTicket, "status">) {
-  return ticket.status === "Resolved" || ticket.status === "Approved" || ticket.status === "Declined";
+  return ticket.status === "Resolved" || ticket.status === "Approved";
 }
 
 export function sortSupportTickets(tickets: readonly SupportTicket[], sort: SupportTicketSort) {
@@ -41,8 +40,8 @@ export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
 }
 
 /** Only a resolved help request can be reopened; an account change is decided once. */
-export function canReopenSupportTicket(ticket: Pick<SupportTicket, "status">) {
-  return ticket.status === "Resolved";
+export function canReopenSupportTicket(ticket: Pick<SupportTicket, "status" | "accountChange">) {
+  return ticket.status === "Resolved" && !ticket.accountChange;
 }
 
 export type SupportTicketCreatePayload = Omit<ApiSupportTicketCreate, "attachments"> & {
@@ -119,14 +118,10 @@ function compareSupportTickets(left: SupportTicket, right: SupportTicket, sort: 
   return workflowRank[left.status] - workflowRank[right.status] || compareTimestamp(right.updatedAt, left.updatedAt) || stableTicketOrder(left, right);
 }
 
-/** Open requests first (in progress before sent), newest first; closed ones last, latest closed first. */
+/** Open requests first, newest first; closed ones last, latest closed first. */
 function compareRecommended(left: SupportTicket, right: SupportTicket) {
   const closedDifference = Number(isClosedRequest(left)) - Number(isClosedRequest(right));
   if (closedDifference !== 0) return closedDifference;
-  if (!isClosedRequest(left)) {
-    const statusDifference = workflowRank[right.status] - workflowRank[left.status];
-    if (statusDifference !== 0) return statusDifference;
-  }
   return compareTimestamp(isClosedRequest(right) ? right.updatedAt : right.createdAt, isClosedRequest(left) ? left.updatedAt : left.createdAt) || stableTicketOrder(left, right);
 }
 

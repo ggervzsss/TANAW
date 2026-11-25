@@ -4,6 +4,9 @@ import {
   filterStaffReportRows,
   hasStaffReportFilters,
   parseStaffReportFilters,
+  reminderButton,
+  reminderFailedMessage,
+  reminderSentMessage,
   staffReportFilterOptions,
   staffReportFilterParams,
   staffReportRows,
@@ -56,7 +59,7 @@ describe("staff report rows", () => {
       ["Acacia Park", "Submitted", "Consolidated", "view"],
       ["Echo Mall", "Submitted", "Consolidated", "view"],
     ]);
-    expect(rows[0]).toMatchObject({ sent: "Nov 13", note: "3 days after due", report: { id: "r-b" } });
+    expect(rows[0]).toMatchObject({ sent: "Nov 13", note: null, report: { id: "r-b" } });
     expect(rows[1]).toMatchObject({ sent: null, note: "14 days overdue", report: undefined });
     expect(rows[2].note).toBe("Returned for correction");
   });
@@ -88,15 +91,21 @@ describe("staff report filters", () => {
     expect(names({ submission: "Missing", barangay: "Landayan" })).toEqual(["Daisy Resort"]);
   });
 
-  it("counts what each option would show alongside the other filters", () => {
-    const options = staffReportFilterOptions(rows, { ...EMPTY_STAFF_REPORT_FILTERS, barangay: "Landayan" });
-    expect(options.submission.map(({ label, meta }) => [label, meta])).toEqual([
-      ["All submissions", "2"],
-      ["Submitted", "1"],
-      ["Pending", "0"],
-      ["Missing", "1"],
+  it("labels each option plainly, without a count", () => {
+    const options = staffReportFilterOptions(rows);
+    expect(options.submission).toEqual([
+      { value: "all", label: "All submissions" },
+      { value: "Submitted", label: "Submitted" },
+      { value: "Pending", label: "Pending" },
+      { value: "Missing", label: "Missing" },
     ]);
-    expect(options.barangay.map(({ value }) => value)).toEqual(["all", "Landayan", "Poblacion"]);
+    expect(options.review.map(({ label }) => label)).toEqual(["All reviews", "Waiting", "Reviewing", "Consolidated"]);
+    expect(options.barangay.map(({ value, label }) => [value, label])).toEqual([
+      ["all", "All barangays"],
+      ["Landayan", "Landayan"],
+      ["Poblacion", "Poblacion"],
+    ]);
+    for (const option of [...options.submission, ...options.review, ...options.barangay]) expect(option).not.toHaveProperty("meta");
   });
 
   it("reads and writes the filters in the address", () => {
@@ -107,6 +116,18 @@ describe("staff report filters", () => {
     expect(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS)).toEqual({ q: null, submission: null, review: null, barangay: null });
     expect(hasStaffReportFilters(EMPTY_STAFF_REPORT_FILTERS)).toBe(false);
     expect(hasStaffReportFilters(filters)).toBe(true);
+  });
+});
+
+describe("reminders", () => {
+  it("labels the button Remind, then Reminded once sent", () => {
+    expect(reminderButton("Daisy Resort", false)).toEqual({ label: "Remind", ariaLabel: "Remind Daisy Resort" });
+    expect(reminderButton("Daisy Resort", true)).toEqual({ label: "Reminded", ariaLabel: "Reminded Daisy Resort" });
+  });
+
+  it("confirms or reports the reminder with the enterprise and month", () => {
+    expect(reminderSentMessage("Daisy Resort", "October 2026")).toBe("Reminder sent to Daisy Resort for October 2026.");
+    expect(reminderFailedMessage("Daisy Resort", "October 2026")).toBe("The reminder to Daisy Resort for October 2026 could not be sent. Try again.");
   });
 });
 

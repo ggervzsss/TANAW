@@ -89,9 +89,9 @@ export function AdminRequestsPage() {
         </div>
         <div>
           <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
-            Group
+            Type
           </span>
-          <Select ariaLabel="Group" value={filters.group} options={groupFilterOptions} onChange={(group) => updateFilters({ group: group as RequestFilters["group"] })} />
+          <Select ariaLabel="Type" value={filters.group} options={groupFilterOptions} onChange={(group) => updateFilters({ group: group as RequestFilters["group"] })} />
         </div>
         <div>
           <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">

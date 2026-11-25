@@ -176,7 +176,7 @@ function MetricSegment({ metric, labelId, grid }: { metric: Metric; labelId: str
             {metric.badge && <span className="shrink-0">{metric.badge}</span>}
           </div>
           {metric.isLoading ? (
-            <div className="mt-4" role="status" aria-label={`Loading ${metric.title}`}>
+            <div className="mt-3" role="status" aria-label={`Loading ${metric.title}`}>
               <span className="block h-10 w-24 animate-pulse rounded-tanaw-sm bg-(--tanaw-surface-strong) motion-reduce:animate-none" />
             </div>
           ) : (

@@ -55,7 +55,10 @@ from app.features.monitoring.schemas import (
     VisitorRankingSummary,
 )
 from app.features.monitoring.telemetry import ingest_telemetry, list_latest_telemetry
-from app.features.monitoring.visitor_insights import get_visitor_insights
+from app.features.monitoring.visitor_insights import (
+    InvalidInsightRangeError,
+    get_visitor_insights,
+)
 from app.features.monitoring.visitor_ranking import InvalidRankingRangeError, get_visitor_ranking
 
 router = APIRouter(prefix="/operational", tags=["monitoring"])
@@ -191,18 +194,33 @@ async def get_admin_visitor_insights(
     range_value: Annotated[VisitorInsightRange, Query(alias="range")] = "7d",
     enterprise_id: Annotated[str | None, Query(alias="enterpriseId")] = None,
     barangay: str | None = None,
+    start: Annotated[
+        date | None,
+        Query(description="First day, in Philippine time. Chooses the days instead of range."),
+    ] = None,
+    end: Annotated[
+        date | None,
+        Query(description="Last day, in Philippine time. Give it together with start."),
+    ] = None,
 ) -> VisitorInsightsSummary:
     if enterprise_id and barangay:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Choose either an establishment or a barangay insight scope.",
         )
-    return await get_visitor_insights(
-        db,
-        range_value,
-        enterprise_id=enterprise_id,
-        barangay=barangay,
-    )
+    try:
+        return await get_visitor_insights(
+            db,
+            range_value,
+            enterprise_id=enterprise_id,
+            barangay=barangay,
+            start=start,
+            end=end,
+        )
+    except InvalidInsightRangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get("/visitor-insights/ranking", response_model=VisitorRankingSummary)

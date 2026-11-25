@@ -192,8 +192,7 @@ one.
 - **The conversation** between the sender and IT, and any messages from the
   Admin.
 
-There is no priority picker. Requests show newest first, and IT can mark one
-as urgent.
+Requests have no priority or urgency. They show open first, then newest first.
 
 ### 2.4 Account changes
 
@@ -211,20 +210,20 @@ Activity.
 
 | Status | Meaning |
 | --- | --- |
-| Sent | Waiting for IT to start |
-| In progress | IT is working on it |
-| Resolved | IT finished it |
-| Approved / Declined | The final status of an account change, instead of Resolved |
+| In progress | Sent to IT and not finished yet. Every new request starts here |
+| Resolved | IT finished it. For an account change, IT closed it without approving |
+| Approved | IT approved an account change |
 
 A resolved request can be reopened by IT or by the sender, and it goes back to
-Sent.
+In progress. An account change is decided once: IT approves it, or resolves it
+without approving, and it can't be reopened.
 
 ### 2.6 Who sees and handles requests
 
 - **IT** handles every request in the Work Center: it replies, changes the
-  status, moves the group and approves or declines account changes.
-- **The Admin** sees every request, from every group and of any urgency, on the
-  Requests page. The Admin can add a note for IT on any request, but can't
+  status, moves the group, and approves account changes or resolves them
+  without approving.
+- **The Admin** sees every request, of every type, on the Requests page. The Admin can add a note for IT on any request, but can't
   change its status or send a request.
 - **LGU Staff** don't see Requests.
 - **The sender** sees their own requests and the replies in the desktop app.
@@ -367,7 +366,7 @@ These rules apply to the pins:
 | Important Support Request and Request Account Update records | Only sample data writes them |
 | Separate records for one event | Merged into one record each (see 1.3) |
 | Pinned and unresolved activity | Open problems are in Requests and Alerts |
-| Ticket priority chosen by the sender | Senders tend to mark everything urgent. IT marks urgency instead |
+| Ticket priority chosen by the sender, and IT's urgent flag | Requests are handled newest first; the Sent and Declined statuses went too |
 | Admin sees only High and Urgent requests | The Admin sees all requests |
 | "Your response" buttons for Admin-owned alerts | Alerts end by themselves, and the Admin doesn't handle requests |
 

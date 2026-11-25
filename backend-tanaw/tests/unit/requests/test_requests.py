@@ -71,8 +71,7 @@ def request(**overrides: object) -> Request:
         "request_group": "Desktop app or camera problem",
         "title": "Entrance camera keeps disconnecting",
         "description": "The entrance camera drops off every few minutes.",
-        "status": "Sent",
-        "urgent": False,
+        "status": "In Progress",
         "enterprise_profile_id": enterprise.id,
         "enterprise_name": "Test Enterprise",
         "requester_name": "Test Manager",
@@ -256,13 +255,13 @@ def test_a_business_email_change_can_be_approved_only_once_verified(
     assert change.canApprove is can_approve
 
 
-def test_account_changes_end_approved_or_declined_not_resolved() -> None:
+def test_account_changes_end_approved_or_resolved() -> None:
     assert allowed_statuses(request(change_field="enterpriseName")) == {
         "In Progress",
         "Approved",
-        "Declined",
+        "Resolved",
     }
-    assert allowed_statuses(request()) == {"Sent", "In Progress", "Resolved"}
+    assert allowed_statuses(request()) == {"In Progress", "Resolved"}
 
 
 @pytest.mark.asyncio
@@ -273,7 +272,7 @@ async def test_status_changes_are_written_on_the_timeline() -> None:
 
     previous = await set_request_status(db, item, it_account, "Resolved")
 
-    assert previous == "Sent"
+    assert previous == "In Progress"
     assert item.status == "Resolved"
     assert item.closed_at is not None
     timeline_entry = db.add.call_args.args[0]
@@ -287,7 +286,7 @@ async def test_a_resolved_request_can_be_reopened_once() -> None:
 
     await reopen_request(db, item, account(AccountRole.ENTERPRISE))
 
-    assert item.status == "Sent"
+    assert item.status == "In Progress"
     assert item.closed_at is None
     assert db.add.call_args.args[0].message == "Reopened"
     with pytest.raises(RequestConflictError):
@@ -295,11 +294,13 @@ async def test_a_resolved_request_can_be_reopened_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_account_change_is_never_resolved_like_a_help_request() -> None:
-    with pytest.raises(RequestConflictError):
-        await set_request_status(
-            fake_db(), request(change_field="contactNumber"), account(AccountRole.IT), "Resolved"
-        )
+async def test_a_decided_account_change_stays_closed() -> None:
+    for status in ("Approved", "Resolved"):
+        item = request(change_field="contactNumber", status=status, closed_at=NOW)
+        with pytest.raises(RequestConflictError):
+            await set_request_status(fake_db(), item, account(AccountRole.IT), "In Progress")
+        with pytest.raises(RequestConflictError):
+            await reopen_request(fake_db(), item, account(AccountRole.ENTERPRISE))
 
 
 @pytest.mark.asyncio
@@ -311,7 +312,7 @@ async def test_only_account_changes_belong_in_the_account_change_group() -> None
 
 
 @pytest.mark.asyncio
-async def test_an_it_reply_starts_work_on_a_sent_request() -> None:
+async def test_an_it_reply_keeps_the_request_in_progress() -> None:
     db = fake_db()
     item = request()
 
@@ -330,7 +331,7 @@ async def test_an_admin_note_does_not_change_the_status() -> None:
         db, item, account(AccountRole.ADMIN), "Please update me here.", kind="note"
     )
 
-    assert item.status == "Sent"
+    assert item.status == "In Progress"
     assert record.kind == "note"
 
 

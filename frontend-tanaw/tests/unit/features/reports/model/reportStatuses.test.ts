@@ -20,8 +20,8 @@ describe("submission status", () => {
     expect(submissionStatus(undefined, "October", 2026, new Date(2026, 10, 11))).toBe("Missing");
   });
 
-  it("notes late, returned, overdue and upcoming reports", () => {
-    expect(submissionNote(report({ submittedAt: "2026-11-13T10:00:00+08:00" }), "October", 2026, new Date(2026, 10, 20))).toBe("3 days after due");
+  it("notes returned, overdue and upcoming reports, but not a report sent after the due date", () => {
+    expect(submissionNote(report({ submittedAt: "2026-11-13T10:00:00+08:00" }), "October", 2026, new Date(2026, 10, 20))).toBeNull();
     expect(submissionNote(report(), "October", 2026, new Date(2026, 10, 20))).toBeNull();
     expect(submissionNote(report({ status: "Returned" }), "October", 2026, new Date(2026, 10, 20))).toBe("Returned for correction");
     expect(submissionNote(undefined, "October", 2026, new Date(2026, 10, 22))).toBe("12 days overdue");

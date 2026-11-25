@@ -1,20 +1,33 @@
 import { ChevronRight, SearchX, TriangleAlert } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
-import { useOperationalReports, useVisitorInsights } from "@/app/hooks/useOperationalSync";
+import { useOperationalReports, useVisitorInsights, useVisitorRanking } from "@/app/hooks/useOperationalSync";
 import { routes } from "@/app/routers/routes";
-import { Alert, Button, EmptyState, PortalPageHeader, SegmentedControl, Skeleton, cn, initialsOf } from "@/shared/ui-kit";
+import { Alert, Button, DateRangePicker, EmptyState, PortalPageHeader, SegmentedControl, Skeleton, cn, initialsOf, parseIsoDate, toIsoDate, type DateRange } from "@/shared/ui-kit";
 import { useEnterpriseDirectory, useNow } from "../hooks/useEnterpriseDirectory";
 import { cameraWarning, formatSince, isSameDayAs, monitoredLocations, plural, type LocationState, type MonitoredLocation } from "../model/cameraStatus";
 import type { EnterpriseRow } from "../model/enterpriseDirectory";
-import { barHeight, busiestDay, dailyTrend, formatCompact, formatCount, hourlyTrend, monthlyTrend, trendNote, type Trend, type TrendPeriod } from "../model/enterpriseTrend";
+import {
+  CAMERA_HISTORY_NOTE,
+  cameraWindow,
+  defaultTrendPeriod,
+  emptyTrendMessage,
+  isLiveRange,
+  paramsWithRange,
+  rangeFromParams,
+  rangePhrase,
+  rangeVisitors,
+  trendPeriodFor,
+  trendPeriodsFor,
+  trendSource,
+  trendTitle,
+  windowText,
+} from "../model/enterpriseRange";
+import { busiestDay, busiestHour, dailyTrend, formatCount, hourlyTrend, monthlyTrend, trendNote, type Trend, type TrendPeriod } from "../model/enterpriseTrend";
+import { TrendChart } from "../components/TrendChart";
 import "../adminEnterprises.css";
 
-const PERIODS: ReadonlyArray<{ value: TrendPeriod; label: string }> = [
-  { value: "hourly", label: "Hourly" },
-  { value: "daily", label: "Daily" },
-  { value: "monthly", label: "Monthly" },
-];
+const PERIOD_LABELS: Record<TrendPeriod, string> = { hourly: "Hourly", daily: "Daily", monthly: "Monthly" };
 
 /** Where the back link returns: the list with the filters it had (passed as link state), or the plain list. */
 function backTarget(state: unknown) {
@@ -24,7 +37,9 @@ function backTarget(state: unknown) {
 
 /*
  * Enterprise Details (/admin/enterprises/:enterpriseId), by the enterprise ID used on the map and
- * in reports. ?trend=hourly|daily|monthly keeps the chosen trend period.
+ * in reports. ?range=<preset>&from=&to= keeps a date range other than today (see
+ * model/enterpriseRange.ts), and ?trend=daily|monthly keeps a trend period other than the range's
+ * default.
  */
 export function EnterpriseDetailsPage() {
   const { enterpriseId = "" } = useParams();
@@ -90,25 +105,39 @@ export function EnterpriseDetailsPage() {
 
 function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; back: { to: string; label: string; ariaLabel: string } }) {
   const [params, setParams] = useSearchParams();
-  // Keep the link state (the list's filters) when the trend period changes the address.
+  // Keep the link state (the list's filters) when the range or trend period changes the address.
   const { state: linkState } = useLocation();
-  const requested = params.get("trend");
-  const period: TrendPeriod = requested === "daily" || requested === "monthly" ? requested : "hourly";
+  const todayIso = toIsoDate(now);
+  const today = useMemo(() => parseIsoDate(todayIso), [todayIso]);
+  const range = useMemo(() => rangeFromParams(params, today), [params, today]);
+  const live = isLiveRange(range, today);
+  const oneDay = range.start === range.end;
+  const history = useMemo(() => cameraWindow(range, today), [range, today]);
+  const period = trendPeriodFor(params.get("trend"), range, today);
+  const periodOptions = trendPeriodsFor(range).map((value) => ({ value, label: PERIOD_LABELS[value] }));
 
-  const todayInsights = useVisitorInsights({ range: "today", enterpriseId: row.id });
-  const monthInsights = useVisitorInsights({ range: "30d", enterpriseId: row.id });
+  // Camera counts for the range (by hour for one day, by day otherwise), clipped to camera history.
+  const insights = useVisitorInsights({ start: range.start, end: range.end, enterpriseId: row.id }, history !== null);
+  // Visitor totals for a past range; today's total is the live count from the map.
+  const ranking = useVisitorRanking({ start: range.start, end: range.end }, !live);
   const reports = useOperationalReports();
 
-  const daily = useMemo(() => dailyTrend(monthInsights.data, now), [monthInsights.data, now]);
-  const trend = useMemo(() => {
-    if (period === "daily") return daily;
-    if (period === "monthly") return monthlyTrend(reports.data ?? [], row.id);
-    return hourlyTrend(todayInsights.data);
-  }, [period, daily, reports.data, row.id, todayInsights.data]);
-  const trendQuery = period === "hourly" ? todayInsights : period === "daily" ? monthInsights : reports;
+  const hourly = useMemo(() => (history && oneDay ? hourlyTrend(insights.data, trendTitle("hourly", range, today)) : null), [history, oneDay, insights.data, range, today]);
+  const daily = useMemo(() => (history && !oneDay ? dailyTrend(insights.data, history) : null), [history, oneDay, insights.data]);
+  const trend = useMemo(() => (period === "monthly" ? monthlyTrend(reports.data ?? [], row.id, range) : period === "daily" ? daily : hourly), [period, reports.data, row.id, range, daily, hourly]);
+  const trendQuery = period === "monthly" ? reports : insights;
+  const trendLoading = trendQuery.isPending && (period === "monthly" || history !== null);
 
   const locations = monitoredLocations(row.map, now);
-  const today = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const phrase = rangePhrase(range, today);
+
+  const changeRange = (next: DateRange) => setParams(paramsWithRange(params, next, today), { replace: true, state: linkState });
+  const changePeriod = (value: string) => {
+    const next = new URLSearchParams(params);
+    if (value === defaultTrendPeriod(range, today)) next.delete("trend");
+    else next.set("trend", value);
+    setParams(next, { replace: true, state: linkState });
+  };
 
   return (
     <div className="admin-enterprises mx-auto w-full max-w-360">
@@ -117,60 +146,51 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
         title={row.name}
         description={row.address ?? `Barangay ${row.barangay}, San Pedro, Laguna`}
         leading={<EnterprisePhoto name={row.name} />}
-        actions={<p className="rounded-[10px] border border-(--tanaw-border-soft) bg-(--tanaw-surface) px-4 py-2.5 text-sm font-bold text-(--tanaw-text)">Today, {today}</p>}
+        actions={<DateRangePicker value={range} onChange={changeRange} today={today} variant="pill" ariaLabel={`Choose a date range for ${row.name}`} />}
       >
         <Tags row={row} now={now} />
       </PortalPageHeader>
 
-      <Figures row={row} now={now} locations={locations} busiest={busiestDay(daily)} busiestLoading={monthInsights.isPending} />
+      <Figures
+        row={row}
+        now={now}
+        locations={locations}
+        live={live}
+        phrase={phrase}
+        total={live ? null : ranking.isPending ? "loading" : ranking.isError ? "error" : rangeVisitors(ranking.data, row.id)}
+        busiest={<Busiest oneDay={oneDay} history={history} phrase={phrase} trend={oneDay ? hourly : daily} loading={history !== null && insights.isPending} failed={insights.isError} />}
+      />
 
       <div className="mt-6.5 grid grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-8 max-[1100px]:grid-cols-1">
         <section aria-labelledby="trend-title" className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div>
               <h2 id="trend-title" className="font-display text-[1.375rem] font-bold text-(--tanaw-text)">
-                {trend.title}
+                {trend?.title ?? trendTitle(period, range, today)}
               </h2>
-              <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">{trendCaption(trend)}</p>
+              <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">{trendCaption(trend, trendSource(period, range, today))}</p>
             </div>
-            <SegmentedControl
-              ariaLabel="Trend period"
-              className="ae-trend-period"
-              options={PERIODS}
-              value={period}
-              onChange={(value) => {
-                const next = new URLSearchParams(params);
-                if (value === "hourly") next.delete("trend");
-                else next.set("trend", value);
-                setParams(next, { replace: true, state: linkState });
-              }}
-            />
+            {periodOptions.length > 1 && <SegmentedControl ariaLabel="Trend period" className="ae-trend-period" options={periodOptions} value={period} onChange={changePeriod} />}
           </div>
-          {trendQuery.isPending ? (
+          {trendLoading ? (
             <Skeleton className="mt-4.5 h-62.5 w-full" label="Loading trend" />
           ) : trendQuery.isError ? (
             <p role="alert" className="mt-4.5 flex min-h-40 items-center border-b border-(--tanaw-border-soft) text-sm text-(--tanaw-text-secondary)">
               The trend could not be loaded. It will try again shortly.
             </p>
           ) : (
-            <TrendChart trend={trend} />
+            <TrendChart trend={trend} empty={emptyTrendMessage(period, range, today)} />
           )}
         </section>
 
-        <MonitoredLocations row={row} locations={locations} />
+        <MonitoredLocations row={row} locations={locations} live={live} />
       </div>
     </div>
   );
 }
 
-function trendCaption(trend: Trend) {
-  const source =
-    trend.period === "hourly"
-      ? "Most visitors inside at once in each hour today."
-      : trend.period === "daily"
-        ? "Estimated visitors on each of the last 30 days."
-        : "Visitors stated in each submitted monthly report.";
-  const note = trendNote(trend);
+function trendCaption(trend: Trend | null, source: string) {
+  const note = trend ? trendNote(trend) : null;
   return note ? `${note}. ${source}` : source;
 }
 
@@ -223,18 +243,26 @@ function connectionTag(row: EnterpriseRow) {
   return { label: "Offline", text: "text-(--tanaw-danger)", dot: "bg-(--tanaw-danger)" };
 }
 
+type RangeTotal = ReturnType<typeof rangeVisitors> | "loading" | "error" | null;
+
 function Figures({
   row,
   now,
   locations,
+  live,
+  phrase,
+  total,
   busiest,
-  busiestLoading,
 }: {
   row: EnterpriseRow;
   now: Date;
   locations: MonitoredLocation[];
-  busiest: ReturnType<typeof busiestDay>;
-  busiestLoading: boolean;
+  /** True for today; otherwise the live figures are marked "Now" beside the range's figures. */
+  live: boolean;
+  phrase: string;
+  /** The range's visitor total, or null for today (read live from the map instead). */
+  total: RangeTotal;
+  busiest: ReactNode;
 }) {
   const { camera, map } = row;
   const notCounting = locations.filter((location) => location.needsIt);
@@ -274,17 +302,38 @@ function Figures({
 
   return (
     <dl className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2 max-sm:grid-cols-1">
-      <Figure index={0} title="Cameras" sub="online right now" value={camerasValue} valueClass={camerasShort ? "text-(--tanaw-st-missing)" : undefined} note={camerasNote} noteClass={camerasShort || camera.state === "offline" ? "font-semibold text-(--tanaw-st-missing)" : undefined} />
-      <Figure index={1} title="Visitors today" sub="estimated unique visitors" value={visitorsValue} note={visitorsNote} />
-      <Figure index={2} title="Live occupancy" sub="visitors inside now" value={occupancy === null || occupancy === undefined ? "—" : formatCount(occupancy)} note={occupancy === null || occupancy === undefined ? "Shown while the enterprise is online" : null} />
-      <Figure
-        index={3}
-        title="Busiest day"
-        sub="most visitors, last 30 days"
-        value={busiestLoading ? <Skeleton className="h-8.5 w-28" label="Loading busiest day" /> : (busiest?.weekday ?? "—")}
-        note={busiestLoading ? null : (busiest?.note ?? "Not enough daily counts yet")}
-      />
+      <Figure index={0} title="Cameras" sub="online right now" now={!live} value={camerasValue} valueClass={camerasShort ? "text-(--tanaw-st-missing)" : undefined} note={camerasNote} noteClass={camerasShort || camera.state === "offline" ? "font-semibold text-(--tanaw-st-missing)" : undefined} />
+      {total === null ? (
+        <Figure index={1} title="Visitors today" sub="estimated unique visitors" value={visitorsValue} note={visitorsNote} />
+      ) : (
+        <Figure
+          index={1}
+          title="Visitors"
+          sub={`estimated unique visitors ${phrase}`}
+          value={total === "loading" ? <Skeleton className="h-8.5 w-28" label="Loading visitors" /> : total === "error" || total.value === null ? "—" : formatCount(total.value)}
+          note={total === "loading" ? null : total === "error" ? "Visitor totals could not be loaded" : total.note}
+        />
+      )}
+      <Figure index={2} title="Live occupancy" sub="visitors inside now" now={!live} value={occupancy === null || occupancy === undefined ? "—" : formatCount(occupancy)} note={occupancy === null || occupancy === undefined ? "Shown while the enterprise is online" : null} />
+      {busiest}
     </dl>
+  );
+}
+
+/** The busiest hour of one day, or the busiest day of a longer range, from camera counts. */
+function Busiest({ oneDay, history, phrase, trend, loading, failed }: { oneDay: boolean; history: ReturnType<typeof cameraWindow>; phrase: string; trend: Trend | null; loading: boolean; failed: boolean }) {
+  const best = trend ? (oneDay ? busiestHour(trend) : busiestDay(trend)) : null;
+  const value = best ? ("hour" in best ? best.hour : best.weekday) : "—";
+  const sub = oneDay ? `most visitors inside at once ${phrase}` : history?.clipped ? `most visitors, ${windowText(history)}` : `most visitors ${phrase}`;
+  const note = !history ? CAMERA_HISTORY_NOTE : failed ? "Camera counts could not be loaded" : (best?.note ?? (oneDay ? `No camera counts ${phrase}` : "Not enough daily counts yet"));
+  return (
+    <Figure
+      index={3}
+      title={oneDay ? "Busiest hour" : "Busiest day"}
+      sub={sub}
+      value={loading ? <Skeleton className="h-8.5 w-28" label={oneDay ? "Loading busiest hour" : "Loading busiest day"} /> : value}
+      note={loading ? null : note}
+    />
   );
 }
 
@@ -298,11 +347,33 @@ function figureRuleClass(index: number) {
   );
 }
 
-function Figure({ index, title, sub, value, valueClass, note, noteClass }: { index: number; title: string; sub: string; value: ReactNode; valueClass?: string; note?: ReactNode; noteClass?: string }) {
+function Figure({
+  index,
+  title,
+  sub,
+  now,
+  value,
+  valueClass,
+  note,
+  noteClass,
+}: {
+  index: number;
+  title: string;
+  sub: string;
+  /** Mark a live figure "Now" while a past range is shown. */
+  now?: boolean;
+  value: ReactNode;
+  valueClass?: string;
+  note?: ReactNode;
+  noteClass?: string;
+}) {
   return (
     <div className={cn("min-w-0", figureRuleClass(index))}>
       <dt>
-        <span className="block text-sm font-bold text-(--tanaw-text)">{title}</span>
+        <span className="flex items-center gap-2 text-sm font-bold text-(--tanaw-text)">
+          {title}
+          {now && <span className="inline-flex min-h-5 items-center rounded-full border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-2 text-[11.5px] font-semibold text-(--tanaw-accent-ink)">Now</span>}
+        </span>
         <span className="block text-xs text-(--tanaw-text-muted)">{sub}</span>
       </dt>
       <dd>
@@ -310,74 +381,6 @@ function Figure({ index, title, sub, value, valueClass, note, noteClass }: { ind
         {note && <p className={cn("mt-1.5 text-xs text-(--tanaw-text-muted)", noteClass)}>{note}</p>}
       </dd>
     </div>
-  );
-}
-
-function TrendChart({ trend }: { trend: Trend }) {
-  const measured = trend.bars.filter((bar) => bar.value !== null);
-  if (measured.length === 0) {
-    const message =
-      trend.period === "hourly"
-        ? "No camera counts have arrived today yet."
-        : trend.period === "daily"
-          ? "No daily counts in the last 30 days yet."
-          : "No monthly report has been submitted yet.";
-    return <p className="mt-4.5 flex min-h-40 items-center border-b border-(--tanaw-border-soft) text-sm text-(--tanaw-text-secondary)">{message}</p>;
-  }
-  const dense = trend.bars.length > 12;
-  const format = trend.period === "monthly" ? formatCompact : formatCount;
-  const gap = dense ? "gap-1" : "gap-4.5";
-  return (
-    <figure className="mt-4.5" aria-labelledby="trend-title">
-      <div aria-hidden="true" className={cn("flex h-62.5 items-end border-b border-(--tanaw-border-soft) px-1", gap)}>
-        {trend.bars.map((bar) => {
-          const peak = bar.key === trend.busiest?.key;
-          const showValue = bar.value !== null && (trend.labelEveryBar || peak);
-          return (
-            <div
-              key={bar.key}
-              title={bar.value === null ? `No data ${bar.fullLabel}` : `${formatCount(bar.value)} ${trend.unit} ${bar.fullLabel}`}
-              className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-            >
-              <span className={cn("text-xs font-semibold whitespace-nowrap text-(--tanaw-text-secondary) tabular-nums", !showValue && "invisible")}>{bar.value === null ? "0" : format(bar.value)}</span>
-              <span className="ae-bar block w-full max-w-14 rounded-t" data-peak={peak} style={{ height: `${(barHeight(bar.value, trend.bars) / 100) * 210}px` }} />
-            </div>
-          );
-        })}
-      </div>
-      <div aria-hidden="true" className={cn("flex px-1 pt-2", gap)}>
-        {trend.bars.map((bar) => (
-          <span
-            key={bar.key}
-            className={cn(
-              "min-w-0 flex-1 overflow-visible text-center text-xs whitespace-nowrap",
-              bar.key === trend.busiest?.key && trend.labelEveryBar ? "font-bold text-(--tanaw-text)" : "text-(--tanaw-text-muted)",
-            )}
-          >
-            {bar.axisLabel}
-          </span>
-        ))}
-      </div>
-      <table className="sr-only">
-        <caption>
-          {trend.title}: {trend.unit}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Period</th>
-            <th scope="col">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {trend.bars.map((bar) => (
-            <tr key={bar.key}>
-              <th scope="row">{bar.fullLabel}</th>
-              <td>{bar.value === null ? "No data" : `${formatCount(bar.value)} ${trend.unit}`}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </figure>
   );
 }
 
@@ -389,7 +392,7 @@ const locationColor: Record<LocationState, { text: string; dot: string }> = {
   offline: { text: "text-(--tanaw-st-missing)", dot: "bg-(--tanaw-st-missing)" },
 };
 
-function MonitoredLocations({ row, locations }: { row: EnterpriseRow; locations: MonitoredLocation[] }) {
+function MonitoredLocations({ row, locations, live }: { row: EnterpriseRow; locations: MonitoredLocation[]; live: boolean }) {
   const empty =
     row.camera.state === "unknown"
       ? "Camera details appear once this enterprise is on the monitoring list."
@@ -403,7 +406,7 @@ function MonitoredLocations({ row, locations }: { row: EnterpriseRow; locations:
       <h2 id="locations-title" className="font-display text-[1.375rem] font-bold text-(--tanaw-text)">
         Monitored Locations
       </h2>
-      <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">Cameras at this enterprise.</p>
+      <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">{live ? "Cameras at this enterprise." : "Cameras at this enterprise, as they are now."}</p>
       {locations.length === 0 ? (
         <p className="mt-3 border-y border-(--tanaw-border-soft) py-3 text-sm text-(--tanaw-text-secondary)">{empty}</p>
       ) : (

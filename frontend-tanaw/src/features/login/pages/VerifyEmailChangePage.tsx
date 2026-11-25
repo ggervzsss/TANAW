@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, MailCheck, MapPin, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
+import { TANAW_LOGO } from "@/shared/constants/branding";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { AuthStageGlow, AuthThemeToggle, LoginBackground } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { type EmailChangeVerificationResult, verifyAccountEmailChange } from "../services";
-import { SAN_PEDRO_SEAL } from "../utils";
 
 type VerificationView = "verifying" | "invalid" | "verified";
 
@@ -67,7 +67,7 @@ export function VerifyEmailChangePage() {
         <main className="flex items-center justify-center lg:justify-end">
           <section className="tanaw-auth-card w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] backdrop-blur-xl sm:px-10 sm:py-10">
             <header className="mb-8 flex items-center gap-5 border-b border-(--tanaw-gold)/60 pb-7">
-              <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="h-16 w-16 object-contain sm:h-20 sm:w-20" />
+              <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
               <div>
                 <p className="font-sans text-2xl font-extrabold text-(--tanaw-green) sm:text-3xl">TANAW PORTAL</p>
                 <p className="mt-1 text-sm font-semibold text-(--tanaw-muted)">Email Ownership Verification</p>

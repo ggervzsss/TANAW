@@ -8,7 +8,7 @@ import { createFinalReport, listReportEnterprises, notifyEnterprise, updateIntak
 import type { FinalReport, IntakeReport, ReportEnterprise } from "@/shared/types";
 import { formatShortDate, reportDueDate } from "../model/reportStatuses";
 import { formatReportingMonth, type ReportingMonth } from "../model/reportingMonth";
-import { staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
+import { reminderFailedMessage, reminderSentMessage, staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
 
 const EMPTY_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_REPORTS: IntakeReport[] = [];
@@ -74,11 +74,14 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
         sourceId: row.enterpriseId,
       });
     },
-    onSuccess: (_, row) => {
-      setRemindedIds((current) => new Set(current).add(`${row.enterpriseId}:${monthLabel}`));
-      toast.success(`Reminder sent to ${row.name}.`);
+    // The month the reminder was for, in case the staff member changes month before it finishes.
+    onMutate: () => ({ monthLabel }),
+    onSuccess: (_, row, sent) => {
+      const label = sent?.monthLabel ?? monthLabel;
+      setRemindedIds((current) => new Set(current).add(`${row.enterpriseId}:${label}`));
+      toast.success(reminderSentMessage(row.name, label));
     },
-    onError: (_, row) => toast.error(`The reminder to ${row.name} could not be sent. Try again.`),
+    onError: (_, row, sent) => toast.error(reminderFailedMessage(row.name, sent?.monthLabel ?? monthLabel)),
   });
 
   return {

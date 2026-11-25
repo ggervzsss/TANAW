@@ -77,8 +77,11 @@ export async function listOperationalMapEnterprises() {
   }));
 }
 
-export type VisitorInsightParams = {
-  range: VisitorInsightRange;
+/**
+ * A preset `range`, or `start` and `end` (ISO days, Philippine time) for chosen days: one day gives a
+ * point per hour, more days a point per day, within the server's 30 days of camera history.
+ */
+export type VisitorInsightParams = ({ range: VisitorInsightRange; start?: never; end?: never } | { range?: never; start: string; end: string }) & {
   enterpriseId?: string;
   barangay?: string;
 };

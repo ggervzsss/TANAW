@@ -5,7 +5,7 @@ import { notifyError, notifySuccess } from "../../toasts/services/toast-service"
 import type { SystemTimeFormat } from "../../../utils/date-time";
 import { canReopenSupportTicket, canReplyToSupportTicket, reopenSupportTicket, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
 import { useTicketAttachmentImageUrl } from "../hooks/useTicketAttachmentImageUrl";
-import { TicketBadge, TicketStatusBadge } from "./TicketPresentation";
+import { TicketStatusBadge } from "./TicketPresentation";
 import { formatFileSize, formatTicketTime, getTicketRequestError } from "../utils/ticket-presentation";
 
 type TicketDetailModalProps = {
@@ -146,10 +146,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                         <h4 className="mt-1 text-lg font-black text-[#111827] dark:text-slate-100">{ticket.title}</h4>
                         <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">{ticket.description}</p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <TicketStatusBadge status={ticket.status} />
-                        {ticket.urgent && <TicketBadge tone="warning">Urgent</TicketBadge>}
-                      </div>
+                      <TicketStatusBadge status={ticket.status} />
                     </div>
                   </section>
 

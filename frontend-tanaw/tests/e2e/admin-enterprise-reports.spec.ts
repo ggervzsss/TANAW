@@ -164,7 +164,9 @@ test("lists each enterprise's report for the reporting month, missing first, wit
   await expect(reportRows(page).nth(0)).toContainText("Not sent");
   await expect(reportRows(page).nth(0)).toContainText("14 days overdue");
   await expect(reportRows(page).nth(1)).toContainText("Cuyab Heritage Museum");
-  await expect(reportRows(page).nth(1)).toContainText("2 days after due");
+  // A late report shows only the day it was sent, without an "after due" note.
+  await expect(reportRows(page).nth(1)).toContainText("Nov 12");
+  await expect(reportRows(page).nth(1)).not.toContainText("after due");
   await expect(reportRows(page).nth(1)).toContainText("Not reviewed");
   await expect(reportRows(page).nth(2)).toContainText("San Pedro Public Market");
   await expect(reportRows(page).nth(2)).toContainText("Poblacion · RPT-2026-10-001");

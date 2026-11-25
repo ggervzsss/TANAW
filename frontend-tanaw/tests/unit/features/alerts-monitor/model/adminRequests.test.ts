@@ -3,6 +3,7 @@ import {
   countUnread,
   filterRequests,
   findLinkedRequest,
+  groupFilterOptions,
   groupRequestsByDay,
   initialRequestFilters,
   isRequestFilters,
@@ -39,8 +40,12 @@ describe("Admin Requests list", () => {
     expect(unreadLabel(0)).toBe("All caught up");
   });
 
+  it("labels the group filter as types", () => {
+    expect(groupFilterOptions[0]).toEqual(["all", "All types"]);
+  });
+
   it("offers only the statuses some request has", () => {
-    expect(statusFilterOptions(requests).map(([value]) => value)).toEqual(["all", "Sent", "Approved"]);
+    expect(statusFilterOptions(requests).map(([value]) => value)).toEqual(["all", "In Progress", "Approved"]);
   });
 
   it("groups requests under day headings", () => {

@@ -5,14 +5,12 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
-    Boolean,
     DateTime,
     ForeignKey,
     Index,
     Sequence,
     String,
     Text,
-    false,
     func,
     text,
 )
@@ -37,9 +35,7 @@ class Request(Base):
             "enterprise_profile_id",
             "change_field",
             unique=True,
-            postgresql_where=text(
-                "change_field IS NOT NULL AND status NOT IN ('Approved', 'Declined')"
-            ),
+            postgresql_where=text("change_field IS NOT NULL AND status = 'In Progress'"),
         ),
     )
 
@@ -48,9 +44,8 @@ class Request(Base):
     request_group: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Sent")
-    urgent: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
+    status: Mapped[str] = mapped_column(
+        String(20), index=True, nullable=False, default="In Progress"
     )
     enterprise_profile_id: Mapped[str | None] = mapped_column(
         String(36),

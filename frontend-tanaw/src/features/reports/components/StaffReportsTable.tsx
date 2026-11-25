@@ -1,6 +1,6 @@
 import { Button, StatusPill } from "@/shared/ui-kit";
 import { reviewTone, submissionTone } from "../model/reportStatuses";
-import type { StaffReportRow } from "../model/staffReports";
+import { reminderButton, type StaffReportRow } from "../model/staffReports";
 
 type StaffReportsTableProps = {
   rows: readonly StaffReportRow[];
@@ -83,9 +83,10 @@ function RowAction({ row, reminding, reminded, onOpen, onRemind }: { row: StaffR
       </Button>
     );
   }
+  const button = reminderButton(row.name, reminded);
   return (
-    <Button size="sm" variant="secondary" aria-label={reminded ? `Reminder sent to ${row.name}` : `Send a reminder to ${row.name}`} loading={reminding} disabled={reminded} onClick={() => onRemind(row)}>
-      {reminded ? "Reminder sent" : "Send reminder"}
+    <Button size="sm" variant="secondary" aria-label={button.ariaLabel} loading={reminding} disabled={reminded} onClick={() => onRemind(row)}>
+      {button.label}
     </Button>
   );
 }

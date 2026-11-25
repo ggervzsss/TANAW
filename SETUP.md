@@ -220,8 +220,30 @@ No target is selected automatically. A seed must match one enterprise; if
 several match, use the numbered or full ID shown in the account details.
 An exact account ID, email, or enterprise name also works.
 
-The target account is preserved. The script creates supporting records and
-prepared counts that the desktop imports after that enterprise signs in.
+If no enterprise matches a plain name such as lolouweng, for example on a
+freshly reset database, the script creates an active, activated enterprise
+account for it and prints its sign-in details under `target.signIn`:
+
+| Sign in with | Example                           |
+| ------------ | --------------------------------- |
+| Username     | lolouweng@tanaw.test              |
+| or           | lolouweng_001@tanaw.sanpedro      |
+| Password     | Visitor sample access phrase 2026 |
+
+Set TANAW_MOCK_TARGET_PASSWORD for a different password and
+TANAW_MOCK_TARGET_NAME (or --target-name) for its enterprise name; the name
+defaults to the target written as words, such as Lolouweng. Numbered or full
+enterprise IDs, emails and account IDs are never created, and
+--no-create-target turns creation off.
+
+```shell
+TANAW_MOCK_TARGET_PASSWORD="Lolo Uweng desktop phrase 2026" ./scripts/mockdata-on lolouweng --target-name "Lolo Uweng Shrine"
+```
+
+The target account is preserved, including one the script created: mockdata-off
+removes the sample data but keeps that account, and later runs reuse it. The
+script creates supporting records and prepared counts that the desktop imports
+after that enterprise signs in.
 Supporting sample accounts use **Visitor sample access phrase 2026**:
 
 | Role         | Username                 |

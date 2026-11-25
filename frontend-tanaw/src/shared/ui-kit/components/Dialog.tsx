@@ -68,7 +68,7 @@ export function Dialog({
   return (
     <ModalPortal lockScroll>
       <motion.div
-        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgb(3_20_12/0.6)] p-4 backdrop-blur-[6px]"
+        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain bg-[rgb(3_20_12/0.6)] p-4 backdrop-blur-[6px]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -114,7 +114,7 @@ export function Dialog({
               <X size={18} aria-hidden="true" />
             </button>
           </header>
-          <div data-dialog-body className={cn("min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-5", bodyClassName)}>
+          <div data-dialog-body className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 max-sm:p-5", bodyClassName)}>
             {children}
           </div>
           {footer && <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-(--tanaw-border-soft) px-6 py-4 max-sm:px-5">{footer}</footer>}

@@ -8,9 +8,9 @@ type StaffReportsFiltersProps = {
   onChange: (patch: Partial<StaffReportFilters>) => void;
 };
 
-/** Search plus submission, review and barangay filters for the Staff Reports list. Each option shows how many enterprises it would list. */
+/** Search plus submission, review and barangay filters for the Staff Reports list. */
 export function StaffReportsFilters({ rows, filters, onChange }: StaffReportsFiltersProps) {
-  const options = staffReportFilterOptions(rows, filters);
+  const options = staffReportFilterOptions(rows);
   return (
     <div role="search" aria-label="Filter reports" className="mt-2 grid grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] items-end gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
       <div className="min-w-0">

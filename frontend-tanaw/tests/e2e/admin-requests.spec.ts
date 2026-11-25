@@ -31,7 +31,6 @@ function requestsFixture(): RequestRecord[] {
       title: "Entrance camera is offline",
       description: "The entrance camera stopped counting at 12:40 PM.",
       status: "In Progress",
-      urgent: true,
       affectedArea: "Main entrance",
       camera: "Entrance camera",
       attachments: [{ id: "request-1:0", fileName: "camera.png", mediaType: "image/png", sizeBytes: 68, url: "/operational/requests/request-1/attachments/0" }],
@@ -47,8 +46,8 @@ function requestsFixture(): RequestRecord[] {
       group: "Sign-in help",
       title: "Sign-in help",
       description: "I forgot the password of our desktop app.",
-      status: "Sent",
-      urgent: false,
+      status: "Resolved",
+      closedAt: "2026-11-22T03:00:00Z",
       enterpriseId: null,
       enterpriseName: null,
       requesterName: "Joy Villanueva",
@@ -65,8 +64,7 @@ function requestsFixture(): RequestRecord[] {
       group: "Account change",
       title: "Change of contact number",
       description: "San Pedro Plaza asked to change its contact number to 09171234567.",
-      status: "Sent",
-      urgent: false,
+      status: "In Progress",
       accountChange: { field: "contactNumber", label: "Contact number", currentValue: "09170000000", requestedValue: "09171234567", verification: null, canApprove: true },
       createdAt: "2026-11-21T01:00:00Z",
       updatedAt: "2026-11-21T01:00:00Z",
@@ -78,8 +76,7 @@ function requestsFixture(): RequestRecord[] {
 
 const messagesById: Record<string, unknown[]> = {
   "request-1": [
-    { id: "status-1", requestId: "request-1", authorId: "it-1", authorName: "Carlo Mendoza", authorRole: "it", kind: "status", message: "In Progress", createdAt: "2026-11-23T06:05:00Z" },
-    { id: "reply-1", requestId: "request-1", authorId: "it-1", authorName: "Carlo Mendoza", authorRole: "it", kind: "message", message: "Checking the camera feed now.", createdAt: "2026-11-23T06:20:00Z" },
+    { id: "reply-1", requestId: "request-1", authorId: "it-1", authorName: "Carlo Mendoza", authorRole: "it", kind: "message", message: "Checking the camera feed now.", createdAt: "2026-11-23T06:05:00Z" },
   ],
 };
 
@@ -131,13 +128,15 @@ test("selects a deep-linked request and shows its details, photos and updates", 
   await expect(list.getByRole("heading", { name: "Yesterday" })).toBeVisible();
   await expect(list.getByRole("button")).toHaveCount(3);
   await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toHaveAttribute("aria-current", "true");
-  await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toContainText("Urgent");
+  await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).not.toContainText("Urgent");
   // Opening a request marks it read on the server.
   await expect.poll(() => api.reads).toContainEqual({ all: false, requestIds: ["request-1"] });
   await expect(page.getByText("2 unread", { exact: true })).toBeVisible();
 
   const detail = page.getByRole("article");
   await expect(detail.getByRole("heading", { level: 2, name: "Entrance camera is offline" })).toBeVisible();
+  await expect(detail.getByText("In progress", { exact: true }).first()).toBeVisible();
+  await expect(detail.getByText("Type", { exact: true })).toBeVisible();
   await expect(detail.getByText("Carlo Mendoza from IT started on this at 2:05 PM.")).toBeVisible();
   await expect(detail.getByRole("link", { name: "San Pedro Plaza" })).toHaveAttribute("href", "/admin/enterprises/ENT-001");
   await expect(detail.getByText("Carlo Mendoza, IT", { exact: true })).toBeVisible();
@@ -168,7 +167,11 @@ test("adds a note for IT that appears at the top of Latest updates", async ({ pa
   await expect(detail.getByLabel("Your note")).toHaveValue(note);
 
   await add.click();
-  await expect(detail.getByText("Note added for IT.")).toBeVisible();
+  // A toast confirms the note; the composer shows no inline success text.
+  const toast = page.getByRole("status").filter({ hasText: "Note sent to IT" });
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText("Carlo Mendoza and the IT team will see it on REQ-000123.");
+  await expect(detail.getByText("Note added for IT.")).toHaveCount(0);
   expect(api.notes).toEqual([{ id: "request-1", message: note }]);
   await expect(detail.getByLabel("Your note")).toHaveValue("");
   const firstUpdate = detail.getByRole("listitem").filter({ hasText: "Note for IT from LGU Admin" });
@@ -183,7 +186,7 @@ test("adds a note for IT that appears at the top of Latest updates", async ({ pa
   await expect(detail.getByText("Joy Villanueva asked for help signing in.")).toBeVisible();
 });
 
-test("filters by group and status, searches, and marks everything read", async ({ page }) => {
+test("filters by type and status, searches, and marks everything read", async ({ page }) => {
   const api = await openRequests(page);
   const list = page.getByRole("navigation", { name: "Requests" });
   await expect(page.getByText("3 requests, newest first.")).toBeVisible();
@@ -203,21 +206,25 @@ test("filters by group and status, searches, and marks everything read", async (
   await expect(list.getByText("No requests match these filters.")).toBeVisible();
   await list.getByRole("button", { name: "Clear filters" }).click();
 
-  await page.getByRole("combobox", { name: "Group" }).click();
+  await page.getByRole("combobox", { name: "Type" }).click();
   await page.getByRole("option", { name: "Account change" }).click();
   await expect(list.getByRole("button")).toHaveCount(1);
   await list.getByRole("button", { name: /Change of contact number/ }).click();
   await expect(page).toHaveURL(/\?request=request-3$/);
   const detail = page.getByRole("article");
   await expect(detail.getByText("Contact number from 09170000000 to 09171234567.", { exact: false })).toBeVisible();
-  await expect(detail.getByText("Waiting for IT to approve or decline this change.")).toBeVisible();
-  await page.getByRole("combobox", { name: "Group" }).click();
-  await page.getByRole("option", { name: "All groups" }).click();
+  await expect(detail.getByText("Waiting for IT to approve this change.")).toBeVisible();
+  await page.getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("option", { name: "All types" }).click();
 
   await page.getByRole("combobox", { name: "Status" }).click();
-  await expect(page.getByRole("option", { name: "Resolved" })).toHaveCount(0);
-  await page.getByRole("option", { name: "In progress" }).click();
+  await expect(page.getByRole("option", { name: "Approved" })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "Sent" })).toHaveCount(0);
+  await page.getByRole("option", { name: "Resolved" }).click();
   await expect(list.getByRole("button")).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "In progress" }).click();
+  await expect(list.getByRole("button")).toHaveCount(2);
   await page.getByRole("combobox", { name: "Status" }).click();
   await page.getByRole("option", { name: "All statuses" }).click();
 

@@ -265,7 +265,6 @@ export function TicketsView() {
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black">
                     <TicketBadge tone="info">{toSentenceCase(ticket.group)}</TicketBadge>
-                    {ticket.urgent && <TicketBadge tone="warning">Urgent</TicketBadge>}
                     {ticket.affectedArea && <TicketBadge tone="neutral">{ticket.affectedArea}</TicketBadge>}
                     {ticket.camera && <TicketBadge tone="neutral">{ticket.camera}</TicketBadge>}
                     {(ticket.attachments?.length ?? 0) > 0 && (

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { useId, useState } from "react";
+import toast from "react-hot-toast/headless";
 import { activityLogsQueryKey } from "@/features/system-logs/hooks/useActivityLogs";
 import { addNoteForIt, requestDetailQueryKey, requestsQueryKey, type Request } from "@/shared/services/requests";
 import { Button, Textarea, cn } from "@/shared/ui-kit";
@@ -23,7 +24,6 @@ type NoteForItComposerProps = {
 export function NoteForItComposer({ request, recipients }: NoteForItComposerProps) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const labelId = useId();
   const fieldId = useId();
@@ -39,21 +39,35 @@ export function NoteForItComposer({ request, recipients }: NoteForItComposerProp
       void queryClient.invalidateQueries({ queryKey: requestsQueryKey });
       void queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
       setDraft("");
-      setSent(true);
+      toast.success(
+        <>
+          <span className="block font-bold">Note sent to IT</span>
+          <span className="mt-0.5 block text-[0.8125rem] font-normal">
+            {sentenceCase(recipients)} will see it on {request.code}.
+          </span>
+        </>,
+      );
     },
-    onError: (failure) => setError(getApiErrorMessage(failure, "The note could not be added. Try again.")),
+    onError: (failure) => {
+      const failureMessage = getApiErrorMessage(failure, "The note could not be added. Try again.");
+      setError(failureMessage);
+      toast.error(
+        <>
+          <span className="block font-bold">Note not sent</span>
+          <span className="mt-0.5 block text-[0.8125rem] font-normal">{failureMessage}</span>
+        </>,
+      );
+    },
   });
 
   const send = () => {
     if (empty || mutation.isPending) return;
     setError("");
-    setSent(false);
     mutation.mutate(message);
   };
 
   const changeDraft = (value: string) => {
     setDraft(value);
-    setSent(false);
     setError("");
   };
 
@@ -115,10 +129,16 @@ export function NoteForItComposer({ request, recipients }: NoteForItComposerProp
         >
           Add note
         </Button>
-        <p id={statusId} role="status" className={cn("text-[0.84375rem] font-semibold", error ? "text-(--tanaw-error)" : "text-(--tanaw-accent-ink)")}>
-          {error || (sent ? "Note added for IT." : "")}
-        </p>
+        {error && (
+          <p id={statusId} className="text-[0.84375rem] font-semibold text-(--tanaw-error)">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   );
+}
+
+function sentenceCase(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

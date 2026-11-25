@@ -74,17 +74,12 @@ export function reviewStatus(report: Pick<IntakeReport, "status"> | undefined): 
 }
 
 /**
- * The small note under a submission status:
- * "3 days after due", "Returned for correction", "12 days overdue" or "Due Dec 10".
+ * The small note under a submission status: "Returned for correction", "12 days overdue" or
+ * "Due Dec 10". A report that was sent gets no lateness note; the sent date already shows when.
  */
 export function submissionNote(report: IntakeReport | undefined, month: string, year: number | string, today: Date) {
+  if (report) return report.status === "Returned" ? "Returned for correction" : null;
   const due = reportDueDate(month, year);
-  if (report) {
-    if (report.status === "Returned") return "Returned for correction";
-    const sent = reportSentAt(report);
-    const late = sent ? daysAfter(due, sent) : 0;
-    return late > 0 ? `${late} ${late === 1 ? "day" : "days"} after due` : null;
-  }
   if (today.getTime() <= due.getTime()) return `Due ${formatShortDate(due)}`;
   const overdue = daysAfter(due, today);
   return `${overdue} ${overdue === 1 ? "day" : "days"} overdue`;

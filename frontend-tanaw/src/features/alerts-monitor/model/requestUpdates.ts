@@ -6,7 +6,7 @@ import { requestPlace } from "./adminRequests";
  * changes, newest first, ending with when it was sent.
  */
 
-export type RequestUpdateKind = "sent" | "note" | "accepted" | "resolved" | "declined" | "review";
+export type RequestUpdateKind = "sent" | "note" | "accepted" | "resolved" | "review";
 
 export type RequestUpdate = { id: string; title: string; at: string | null; detail: string; kind: RequestUpdateKind };
 
@@ -14,9 +14,7 @@ const STATUS_UPDATES: Record<string, { title: string; kind: RequestUpdateKind; d
   "In Progress": { title: "In progress", kind: "accepted", detail: (name) => `${name} started on this.` },
   Resolved: { title: "Resolved", kind: "resolved", detail: (name) => `${name} marked this resolved.` },
   Approved: { title: "Approved by IT", kind: "resolved", detail: (name) => `${name} approved this change.` },
-  Declined: { title: "Declined by IT", kind: "declined", detail: (name) => `${name} declined this change.` },
   Reopened: { title: "Reopened", kind: "review", detail: (name) => `${name} reopened this.` },
-  Sent: { title: "Set back to Sent", kind: "review", detail: (name) => `${name} set this back to Sent.` },
 };
 
 function messageUpdate(message: RequestMessage): RequestUpdate {
@@ -43,26 +41,27 @@ export function buildRequestUpdates(request: Request, detail: RequestDetail | nu
   return [...updates, sentUpdate(request)];
 }
 
-/** The IT person who last worked on the request, from its timeline. */
+/** The IT person who last worked on the request, and when IT first acted on it, from its timeline. */
 export function requestHandler(detail: RequestDetail | null): { name: string | null; at: string | null } {
   const itEntries = (detail?.messages ?? []).filter((message) => message.authorRole === "it").sort((left, right) => sortTime(right.createdAt) - sortTime(left.createdAt));
   const latest = itEntries[0];
-  const started = itEntries.find((message) => message.kind === "status" && message.message === "In Progress");
-  return { name: latest?.authorName ?? null, at: started?.createdAt ?? null };
+  const first = itEntries.at(-1);
+  return { name: latest?.authorName ?? null, at: first?.createdAt ?? null };
 }
 
-export function handledByLabel(request: Request, handler: { name: string | null }) {
-  if (handler.name) return `${handler.name}, IT`;
-  return request.status === "Sent" ? "Not started yet" : "IT team";
+export function handledByLabel(handler: { name: string | null }) {
+  return handler.name ? `${handler.name}, IT` : "IT team";
 }
 
 /** The sentence under the title. `formatTime` turns a timestamp into "2:05 PM" or "Nov 21, 2:05 PM". */
 export function requestStatusNote(request: Request, handler: { name: string | null; at: string | null }, formatTime: (value: string) => string) {
   const when = handler.at ? formatTime(handler.at) : null;
-  if (request.status === "Sent") return request.group === "Account change" ? "Waiting for IT to approve or decline this change." : "Sent to IT. The status changes to In progress as soon as IT starts on it.";
-  if (request.status === "In Progress") return handler.name && when ? `${handler.name} from IT started on this at ${when}.` : "IT is working on this.";
+  if (request.status === "In Progress") {
+    if (handler.name && when) return `${handler.name} from IT started on this at ${when}.`;
+    return request.group === "Account change" ? "Waiting for IT to approve this change." : "Sent to IT. IT is working on this.";
+  }
   if (request.status === "Approved") return `IT approved this change. ${requestPlace(request)}'s details are updated.`;
-  if (request.status === "Declined") return "IT declined this change. Nothing was changed.";
+  if (request.group === "Account change") return handler.name ? `${handler.name} from IT resolved this without approving the change.` : "IT resolved this without approving the change.";
   return handler.name ? `${handler.name} from IT resolved this.` : "IT resolved this.";
 }
 

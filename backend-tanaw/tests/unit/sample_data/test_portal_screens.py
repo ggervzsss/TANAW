@@ -133,7 +133,7 @@ async def test_request_history_gives_resolved_open_and_approved_requests() -> No
     alerts = [item for item in added if isinstance(item, OperationalAlert)]
     assert {(request.request_group, request.status) for request in requests} == {
         ("Desktop app or camera problem", "Resolved"),
-        ("Other", "Sent"),
+        ("Other", "In Progress"),
         ("Account change", "Approved"),
     }
     assert [(alert.alert_type, alert.status) for alert in alerts] == [

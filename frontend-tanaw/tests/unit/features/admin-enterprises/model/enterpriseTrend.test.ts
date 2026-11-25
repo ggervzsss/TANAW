@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barHeight, busiestDay, calendarDayOf, dailyTrend, formatCompact, hourlyTrend, monthlyTrend, trendNote } from "@/features/admin-enterprises/model/enterpriseTrend";
+import { busiestDay, busiestHour, calendarDayOf, dailyTrend, formatCompact, hourlyTrend, monthlyTrend, trendNote } from "@/features/admin-enterprises/model/enterpriseTrend";
 import type { IntakeReport, VisitorInsights } from "@/shared/types";
 
 function insights(series: VisitorInsights["series"]): VisitorInsights {
@@ -49,6 +49,13 @@ describe("hourly trend", () => {
     expect(trend.bars.map((bar) => bar.value)).toEqual([28, 96, null]);
     expect(trend.busiest?.axisLabel).toBe("6 PM");
     expect(trendNote(trend)).toBe("Busiest: 6 PM · 96 visitors inside at peak");
+    expect(trend.title).toBe("Today’s Trend");
+    expect(busiestHour(trend)).toEqual({ hour: "6 PM", note: "96 visitors inside at peak" });
+  });
+
+  it("takes the title of a past day", () => {
+    expect(hourlyTrend(undefined, "Trend on Nov 3").title).toBe("Trend on Nov 3");
+    expect(busiestHour(hourlyTrend(undefined))).toBeNull();
   });
 
   it("has no busiest bar without data", () => {
@@ -59,17 +66,16 @@ describe("hourly trend", () => {
 });
 
 describe("daily trend", () => {
-  const today = new Date(2026, 10, 24);
   const trend = dailyTrend(
     insights([
       { startAt: "2026-11-14T00:00:00+08:00", label: "Sat, Nov 14", averageVisitors: 50, peakVisitors: 80, estimatedUniqueCount: 1240 },
       { startAt: "2026-11-23T00:00:00+08:00", label: "Mon, Nov 23", averageVisitors: 20, peakVisitors: 40, estimatedUniqueCount: 610 },
       { startAt: "2026-10-01T00:00:00+08:00", label: "Thu, Oct 1", averageVisitors: 20, peakVisitors: 40, estimatedUniqueCount: 9999 },
     ]),
-    today,
+    { from: "2026-10-26", to: "2026-11-24" },
   );
 
-  it("fills the last 30 days and leaves days without updates empty, not zero", () => {
+  it("fills every day of the range and leaves days without updates empty, not zero", () => {
     expect(trend.bars).toHaveLength(30);
     expect(trend.bars[0]?.key).toBe("2026-10-26");
     expect(trend.bars.at(-1)?.key).toBe("2026-11-24");
@@ -84,6 +90,15 @@ describe("daily trend", () => {
   it("finds the busiest day for the figure strip", () => {
     expect(trendNote(trend)).toBe("Busiest: Saturday, Nov 14 · 1,240 visitors");
     expect(busiestDay(trend)).toEqual({ weekday: "Saturday", note: "Nov 14 · 1,240 visitors" });
+  });
+
+  it("labels every day of a short range and keeps only its days", () => {
+    const series = [{ startAt: "2026-11-14T00:00:00+08:00", label: "Sat, Nov 14", averageVisitors: 1, peakVisitors: 1, estimatedUniqueCount: 300 }];
+    const week = dailyTrend(insights(series), { from: "2026-11-12", to: "2026-11-18" });
+    expect(week.title).toBe("Daily Trend");
+    expect(week.bars.map((bar) => bar.axisLabel)).toEqual(["Nov 12", "Nov 13", "Nov 14", "Nov 15", "Nov 16", "Nov 17", "Nov 18"]);
+    expect(week.labelEveryBar).toBe(true);
+    expect(busiestDay(week)).toEqual({ weekday: "Saturday", note: "Nov 14 · 300 visitors" });
   });
 
   it("reads the calendar day from the timestamp text", () => {
@@ -105,23 +120,17 @@ describe("monthly trend", () => {
 
   it("keeps only the most recent months", () => {
     const reports = ["January", "February", "March", "April"].map((month) => report("ENT-1", `${month} 2026`, 10));
-    expect(monthlyTrend(reports, "ENT-1", 2).bars.map((bar) => bar.axisLabel)).toEqual(["Mar", "Apr"]);
+    expect(monthlyTrend(reports, "ENT-1", undefined, 2).bars.map((bar) => bar.axisLabel)).toEqual(["Mar", "Apr"]);
+  });
+
+  it("keeps the months the range touches", () => {
+    const reports = ["January", "February", "March", "April"].map((month) => report("ENT-1", `${month} 2026`, 10));
+    expect(monthlyTrend(reports, "ENT-1", { start: "2026-02-15", end: "2026-03-02" }).bars.map((bar) => bar.axisLabel)).toEqual(["Feb", "Mar"]);
+    expect(monthlyTrend(reports, "ENT-1", { start: "2026-11-01", end: "2026-11-24" }).bars).toEqual([]);
   });
 });
 
 describe("chart helpers", () => {
-  it("scales bars to the tallest one", () => {
-    const bars = [
-      { key: "a", axisLabel: "", fullLabel: "", value: 50 },
-      { key: "b", axisLabel: "", fullLabel: "", value: 100 },
-      { key: "c", axisLabel: "", fullLabel: "", value: null },
-    ];
-    expect(barHeight(100, bars)).toBe(100);
-    expect(barHeight(50, bars)).toBe(50);
-    expect(barHeight(null, bars)).toBe(0);
-    expect(barHeight(0, bars)).toBe(0);
-  });
-
   it("shortens large totals", () => {
     expect(formatCompact(9_999)).toBe("9,999");
     expect(formatCompact(212_000)).toBe("212K");

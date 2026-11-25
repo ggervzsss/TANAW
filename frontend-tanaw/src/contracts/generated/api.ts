@@ -1211,23 +1211,6 @@ export interface paths {
         patch: operations["change_request_status_operational_requests__request_id__status_patch"];
         trace?: never;
     };
-    "/operational/requests/{request_id}/urgent": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Flag Request */
-        patch: operations["flag_request_operational_requests__request_id__urgent_patch"];
-        trace?: never;
-    };
     "/operational/telemetry/summary": {
         parameters: {
             query?: never;
@@ -3008,7 +2991,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+            status: "In Progress" | "Resolved" | "Approved";
             /** Title */
             title: string;
             /**
@@ -3026,8 +3009,6 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
-            /** Urgent */
-            urgent: boolean;
         };
         /** RequestGroupUpdate */
         RequestGroupUpdate: {
@@ -3088,7 +3069,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+            status: "In Progress" | "Resolved" | "Approved";
         };
         /** RequestSummary */
         RequestSummary: {
@@ -3129,7 +3110,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Sent" | "In Progress" | "Resolved" | "Approved" | "Declined";
+            status: "In Progress" | "Resolved" | "Approved";
             /** Title */
             title: string;
             /**
@@ -3147,13 +3128,6 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
-            /** Urgent */
-            urgent: boolean;
-        };
-        /** RequestUrgentUpdate */
-        RequestUrgentUpdate: {
-            /** Urgent */
-            urgent: boolean;
         };
         /** RetentionCleanupCountsResponse */
         RetentionCleanupCountsResponse: {
@@ -3406,13 +3380,18 @@ export interface components {
             currentVisitors: number | null;
             /** Differencepercent */
             differencePercent?: number | null;
+            /**
+             * End
+             * @description Last day asked for, in Philippine time, when chosen by date.
+             */
+            end?: string | null;
             /** Lastupdatedat */
             lastUpdatedAt?: string | null;
             /**
              * Range
-             * @enum {string}
+             * @description The preset range, or null when start and end chose the days.
              */
-            range: "today" | "7d" | "30d";
+            range: ("today" | "7d" | "30d") | null;
             /** Scopeid */
             scopeId?: string | null;
             /** Scopename */
@@ -3424,6 +3403,11 @@ export interface components {
             scopeType: "city" | "barangay" | "enterprise";
             /** Series */
             series?: components["schemas"]["VisitorInsightPoint"][];
+            /**
+             * Start
+             * @description First day asked for, in Philippine time, when chosen by date.
+             */
+            start?: string | null;
             /** Typicalvisitors */
             typicalVisitors?: number | null;
             /** Unusuallybusy */
@@ -5877,41 +5861,6 @@ export interface operations {
             };
         };
     };
-    flag_request_operational_requests__request_id__urgent_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestUrgentUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RequestDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_summary_operational_telemetry_summary_get: {
         parameters: {
             query?: never;
@@ -5938,6 +5887,10 @@ export interface operations {
                 range?: "today" | "7d" | "30d";
                 enterpriseId?: string | null;
                 barangay?: string | null;
+                /** @description First day, in Philippine time. Chooses the days instead of range. */
+                start?: string | null;
+                /** @description Last day, in Philippine time. Give it together with start. */
+                end?: string | null;
             };
             header?: never;
             path?: never;

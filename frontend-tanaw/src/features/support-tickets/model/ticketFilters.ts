@@ -1,21 +1,18 @@
 import { REQUEST_GROUPS, sortRequests, type Request, type RequestGroup } from "@/shared/services/requests";
 
-export type TicketStatusFilter = "All Statuses" | "Sent" | "In progress" | "Resolved" | "Approved" | "Declined";
-export type TicketUrgencyFilter = "All Requests" | "Urgent Only";
+export type TicketStatusFilter = "All Statuses" | "In progress" | "Resolved" | "Approved";
 export type TicketGroupFilter = "All Groups" | RequestGroup;
 
 export type TicketFilterState = {
   group: TicketGroupFilter;
-  urgency: TicketUrgencyFilter;
   query: string;
   status: TicketStatusFilter;
 };
 
-export const ticketStatusFilters: TicketStatusFilter[] = ["All Statuses", "Sent", "In progress", "Resolved", "Approved", "Declined"];
-export const ticketUrgencyFilters: TicketUrgencyFilter[] = ["All Requests", "Urgent Only"];
+export const ticketStatusFilters: TicketStatusFilter[] = ["All Statuses", "In progress", "Resolved", "Approved"];
 export const ticketGroupFilters: TicketGroupFilter[] = ["All Groups", ...REQUEST_GROUPS];
 
-export const initialTicketFilters: TicketFilterState = { group: "All Groups", urgency: "All Requests", query: "", status: "All Statuses" };
+export const initialTicketFilters: TicketFilterState = { group: "All Groups", query: "", status: "All Statuses" };
 
 export function filterSupportTickets(requests: readonly Request[], filters: TicketFilterState) {
   const query = filters.query.trim().toLowerCase();
@@ -27,7 +24,6 @@ export function filterSupportTickets(requests: readonly Request[], filters: Tick
       return (
         (!query || searchable.includes(query)) &&
         (filters.status === "All Statuses" || ticketStatusLabel(request.status) === filters.status) &&
-        (filters.urgency === "All Requests" || request.urgent) &&
         (filters.group === "All Groups" || request.group === filters.group)
       );
     }),
@@ -41,7 +37,6 @@ export function isTicketFilterState(value: unknown): value is TicketFilterState 
     typeof filters.query === "string" &&
     filters.query.length <= 200 &&
     ticketStatusFilters.includes(filters.status as TicketStatusFilter) &&
-    ticketUrgencyFilters.includes(filters.urgency as TicketUrgencyFilter) &&
     ticketGroupFilters.includes(filters.group as TicketGroupFilter)
   );
 }

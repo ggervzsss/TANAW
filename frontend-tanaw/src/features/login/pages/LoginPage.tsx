@@ -4,9 +4,9 @@ import { motion } from "motion/react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
+import { TANAW_LOGO } from "@/shared/constants/branding";
 import { AuthParticles, AuthStageGlow, AuthThemeToggle, LoginBackground, LoginForm } from "../components";
 import { useAuthStageGlow, useLogin } from "../hooks";
-import { SAN_PEDRO_SEAL } from "../utils";
 
 function SampaguitaIcon({ className = "" }: { className?: string }) {
   return (
@@ -84,11 +84,7 @@ export function LoginPage() {
           >
             <header className="tanaw-auth-card-header mb-8">
               <div className="flex items-center gap-5 sm:gap-7">
-                <img
-                  src={SAN_PEDRO_SEAL}
-                  alt="City of San Pedro seal"
-                  className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5"
-                />
+                <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
                 <div className="min-w-0">
                   <h1 className="tanaw-auth-brand-title font-display text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
                   <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">San Pedro Tourism Management</p>

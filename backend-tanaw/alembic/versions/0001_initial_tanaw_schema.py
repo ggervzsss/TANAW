@@ -939,7 +939,6 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=160), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("urgent", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("enterprise_profile_id", sa.String(length=36), nullable=True),
         sa.Column("enterprise_name", sa.String(length=120), nullable=True),
         sa.Column("requester_name", sa.String(length=120), nullable=False),
@@ -992,9 +991,7 @@ def upgrade() -> None:
         "requests",
         ["enterprise_profile_id", "change_field"],
         unique=True,
-        postgresql_where=sa.text(
-            "change_field IS NOT NULL AND status NOT IN ('Approved', 'Declined')"
-        ),
+        postgresql_where=sa.text("change_field IS NOT NULL AND status = 'In Progress'"),
     )
     op.create_table(
         "final_report_sources",

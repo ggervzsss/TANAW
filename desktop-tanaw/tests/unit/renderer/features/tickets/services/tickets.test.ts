@@ -28,22 +28,24 @@ describe("request photos", () => {
 describe("request order and actions", () => {
   const requests = [
     request("resolved", "Resolved", "2026-07-24T09:00:00Z"),
-    request("sent-old", "Sent", "2026-07-24T02:00:00Z"),
-    request("in-progress", "In Progress", "2026-07-24T03:00:00Z"),
-    request("sent-new", "Sent", "2026-07-24T06:00:00Z"),
+    request("open-old", "In Progress", "2026-07-24T02:00:00Z"),
+    request("approved", "Approved", "2026-07-24T08:00:00Z"),
+    request("open-new", "In Progress", "2026-07-24T06:00:00Z"),
   ];
 
-  it("lists open requests first, in progress before sent, newest first, without changing the input", () => {
-    expect(sortSupportTickets(requests, "recommended").map((item) => item.id)).toEqual(["in-progress", "sent-new", "sent-old", "resolved"]);
-    expect(sortSupportTickets(requests, "oldest")[0].id).toBe("sent-old");
+  it("lists open requests first, newest first, without changing the input", () => {
+    expect(sortSupportTickets(requests, "recommended").map((item) => item.id)).toEqual(["open-new", "open-old", "resolved", "approved"]);
+    expect(sortSupportTickets(requests, "oldest")[0].id).toBe("open-old");
     expect(requests[0].id).toBe("resolved");
   });
 
   it("closes the conversation once a request is resolved or decided, and reopens only resolved ones", () => {
     expect(canReplyToSupportTicket({ status: "In Progress" })).toBe(true);
     expect(canReplyToSupportTicket({ status: "Resolved" })).toBe(false);
-    expect(canReopenSupportTicket({ status: "Resolved" })).toBe(true);
-    expect(canReopenSupportTicket({ status: "Declined" })).toBe(false);
+    expect(canReopenSupportTicket({ status: "Resolved", accountChange: null })).toBe(true);
+    expect(canReopenSupportTicket({ status: "Approved", accountChange: null })).toBe(false);
+    const accountChange = { field: "contactNumber", label: "Contact number", currentValue: null, requestedValue: "09171234567", canApprove: false } as const;
+    expect(canReopenSupportTicket({ status: "Resolved", accountChange })).toBe(false);
   });
 });
 
@@ -55,7 +57,6 @@ function request(id: string, status: SupportTicketStatus, timestamp: string): Su
     title: id,
     description: `${id} description`,
     status,
-    urgent: false,
     enterpriseId: "ENT-001",
     enterpriseName: "Test Enterprise",
     requesterName: "Front desk",

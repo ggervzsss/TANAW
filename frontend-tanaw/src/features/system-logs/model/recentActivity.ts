@@ -101,11 +101,8 @@ const ACTION_TITLES: Record<string, string> = {
   "Add Note for IT": "Note Added for IT",
   "Request In Progress": "Request In Progress",
   "Request Resolved": "Request Resolved",
-  "Request Sent": "Request Set Back to Sent",
   "Reopen Request": "Request Reopened",
   "Move Request": "Request Moved to Another Group",
-  "Mark Request Urgent": "Request Marked Urgent",
-  "Clear Request Urgency": "Request No Longer Urgent",
   // Monitoring
   "Busier Than Usual": "Busier Than Usual",
   "Back to Usual": "Back to Usual",

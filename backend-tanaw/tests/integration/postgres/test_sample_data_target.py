@@ -206,3 +206,53 @@ async def test_generation_and_cleanup_preserve_user_targets(
     assert await db.get(Account, target.id) is not None
     assert await db.get(Account, other.id) is not None
     assert not await sample_dataset_present(db)
+
+
+@pytest.mark.asyncio
+async def test_missing_plain_target_is_created_signs_in_and_survives_cleanup(
+    target_db: tuple[AsyncSession, Account, str],
+) -> None:
+    db, _, _ = target_db
+    if await sample_dataset_present(db):
+        pytest.skip("A sample dataset already exists in this test database.")
+    new_seed = f"newtarget{uuid4().hex[:10]}x"
+    target_password = "Lolo Uweng desktop phrase 2026"
+
+    result = await generate_sample_data(
+        db,
+        "30d",
+        "full-workflow",
+        "create-target-test",
+        new_seed,
+        account_password="Private hosted demo passphrase",
+        create_missing_target=True,
+        target_password=target_password,
+        target_name="Lolo Uweng Shrine",
+    )
+
+    enterprise_id = f"{new_seed}_001@tanaw.sanpedro"
+    assert result["target"]["created"] is True
+    assert result["target"]["enterpriseId"] == enterprise_id
+    assert result["target"]["enterpriseName"] == "Lolo Uweng Shrine"
+    assert result["target"]["signIn"] == {
+        "username": f"{new_seed}@tanaw.test",
+        "enterpriseId": enterprise_id,
+        "password": target_password,
+    }
+    created = await db.get(Account, result["target"]["accountId"])
+    assert created is not None and created.password_hash is not None
+    assert verify_password(target_password, created.password_hash)
+    assert created.status == AccountStatus.ACTIVE and created.activated_at is not None
+
+    await remove_sample_data(db)
+
+    assert (await resolve_target_enterprise(db, new_seed)).id == created.id
+
+
+@pytest.mark.asyncio
+async def test_missing_target_is_not_created_without_the_option(
+    target_db: tuple[AsyncSession, Account, str],
+) -> None:
+    db, _, _ = target_db
+    with pytest.raises(SystemExit, match="was not found"):
+        await generate_sample_data(db, "30d", "full-workflow", "s", f"absent{uuid4().hex[:10]}x")

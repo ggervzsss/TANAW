@@ -76,7 +76,6 @@ function RequestListItem({
         <span className="flex justify-between gap-3 text-[0.78125rem] text-(--tanaw-text-secondary)">
           <span className="inline-flex min-w-0 items-center gap-1.5">
             {request.group}
-            {request.urgent && <span className="font-bold text-(--tanaw-danger)">Urgent</span>}
             {marker && <span className="font-bold text-(--tanaw-accent-ink)">{marker}</span>}
           </span>
           {time && (

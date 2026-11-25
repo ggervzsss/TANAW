@@ -40,7 +40,7 @@ export function EnterpriseFullMapView({
   onToggleBoundaries,
 }: FullMapViewProps) {
   return (
-    <ModalPortal>
+    <ModalPortal lockScroll>
       <motion.div
         className="fixed inset-0 z-1500 flex min-h-dvh items-center justify-center bg-[rgba(3,20,12,0.72)] p-4 backdrop-blur-[7px]"
         initial={{ opacity: 0 }}
@@ -79,7 +79,7 @@ export function EnterpriseFullMapView({
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
             <LocationPicker
               location={location}
               mapId="enterprise-location-picker-full"

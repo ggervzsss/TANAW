@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { FilterSelect } from "@/shared/components/ui";
-import { ticketGroupFilters, ticketStatusFilters, ticketUrgencyFilters, type TicketFilterState, type TicketGroupFilter, type TicketStatusFilter, type TicketUrgencyFilter } from "../model";
+import { ticketGroupFilters, ticketStatusFilters, type TicketFilterState, type TicketGroupFilter, type TicketStatusFilter } from "../model";
 
 export function SupportTicketFilters({ filters, onChange }: { filters: TicketFilterState; onChange: (update: (current: TicketFilterState) => TicketFilterState) => void }) {
   return (
@@ -15,7 +15,6 @@ export function SupportTicketFilters({ filters, onChange }: { filters: TicketFil
         />
       </div>
       <FilterSelect value={filters.status} onChange={(value) => onChange((current) => ({ ...current, status: value as TicketStatusFilter }))} options={ticketStatusFilters} />
-      <FilterSelect value={filters.urgency} onChange={(value) => onChange((current) => ({ ...current, urgency: value as TicketUrgencyFilter }))} options={ticketUrgencyFilters} />
       <FilterSelect value={filters.group} onChange={(value) => onChange((current) => ({ ...current, group: value as TicketGroupFilter }))} options={ticketGroupFilters} />
     </div>
   );

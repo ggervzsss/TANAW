@@ -7,7 +7,7 @@ import { NotificationDropdown } from "../../features/notifications/components/No
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
 import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
-import { SAN_PEDRO_SEAL_IMAGE } from "../../lib/assets";
+import { TANAW_LOGO } from "../../lib/assets";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -37,7 +37,7 @@ export function EnterpriseBrand() {
   return (
     <div className="flex shrink-0 items-center gap-4 max-sm:gap-2">
       <div className="flex items-center gap-4 max-sm:gap-2">
-        <img src={SAN_PEDRO_SEAL_IMAGE} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-8" />
+        <img src={TANAW_LOGO} alt="" className="h-10 w-14 rounded-lg object-cover max-sm:h-7 max-sm:w-10" />
         <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
       </div>
       <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />

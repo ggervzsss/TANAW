@@ -7,6 +7,7 @@
   --ae-chip: #e4f1e8;
   --ae-bar: #7fcf9f;
   --ae-peak: #055b25;
+  --ae-peak-text: #ffffff;
   --ae-segment-on: var(--tanaw-action);
   --ae-segment-on-text: var(--tanaw-on-action);
 }
@@ -15,6 +16,7 @@
   --ae-chip: #17382f;
   --ae-bar: #2b6f55;
   --ae-peak: #6ee7b7;
+  --ae-peak-text: #0b141d;
   --ae-segment-on: #6ee7b7;
   --ae-segment-on-text: #0b141d;
 }
@@ -31,14 +33,6 @@
 .admin-enterprises .ae-trend-period [role="radio"][aria-checked="true"] {
   background: var(--ae-segment-on);
   color: var(--ae-segment-on-text);
-}
-
-.admin-enterprises .ae-bar {
-  background: var(--ae-bar);
-}
-
-.admin-enterprises .ae-bar[data-peak="true"] {
-  background: var(--ae-peak);
 }
 
 .admin-enterprises .ae-table tbody tr {

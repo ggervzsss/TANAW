@@ -174,9 +174,12 @@ html.dark .tanaw-auth-card {
   margin-bottom: clamp(1.15rem, 3.2svh, 2rem);
 }
 
-.tanaw-auth-brand-seal {
+.tanaw-auth-brand-logo {
   width: clamp(4rem, 9svh, 5.375rem);
-  height: clamp(4rem, 9svh, 5.375rem);
+  aspect-ratio: 3 / 2;
+  flex: none;
+  border-radius: 0.5rem;
+  object-fit: cover;
 }
 
 .tanaw-auth-brand-title {
@@ -461,9 +464,8 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
     margin-bottom: 0.9rem;
   }
 
-  .tanaw-auth-brand-seal {
+  .tanaw-auth-brand-logo {
     width: 3.5rem;
-    height: 3.5rem;
   }
 
   .tanaw-auth-divider {

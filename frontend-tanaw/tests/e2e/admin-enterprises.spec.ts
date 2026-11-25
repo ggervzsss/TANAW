@@ -9,12 +9,31 @@ const adminUser = portalUser("admin", { id: "admin-enterprises-test", email: "ad
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
-function localDay(offsetDays: number) {
+const pad = (value: number) => String(value).padStart(2, "0");
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** The local ISO day `offsetDays` before today. */
+function isoDay(offsetDays: number) {
   const date = new Date();
   date.setDate(date.getDate() - offsetDays);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T00:00:00+08:00`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+function localDay(offsetDays: number, hour = 0) {
+  return `${isoDay(offsetDays)}T${pad(hour)}:00:00+08:00`;
+}
+
+/** "Nov 3" for a local ISO day, with the year when it is not this year. */
+function shortDay(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const text = `${MONTHS[(month ?? 1) - 1].slice(0, 3)} ${day}`;
+  return year === new Date().getFullYear() ? text : `${text}, ${year}`;
+}
+
+const today = new Date();
+const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+const lastMonthName = `${MONTHS[lastMonth.getMonth()]} ${lastMonth.getFullYear()}`;
+const lastMonthKey = `${lastMonth.getFullYear()}-${pad(lastMonth.getMonth() + 1)}`;
 
 function monitoring(cameras: Array<{ name: string; status: "running" | "error" | "starting" | "stopped" }>): MapEnterprise["cameraMonitoring"] {
   const count = (status: string) => cameras.filter((camera) => camera.status === status).length;
@@ -119,19 +138,29 @@ const accounts = [
   account("ENT-MUSEUM", "Museo ng San Pedro", { code: "205", typeCode: "2", type: "History and Culture", category: "Museum", portfolioCategory: "Cultural Tourism", ntdpCode: "TD213" }, "Barangay San Antonio, San Pedro, Laguna"),
 ];
 
-function insights(range: string) {
+/** Camera counts by date: today and three days ago by hour, longer ranges by day. */
+function insights(start: string | null, end: string | null) {
   const series =
-    range === "today"
+    start !== end
       ? [
-          { startAt: localDay(0), label: "8 AM", averageVisitors: 20, peakVisitors: 29, estimatedUniqueCount: 288 },
-          { startAt: localDay(0), label: "6 PM", averageVisitors: 80, peakVisitors: 96, estimatedUniqueCount: 4000 },
-        ]
-      : [
           { startAt: localDay(3), label: "", averageVisitors: 40, peakVisitors: 90, estimatedUniqueCount: 11240 },
           { startAt: localDay(1), label: "", averageVisitors: 30, peakVisitors: 70, estimatedUniqueCount: 6300 },
-        ];
+        ]
+      : start === isoDay(0)
+        ? [
+            { startAt: localDay(0, 8), label: "8 AM", averageVisitors: 20, peakVisitors: 29, estimatedUniqueCount: 288 },
+            { startAt: localDay(0, 18), label: "6 PM", averageVisitors: 80, peakVisitors: 96, estimatedUniqueCount: 4000 },
+          ]
+        : start === isoDay(3)
+          ? [
+              { startAt: localDay(3, 10), label: "10 AM", averageVisitors: 30, peakVisitors: 41, estimatedUniqueCount: 500 },
+              { startAt: localDay(3, 15), label: "3 PM", averageVisitors: 60, peakVisitors: 77, estimatedUniqueCount: 11240 },
+            ]
+          : [];
   return {
-    range,
+    range: null,
+    start,
+    end,
     scopeType: "enterprise",
     scopeId: "ENT-PLAZA",
     scopeName: "City Plaza",
@@ -147,17 +176,37 @@ function insights(range: string) {
   };
 }
 
+/**
+ * Visitor totals per enterprise, as the server ranks them: last month as a whole from its report,
+ * anything else from camera counts.
+ */
+function ranking(start: string | null, end: string | null) {
+  const wholeLastMonth = start === `${lastMonthKey}-01` && end?.startsWith(lastMonthKey);
+  return {
+    start,
+    end,
+    reportMonths: wholeLastMonth ? [lastMonthKey] : [],
+    cameraDays: wholeLastMonth ? 0 : 7,
+    includesToday: !wholeLastMonth,
+    uncoveredDays: 0,
+    enterprises: [
+      { enterpriseId: "ENT-PLAZA", enterpriseName: "City Plaza", barangay: "Poblacion", category: "Parks", visitors: wholeLastMonth ? 259600 : 17540 },
+      { enterpriseId: "ENT-MUSEUM", enterpriseName: "Museo ng San Pedro", barangay: "San Antonio", category: "Museum", visitors: 900 },
+    ],
+  };
+}
+
 const intakeReport = {
-  id: "report-plaza-oct",
+  id: "report-plaza-last-month",
   enterpriseId: "ENT-PLAZA",
   enterprise: "City Plaza",
   category: "Parks",
   attraction: accounts[0]?.attraction,
   barangay: "Poblacion",
-  month: "October",
-  period: "October 2026",
-  submitted: "2026-11-05",
-  submittedAt: "2026-11-05T09:00:00+08:00",
+  month: MONTHS[lastMonth.getMonth()],
+  period: lastMonthName,
+  submitted: isoDay(0),
+  submittedAt: localDay(0, 9),
   status: "Pending Review",
   code: "RPT-1",
   metrics: { entry: null, exit: null, unique: 259600, peak: "320" },
@@ -173,8 +222,11 @@ async function openEnterprises(page: Page, path = "/admin/enterprises") {
   await page.route("**/operational/reports/intake", (route) => route.fulfill(json([intakeReport])));
   await page.route("**/operational/visitor-insights**", (route) => {
     const url = new URL(route.request().url());
+    const [start, end] = [url.searchParams.get("start"), url.searchParams.get("end")];
+    if (url.pathname.endsWith("/visitor-insights/ranking")) return route.fulfill(json(ranking(start, end)));
     expect(url.searchParams.get("enterpriseId")).toBe("ENT-PLAZA");
-    return route.fulfill(json(insights(url.searchParams.get("range") ?? "today")));
+    expect(url.searchParams.has("range")).toBe(false);
+    return route.fulfill(json(insights(start, end)));
   });
   await page.goto(path);
 }
@@ -228,23 +280,56 @@ test("Admin filters the registered enterprises and opens one enterprise's detail
   await expect(page.getByText("Barangay Poblacion, San Pedro, Laguna 4023")).toBeVisible();
   await expect(page.getByText("Online", { exact: true })).toBeVisible();
   await expect(page.getByText("Parking Area is not responding")).toBeVisible();
-  await expect(page.getByText(/^Today, /)).toBeVisible();
 
+  // Today by default: live figures, today's total and today's hours.
+  const rangeButton = page.getByRole("button", { name: "Today", exact: true });
+  await expect(rangeButton).toBeVisible();
   const detailFigures = page.locator("dl").first();
   await expect(detailFigures).toContainText("2/3");
   await expect(detailFigures).toContainText("Parking Area not counting");
+  await expect(detailFigures).toContainText("Visitors today");
   await expect(detailFigures).toContainText("4,464");
   await expect(detailFigures).toContainText("60");
+  await expect(detailFigures).toContainText("Busiest hour");
+  await expect(detailFigures).toContainText("6 PM");
+  await expect(detailFigures.getByText("Now", { exact: true })).toHaveCount(0);
 
   await expect(page.getByRole("heading", { level: 2, name: "Today’s Trend" })).toBeVisible();
   await expect(page.getByText(/Busiest: 6 PM · 96 visitors inside at peak/)).toBeVisible();
-  await page.getByRole("radio", { name: "Daily" }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "Last 30 Days" })).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Trend period" })).toHaveCount(0);
+
+  // The last 7 days: the total, busiest day and trend follow the range; live figures say "Now".
+  await rangeButton.click();
+  const picker = page.getByRole("dialog", { name: "Choose a date range for City Plaza" });
+  await picker.getByRole("button", { name: "Last 7 days" }).click();
+  await picker.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(new RegExp(`range=last7&from=${isoDay(6)}&to=${isoDay(0)}`));
+  await expect(detailFigures).toContainText("estimated unique visitors in the last 7 days");
+  await expect(detailFigures).toContainText("17,540");
+  await expect(detailFigures).toContainText("From camera counts");
+  await expect(detailFigures.getByText("Now", { exact: true })).toHaveCount(2);
+  await expect(detailFigures).toContainText("2/3");
+  await expect(detailFigures).toContainText("Busiest day");
+  await expect(detailFigures).toContainText(`${shortDay(isoDay(3))} · 11,240 visitors`);
+  await expect(page.getByRole("heading", { level: 2, name: "Daily Trend" })).toBeVisible();
   await expect(page.getByText(/^Busiest: .* · 11,240 visitors/)).toBeVisible();
+  await expect(page.getByText("Cameras at this enterprise, as they are now.")).toBeVisible();
   await page.getByRole("radio", { name: "Monthly" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Monthly Trend" })).toBeVisible();
-  await expect(page.getByText(/Busiest: October 2026 · 259,600 visitors/)).toBeVisible();
   await expect(page).toHaveURL(/trend=monthly/);
+
+  // Last month as a whole: the total and the monthly trend come from its report.
+  await page.getByRole("button", { name: "Last 7 days", exact: true }).click();
+  await picker.getByRole("group", { name: "Quick ranges" }).getByRole("button", { name: "Month" }).click();
+  await picker.getByRole("button", { name: "Previous month" }).click();
+  await picker.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/range=month&from=/);
+  await expect(page.getByRole("button", { name: lastMonthName, exact: true })).toBeVisible();
+  await expect(detailFigures).toContainText(`estimated unique visitors in ${lastMonthName}`);
+  await expect(detailFigures).toContainText("259,600");
+  await expect(detailFigures).toContainText("From the monthly report");
+  await page.getByRole("radio", { name: "Monthly" }).click();
+  await expect(page.getByText(`Busiest: ${lastMonthName} · 259,600 visitors`)).toBeVisible();
 
   const locations = page.getByRole("region", { name: "Monitored Locations" });
   await expect(locations.getByRole("listitem").filter({ hasText: "Main Entrance" })).toContainText("Monitoring");
@@ -256,6 +341,32 @@ test("Admin filters the registered enterprises and opens one enterprise's detail
   await page.getByRole("link", { name: "Back to Registered Enterprises" }).click();
   await expect(page).toHaveURL(/\/admin\/enterprises\?.*camera=issue/);
   await expect(page.getByRole("searchbox", { name: "Search enterprises" })).toHaveValue("plaza");
+});
+
+test("Enterprise Details shows a past day from the address, within the camera history", async ({ page }) => {
+  // Three days ago: that day's hours, its busiest hour and its total; cameras and occupancy stay live.
+  await openEnterprises(page, `/admin/enterprises/ENT-PLAZA?range=custom&from=${isoDay(3)}&to=${isoDay(3)}`);
+  await expect(page.getByRole("heading", { level: 1, name: "City Plaza" })).toBeVisible();
+  const day = shortDay(isoDay(3));
+  const figures = page.locator("dl").first();
+  await expect(page.getByRole("heading", { level: 2, name: `Trend on ${day}` })).toBeVisible();
+  await expect(page.getByText(`Busiest: 3 PM · 77 visitors inside at peak. Most visitors inside at once in each hour on ${day}.`)).toBeVisible();
+  await expect(figures).toContainText(`estimated unique visitors on ${day}`);
+  await expect(figures).toContainText("17,540");
+  await expect(figures).toContainText("Busiest hour");
+  await expect(figures).toContainText("3 PM");
+  await expect(figures.getByText("Now", { exact: true })).toHaveCount(2);
+  await expect(figures).toContainText("visitors inside now");
+
+  // Forty days ago is older than the camera history: no hourly chart, and the page says why.
+  await page.goto(`/admin/enterprises/ENT-PLAZA?range=custom&from=${isoDay(40)}&to=${isoDay(40)}`);
+  await expect(page.getByText(/^Camera history covers the last 30 days, so there are no camera counts on /)).toBeVisible();
+  await expect(figures).toContainText("Camera history covers the last 30 days only");
+
+  // A malformed range falls back to today.
+  await page.goto("/admin/enterprises/ENT-PLAZA?range=custom&from=2026-13-40&to=nope");
+  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Today’s Trend" })).toBeVisible();
 });
 
 test("Enterprise Details explains an unknown enterprise ID", async ({ page }) => {

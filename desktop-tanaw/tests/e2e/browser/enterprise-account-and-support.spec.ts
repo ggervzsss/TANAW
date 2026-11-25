@@ -122,7 +122,6 @@ test("sends a request, and reopens a resolved one", async ({ page }) => {
     title: "Resolved camera concern",
     description: "The camera concern has already been resolved.",
     status: "Resolved",
-    urgent: false,
     enterpriseId: defaultEnterpriseUser.enterpriseId,
     enterpriseName: defaultEnterpriseUser.enterpriseName,
     requesterName: defaultEnterpriseUser.displayName,
@@ -140,20 +139,21 @@ test("sends a request, and reopens a resolved one", async ({ page }) => {
       { id: "message-1", authorName: "Default IT Personnel", authorRole: "it", kind: "message", message: "The connection has been restored.", createdAt: "2026-07-23T12:14:04.071391+00:00" },
     ],
   };
-  let current = resolvedRequest;
+  let current: Omit<typeof resolvedRequest, "closedAt"> & { closedAt: string | null } = resolvedRequest;
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.route("**/operational/requests**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (route.request().method() === "POST" && pathname.endsWith("/reopen")) {
-      current = { ...current, status: "Sent", closedAt: null };
+      current = { ...current, status: "In Progress", closedAt: null };
       return route.fulfill({ json: current });
     }
     if (route.request().method() === "POST") {
       const request = route.request().postDataJSON();
       expect(request).toMatchObject({ group: "Report problem", title: "Report summary question" });
       expect(request).not.toHaveProperty("priority");
-      return route.fulfill({ json: { ...resolvedRequest, ...request, id: "request-new", code: "REQ-000100", status: "Sent", closedAt: null, messages: [] } });
+      expect(request).not.toHaveProperty("urgent");
+      return route.fulfill({ json: { ...resolvedRequest, ...request, id: "request-new", code: "REQ-000100", status: "In Progress", closedAt: null, messages: [] } });
     }
     const body = pathname.endsWith("/request-resolved") ? current : [current];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -168,6 +168,8 @@ test("sends a request, and reopens a resolved one", async ({ page }) => {
   await page.getByRole("button", { name: "Send Request" }).click();
   await expect(page.getByText("Request REQ-000100 sent.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Report summary question/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Report summary question/ })).toContainText("In progress");
+  await expect(page.getByRole("button", { name: /Report summary question/ })).not.toContainText("Urgent");
 
   await page.getByRole("button", { name: /Resolved camera concern/ }).click();
   await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();

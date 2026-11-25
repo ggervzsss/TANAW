@@ -480,9 +480,9 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
     assert failed_email.status == "terminal_failed"
     assert [(request.request_group, request.status) for request in requests] == [
         ("Desktop app or camera problem", "In Progress"),
-        ("Report problem", "Sent"),
-        ("Account change", "Sent"),
-        ("Sign-in help", "Sent"),
+        ("Report problem", "In Progress"),
+        ("Account change", "In Progress"),
+        ("Sign-in help", "In Progress"),
     ]
     change = next(request for request in requests if request.change_field)
     assert (
@@ -500,7 +500,7 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
         "operationalAlerts": 2,
         "requests": 4,
         "emailProblems": 1,
-        "activityLogs": 8,
+        "activityLogs": 7,
     }
     assert db.flush.await_count == 2
 

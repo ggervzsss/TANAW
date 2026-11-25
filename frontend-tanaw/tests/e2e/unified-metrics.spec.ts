@@ -94,7 +94,7 @@ async function expectUnderlineUnder(indicator: Locator, tab: Locator) {
     .toBeLessThan(2);
 }
 
-const itDashboardMetrics = ["Urgent Issues", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"];
+const itDashboardMetrics = ["Live Alerts", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"];
 
 async function openItPage(page: Page, path: string) {
   await page.setViewportSize({ width: 1024, height: 768 });
@@ -176,7 +176,7 @@ for (const zoom of ["90%", "100%", "110%"]) {
 
 test("unifies the IT Work Center request metrics", async ({ page }) => {
   const header = await openItPage(page, "/it/work-center");
-  await expectUnifiedHeader(header, ["Open Requests", "Urgent", "In Progress", "Account Changes"]);
+  await expectUnifiedHeader(header, ["Open Requests", "Help Requests", "Account Changes", "Resolved"]);
   await expect(page.getByPlaceholder("Search reference, place, person, request or group")).toBeVisible();
 });
 

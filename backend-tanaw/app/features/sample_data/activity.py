@@ -68,7 +68,7 @@ async def create_request_and_user_activity(
         request_group="Other",
         title="Update the listed opening hours",
         description="We now open at 9:00 AM instead of 10:00 AM. Please update what TANAW shows.",
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=other_enterprise.id,
         enterprise_name=_name(other_enterprise),
         requester_name=_manager(other_enterprise),
@@ -98,7 +98,6 @@ async def create_request_and_user_activity(
     await db.flush()
     db.add_all(
         [
-            _status(camera_request, it_account, "In Progress", camera_opened + timedelta(hours=1)),
             RequestMessage(
                 id=sample_uuid("history-request-message", camera_request.id),
                 request_id=camera_request.id,

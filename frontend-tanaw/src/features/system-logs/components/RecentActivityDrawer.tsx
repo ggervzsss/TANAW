@@ -88,7 +88,7 @@ export function RecentActivityDrawer({
             </p>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6.5 py-5.5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6.5 py-5.5">
             <section aria-labelledby={`${titleId}-who`}>
               <h3 id={`${titleId}-who`} className={sectionLabel}>
                 Performed by

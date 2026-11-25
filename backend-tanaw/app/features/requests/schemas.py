@@ -14,7 +14,7 @@ RequestGroup = Literal[
 ]
 # The groups an enterprise picks from; Sign-in help and Account change are set by TANAW.
 SenderRequestGroup = Literal["Desktop app or camera problem", "Report problem", "Other"]
-RequestStatus = Literal["Sent", "In Progress", "Resolved", "Approved", "Declined"]
+RequestStatus = Literal["In Progress", "Resolved", "Approved"]
 AccountChangeField = Literal["businessEmail", "contactNumber", "enterpriseName"]
 AccountChangeVerification = Literal["pending_verification", "verified", "expired"]
 RequestMessageKind = Literal["message", "note", "status"]
@@ -129,7 +129,6 @@ class RequestSummary(BaseModel):
     title: str
     description: str
     status: RequestStatus
-    urgent: bool
     enterpriseId: str | None = None
     enterpriseName: str | None = None
     requesterName: str
@@ -178,10 +177,6 @@ class RequestStatusUpdate(BaseModel):
 
 class RequestGroupUpdate(BaseModel):
     group: RequestGroup
-
-
-class RequestUrgentUpdate(BaseModel):
-    urgent: bool
 
 
 class RequestReadUpdate(BaseModel):

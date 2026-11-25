@@ -23,13 +23,13 @@ from app.features.accounts.attractions import attraction_category
 from app.features.accounts.models import EnterpriseProfile
 from app.features.monitoring.schemas import VisitorRankingEnterprise, VisitorRankingSummary
 from app.features.monitoring.visitor_insights import (
+    CAMERA_HISTORY_DAYS,
     HourlyVisitorObservation,
     load_hourly_visitor_observations,
 )
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.periods import reporting_period_key
 
-CAMERA_HISTORY_DAYS = 30
 MAX_RANKING_DAYS = 3700
 MONTH_NAMES = (
     "January",

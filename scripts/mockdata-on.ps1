@@ -10,7 +10,11 @@ $ExitCode = 0
 
 Push-Location $RepoRoot
 try {
-    & docker compose exec --env "TANAW_MOCK_TARGET_ENTERPRISE=$TargetEnterprise" backend `
+    & docker compose exec `
+        --env "TANAW_MOCK_TARGET_ENTERPRISE=$TargetEnterprise" `
+        --env "TANAW_MOCK_TARGET_NAME=$env:TANAW_MOCK_TARGET_NAME" `
+        --env "TANAW_MOCK_TARGET_PASSWORD=$env:TANAW_MOCK_TARGET_PASSWORD" `
+        backend `
         uv run sample-data on `
         --range $Range `
         --scenario $Scenario `

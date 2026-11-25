@@ -11,6 +11,11 @@ without touching the other. Keep the brand values below in step across both.
 
 ## Shared identity
 
+**Logo.** The standalone TANAW eagle logo is a 2048 × 2048 PNG with dark green artwork on a white
+background. Use it in topbars and sign-in or account verification headers. Each app keeps a local
+copy in its assets directory ([web portal](frontend-tanaw/assets/tanaw-logo.png) and
+[desktop app](desktop-tanaw/assets/tanaw-logo.png)).
+
 **Type.** Bai Jamjuree (400–700) for the TANAW wordmark, page titles and section headings. Inter
 for everything else: body, labels, tables, forms and figures. Both are bundled in each app's
 `public/fonts` under the SIL Open Font License; never load them from a CDN. Counts use tabular
@@ -35,8 +40,8 @@ follows the `.dark` class on `<html>`; deepen shadows rather than lightening sur
 
 **Status.** Live `#45a549` for the running-camera dot only, destructive `#a40e0e`, errors
 `#dc2626`; badges are tinted pills (success emerald, warning amber, danger red, info blue,
-neutral slate). The topbar's Canopy gradient (`#043817` → `#075526` → `#0c6a32`) and the city
-seal's navy `#2a3063` stay in the topbar and official artwork.
+neutral slate). The Canopy gradient (`#043817` → `#075526` → `#0c6a32`) stays in the topbar.
+The city seal's navy `#2a3063` stays in official artwork.
 
 ## Rules both apps keep
 

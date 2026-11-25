@@ -1,7 +1,7 @@
 /**
  * The six record statuses shared by the Admin and Staff portals. Report submission uses Submitted,
- * Pending and Missing; staff review uses Waiting, Reviewing and Consolidated. Request progress (Seen by IT,
- * In progress, Resolved, Declined by IT) reuses the pending, reviewing, consolidated and missing tints.
+ * Pending and Missing; staff review uses Waiting, Reviewing and Consolidated. Request progress (In
+ * progress, Resolved, Approved) reuses the reviewing and consolidated tints.
  */
 export type RecordStatusTone = "submitted" | "consolidated" | "reviewing" | "pending" | "waiting" | "missing";
 

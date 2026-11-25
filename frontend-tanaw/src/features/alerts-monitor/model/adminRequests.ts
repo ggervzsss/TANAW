@@ -9,30 +9,24 @@ import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/date
 
 export const REQUEST_PARAM = "request";
 
-export const REQUEST_STATUSES: readonly RequestStatus[] = ["Sent", "In Progress", "Resolved", "Approved", "Declined"];
+export const REQUEST_STATUSES: readonly RequestStatus[] = ["In Progress", "Resolved", "Approved"];
 
 export const statusLabels: Record<RequestStatus, string> = {
-  Sent: "Sent",
   "In Progress": "In progress",
   Resolved: "Resolved",
   Approved: "Approved",
-  Declined: "Declined",
 };
 
 export const statusTextClass: Record<RequestStatus, string> = {
-  Sent: "text-(--tanaw-warn-ink)",
   "In Progress": "text-(--tanaw-accent-ink)",
   Resolved: "text-(--tanaw-text-secondary)",
   Approved: "text-(--tanaw-text-secondary)",
-  Declined: "text-(--tanaw-danger)",
 };
 
 export const statusDotClass: Record<RequestStatus, string> = {
-  Sent: "bg-(--tanaw-warn-ink)",
   "In Progress": "bg-(--tanaw-accent-ink)",
   Resolved: "bg-(--tanaw-text-secondary)",
   Approved: "bg-(--tanaw-text-secondary)",
-  Declined: "bg-(--tanaw-danger)",
 };
 
 export type RequestFilters = {
@@ -43,7 +37,7 @@ export type RequestFilters = {
 
 export const initialRequestFilters: RequestFilters = { query: "", group: "all", status: "all" };
 
-export const groupFilterOptions: Array<readonly [RequestFilters["group"], string]> = [["all", "All groups"], ...REQUEST_GROUPS.map((group) => [group, group] as const)];
+export const groupFilterOptions: Array<readonly [RequestFilters["group"], string]> = [["all", "All types"], ...REQUEST_GROUPS.map((group) => [group, group] as const)];
 
 export function isRequestFilters(value: unknown): value is RequestFilters {
   if (!value || typeof value !== "object") return false;

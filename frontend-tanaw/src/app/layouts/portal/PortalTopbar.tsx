@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
-import { CITY_SEAL } from "@/shared/constants/branding";
+import { TANAW_LOGO } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { AlertsButton } from "@/features/live-alerts";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
@@ -30,7 +30,7 @@ export function PortalBrand({ role }: { role: UserRole }) {
   return (
     <div className="flex shrink-0 items-center gap-4">
       <div className="flex items-center gap-4 max-[360px]:gap-1.5 max-sm:min-h-11 max-sm:gap-2">
-        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:size-8" />
+        <img src={TANAW_LOGO} alt="" className="h-10 w-14 rounded-lg object-cover max-sm:h-7 max-sm:w-10" />
         <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
       </div>
       <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />

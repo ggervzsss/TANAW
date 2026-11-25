@@ -12,22 +12,24 @@ describe("request timeline", () => {
   const detail: RequestDetail = {
     ...item,
     messages: [
-      message({ id: "status", kind: "status", message: "In Progress", createdAt: "2026-11-23T05:10:00Z" }),
-      message({ id: "reply", createdAt: "2026-11-23T05:20:00Z" }),
+      message({ id: "reply", createdAt: "2026-11-23T05:10:00Z" }),
+      message({ id: "resolved", kind: "status", message: "Resolved", createdAt: "2026-11-23T05:15:00Z" }),
+      message({ id: "reopened", kind: "status", authorName: "Rina Dizon", authorRole: "enterprise", message: "Reopened", createdAt: "2026-11-23T05:20:00Z" }),
       message({ id: "note", kind: "note", authorName: "Ana Reyes", authorRole: "admin", message: "Please update me here.", createdAt: "2026-11-23T05:30:00Z" }),
     ],
   };
 
   it("lists replies, notes and status changes newest first, ending with when it was sent", () => {
-    expect(buildRequestUpdates(item, detail).map((update) => update.title)).toEqual(["Note for IT from Ana Reyes", "Reply from Carlo Mendoza, IT", "In progress", "Request sent"]);
+    expect(buildRequestUpdates(item, detail).map((update) => update.title)).toEqual(["Note for IT from Ana Reyes", "Reopened", "Resolved", "Reply from Carlo Mendoza, IT", "Request sent"]);
   });
 
   it("names who from IT is handling it", () => {
     const handler = requestHandler(detail);
     expect(handler).toEqual({ name: "Carlo Mendoza", at: "2026-11-23T05:10:00Z" });
-    expect(handledByLabel(item, handler)).toBe("Carlo Mendoza, IT");
+    expect(handledByLabel(handler)).toBe("Carlo Mendoza, IT");
     expect(requestStatusNote(item, handler, () => "1:10 PM")).toBe("Carlo Mendoza from IT started on this at 1:10 PM.");
-    expect(handledByLabel(request({ id: "new" }), { name: null })).toBe("Not started yet");
+    expect(handledByLabel({ name: null })).toBe("IT team");
+    expect(requestStatusNote(request({ id: "new" }), { name: null, at: null }, () => "")).toBe("Sent to IT. IT is working on this.");
   });
 
   it("describes an account change and whether the new email is verified", () => {
@@ -37,6 +39,7 @@ describe("request timeline", () => {
       accountChange: { field: "businessEmail", label: "Business email", currentValue: "old@example.com", requestedValue: "new@example.com", verification: "pending_verification", canApprove: false },
     });
     expect(accountChangeSentence(change)).toBe("Business email from old@example.com to new@example.com. The new address is not verified yet, so IT can't approve it.");
-    expect(requestStatusNote(change, { name: null, at: null }, () => "")).toBe("Waiting for IT to approve or decline this change.");
+    expect(requestStatusNote(change, { name: null, at: null }, () => "")).toBe("Waiting for IT to approve this change.");
+    expect(requestStatusNote({ ...change, status: "Resolved" }, { name: "Carlo Mendoza", at: null }, () => "")).toBe("Carlo Mendoza from IT resolved this without approving the change.");
   });
 });

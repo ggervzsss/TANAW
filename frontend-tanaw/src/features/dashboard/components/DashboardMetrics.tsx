@@ -8,10 +8,10 @@ export function DashboardMetrics({ overview }: { overview: DashboardOverview }) 
       ariaLabel="IT operations overview"
       metrics={[
         {
-          id: "urgent-issues",
-          title: "Urgent Issues",
-          value: overview.urgentIssueCount,
-          description: "Needs immediate action",
+          id: "live-alerts",
+          title: "Live Alerts",
+          value: overview.itIssueCount,
+          description: "Happening right now",
           tone: "danger",
           icon: AlertTriangle,
           isLoading: overview.loading.overall,

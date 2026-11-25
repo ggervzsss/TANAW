@@ -67,12 +67,12 @@ export function useVisitorInsights(params: VisitorInsightParams, enabled = true)
 const VISITOR_RANKING_STALE_MS = 60_000;
 
 /** One request for Most Visited: visitors per enterprise for the range. */
-export function useVisitorRanking(params: { start: string; end: string }) {
+export function useVisitorRanking(params: { start: string; end: string }, enabled = true) {
   const token = useAuthStore((state) => state.token);
   return useQuery({
     queryKey: [...visitorRankingQueryKey, params],
     queryFn: () => getVisitorRanking(params),
-    enabled: Boolean(token),
+    enabled: Boolean(token) && enabled,
     staleTime: VISITOR_RANKING_STALE_MS,
   });
 }

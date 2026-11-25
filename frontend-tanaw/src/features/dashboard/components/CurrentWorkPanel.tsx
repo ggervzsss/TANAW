@@ -50,14 +50,9 @@ export function CurrentWorkPanel({ overview }: { overview: DashboardOverview }) 
           icon={TicketCheck}
           label="Requests"
           count={overview.openSupportRequestCount}
-          description={
-            overview.urgentIssueCount > 0
-              ? `${overview.urgentIssueCount} marked urgent.`
-              : "Problems and sign-in help people asked for."
-          }
+          description="Problems and sign-in help people asked for."
           href={`${routes.it.workCenter}?view=requests`}
           tone="support"
-          urgentCount={overview.urgentIssueCount}
         />
         <WorkItem
           icon={UserRoundCog}
@@ -87,7 +82,6 @@ function WorkItem({
   description,
   href,
   tone,
-  urgentCount = 0,
 }: {
   icon: LucideIcon;
   label: string;
@@ -95,7 +89,6 @@ function WorkItem({
   description: string;
   href: string;
   tone: WorkTone;
-  urgentCount?: number;
 }) {
   const styles = toneStyles[tone];
   return (
@@ -111,7 +104,6 @@ function WorkItem({
         <span className="flex flex-wrap items-center gap-2.5">
           <span className="font-black text-slate-950 dark:text-slate-50">{label}</span>
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-black tabular-nums ${styles.count}`}>{count}</span>
-          {urgentCount > 0 && <span className="text-[10px] font-black tracking-[0.08em] text-red-700 uppercase dark:text-red-300">Urgent attention</span>}
         </span>
         <span className="mt-1.5 block text-sm leading-5 font-medium text-slate-500 dark:text-slate-400">{description}</span>
       </span>

@@ -23,19 +23,17 @@ export function requestDetailQueryKey(requestId: string) {
 }
 
 export function isClosedRequest(request: Pick<Request, "status">) {
-  return request.status === "Resolved" || request.status === "Approved" || request.status === "Declined";
+  return request.status === "Resolved" || request.status === "Approved";
 }
 
 export function canReplyToRequest(request: Pick<Request, "status">) {
   return !isClosedRequest(request);
 }
 
-/** Open requests first, urgent ones on top, then newest first. */
+/** Open requests first, then newest first. */
 export function compareRequests(left: Request, right: Request) {
   const closed = Number(isClosedRequest(left)) - Number(isClosedRequest(right));
   if (closed !== 0) return closed;
-  const urgent = Number(right.urgent) - Number(left.urgent);
-  if (!isClosedRequest(left) && urgent !== 0) return urgent;
   const time = safeTimestamp(Date.parse(right.createdAt)) - safeTimestamp(Date.parse(left.createdAt));
   return time || left.code.localeCompare(right.code);
 }
@@ -76,11 +74,6 @@ export async function reopenRequest(requestId: string) {
 
 export async function moveRequest(requestId: string, group: RequestGroup) {
   const response = await apiClient.patch<RequestDetail>(`/operational/requests/${requestId}/group`, { group });
-  return response.data;
-}
-
-export async function markRequestUrgent(requestId: string, urgent: boolean) {
-  const response = await apiClient.patch<RequestDetail>(`/operational/requests/${requestId}/urgent`, { urgent });
   return response.data;
 }
 

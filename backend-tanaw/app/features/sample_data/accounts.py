@@ -158,6 +158,17 @@ def ensure_email_available(existing: Account | None, email: str) -> None:
 
 
 async def resolve_target_enterprise(db: AsyncSession, identifier: str | None) -> Account:
+    target = await find_target_enterprise(db, identifier)
+    if target is None:
+        raise SystemExit(
+            f"Target enterprise '{identifier}' was not found. "
+            "Choose an existing active, activated enterprise account."
+        )
+    return target
+
+
+async def find_target_enterprise(db: AsyncSession, identifier: str | None) -> Account | None:
+    """The one active enterprise account the identifier names, or None when none matches."""
     if not identifier or not identifier.strip():
         raise SystemExit("Choose a target enterprise using its account seed or enterprise ID.")
 
@@ -198,10 +209,7 @@ async def resolve_target_enterprise(db: AsyncSession, identifier: str | None) ->
         targets = list(await db.scalars(query.where(or_(*conditions))))
 
     if not targets:
-        raise SystemExit(
-            f"Target enterprise '{identifier}' was not found. "
-            "Choose an existing active, activated enterprise account."
-        )
+        return None
     if len(targets) > 1:
         enterprise_ids = ", ".join(
             target.enterprise_profile.enterprise_id
@@ -213,3 +221,72 @@ async def resolve_target_enterprise(db: AsyncSession, identifier: str | None) ->
             f"Use a numbered or full enterprise ID: {enterprise_ids}"
         )
     return targets[0]
+
+
+TARGET_EMAIL_DOMAIN = "tanaw.test"
+# A spot in Barangay Landayan, inside San Pedro, so the new target shows on the Admin map.
+TARGET_LOCATION = ("Landayan", "Barangay Landayan, San Pedro, Laguna 4023", 14.351520, 121.067180)
+
+
+def creatable_target_seed(identifier: str) -> str | None:
+    """The enterprise ID seed to create a missing target from, or None when the identifier is
+    an explicit enterprise ID, email or account ID, which must name an existing account."""
+    value = identifier.strip()
+    if not value or "@" in value or re.fullmatch(r"[0-9a-fA-F-]{32,36}", value):
+        return None
+    seed = normalize_enterprise_id_seed(value)
+    if re.search(r"_[0-9]{3,}$", seed):
+        return None
+    return seed
+
+
+def target_display_name(seed: str) -> str:
+    return " ".join(part.capitalize() for part in seed.split("_"))
+
+
+async def create_target_enterprise(
+    db: AsyncSession,
+    seed: str,
+    password: str,
+    *,
+    name: str | None = None,
+    registered_before: datetime | None = None,
+) -> Account:
+    """Create an active, activated enterprise account to receive the sample data.
+
+    It is an ordinary enterprise account, not part of the sample dataset, so mockdata-off keeps
+    it and later runs reuse it. It signs in with its enterprise ID and the given password.
+    """
+    email = f"{seed.replace('_', '.')}@{TARGET_EMAIL_DOMAIN}"
+    if email in SAMPLE_ACCOUNT_EMAILS:
+        raise SystemExit(f"'{seed}' is a sample enterprise. Choose another target name.")
+    ensure_email_available(await db.scalar(select(Account).where(Account.email == email)), email)
+    display_name = (name or "").strip() or target_display_name(seed)
+    registered_at = (registered_before or datetime.now(UTC)) - timedelta(days=30)
+    barangay, address, latitude, longitude = TARGET_LOCATION
+    account = Account(
+        email=email,
+        password_hash=hash_password(validate_password_policy(password)),
+        role=AccountRole.ENTERPRISE,
+        display_name=display_name,
+        title="Enterprise Account",
+        status=AccountStatus.ACTIVE,
+        activated_at=registered_at + timedelta(days=1),
+        created_at=registered_at,
+        enterprise_profile=EnterpriseProfile(
+            enterprise_name=display_name,
+            attraction_code="901",
+            manager_name="Mock Data Manager",
+            barangay=barangay,
+            address=address,
+            latitude=latitude,
+            longitude=longitude,
+            location_updated_at=datetime.now(UTC),
+            enterprise_id=await generate_enterprise_id(db, seed),
+            building_capacity=200,
+            opening_hours_json=sample_opening_hours(0).model_dump_json(),
+        ),
+    )
+    db.add(account)
+    await db.flush()
+    return account

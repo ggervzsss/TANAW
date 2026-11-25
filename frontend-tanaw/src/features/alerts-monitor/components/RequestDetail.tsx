@@ -33,7 +33,6 @@ const dotBorder: Record<RequestUpdateKind, string> = {
   note: "border-(--tanaw-action)",
   accepted: "border-(--tanaw-accent-ink)",
   resolved: "border-(--tanaw-text-secondary)",
-  declined: "border-(--tanaw-danger)",
   review: "border-(--tanaw-warn-ink)",
 };
 
@@ -42,7 +41,6 @@ const dotFill: Record<RequestUpdateKind, string> = {
   note: "bg-(--tanaw-action)",
   accepted: "bg-(--tanaw-accent-ink)",
   resolved: "bg-(--tanaw-text-secondary)",
-  declined: "bg-(--tanaw-danger)",
   review: "bg-(--tanaw-warn-ink)",
 };
 
@@ -58,10 +56,7 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
 
   return (
     <article aria-labelledby="request-detail-title" className="min-w-0 py-1.5">
-      <p className="flex flex-wrap items-center gap-2 text-[0.8125rem] font-bold">
-        <span className={statusTextClass[request.status]}>{statusLabel}</span>
-        {request.urgent && <span className="rounded-full bg-(--tanaw-danger-bg) px-2 text-(--tanaw-danger-text)">Urgent</span>}
-      </p>
+      <p className={cn("text-[0.8125rem] font-bold", statusTextClass[request.status])}>{statusLabel}</p>
       <h2 id="request-detail-title" className="mt-2 font-display text-[1.875rem] leading-[1.15] font-bold text-(--tanaw-text) max-sm:text-2xl">
         {request.title}
       </h2>
@@ -93,9 +88,9 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
             place
           )}
         </DetailItem>
-        <DetailItem label="Group">{request.group}</DetailItem>
+        <DetailItem label="Type">{request.group}</DetailItem>
         <DetailItem label="Sent by">{sentBy}</DetailItem>
-        <DetailItem label="Handled by">{handledByLabel(request, handler)}</DetailItem>
+        <DetailItem label="Handled by">{handledByLabel(handler)}</DetailItem>
         <DetailItem label="Status">{statusLabel}</DetailItem>
         <DetailItem label="Reference number">
           <span className="tabular-nums">{request.code}</span>
@@ -115,7 +110,7 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
               aria-hidden="true"
               className={cn("absolute top-0.5 -left-1.75 size-3 rounded-full border-2", dotBorder[update.kind], index === 0 ? dotFill[update.kind] : "bg-(--tanaw-page)")}
             />
-            <p className={cn("font-bold", update.kind === "declined" ? "text-(--tanaw-danger)" : "text-(--tanaw-text)")}>
+            <p className="font-bold text-(--tanaw-text)">
               {update.title} {update.at && <span className="text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{formatWhen(update.at)}</span>}
             </p>
             <p className="mt-0.5 text-sm wrap-break-word whitespace-pre-line text-(--tanaw-text-secondary)">{update.detail}</p>
@@ -124,7 +119,7 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
       </ol>
       {detailLoading && <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">Loading the request's updates.</p>}
 
-      <NoteForItComposer key={request.id} request={request} recipients={handler.name && request.status !== "Sent" ? `${handler.name} and the IT team` : "the IT team"} />
+      <NoteForItComposer key={request.id} request={request} recipients={handler.name ? `${handler.name} and the IT team` : "the IT team"} />
     </article>
   );
 }

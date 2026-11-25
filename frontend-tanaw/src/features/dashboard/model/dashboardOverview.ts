@@ -14,7 +14,6 @@ type DashboardOverviewInput = {
 export function buildDashboardOverview(input: DashboardOverviewInput) {
   const itIssues = input.alerts;
   const open = input.requests.filter((request) => !isClosedRequest(request));
-  const urgentIssueCount = open.filter((request) => request.urgent).length;
   const openSupportRequestCount = open.filter((request) => request.group !== "Account change").length;
   const pendingAccountRequestCount = open.filter((request) => request.group === "Account change").length;
   const emailProblemCount = input.emailDeliveries.filter(isEmailProblem).length;
@@ -30,7 +29,6 @@ export function buildDashboardOverview(input: DashboardOverviewInput) {
     pendingAccountRequestCount,
     summary: input.operationalSummary,
     unavailableDesktopAppCount,
-    urgentIssueCount,
   };
 }
 

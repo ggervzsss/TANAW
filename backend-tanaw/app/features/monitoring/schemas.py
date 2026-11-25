@@ -187,7 +187,15 @@ class VisitorRankingSummary(BaseModel):
 
 
 class VisitorInsightsSummary(BaseModel):
-    range: VisitorInsightRange
+    range: VisitorInsightRange | None = Field(
+        description="The preset range, or null when start and end chose the days."
+    )
+    start: date | None = Field(
+        default=None, description="First day asked for, in Philippine time, when chosen by date."
+    )
+    end: date | None = Field(
+        default=None, description="Last day asked for, in Philippine time, when chosen by date."
+    )
     scopeType: VisitorInsightScope
     scopeId: str | None = None
     scopeName: str

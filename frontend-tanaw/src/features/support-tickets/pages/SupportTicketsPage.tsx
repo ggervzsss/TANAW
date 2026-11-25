@@ -27,7 +27,7 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
     initialValue: initialTicketFilters,
     isValid: isTicketFilterState,
     namespace: `${mode}-ticket-filters`,
-    version: 2,
+    version: 3,
   });
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,7 +60,7 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
       {!embedded && (
         <PageHeader
           title="Requests"
-          description={isItResponder ? "Help people with problems, and approve or decline account changes." : "Requests people sent to IT. IT handles them."}
+          description={isItResponder ? "Help people with problems, and approve account changes or resolve them without approving." : "Requests people sent to IT. IT handles them."}
         />
       )}
 
@@ -94,18 +94,18 @@ export function SupportTicketsPage({ mode, embedded = false, inSettings = false 
 
 function SupportTicketMetrics({ isLoading, tickets }: { isLoading: boolean; tickets: Request[] }) {
   const open = tickets.filter((ticket) => !isClosedRequest(ticket));
-  const urgent = open.filter((ticket) => ticket.urgent);
-  const inProgress = tickets.filter((ticket) => ticket.status === "In Progress");
+  const help = open.filter((ticket) => ticket.group !== "Account change");
   const changes = open.filter((ticket) => ticket.group === "Account change");
+  const resolved = tickets.filter((ticket) => ticket.status === "Resolved");
 
   return (
     <UnifiedMetricsHeader
       ariaLabel="Request summary"
       metrics={[
-        { id: "open", title: "Open Requests", value: open.length, description: "Sent or in progress", tone: "success", icon: TicketCheck, isLoading },
-        { id: "urgent", title: "Urgent", value: urgent.length, description: "Marked urgent by IT", tone: "warning", icon: AlertCircle, isLoading },
-        { id: "working", title: "In Progress", value: inProgress.length, description: "IT is working on these", tone: "info", icon: Clock3, isLoading },
+        { id: "open", title: "Open Requests", value: open.length, description: "In progress", tone: "info", icon: Clock3, isLoading },
+        { id: "help", title: "Help Requests", value: help.length, description: "Problems IT is working on", tone: "warning", icon: AlertCircle, isLoading },
         { id: "changes", title: "Account Changes", value: changes.length, description: "Waiting for approval", tone: "teal", icon: ImageIcon, isLoading },
+        { id: "resolved", title: "Resolved", value: resolved.length, description: "Closed by IT", tone: "success", icon: TicketCheck, isLoading },
       ]}
     />
   );

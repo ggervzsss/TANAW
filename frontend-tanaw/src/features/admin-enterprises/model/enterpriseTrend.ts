@@ -1,14 +1,17 @@
 import type { IntakeReport, VisitorInsights } from "@/shared/types";
+import { parseIsoDate, toIsoDate, type DateRange } from "@/shared/ui-kit/lib/dateRange";
 
 /*
- * The Enterprise Details trend chart. Each period reads the closest real figure the API has:
+ * The Enterprise Details trend chart for the chosen date range. Each period reads the closest real
+ * figure the API has:
  *
- *   Hourly   /operational/visitor-insights?range=today: the most visitors inside at once in each hour
- *            (peakVisitors). Only hours with camera updates appear.
- *   Daily    /operational/visitor-insights?range=30d: the estimated unique visitors of each of the
- *            last 30 days (estimatedUniqueCount). A day without updates shows an empty slot, never 0.
- *   Monthly  submitted monthly reports (/operational/reports/intake): the unique visitors each report
- *            states. Months without a report are left out.
+ *   Hourly   one day: /operational/visitor-insights?start=day&end=day, the most visitors inside at
+ *            once in each hour (peakVisitors). Only hours with camera updates appear.
+ *   Daily    longer ranges: /operational/visitor-insights?start&end, the estimated unique visitors of
+ *            each day the camera history covers (estimatedUniqueCount). A day without updates shows
+ *            an empty slot, never 0.
+ *   Monthly  submitted monthly reports (/operational/reports/intake) for the months the range
+ *            touches: the unique visitors each report states. Months without a report are left out.
  */
 
 export type TrendPeriod = "hourly" | "daily" | "monthly";
@@ -67,34 +70,41 @@ export function busiestBar(bars: readonly TrendBar[]) {
   return best;
 }
 
-export function hourlyTrend(insights: VisitorInsights | undefined): Trend {
+export function hourlyTrend(insights: VisitorInsights | undefined, title = "Today’s Trend"): Trend {
   const bars = (insights?.series ?? []).map((point) => ({
     key: point.startAt,
     axisLabel: point.label,
     fullLabel: point.label,
     value: point.peakVisitors,
   }));
-  return { period: "hourly", title: "Today’s Trend", unit: "visitors inside at peak", bars, busiest: busiestBar(bars), labelEveryBar: true };
+  return { period: "hourly", title, unit: "visitors inside at peak", bars, busiest: busiestBar(bars), labelEveryBar: true };
 }
 
-export function dailyTrend(insights: VisitorInsights | undefined, today: Date, days = 30): Trend {
+/** Up to this many days, every bar is labelled; longer ranges label one day a week. */
+const LABEL_EVERY_DAY = 10;
+
+/** One bar per day from `days.from` to `days.to` (ISO days); days without updates stay empty. */
+export function dailyTrend(insights: VisitorInsights | undefined, days: { from: string; to: string }): Trend {
   const byDay = new Map<string, number | null>();
   for (const point of insights?.series ?? []) {
     const day = calendarDayOf(point.startAt);
     if (day) byDay.set(dayKey(day), point.estimatedUniqueCount ?? null);
   }
-  const bars: TrendBar[] = [];
-  for (let offset = days - 1; offset >= 0; offset -= 1) {
-    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
-    const index = days - 1 - offset;
-    bars.push({
-      key: dayKey(date),
-      axisLabel: index % 7 === 0 ? shortDay(date) : "",
-      fullLabel: `${WEEKDAYS[date.getDay()]}, ${shortDay(date)}`,
-      value: byDay.get(dayKey(date)) ?? null,
-    });
-  }
-  return { period: "daily", title: "Last 30 Days", unit: "visitors", bars, busiest: busiestBar(bars), labelEveryBar: false };
+  const dates: Date[] = [];
+  for (const date = parseIsoDate(days.from); toIsoDate(date) <= days.to; date.setDate(date.getDate() + 1)) dates.push(new Date(date));
+  const every = dates.length <= LABEL_EVERY_DAY;
+  const bars = dates.map((date, index) => ({
+    key: dayKey(date),
+    axisLabel: every || index % 7 === 0 ? shortDay(date) : "",
+    fullLabel: `${WEEKDAYS[date.getDay()]}, ${shortDay(date)}`,
+    value: byDay.get(dayKey(date)) ?? null,
+  }));
+  return { period: "daily", title: "Daily Trend", unit: "visitors", bars, busiest: busiestBar(bars), labelEveryBar: every };
+}
+
+function monthIndexOf(iso: string) {
+  const date = parseIsoDate(iso);
+  return date.getFullYear() * 12 + date.getMonth();
 }
 
 function periodOf(report: Pick<IntakeReport, "period" | "month">) {
@@ -104,14 +114,18 @@ function periodOf(report: Pick<IntakeReport, "period" | "month">) {
   return month >= 0 && Number.isInteger(year) ? { month, year } : null;
 }
 
-export function monthlyTrend(reports: readonly IntakeReport[], enterpriseId: string, limit = 12): Trend {
+/** This enterprise's monthly reports for the months the range touches (the last `limit` without a range). */
+export function monthlyTrend(reports: readonly IntakeReport[], enterpriseId: string, range?: Pick<DateRange, "start" | "end">, limit = 12): Trend {
   const totals = new Map<number, { month: number; year: number; value: number }>();
+  const first = range ? monthIndexOf(range.start) : -Infinity;
+  const last = range ? monthIndexOf(range.end) : Infinity;
   for (const report of reports) {
     if (report.enterpriseId !== enterpriseId) continue;
     const period = periodOf(report);
     const value = report.metrics.unique;
     if (!period || typeof value !== "number") continue;
     const key = period.year * 12 + period.month;
+    if (key < first || key > last) continue;
     // One report per enterprise and month; keep the larger figure if a duplicate ever appears.
     totals.set(key, { ...period, value: Math.max(value, totals.get(key)?.value ?? 0) });
   }
@@ -136,9 +150,9 @@ export function busiestDay(trend: Trend) {
   return { weekday, note: `${date} · ${formatCount(bar.value)} ${trend.unit}` };
 }
 
-/** The bar's height as a share of the tallest bar, 0–100. */
-export function barHeight(value: number | null, bars: readonly TrendBar[]) {
-  const max = Math.max(0, ...bars.map((bar) => bar.value ?? 0));
-  if (value === null || value <= 0 || max === 0) return 0;
-  return Math.max(1.5, (value / max) * 100);
+/** The busiest hour of an hourly trend, for the figure strip ("6 PM", "96 visitors inside at peak"). */
+export function busiestHour(trend: Trend) {
+  const bar = trend.busiest;
+  if (!bar || bar.value === null) return null;
+  return { hour: bar.fullLabel, note: `${formatCount(bar.value)} ${trend.unit}` };
 }

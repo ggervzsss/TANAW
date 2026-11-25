@@ -141,7 +141,6 @@ async function mockRecentData(page: Page) {
   const request = (overrides: Record<string, unknown>) => ({
     group: "Desktop app or camera problem",
     description: "",
-    urgent: false,
     enterpriseId: mapEnterprise.id,
     enterpriseName: mapEnterprise.name,
     requesterName: "Front desk",
@@ -154,7 +153,7 @@ async function mockRecentData(page: Page) {
     route.fulfill(
       json([
         request({ id: "request-1", code: "REQ-000001", title: "Entrance camera keeps disconnecting", status: "In Progress", createdAt: daysAgo(3).toISOString(), updatedAt: daysAgo(1).toISOString() }),
-        request({ id: "request-3", code: "REQ-000003", title: "Visitor counts stopped updating", enterpriseName: "San Antonio Plaza", status: "Sent", createdAt: daysAgo(0).toISOString(), updatedAt: daysAgo(0).toISOString() }),
+        request({ id: "request-3", code: "REQ-000003", title: "Visitor counts stopped updating", enterpriseName: "San Antonio Plaza", status: "Resolved", createdAt: daysAgo(0).toISOString(), updatedAt: daysAgo(0).toISOString() }),
       ]),
     ),
   );
@@ -243,7 +242,7 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   const requests = page.getByRole("region", { name: "Recent Requests" });
   await expect(requests.getByRole("link", { name: /Visitor counts stopped updating, San Antonio Plaza/ })).toHaveAttribute("href", "/admin/requests?request=request-3");
   await expect(requests.getByRole("link", { name: /Entrance camera keeps disconnecting/ })).toHaveAttribute("href", "/admin/requests?request=request-1");
-  await expect(requests.getByText("Sent", { exact: true })).toBeVisible();
+  await expect(requests.getByText("Resolved", { exact: true })).toBeVisible();
   await expect(requests.getByText("In progress")).toBeVisible();
   await expect(requests.getByRole("link", { name: "View all requests" })).toHaveAttribute("href", "/admin/requests");
 

@@ -140,7 +140,7 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
             </button>
           </header>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-7.5 pt-5 pb-3.5 max-sm:px-5">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-7.5 pt-5 pb-3.5 max-sm:px-5">
             <dl className="m-0 grid grid-cols-3 gap-x-7 gap-y-4 text-[0.90625rem] max-md:grid-cols-2 max-sm:grid-cols-1">
               {info.map((item) => {
                 const shown = item.contact && hideContact ? null : item.value;

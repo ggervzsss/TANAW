@@ -74,7 +74,11 @@ export type VisitorInsightEnterprise = {
 };
 
 export type VisitorInsights = {
-  range: VisitorInsightRange;
+  /** The preset range, or null when the request chose its days with start and end. */
+  range: VisitorInsightRange | null;
+  /** The days asked for (ISO, Philippine time) when chosen by date. */
+  start?: string | null;
+  end?: string | null;
   scopeType: "city" | "barangay" | "enterprise";
   scopeId: string | null;
   scopeName: string;

@@ -19,7 +19,7 @@ export function PendingAccountChanges({ refreshKey }: { refreshKey: number }) {
     void listSupportTickets()
       .then((requests) => {
         if (disposed) return;
-        setChanges(requests.filter((request) => request.group === "Account change" && request.accountChange?.field !== "businessEmail" && (request.status === "Sent" || request.status === "In Progress")));
+        setChanges(requests.filter((request) => request.group === "Account change" && request.accountChange?.field !== "businessEmail" && request.status === "In Progress"));
       })
       .catch(() => undefined);
     return () => {

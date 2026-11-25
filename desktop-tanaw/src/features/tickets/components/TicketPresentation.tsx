@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "../../../ui-kit";
 import type { SupportTicket } from "../services/tickets";
 
-const statusTones: Record<SupportTicket["status"], BadgeTone> = { Sent: "info", "In Progress": "warning", Resolved: "success", Approved: "success", Declined: "danger" };
-const statusLabels: Record<SupportTicket["status"], string> = { Sent: "Sent", "In Progress": "In progress", Resolved: "Resolved", Approved: "Approved", Declined: "Declined" };
+const statusTones: Record<SupportTicket["status"], BadgeTone> = { "In Progress": "warning", Resolved: "success", Approved: "success" };
+const statusLabels: Record<SupportTicket["status"], string> = { "In Progress": "In progress", Resolved: "Resolved", Approved: "Approved" };
 
 export function TicketStatusBadge({ status }: { status: SupportTicket["status"] }) {
   return <Badge tone={statusTones[status] ?? "info"}>{statusLabels[status] ?? status}</Badge>;

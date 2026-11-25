@@ -44,8 +44,8 @@ from app.features.requests.schemas import (
     SignInHelpCreate,
 )
 
-OPEN_STATUSES = frozenset({"Sent", "In Progress"})
-CLOSED_STATUSES = frozenset({"Resolved", "Approved", "Declined"})
+OPEN_STATUSES = frozenset({"In Progress"})
+CLOSED_STATUSES = frozenset({"Resolved", "Approved"})
 ACCOUNT_CHANGE_LABELS: dict[str, str] = {
     "businessEmail": "Business email",
     "contactNumber": "Contact number",
@@ -167,7 +167,6 @@ def to_request_summary(
         title=request.title,
         description=request.description,
         status=cast(RequestStatus, request.status),
-        urgent=request.urgent,
         enterpriseId=profile.enterprise_id if profile is not None else None,
         enterpriseName=request.enterprise_name,
         requesterName=request.requester_name,
@@ -357,7 +356,7 @@ async def create_request(db: AsyncSession, account: Account, payload: RequestCre
         request_group=payload.group,
         title=payload.title,
         description=payload.description,
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=account.id,
         enterprise_name=enterprise_name(account),
         requester_name=(profile.manager_name if profile is not None else None)
@@ -387,7 +386,7 @@ async def create_sign_in_help_request(
         request_group="Sign-in help",
         title="Sign-in help",
         description=" ".join(payload.message.split()),
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=profile.account_id if profile is not None else None,
         enterprise_name=profile.enterprise_name if profile is not None else None,
         requester_name=" ".join(payload.name.split()),
@@ -420,8 +419,6 @@ async def add_request_message(
         message=message,
     )
     db.add(record)
-    if kind == "message" and author.role == AccountRole.IT and request.status == "Sent":
-        request.status = "In Progress"
     request.updated_at = _now()
     await db.flush()
     await db.refresh(record)
@@ -430,9 +427,10 @@ async def add_request_message(
 
 
 def allowed_statuses(request: Request) -> frozenset[str]:
+    """IT approves an account change, or resolves it without approving."""
     if request.change_field is not None:
-        return frozenset({"In Progress", "Approved", "Declined"})
-    return frozenset({"Sent", "In Progress", "Resolved"})
+        return frozenset({"In Progress", "Approved", "Resolved"})
+    return frozenset({"In Progress", "Resolved"})
 
 
 async def set_request_status(
@@ -444,7 +442,7 @@ async def set_request_status(
         return previous
     if status not in allowed_statuses(request):
         raise RequestConflictError(f"A {request.request_group.lower()} request can't be {status}.")
-    if previous in {"Approved", "Declined"}:
+    if request.change_field is not None and previous in CLOSED_STATUSES:
         raise RequestConflictError("This account change is already decided.")
     request.status = status
     request.closed_at = _now() if status in CLOSED_STATUSES else None
@@ -468,7 +466,7 @@ async def set_request_status(
 async def reopen_request(db: AsyncSession, request: Request, actor: Account) -> str:
     if request.status != "Resolved":
         raise RequestConflictError("Only a resolved request can be reopened.")
-    return await set_request_status(db, request, actor, "Sent")
+    return await set_request_status(db, request, actor, "In Progress")
 
 
 async def update_request_fields(
@@ -477,14 +475,11 @@ async def update_request_fields(
     actor: Account,
     *,
     group: RequestGroup | None = None,
-    urgent: bool | None = None,
 ) -> None:
     if group is not None:
         if (group == "Account change") != (request.change_field is not None):
             raise RequestConflictError("Only account changes belong in the Account change group.")
         request.request_group = group
-    if urgent is not None:
-        request.urgent = urgent
     request.updated_at = _now()
     await db.flush()
     await mark_requests_read(db, actor, [request.id])
@@ -525,7 +520,7 @@ async def open_account_change_request(
         existing.change_value = value
         existing.description = description
         existing.email_change_request_id = email_change_request_id
-        existing.status = "Sent"
+        existing.status = "In Progress"
         existing.updated_at = _now()
         await db.flush()
         await mark_requests_read(db, account, [existing.id])
@@ -536,7 +531,7 @@ async def open_account_change_request(
         request_group="Account change",
         title=f"Change of {label.lower()}",
         description=description,
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=account.id,
         enterprise_name=name,
         requester_name=(profile.manager_name if profile is not None else None)
@@ -576,7 +571,7 @@ async def close_account_change_request(
     request = await get_open_account_change_request(db, enterprise_account_id, field)
     if request is None:
         return
-    await set_request_status(db, request, actor, "Approved" if approved else "Declined")
+    await set_request_status(db, request, actor, "Approved" if approved else "Resolved")
 
 
 async def touch_account_change_request(

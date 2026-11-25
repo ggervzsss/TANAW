@@ -92,14 +92,16 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(generate).toHaveAttribute("aria-describedby", "staff-reports-status");
   await expect(status).toHaveText("0 of 1 received report consolidated. Generate once it is.");
   await page.getByRole("combobox", { name: "Submission" }).click();
-  await expect(page.getByRole("option", { name: /^Missing\s*1$/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Missing", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 
   const museumRow = page.getByRole("row", { name: /Riverside Museum/ });
   await expect(museumRow.getByText("Missing", { exact: true })).toBeVisible();
   await expect(museumRow.getByText("14 days overdue")).toBeVisible();
-  await museumRow.getByRole("button", { name: "Send a reminder to Riverside Museum" }).click();
-  await expect(museumRow.getByRole("button", { name: "Reminder sent to Riverside Museum" })).toBeDisabled();
+  await museumRow.getByRole("button", { name: "Remind Riverside Museum", exact: true }).click();
+  await expect(museumRow.getByRole("button", { name: "Reminded Riverside Museum", exact: true })).toBeDisabled();
+  await expect(museumRow.getByRole("button", { name: "Reminded Riverside Museum", exact: true })).toHaveText("Reminded");
+  await expect(page.getByText("Reminder sent to Riverside Museum for October 2026.", { exact: true })).toBeVisible();
   expect(reminders).toEqual([expect.objectContaining({ enterpriseId: "museum-fixture", message: "Please send your October 2026 monthly report. It was due Nov 10." })]);
 
   await page.screenshot({ path: testInfo.outputPath("staff-reports-light.png"), animations: "disabled" });

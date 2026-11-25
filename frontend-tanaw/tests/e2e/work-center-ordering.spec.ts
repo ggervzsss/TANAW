@@ -1,4 +1,4 @@
-// IT Work Center: open requests first with urgent ones on top, approving an account change, and live alerts.
+// IT Work Center: open requests first and newest first, deciding an account change, and live alerts.
 import { expect, test, type Page } from "@playwright/test";
 
 const itUser = {
@@ -26,8 +26,7 @@ const request = (id: string, overrides: Record<string, unknown>) => ({
   group: "Desktop app or camera problem",
   title: `${id} title`,
   description: `${id} description`,
-  status: "Sent",
-  urgent: false,
+  status: "In Progress",
   enterpriseId: "ENT-1",
   enterpriseName: "Ordering Test Enterprise",
   requesterName: "Front desk",
@@ -47,12 +46,18 @@ async function mockWorkCenter(page: Page) {
   let requests = [
     request("REQ-RESOLVED", { status: "Resolved", createdAt: "2026-07-29T14:00:00Z" }),
     request("REQ-NORMAL-NEW", { createdAt: "2026-07-29T13:00:00Z" }),
-    request("REQ-URGENT-OLD", { urgent: true, createdAt: "2026-07-29T09:00:00Z" }),
+    request("REQ-OPEN-OLD", { createdAt: "2026-07-29T09:00:00Z" }),
     request("REQ-CHANGE", {
       group: "Account change",
       title: "Change of contact number",
       createdAt: "2026-07-29T12:00:00Z",
       accountChange: { field: "contactNumber", label: "Contact number", currentValue: "09170000000", requestedValue: "09171234567", verification: null, canApprove: true },
+    }),
+    request("REQ-NAME", {
+      group: "Account change",
+      title: "Change of enterprise name",
+      createdAt: "2026-07-29T08:00:00Z",
+      accountChange: { field: "enterpriseName", label: "Enterprise name", currentValue: "Ordering Test Enterprise", requestedValue: "Ordering Test Place", verification: null, canApprove: true },
     }),
   ];
   const decisions: unknown[] = [];
@@ -96,13 +101,15 @@ async function mockWorkCenter(page: Page) {
   return decisions;
 }
 
-test("lists open requests first with urgent ones on top, and approves an account change", async ({ page }) => {
+test("lists open requests first, newest first, and approves an account change", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const decisions = await mockWorkCenter(page);
   await page.goto("/it/work-center");
 
   const codes = page.locator("tbody tr td:first-child");
-  await expect(codes).toHaveText(["REQ-URGENT-OLD", "REQ-NORMAL-NEW", "REQ-CHANGE", "REQ-RESOLVED"]);
+  await expect(codes).toHaveText(["REQ-NORMAL-NEW", "REQ-CHANGE", "REQ-OPEN-OLD", "REQ-NAME", "REQ-RESOLVED"]);
+  await expect(page.locator("tbody")).not.toContainText("Urgent");
+  await expect(page.getByRole("columnheader", { name: "Urgent" })).toHaveCount(0);
 
   await page.getByPlaceholder("Search reference, place, person, request or group").fill("contact number");
   await expect(codes).toHaveText(["REQ-CHANGE"]);
@@ -112,6 +119,21 @@ test("lists open requests first with urgent ones on top, and approves an account
   await dialog.getByRole("button", { name: "Approve" }).click();
   await expect.poll(() => decisions).toEqual([{ id: "REQ-CHANGE", status: "Approved" }]);
   await expect(dialog.getByText("Approved").first()).toBeVisible();
+});
+
+test("resolves an account change without approving it, with no Decline action", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const decisions = await mockWorkCenter(page);
+  await page.goto("/it/work-center");
+
+  await page.getByPlaceholder("Search reference, place, person, request or group").fill("enterprise name");
+  await page.locator("tbody tr").first().click();
+  const dialog = page.getByRole("dialog", { name: "Change of enterprise name" });
+  await expect(dialog.getByRole("button", { name: "Decline" })).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox", { name: "Urgent" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Resolve without approving" }).click();
+  await expect.poll(() => decisions).toEqual([{ id: "REQ-NAME", status: "Resolved" }]);
+  await expect(dialog.getByText("Resolved").first()).toBeVisible();
 });
 
 test("shows live alerts with IT details and no status buttons", async ({ page }) => {

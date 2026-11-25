@@ -8,7 +8,11 @@ RANGE="${TANAW_MOCK_RANGE:-18m}"
 SCENARIO="${TANAW_MOCK_SCENARIO:-full-workflow}"
 
 cd "$REPO_ROOT"
-docker compose exec --env "TANAW_MOCK_TARGET_ENTERPRISE=${TANAW_MOCK_TARGET_ENTERPRISE:-}" backend \
+docker compose exec \
+  --env "TANAW_MOCK_TARGET_ENTERPRISE=${TANAW_MOCK_TARGET_ENTERPRISE:-}" \
+  --env "TANAW_MOCK_TARGET_NAME=${TANAW_MOCK_TARGET_NAME:-}" \
+  --env "TANAW_MOCK_TARGET_PASSWORD=${TANAW_MOCK_TARGET_PASSWORD:-}" \
+  backend \
   uv run sample-data on \
   --range "$RANGE" \
   --scenario "$SCENARIO" \

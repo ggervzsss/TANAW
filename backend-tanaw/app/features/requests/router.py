@@ -30,7 +30,6 @@ from app.features.requests.schemas import (
     RequestReadUpdate,
     RequestStatusUpdate,
     RequestSummary,
-    RequestUrgentUpdate,
 )
 from app.features.requests.service import (
     RequestConflictError,
@@ -140,7 +139,7 @@ async def _notify_it(
         title=title,
         message=message,
         notification_type="Request",
-        severity="Warning" if request.urgent else "Info",
+        severity="Info",
         actor=actor,
         source_type=REQUEST_SOURCE_TYPE,
         source_id=request.id,
@@ -297,9 +296,16 @@ async def change_request_status(
     request_id: str, payload: RequestStatusUpdate, account: ITAccount, db: Db
 ) -> RequestDetail:
     request = await _load(db, account, request_id)
-    if payload.status in {"Approved", "Declined"}:
-        if request.change_field is None or request.enterprise_profile_id is None:
-            raise _conflict(RequestConflictError("Only account changes can be approved."))
+    if payload.status == "Approved" and request.change_field is None:
+        raise _conflict(RequestConflictError("Only account changes can be approved."))
+    if (
+        payload.status in {"Approved", "Resolved"}
+        and request.change_field is not None
+        and request.status == "In Progress"
+    ):
+        # Approving applies the change; resolving without approving leaves the account as is.
+        if request.enterprise_profile_id is None:
+            raise _conflict(RequestConflictError("This account change has no enterprise."))
         enterprise = await get_account_by_id(db, request.enterprise_profile_id)
         if enterprise is None:
             raise _not_found()
@@ -394,28 +400,6 @@ async def move_request(
             action="Move Request",
             summary=f"{account.display_name} moved {_place(request)}'s request to {payload.group}.",
             it_detail=f"{request.request_code}: {previous} → {payload.group}.",
-        )
-    return await require_request_detail(db, account, request.id)
-
-
-@router.patch("/requests/{request_id}/urgent", response_model=RequestDetail)
-async def flag_request(
-    request_id: str, payload: RequestUrgentUpdate, account: ITAccount, db: Db
-) -> RequestDetail:
-    request = await _load(db, account, request_id)
-    changed = request.urgent != payload.urgent
-    await update_request_fields(db, request, account, urgent=payload.urgent)
-    if changed:
-        await _log(
-            db,
-            request,
-            account,
-            action="Mark Request Urgent" if payload.urgent else "Clear Request Urgency",
-            summary=(
-                f"{account.display_name} marked {_place(request)}'s request urgent."
-                if payload.urgent
-                else f"{account.display_name} marked {_place(request)}'s request not urgent."
-            ),
         )
     return await require_request_detail(db, account, request.id)
 

@@ -8,7 +8,7 @@ import { formatReportingMonth, intakeReportMonth, sameMonth, type ReportingMonth
  *
  *   Review         the report is waiting for a staff decision (stored "Pending Review").
  *   View           returned for correction, accepted, or already in a monthly report (read only).
- *   Send reminder  no report yet (Pending before the due date, Missing after it).
+ *   Remind         no report yet (Pending before the due date, Missing after it).
  */
 
 export type StaffReportAction = "review" | "view" | "remind";
@@ -23,7 +23,7 @@ export type StaffReportRow = {
   review: ReviewStatus;
   /** "Nov 9", or null when nothing was sent. */
   sent: string | null;
-  /** "3 days after due", "Returned for correction", "Due Nov 10" or "12 days overdue". */
+  /** "Returned for correction", "Due Nov 10" or "12 days overdue"; null for a report sent on its own. */
   note: string | null;
   action: StaffReportAction;
 };
@@ -132,16 +132,32 @@ export function filterStaffReportRows(rows: readonly StaffReportRow[], filters: 
   return rows.filter((row) => rowMatchesFilters(row, filters));
 }
 
-/** Dropdown options with how many enterprises each would show, given the other filters. */
-export function staffReportFilterOptions(rows: readonly StaffReportRow[], filters: StaffReportFilters) {
-  const countWith = (patch: Partial<StaffReportFilters>) => filterStaffReportRows(rows, { ...filters, ...patch }).length;
-  const option = (value: string, label: string, patch: Partial<StaffReportFilters>) => ({ value, label, meta: String(countWith(patch)) });
+/** Dropdown options for the submission, review and barangay filters, as plain labels without counts. */
+export function staffReportFilterOptions(rows: readonly StaffReportRow[]) {
+  const option = (value: string, label = value) => ({ value, label });
   const barangays = [...new Set(rows.map((row) => row.barangay).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   return {
-    submission: [option("all", "All submissions", { submission: "all" }), ...SUBMISSION_STATUSES.map((status) => option(status, status, { submission: status }))],
-    review: [option("all", "All reviews", { review: "all" }), ...REVIEW_STATUSES.map((status) => option(status, status, { review: status }))],
-    barangay: [option("all", "All barangays", { barangay: "all" }), ...barangays.map((name) => option(name, name, { barangay: name }))],
+    submission: [option("all", "All submissions"), ...SUBMISSION_STATUSES.map((status) => option(status))],
+    review: [option("all", "All reviews"), ...REVIEW_STATUSES.map((status) => option(status))],
+    barangay: [option("all", "All barangays"), ...barangays.map((name) => option(name))],
   };
+}
+
+// Reminders -------------------------------------------------------------------------------------
+
+/** The Remind button: its text and accessible name, before and after the reminder goes out. */
+export function reminderButton(name: string, reminded: boolean) {
+  return reminded ? { label: "Reminded", ariaLabel: `Reminded ${name}` } : { label: "Remind", ariaLabel: `Remind ${name}` };
+}
+
+/** "Reminder sent to Daisy Resort for October 2026." */
+export function reminderSentMessage(name: string, monthLabel: string) {
+  return `Reminder sent to ${name} for ${monthLabel}.`;
+}
+
+/** "The reminder to Daisy Resort for October 2026 could not be sent. Try again." */
+export function reminderFailedMessage(name: string, monthLabel: string) {
+  return `The reminder to ${name} for ${monthLabel} could not be sent. Try again.`;
 }
 
 // Progress and generation -------------------------------------------------------------------------

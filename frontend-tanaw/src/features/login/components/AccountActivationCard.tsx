@@ -3,10 +3,10 @@ import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, LoaderCir
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
+import { TANAW_LOGO } from "@/shared/constants/branding";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "@/shared/utils/passwordPolicy";
 import { formatActivationExpiration, formatActivationRole, type ActivationPasswordErrors, type ActivationPasswordValues, type ActivationView } from "../model";
 import type { AccountActivationDetails } from "../services";
-import { SAN_PEDRO_SEAL } from "../utils";
 
 type AccountActivationCardProps = {
   details: AccountActivationDetails | null;
@@ -35,7 +35,7 @@ function ActivationHeader() {
   return (
     <header className="mb-7">
       <div className="flex items-center gap-5 sm:gap-7">
-        <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5" />
+        <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
         <div className="min-w-0">
           <h1 className="tanaw-auth-brand-title font-display text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
           <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">Account Activation</p>

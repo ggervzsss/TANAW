@@ -1,4 +1,5 @@
 import random
+from datetime import datetime
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,12 @@ from app.features.reporting.models import (
     FinalReportSource,
 )
 from app.features.requests.models import Request
-from app.features.sample_data.accounts import create_accounts, resolve_target_enterprise
+from app.features.sample_data.accounts import (
+    creatable_target_seed,
+    create_accounts,
+    create_target_enterprise,
+    find_target_enterprise,
+)
 from app.features.sample_data.activity import create_request_and_user_activity
 from app.features.sample_data.dataset import (
     SAMPLE_ACCOUNT_EMAILS,
@@ -65,10 +71,20 @@ async def generate_sample_data(
     target_identifier: str | None,
     *,
     account_password: str = TEST_ACCOUNT_PASSWORD,
+    create_missing_target: bool = False,
+    target_password: str | None = None,
+    target_name: str | None = None,
 ) -> dict:
     rng = random.Random(seed)
     range_start, range_end = reporting_range(range_value)
-    target = await resolve_target_enterprise(db, target_identifier)
+    target, target_created = await prepare_target_enterprise(
+        db,
+        target_identifier,
+        create_missing=create_missing_target,
+        password=target_password or account_password,
+        name=target_name,
+        registered_before=range_start,
+    )
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
@@ -123,9 +139,48 @@ async def generate_sample_data(
             "accountId": target.id,
             "enterpriseId": target_profile.enterprise_id,
             "enterpriseName": target_profile.enterprise_name,
+            "created": target_created,
+            **(
+                {
+                    "signIn": {
+                        "username": target.email,
+                        "enterpriseId": target_profile.enterprise_id,
+                        "password": target_password or account_password,
+                    }
+                }
+                if target_created
+                else {}
+            ),
         },
         "counts": counts,
     }
+
+
+async def prepare_target_enterprise(
+    db: AsyncSession,
+    identifier: str | None,
+    *,
+    create_missing: bool,
+    password: str,
+    name: str | None = None,
+    registered_before: datetime | None = None,
+) -> tuple[Account, bool]:
+    """The existing target enterprise, or a new one made from a plain name such as "lolouweng"
+    when create_missing is on, and whether it was created. Enterprise IDs, emails and account
+    IDs must already exist."""
+    target = await find_target_enterprise(db, identifier)
+    if target is not None:
+        return target, False
+    seed = creatable_target_seed(identifier or "") if create_missing else None
+    if seed is None:
+        raise SystemExit(
+            f"Target enterprise '{identifier}' was not found. "
+            "Choose an existing active, activated enterprise account."
+        )
+    target = await create_target_enterprise(
+        db, seed, password, name=name, registered_before=registered_before
+    )
+    return target, True
 
 
 async def remove_sample_data(db: AsyncSession) -> dict:

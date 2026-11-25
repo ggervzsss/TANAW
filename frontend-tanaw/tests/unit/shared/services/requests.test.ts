@@ -30,15 +30,15 @@ describe("requests service", () => {
     expect(apiClient.post).toHaveBeenCalledWith("/operational/requests/read", { all: true, requestIds: [] });
   });
 
-  it("lists open requests first, urgent ones on top, then newest first", () => {
+  it("lists open requests first, then newest first", () => {
     const sorted = sortRequests([
       request({ id: "resolved", status: "Resolved", createdAt: "2026-11-23T09:00:00Z" }),
       request({ id: "old", createdAt: "2026-11-21T06:00:00Z" }),
-      request({ id: "urgent", urgent: true, createdAt: "2026-11-20T06:00:00Z" }),
+      request({ id: "approved", status: "Approved", createdAt: "2026-11-20T06:00:00Z" }),
       request({ id: "new", createdAt: "2026-11-23T08:00:00Z" }),
     ]);
 
-    expect(sorted.map((item) => item.id)).toEqual(["urgent", "new", "old", "resolved"]);
+    expect(sorted.map((item) => item.id)).toEqual(["new", "old", "resolved", "approved"]);
   });
 
   it("closes the conversation once a request is resolved or decided", () => {

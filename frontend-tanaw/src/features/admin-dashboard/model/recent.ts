@@ -20,14 +20,12 @@ export function activityTag(log: Pick<SystemLog, "group">) {
   return activityKindChipLabels[activityKind(log as SystemLog)];
 }
 
-export type RequestProgress = "Sent" | "In progress" | "Resolved" | "Approved" | "Declined";
+export type RequestProgress = "In progress" | "Resolved" | "Approved";
 
 export const requestProgressTone: Record<RequestProgress, RecordStatusTone> = {
-  Sent: "pending",
   "In progress": "reviewing",
   Resolved: "consolidated",
   Approved: "consolidated",
-  Declined: "missing",
 };
 
 export function requestProgress(status: Request["status"]): RequestProgress {

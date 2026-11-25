@@ -163,7 +163,6 @@ async def create_portal_workflow_data(
             "our cameras is not counting."
         ),
         status="In Progress",
-        urgent=True,
         enterprise_profile_id=camera_enterprise.id,
         enterprise_name=_name(camera_enterprise),
         requester_name=_manager(camera_enterprise),
@@ -172,7 +171,7 @@ async def create_portal_workflow_data(
         created_at=camera_sent,
         updated_at=range_end - timedelta(minutes=40),
     )
-    # A report problem nobody has picked up yet.
+    # A report problem IT has not replied to yet.
     report_sent = range_end - timedelta(hours=5)
     report_request = Request(
         id=sample_uuid("operations-request", report_enterprise.id, "report"),
@@ -180,7 +179,7 @@ async def create_portal_workflow_data(
         request_group="Report problem",
         title="October report upload failed",
         description='The October report will not upload. The app says "Sign in again to send this report".',
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=report_enterprise.id,
         enterprise_name=_name(report_enterprise),
         requester_name=_manager(report_enterprise),
@@ -201,7 +200,7 @@ async def create_portal_workflow_data(
         request_group="Account change",
         title="Change of contact number",
         description=f"{_name(change_enterprise)} asked to change its contact number to {new_number}.",
-        status="Sent",
+        status="In Progress",
         enterprise_profile_id=change_enterprise.id,
         enterprise_name=_name(change_enterprise),
         requester_name=_manager(change_enterprise),
@@ -218,7 +217,7 @@ async def create_portal_workflow_data(
         request_group="Sign-in help",
         title="Sign-in help",
         description="I forgot the password of our desktop app and the reset email does not arrive.",
-        status="Sent",
+        status="In Progress",
         requester_name="Joy Villanueva",
         requester_email="joy.villanueva@sample.tanaw.local",
         created_at=help_sent,
@@ -229,16 +228,6 @@ async def create_portal_workflow_data(
     await db.flush()
     db.add_all(
         [
-            RequestMessage(
-                id=sample_uuid("operations-request-message", camera_request.id, "status"),
-                request_id=camera_request.id,
-                author_account_id=it_account.id,
-                author_name=it_account.display_name,
-                author_role=it_account.role.value,
-                kind="status",
-                message="In Progress",
-                created_at=camera_sent + timedelta(minutes=25),
-            ),
             RequestMessage(
                 id=sample_uuid("operations-request-message", camera_request.id, "reply"),
                 request_id=camera_request.id,
@@ -287,21 +276,6 @@ async def create_portal_workflow_data(
         )
     logs.append(
         sample_log(
-            ("activity-request-progress", camera_request.id),
-            camera_sent + timedelta(minutes=25),
-            group="Requests",
-            severity="Info",
-            actor=it_account.display_name,
-            actor_role="IT Personnel",
-            action="Request In Progress",
-            target=camera_request.request_code,
-            summary=f"{it_account.display_name} marked {_name(camera_enterprise)}'s request in progress.",
-            source_id=camera_request.id,
-            it_detail=f"{camera_request.request_code}: Sent → In Progress.",
-        )
-    )
-    logs.append(
-        sample_log(
             ("activity-request-note", camera_request.id),
             range_end - timedelta(minutes=40),
             group="Requests",
@@ -324,7 +298,7 @@ async def create_portal_workflow_data(
             title=f"{request.enterprise_name or request.requester_name} sent request {request.request_code}.",
             message=f"{request.request_group}: {request.title}.",
             notification_type="Request",
-            severity="Warning" if request.urgent else "Info",
+            severity="Info",
             source_type="request",
             source_id=request.id,
             created_by_account_id=request.enterprise_profile_id,

@@ -4,7 +4,7 @@ import { REQUEST_GROUPS, type RequestDetail, type RequestGroup, type RequestStat
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { useTicketDetails } from "../hooks";
 import { formatTicketTime, ticketStatusLabel } from "../model";
-import { GroupBadge, TicketStatusBadge, UrgentBadge } from "./TicketBadges";
+import { GroupBadge, TicketStatusBadge } from "./TicketBadges";
 import { TicketAttachments } from "./TicketAttachments";
 import { TicketConversation } from "./TicketConversation";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
@@ -18,7 +18,7 @@ type TicketDetailsModalProps = {
 };
 
 export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: TicketDetailsModalProps) {
-  const { detailQuery, isReplyPending, isStatusPending, reply, replyError, actionError, setReply, submitReply, updateStatus, reopen, moveToGroup, setUrgent } = useTicketDetails(ticketId);
+  const { detailQuery, isReplyPending, isStatusPending, reply, replyError, actionError, setReply, submitReply, updateStatus, reopen, moveToGroup } = useTicketDetails(ticketId);
   const ticket = detailQuery.data;
   const isItResponder = mode === "it";
 
@@ -42,7 +42,6 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: Tick
           onStatusChange={updateStatus}
           onReopen={reopen}
           onGroupChange={moveToGroup}
-          onUrgentChange={setUrgent}
           actionError={actionError}
           reply={reply}
           replyError={replyError}
@@ -63,7 +62,6 @@ type TicketDetailContentProps = {
   onStatusChange: (status: RequestStatus) => void;
   onReopen: () => void;
   onGroupChange: (group: RequestGroup) => void;
-  onUrgentChange: (urgent: boolean) => void;
   actionError: string;
   reply: string;
   replyError: string;
@@ -117,10 +115,7 @@ function TicketSummary({ ticket }: { ticket: RequestDetail }) {
           <h3 className="mt-1 text-xl font-black text-slate-950">{ticket.title}</h3>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">{ticket.description}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <TicketStatusBadge status={ticket.status} />
-          {ticket.urgent && <UrgentBadge />}
-        </div>
+        <TicketStatusBadge status={ticket.status} />
       </div>
     </div>
   );
@@ -132,7 +127,7 @@ const controlButton =
 function AccountChangePanel({ ticket, isItResponder, isPending, onDecide }: { ticket: RequestDetail; isItResponder: boolean; isPending: boolean; onDecide: (status: RequestStatus) => void }) {
   const change = ticket.accountChange;
   if (!change) return null;
-  const open = ticket.status === "Sent" || ticket.status === "In Progress";
+  const open = ticket.status === "In Progress";
   const waiting = change.verification === "pending_verification" ? "The new address must be verified before you can approve it." : change.verification === "expired" ? "The verification link expired. The enterprise has to ask again." : null;
   return (
     <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
@@ -151,8 +146,8 @@ function AccountChangePanel({ ticket, isItResponder, isPending, onDecide }: { ti
           <button type="button" className={controlButton} disabled={!change.canApprove || isPending} onClick={() => onDecide("Approved")}>
             Approve
           </button>
-          <button type="button" className={controlButton} disabled={isPending} onClick={() => onDecide("Declined")}>
-            Decline
+          <button type="button" className={controlButton} disabled={isPending} onClick={() => onDecide("Resolved")}>
+            Resolve without approving
           </button>
         </div>
       )}
@@ -160,10 +155,10 @@ function AccountChangePanel({ ticket, isItResponder, isPending, onDecide }: { ti
   );
 }
 
-function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStatusChange, onReopen, onGroupChange, onUrgentChange, actionError, ticket }: TicketDetailContentProps) {
+function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStatusChange, onReopen, onGroupChange, actionError, ticket }: TicketDetailContentProps) {
+  // An account change is approved or resolved from its own panel, and stays closed once decided.
   const isAccountChange = Boolean(ticket.accountChange);
-  const options: RequestStatus[] = isAccountChange ? ["In Progress"] : ["Sent", "In Progress", "Resolved"];
-  const decided = ticket.status === "Approved" || ticket.status === "Declined";
+  const options: RequestStatus[] = ["In Progress", "Resolved"];
   return (
     <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
       <div className="flex items-center justify-between gap-3">
@@ -175,8 +170,13 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
       </div>
       {isItResponder ? (
         <>
-          {!decided && ticket.status !== "Resolved" && (
-            <div className={`mt-4 grid gap-2 ${options.length === 3 ? "sm:grid-cols-3" : ""}`}>
+          {isAccountChange && (
+            <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              {ticket.status === "In Progress" ? "Approve this change, or resolve it without approving, under Account change." : "This account change is decided."}
+            </p>
+          )}
+          {!isAccountChange && ticket.status === "In Progress" && (
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {options.map((statusOption) => (
                 <button key={statusOption} type="button" disabled={ticket.status === statusOption || isPending} onClick={() => onStatusChange(statusOption)} className={controlButton}>
                   {toSentenceCase(ticketStatusLabel(statusOption))}
@@ -184,7 +184,7 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
               ))}
             </div>
           )}
-          {ticket.status === "Resolved" && (
+          {!isAccountChange && ticket.status === "Resolved" && (
             <button type="button" disabled={isPending} onClick={onReopen} className={`mt-4 w-full ${controlButton}`}>
               Reopen request
             </button>
@@ -206,10 +206,6 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
               </select>
             </label>
           )}
-          <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <input type="checkbox" checked={ticket.urgent} disabled={isPending} onChange={(event) => onUrgentChange(event.target.checked)} />
-            Urgent
-          </label>
           {actionError && <p className="mt-2 text-xs font-bold text-red-700">{actionError}</p>}
         </>
       ) : (

@@ -7,7 +7,6 @@ from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
-from app.features.sample_data.accounts import resolve_target_enterprise
 from app.features.sample_data.definitions import (
     DEFAULT_SCENARIO,
     DEFAULT_SEED,
@@ -15,6 +14,7 @@ from app.features.sample_data.definitions import (
 )
 from app.features.sample_data.lifecycle import (
     generate_sample_data,
+    prepare_target_enterprise,
     remove_sample_data,
     sample_dataset_present,
     sample_dataset_status,
@@ -76,6 +76,17 @@ def add_target_arguments(parser: argparse.ArgumentParser) -> None:
     )
     targets.add_argument("target", nargs="?", help=target_help)
     targets.add_argument("--target-enterprise", default=default_target, help=target_help)
+    parser.add_argument(
+        "--no-create-target",
+        dest="create_target",
+        action="store_false",
+        help="Fail instead of creating the target when a plain name such as lolouweng has no account.",
+    )
+    parser.add_argument(
+        "--target-name",
+        default=os.environ.get("TANAW_MOCK_TARGET_NAME", "").strip() or None,
+        help="Enterprise name for a newly created target (default: from the target name).",
+    )
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -96,10 +107,24 @@ async def run(args: argparse.Namespace) -> None:
         return
 
     account_password = sample_account_password()
+    target_password = target_account_password()
+    target_options = {
+        "account_password": account_password,
+        "create_missing_target": args.create_target,
+        "target_password": target_password,
+        "target_name": args.target_name,
+    }
     if args.command == "reset":
         async with AsyncSessionLocal() as db:
             # Cleanup commits independently, so reject invalid targets before deleting anything.
-            await resolve_target_enterprise(db, args.target_enterprise)
+            await prepare_target_enterprise(
+                db,
+                args.target_enterprise,
+                create_missing=args.create_target,
+                password=target_password or account_password,
+                name=args.target_name,
+            )
+            await db.rollback()
             removed = await remove_sample_data(db)
             created = await generate_sample_data(
                 db,
@@ -107,7 +132,7 @@ async def run(args: argparse.Namespace) -> None:
                 args.scenario,
                 args.seed,
                 args.target_enterprise,
-                account_password=account_password,
+                **target_options,
             )
         print(json.dumps({"removed": removed, "created": created}, indent=2, sort_keys=True))
         return
@@ -123,7 +148,7 @@ async def run(args: argparse.Namespace) -> None:
             args.scenario,
             args.seed,
             args.target_enterprise,
-            account_password=account_password,
+            **target_options,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
 
@@ -139,6 +164,17 @@ def sample_account_password() -> str:
     if password == TEST_ACCOUNT_PASSWORD:
         raise SystemExit("Set TANAW_MOCK_ACCOUNT_PASSWORD to a password unique to this demo.")
     return password
+
+
+def target_account_password() -> str | None:
+    """The password for a newly created target, or None to use the sample account password."""
+    value = os.environ.get("TANAW_MOCK_TARGET_PASSWORD", "")
+    if not value:
+        return None
+    try:
+        return validate_password_policy(value)
+    except ValueError as error:
+        raise SystemExit(f"Invalid TANAW_MOCK_TARGET_PASSWORD. {error}") from None
 
 
 async def validate_schema() -> None:

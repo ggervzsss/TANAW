@@ -5,7 +5,7 @@ import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { Request } from "@/shared/services/requests";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatTicketTime } from "../model";
-import { GroupBadge, TicketStatusBadge, UrgentBadge } from "./TicketBadges";
+import { GroupBadge, TicketStatusBadge } from "./TicketBadges";
 
 type SupportTicketsTableProps = {
   isItResponder: boolean;
@@ -24,16 +24,15 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
         <table className="w-full min-w-260 table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[12%]" />
-            <col className="w-[18%]" />
-            <col className="w-[24%]" />
+            <col className="w-[20%]" />
+            <col className="w-[28%]" />
+            <col className="w-[14%]" />
             <col className="w-[12%]" />
-            <col className="w-[12%]" />
-            <col className="w-[10%]" />
-            <col className="w-[12%]" />
+            <col className="w-[14%]" />
           </colgroup>
           <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
-              {["Reference", "From", "Request", "Group", "Urgent", "Status", "Sent"].map((heading) => (
+              {["Reference", "From", "Request", "Group", "Status", "Sent"].map((heading) => (
                 <th key={heading} className="px-4 py-4 whitespace-nowrap">
                   {heading}
                 </th>
@@ -46,7 +45,7 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
             ))}
             {tickets.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={6}>
                   <EmptyState
                     icon={TicketCheck}
                     title={isLoading ? "Loading requests" : "No requests"}
@@ -99,9 +98,6 @@ function TicketRow({ ticket, onOpen, timeFormat }: { ticket: Request; onOpen: ()
       </td>
       <td className="px-4 py-4 align-top">
         <GroupBadge group={ticket.group} />
-      </td>
-      <td className="px-4 py-4 align-top">
-        {ticket.urgent ? <UrgentBadge /> : <span className="text-xs text-gray-400">No</span>}
       </td>
       <td className="px-4 py-4 align-top">
         <TicketStatusBadge status={ticket.status} />
