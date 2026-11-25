@@ -246,6 +246,7 @@ def test_a_business_email_change_can_be_approved_only_once_verified(
         viewer=account(AccountRole.IT),
         email_request=email_change(status, expires_in=expires_in),
         now=NOW,
+        contact=("enterprise@example.com", "+639170000000"),
     ).accountChange
 
     assert change is not None

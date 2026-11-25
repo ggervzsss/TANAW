@@ -24,6 +24,7 @@ from app.features.accounts.models import (
 from app.features.realtime.models import RealtimeOutbox
 from app.features.requests import router as support_router
 from app.features.requests.models import Request as SupportTicket
+from app.features.requests.service import list_requests
 from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
 TEST_EMAIL_PATTERN = "tanaw-support-attachment-pg-%@example.com"
@@ -217,3 +218,59 @@ async def test_ticket_responses_expose_metadata_and_attachment_endpoint_returns_
             headers=_authorization(owner),
         )
         assert missing_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_listing_account_changes_reads_the_current_value_without_lazy_loading(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    enterprise = await _create_enterprise(postgres_runtime, label="change")
+    viewer = Account(
+        id=str(uuid4()),
+        email=f"tanaw-support-attachment-pg-admin-{uuid4().hex[:12]}@example.com",
+        password_hash="unused-test-password-hash",
+        role=AccountRole.ADMIN,
+        display_name="Admin reader",
+        title="Administrator",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+    )
+    async with postgres_runtime.sessions() as db:
+        stored = await db.get(Account, enterprise.id)
+        assert stored is not None
+        stored.phone = "+639171234567"
+        db.add(viewer)
+        db.add(
+            SupportTicket(
+                request_code=f"REQ-T{uuid4().hex[:10]}",
+                request_group="Account change",
+                title="Change the contact number",
+                description="Please update our contact number.",
+                status="In Progress",
+                enterprise_profile_id=enterprise.id,
+                enterprise_name="Attachment Test change",
+                requester_name="Test Manager change",
+                change_field="contactNumber",
+                change_value="+639179999999",
+            )
+        )
+        await db.commit()
+
+    # A fresh session, as in a real request: the enterprise's account is not loaded yet.
+    async with postgres_runtime.sessions() as db:
+        reader = await db.get(Account, viewer.id)
+        assert reader is not None
+        summaries = await list_requests(db, reader)
+
+    change = next(
+        summary.accountChange
+        for summary in summaries
+        if summary.enterpriseId == enterprise.enterprise_profile.enterprise_id  # type: ignore[union-attr]
+    )
+    assert change is not None
+    assert change.currentValue == "+639171234567"
+    assert change.requestedValue == "+639179999999"
+
+    async with postgres_runtime.sessions() as db:
+        await db.execute(delete(Account).where(Account.id == viewer.id))
+        await db.commit()

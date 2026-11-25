@@ -115,18 +115,28 @@ def _email_verification(
     return "pending_verification"
 
 
-def _current_account_value(profile: EnterpriseProfile | None, field: str) -> str | None:
+# An enterprise account's email and phone, loaded up front: reading profile.account here would
+# lazy-load it outside the async session and fail.
+AccountContact = tuple[str, str | None]
+
+
+def _current_account_value(
+    profile: EnterpriseProfile | None, field: str, contact: AccountContact | None
+) -> str | None:
     if profile is None:
         return None
     if field == "businessEmail":
-        return profile.account.email
+        return contact[0] if contact else None
     if field == "contactNumber":
-        return profile.account.phone
+        return contact[1] if contact else None
     return profile.enterprise_name
 
 
 def _account_change_summary(
-    request: Request, email_request: AccountEmailChangeRequest | None, now: datetime
+    request: Request,
+    email_request: AccountEmailChangeRequest | None,
+    now: datetime,
+    contact: AccountContact | None = None,
 ) -> AccountChangeSummary | None:
     if request.change_field is None or request.change_value is None:
         return None
@@ -137,7 +147,9 @@ def _account_change_summary(
     return AccountChangeSummary(
         field=cast(AccountChangeField, request.change_field),
         label=account_change_label(request.change_field),
-        currentValue=_current_account_value(request.enterprise_profile, request.change_field),
+        currentValue=_current_account_value(
+            request.enterprise_profile, request.change_field, contact
+        ),
         requestedValue=request.change_value,
         verification=verification,
         canApprove=open_request
@@ -152,6 +164,7 @@ def to_request_summary(
     read_at: datetime | None = None,
     email_request: AccountEmailChangeRequest | None = None,
     now: datetime | None = None,
+    contact: AccountContact | None = None,
 ) -> RequestSummary:
     current = now or _now()
     profile = request.enterprise_profile
@@ -174,7 +187,7 @@ def to_request_summary(
         affectedArea=request.affected_area,
         camera=request.camera,
         attachments=request_attachment_summaries(request),
-        accountChange=_account_change_summary(request, email_request, current),
+        accountChange=_account_change_summary(request, email_request, current, contact),
         createdAt=request.created_at,
         updatedAt=request.updated_at,
         closedAt=request.closed_at,
@@ -208,6 +221,23 @@ async def _email_requests_by_id(
     return {row.id: row for row in rows}
 
 
+async def _account_contacts(
+    db: AsyncSession, requests: Iterable[Request]
+) -> dict[str, AccountContact]:
+    """Email and phone of the enterprises whose account changes are being summarized."""
+    ids = {
+        request.enterprise_profile_id
+        for request in requests
+        if request.change_field is not None and request.enterprise_profile_id is not None
+    }
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(Account.id, Account.email, Account.phone).where(Account.id.in_(ids))
+    )
+    return {account_id: (email, phone) for account_id, email, phone in rows}
+
+
 async def _read_times(
     db: AsyncSession, account: Account, request_ids: Sequence[str]
 ) -> dict[str, datetime]:
@@ -229,6 +259,7 @@ async def summarize_requests(
 ) -> list[RequestSummary]:
     reads = await _read_times(db, account, [request.id for request in requests])
     email_requests = await _email_requests_by_id(db, requests)
+    contacts = await _account_contacts(db, requests)
     now = _now()
     return [
         to_request_summary(
@@ -237,6 +268,7 @@ async def summarize_requests(
             read_at=reads.get(request.id),
             email_request=email_requests.get(request.email_change_request_id or ""),
             now=now,
+            contact=contacts.get(request.enterprise_profile_id or ""),
         )
         for request in requests
     ]
