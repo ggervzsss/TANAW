@@ -218,10 +218,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-(--tanaw-border-soft) pt-3">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <span className="size-3 rounded-[3px] border border-(--tanaw-action) bg-(--tanaw-range-band)" aria-hidden="true" />
-                Showing {formatRangeText(range)}
-              </p>
+              <p className="text-sm font-semibold">Showing {formatRangeText(range)}</p>
               <p className="mt-0.5 text-xs text-(--tanaw-text-muted)">{rangeNote(range, today)}</p>
             </div>
             <div className="flex gap-2">

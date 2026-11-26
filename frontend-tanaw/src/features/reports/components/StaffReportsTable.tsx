@@ -1,4 +1,5 @@
-import { Button, StatusPill } from "@/shared/ui-kit";
+import { ChevronRight } from "lucide-react";
+import { Button, StatusPill, openRowFromClick } from "@/shared/ui-kit";
 import { reviewTone, submissionTone } from "../model/reportStatuses";
 import { reminderButton, type StaffReportRow } from "../model/staffReports";
 
@@ -11,7 +12,10 @@ type StaffReportsTableProps = {
   onRemind: (row: StaffReportRow) => void;
 };
 
-/** One row per enterprise for the month, with the one action that row needs. */
+/**
+ * One row per enterprise for the month. A row with a report opens it when clicked anywhere; a row
+ * without one offers its reminder.
+ */
 export function StaffReportsTable({ rows, emptyMessage, remindingId, wasReminded, onOpen, onRemind }: StaffReportsTableProps) {
   return (
     <>
@@ -34,28 +38,49 @@ export function StaffReportsTable({ rows, emptyMessage, remindingId, wasReminded
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} data-enterprise={row.enterpriseId}>
-                <th scope="row">
-                  <span className="block font-semibold text-(--tanaw-text)">{row.name}</span>
-                  {row.barangay && <span className="mt-0.5 block text-[0.8125rem] font-normal text-(--tanaw-text-muted)">{row.barangay}</span>}
-                </th>
-                <td className="tanaw-hide-sm text-(--tanaw-text-secondary) tabular-nums">{row.report?.code ?? "No report yet"}</td>
-                <td className="tanaw-hide-sm">
-                  <span className="block">{row.sent ?? "Not sent"}</span>
-                  {row.note && <span className={row.submission === "Missing" ? "block text-[0.8125rem] text-(--tanaw-st-missing)" : "block text-[0.8125rem] text-(--tanaw-st-pending)"}>{row.note}</span>}
-                </td>
-                <td>
-                  <StatusPill tone={submissionTone[row.submission]}>{row.submission}</StatusPill>
-                </td>
-                <td>
-                  <StatusPill tone={reviewTone[row.review]}>{row.review}</StatusPill>
-                </td>
-                <td>
-                  <RowAction row={row} reminding={remindingId === row.enterpriseId} reminded={wasReminded(row)} onOpen={onOpen} onRemind={onRemind} />
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const opens = row.action === "review" || row.action === "view";
+              return (
+                <tr key={row.key} data-enterprise={row.enterpriseId} onClick={opens ? openRowFromClick : undefined} className={opens ? "tanaw-row-link" : undefined}>
+                  <th scope="row">
+                    {opens ? (
+                      <button
+                        type="button"
+                        data-row-primary
+                        aria-label={`${row.action === "review" ? "Review" : "View"} the report from ${row.name}`}
+                        onClick={() => onOpen(row)}
+                        className="block font-semibold text-(--tanaw-text)"
+                      >
+                        {row.name}
+                      </button>
+                    ) : (
+                      <span className="block font-semibold text-(--tanaw-text)">{row.name}</span>
+                    )}
+                    {row.barangay && <span className="mt-0.5 block text-[0.8125rem] font-normal text-(--tanaw-text-muted)">{row.barangay}</span>}
+                  </th>
+                  <td className="tanaw-hide-sm text-(--tanaw-text-secondary) tabular-nums">{row.report?.code ?? "No report yet"}</td>
+                  <td className="tanaw-hide-sm">
+                    <span className="block">{row.sent ?? "Not sent"}</span>
+                    {row.note && (
+                      <span className={row.submission === "Missing" ? "block text-[0.8125rem] text-(--tanaw-st-missing)" : "block text-[0.8125rem] text-(--tanaw-st-pending)"}>{row.note}</span>
+                    )}
+                  </td>
+                  <td>
+                    <StatusPill tone={submissionTone[row.submission]}>{row.submission}</StatusPill>
+                  </td>
+                  <td>
+                    <StatusPill tone={reviewTone[row.review]}>{row.review}</StatusPill>
+                  </td>
+                  <td>
+                    {opens ? (
+                      <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
+                    ) : (
+                      <ReminderButton row={row} reminding={remindingId === row.enterpriseId} reminded={wasReminded(row)} onRemind={onRemind} />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -68,21 +93,7 @@ export function StaffReportsTable({ rows, emptyMessage, remindingId, wasReminded
   );
 }
 
-function RowAction({ row, reminding, reminded, onOpen, onRemind }: { row: StaffReportRow; reminding: boolean; reminded: boolean; onOpen: (row: StaffReportRow) => void; onRemind: (row: StaffReportRow) => void }) {
-  if (row.action === "review") {
-    return (
-      <Button size="sm" aria-label={`Review the report from ${row.name}`} onClick={() => onOpen(row)}>
-        Review
-      </Button>
-    );
-  }
-  if (row.action === "view") {
-    return (
-      <Button size="sm" variant="secondary" aria-label={`View the report from ${row.name}`} onClick={() => onOpen(row)}>
-        View
-      </Button>
-    );
-  }
+function ReminderButton({ row, reminding, reminded, onRemind }: { row: StaffReportRow; reminding: boolean; reminded: boolean; onRemind: (row: StaffReportRow) => void }) {
   const button = reminderButton(row.name, reminded);
   return (
     <Button size="sm" variant="secondary" aria-label={button.ariaLabel} loading={reminding} disabled={reminded} onClick={() => onRemind(row)}>

@@ -1,4 +1,5 @@
-import { Button, Skeleton, cn } from "@/shared/ui-kit";
+import { ChevronRight } from "lucide-react";
+import { Button, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import type { AccessSummary, PersonnelAccess, PersonnelAccount, PersonnelActions, PersonnelTag } from "../model";
 
 export type PersonnelRow = {
@@ -59,7 +60,7 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
         <table className="w-full border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-(--tanaw-border-soft)">
-              <th scope="col" className={cn(headClass, "w-[30%] pl-0")}>
+              <th scope="col" className={cn(headClass, "w-[30%] pl-3")}>
                 Person
               </th>
               <th scope="col" className={cn(headClass, "w-[10%]")}>
@@ -71,7 +72,7 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
               <th scope="col" className={cn(headClass, "w-[16%]")}>
                 Last signed in
               </th>
-              <th scope="col" className={cn(headClass, "pr-0 text-right")}>
+              <th scope="col" className={cn(headClass, "pr-3 text-right")}>
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -81,17 +82,18 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
               <tr
                 key={row.account.id}
                 data-access={row.access.access}
-                className={cn("border-b border-(--tanaw-border-soft) align-top transition-colors hover:bg-(--tanaw-interactive-hover-bg)", row.access.access === "deactivated" && "opacity-70")}
+                onClick={row.actions.canEdit ? openRowFromClick : undefined}
+                className={cn("border-b border-(--tanaw-border-soft) align-top", row.actions.canEdit && "tanaw-row-link", row.access.access === "deactivated" && "opacity-70")}
               >
-                <th scope="row" className="py-4 pr-4 font-normal">
-                  <PersonCell row={row} />
+                <th scope="row" className="py-4 pr-4 pl-3 font-normal">
+                  <PersonCell row={row} onEdit={handlers.onEdit} />
                 </th>
                 <td className="p-4 font-semibold text-(--tanaw-text)">{row.role}</td>
                 <td className="p-4">
                   <AccessCell access={row.access} />
                 </td>
                 <td className="p-4 text-(--tanaw-text-secondary)">{row.lastSignIn}</td>
-                <td className="py-4 pl-4 text-right">
+                <td className="py-4 pr-3 pl-4 text-right">
                   <RowActions row={row} {...handlers} />
                 </td>
               </tr>
@@ -104,9 +106,14 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
           <li
             key={row.account.id}
             data-access={row.access.access}
-            className={cn("rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-4", row.access.access === "deactivated" && "opacity-70")}
+            onClick={row.actions.canEdit ? openRowFromClick : undefined}
+            className={cn(
+              "rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-4",
+              row.actions.canEdit && "tanaw-row-link",
+              row.access.access === "deactivated" && "opacity-70",
+            )}
           >
-            <PersonCell row={row} />
+            <PersonCell row={row} onEdit={handlers.onEdit} />
             <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-xs font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase">Role</dt>
               <dd className="font-semibold">{row.role}</dd>
@@ -127,11 +134,19 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
   );
 }
 
-function PersonCell({ row }: { row: PersonnelRow }) {
+/** The person's name and email. When the account can be edited, the name is the button that opens it. */
+function PersonCell({ row, onEdit }: { row: PersonnelRow; onEdit: (account: PersonnelAccount) => void }) {
+  const name = row.account.displayName;
   return (
     <>
       <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-        <span className="text-base font-bold text-(--tanaw-text)">{row.account.displayName}</span>
+        {row.actions.canEdit ? (
+          <button type="button" data-row-primary aria-label={`Edit ${name}`} onClick={() => onEdit(row.account)} className="text-base font-bold text-(--tanaw-text)">
+            {name}
+          </button>
+        ) : (
+          <span className="text-base font-bold text-(--tanaw-text)">{name}</span>
+        )}
         {row.tag && <span className="inline-flex min-h-6 items-center rounded-full bg-(--tanaw-surface-inset) px-2.5 text-xs font-bold text-(--tanaw-text-secondary)">{row.tag}</span>}
       </span>
       <span className="mt-0.5 block text-[0.8125rem] wrap-anywhere text-(--tanaw-text-secondary)">{row.account.email}</span>
@@ -151,16 +166,12 @@ function AccessCell({ access }: { access: AccessSummary }) {
   );
 }
 
-function RowActions({ row, onEdit, onResend, onDeactivate, onActivate, pendingAccountId, align = "end" }: PersonnelRowHandlers & { row: PersonnelRow; align?: "start" | "end" }) {
+/** The actions besides opening the account, which the whole row does. */
+function RowActions({ row, onResend, onDeactivate, onActivate, pendingAccountId, align = "end" }: PersonnelRowHandlers & { row: PersonnelRow; align?: "start" | "end" }) {
   const { account, actions } = row;
   const busy = pendingAccountId === account.id;
   return (
-    <div className={cn("inline-flex flex-wrap gap-2", align === "end" ? "justify-end" : "justify-start")}>
-      {actions.canEdit && (
-        <Button variant="secondary" onClick={() => onEdit(account)} aria-label={`Edit ${account.displayName}`}>
-          Edit
-        </Button>
-      )}
+    <div className={cn("inline-flex flex-wrap items-center gap-2", align === "end" ? "justify-end" : "justify-start")}>
       {actions.resendLabel && (
         <Button variant="secondary" onClick={() => onResend(account)} loading={busy} aria-label={`${actions.resendLabel} to ${account.displayName}`}>
           {actions.resendLabel}
@@ -177,6 +188,7 @@ function RowActions({ row, onEdit, onResend, onDeactivate, onActivate, pendingAc
         </Button>
       )}
       {actions.lockNote && <span className="inline-flex min-h-10.5 items-center text-[0.8125rem] text-(--tanaw-text-muted)">{actions.lockNote}</span>}
+      {actions.canEdit && align === "end" && <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />}
     </div>
   );
 }

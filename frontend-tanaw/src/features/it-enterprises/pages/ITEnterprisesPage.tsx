@@ -2,7 +2,7 @@ import { Building2, ChevronRight, Plus } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Skeleton, cn } from "@/shared/ui-kit";
+import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import { RegisterEnterpriseDialog } from "../components/RegisterEnterpriseDialog";
 import { StateText } from "../components/StateText";
 import { toneText } from "../components/tones";
@@ -225,7 +225,7 @@ function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: Enterprise
         <caption className="sr-only">Enterprises with their account, desktop app and cameras</caption>
         <thead>
           <tr className="border-b border-(--tanaw-border-soft)">
-            <th scope="col" className={cn(head, "w-[28%] pl-0")}>
+            <th scope="col" className={cn(head, "w-[28%] pl-3")}>
               Enterprise
             </th>
             <th scope="col" className={cn(head, "w-[21%]")}>
@@ -237,7 +237,7 @@ function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: Enterprise
             <th scope="col" className={cn(head, "w-[16%]")}>
               Cameras
             </th>
-            <th scope="col" className={cn(head, "pr-0 text-right")}>
+            <th scope="col" className={cn(head, "pr-3 text-right")}>
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -247,7 +247,7 @@ function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: Enterprise
             ? Array.from({ length: 5 }, (_, index) => (
                 <tr key={index} className="border-b border-(--tanaw-border-soft)">
                   {Array.from({ length: 5 }, (__, cellIndex) => (
-                    <td key={cellIndex} className={cn("px-4 py-4", cellIndex === 0 && "pl-0")}>
+                    <td key={cellIndex} className={cn("px-4 py-4", cellIndex === 0 && "pl-3")}>
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="mt-2 h-3 w-1/2" />
                     </td>
@@ -269,9 +269,11 @@ function EnterpriseTableRow({ row, formats }: { row: EnterpriseRow; formats: Dis
   const resend = resendLabel(row);
   const sub = "mt-0.5 block text-[13px] text-(--tanaw-text-muted)";
   return (
-    <tr className="border-b border-(--tanaw-border-soft) align-top">
-      <th scope="row" className="py-4 pr-4 font-normal">
-        <span className="block text-base font-bold text-(--tanaw-text)">{row.name}</span>
+    <tr onClick={openRowFromClick} className="tanaw-row-link border-b border-(--tanaw-border-soft) align-top">
+      <th scope="row" className="py-4 pr-4 pl-3 font-normal">
+        <Link data-row-primary to={manageEnterprisePath(row.enterpriseId)} className="block text-base font-bold text-(--tanaw-text)">
+          {row.name}
+        </Link>
         <span className="mt-0.5 block text-[13px] text-(--tanaw-text-secondary)">{placeLine(row)}</span>
       </th>
       <td className="px-4 py-4">
@@ -288,17 +290,10 @@ function EnterpriseTableRow({ row, formats }: { row: EnterpriseRow; formats: Dis
         <span className={cn("block font-semibold", toneText[cameras.tone])}>{cameras.label}</span>
         {cameras.sub && <span className={sub}>{cameras.sub}</span>}
       </td>
-      <td className="py-4 pl-4 text-right">
-        <div className="inline-flex items-center gap-4">
+      <td className="py-4 pr-3 pl-4 text-right">
+        <div className="inline-flex min-h-10 items-center gap-4">
           {resend && <ResendInvitationButton row={row} label={resend} />}
-          <Link
-            to={manageEnterprisePath(row.enterpriseId)}
-            aria-label={`Manage ${row.name}`}
-            className="inline-flex min-h-10 items-center gap-1 rounded-md font-semibold whitespace-nowrap text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
-          >
-            Manage
-            <ChevronRight size={15} aria-hidden="true" />
-          </Link>
+          <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
         </div>
       </td>
     </tr>

@@ -100,34 +100,47 @@
 }
 
 .tanaw-dashboard-pill:focus-visible,
-.tanaw-dashboard-toggle:focus-visible,
 .tanaw-dashboard-link:focus-visible,
 .tanaw-dashboard-row:focus-visible,
-.tanaw-map-alerts-button:focus-visible {
+.tanaw-map-alerts-button:focus-visible,
+.tanaw-map-control:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: 2px;
 }
 
-.tanaw-dashboard-toggle {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 14px;
-  border-radius: 999px;
+/* The place-names switch: a square map control in the top-right corner, sized like the zoom buttons. */
+.tanaw-map-control {
+  position: absolute;
+  z-index: 1000;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--dash-rule);
+  border-radius: 10px;
+  background: var(--tanaw-surface);
+  box-shadow: var(--dash-card-shadow);
   color: var(--tanaw-text-secondary);
-  font-size: 14px;
-  font-weight: 600;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.tanaw-dashboard-toggle:hover {
+.tanaw-map-control:hover {
   background: var(--tanaw-control-hover);
   color: var(--tanaw-text);
 }
 
-.tanaw-dashboard-toggle[aria-pressed="true"] {
+.tanaw-map-control[aria-pressed="true"] {
+  border-color: var(--tanaw-action);
   background: var(--tanaw-action);
   color: var(--tanaw-on-action);
+}
+
+.tanaw-map-control[aria-pressed="true"]:hover {
+  background: var(--tanaw-action-hover);
 }
 
 .tanaw-dashboard-link {
@@ -257,7 +270,7 @@ button.tanaw-dashboard-row:hover {
 
 .tanaw-map-alerts__icon {
   display: grid;
-  flex-shrink: 0;
+  flex: none;
   width: 28px;
   height: 28px;
   place-items: center;

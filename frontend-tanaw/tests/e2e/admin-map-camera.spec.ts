@@ -141,15 +141,13 @@ test("refits the city when the window resizes", async ({ page }) => {
   await expect(async () => expectCanonicalCitywideFraming(await readSettledMapGeometry(page))).toPass();
 });
 
-test("keeps a manually zoomed map through the display toggles and a staged theme switch", async ({ page }) => {
+test("keeps a manually zoomed map through the labels switch and a staged theme switch", async ({ page }) => {
   // Zooming, dragging and a staged theme switch that waits for map tiles take longer than the default.
   test.setTimeout(60_000);
   const otherBarangay = { ...neighbour, barangay: "Elsewhere", totalLiveOccupancy: 5 };
   await configureAdminMapSession(page, { followSystem: true, enterprises: [mapEnterprise, otherBarangay] });
   const map = page.locator("#admin-enterprise-map");
-  const display = page.getByRole("group", { name: "Map display" });
-  const labels = display.getByRole("button", { name: "Labels" });
-  const boundaries = display.getByRole("button", { name: "Boundaries" });
+  const labels = page.getByRole("button", { name: "Map labels" });
   // Panning can clip boundary paths at the edge of the SVG renderer. Marker spacing tracks scale across pans.
   const markerSpacing = (geometry: MapGeometry) => {
     const [first, second] = Object.values(geometry.markers);
@@ -175,12 +173,8 @@ test("keeps a manually zoomed map through the display toggles and a staged theme
   await expect(page.locator(".tanaw-label-tiles--light")).toHaveCSS("visibility", "hidden");
   expectSameCamera(await readSettledMapGeometry(page), dragged);
 
-  await boundaries.click();
-  await expect(boundaries).toHaveAttribute("aria-pressed", "false");
-  await expect(map.locator("path.tanaw-boundary-path")).toHaveCount(0);
-  await boundaries.click();
+  // Boundaries always show; there is no switch for them.
   await expect(map.locator("path.tanaw-boundary-path")).toHaveCount(28);
-  expectSameCamera(await readSettledMapGeometry(page), dragged);
 
   let releaseTiles: () => void = () => undefined;
   const blockedTiles = new Promise<void>((resolve) => {

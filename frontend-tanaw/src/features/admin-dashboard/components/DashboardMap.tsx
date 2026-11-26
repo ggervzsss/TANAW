@@ -1,4 +1,4 @@
-import { ArrowLeft, Layers, MapPin, Type } from "lucide-react";
+import { ArrowLeft, MapPin, Type } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type PointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminEnterpriseDetailsPath } from "@/app/routers/routes";
@@ -34,8 +34,9 @@ type DashboardMapProps = {
 };
 
 /**
- * The San Pedro map: barangay boundaries, one pin per barangay (all pins inside an open barangay),
- * pins coloured by what is happening now, a legend above it, and the live alerts floating over its bottom.
+ * The San Pedro map: barangay boundaries (always shown), one pin per barangay (all pins inside an open
+ * barangay), pins coloured by what is happening now, a legend above it, a place-names switch in its
+ * top-right corner, and the live alerts floating over its bottom.
  * `?place=<enterprise id>` opens that place, which is where "Show on map" leads.
  */
 export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: DashboardMapProps) {
@@ -44,7 +45,6 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
   const navigate = useNavigate();
   const { boundary, isError: isBoundaryError, isLoading: isBoundaryLoading } = useSanPedroBoundary();
   const [interactionState, dispatchMapInteraction] = useReducer(mapInteractionReducer, initialMapInteractionState);
-  const [showBoundaries, setShowBoundaries] = useState(true);
   const [showLabels, setShowLabels] = useState(readLabelsPreference);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
   const { alerts } = useAlerts();
@@ -81,7 +81,6 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
     selectedEnterprise,
     onViewDetails: viewDetails,
     shouldDrillInto,
-    showBoundaries,
     showLabels,
     visibleEnterprises: visible,
   });
@@ -131,30 +130,25 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
             San Pedro, Laguna
           </h2>
         )}
-        <div role="group" aria-label="Map display" className="flex items-center gap-1">
-          <button type="button" aria-pressed={showBoundaries} onClick={() => setShowBoundaries((value) => !value)} className="tanaw-dashboard-toggle">
-            <Layers size={16} aria-hidden="true" />
-            Boundaries
-          </button>
-          <button
-            type="button"
-            aria-pressed={showLabels}
-            onClick={() => {
-              saveLabelsPreference(!showLabels);
-              setShowLabels(!showLabels);
-            }}
-            className="tanaw-dashboard-toggle"
-          >
-            <Type size={16} aria-hidden="true" />
-            Labels
-          </button>
-        </div>
       </div>
 
       <MapLegend />
 
       <div className="tanaw-dashboard-map" onPointerDown={collapseAlerts}>
         <div id="admin-enterprise-map" role="region" aria-label="Map of San Pedro enterprises" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
+        <button
+          type="button"
+          aria-label="Map labels"
+          aria-pressed={showLabels}
+          title={showLabels ? "Hide place names" : "Show place names"}
+          onClick={() => {
+            saveLabelsPreference(!showLabels);
+            setShowLabels(!showLabels);
+          }}
+          className="tanaw-map-control"
+        >
+          <Type size={18} aria-hidden="true" />
+        </button>
         {mapStatus && (
           <div
             role="status"

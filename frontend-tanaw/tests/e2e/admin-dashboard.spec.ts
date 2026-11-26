@@ -175,9 +175,9 @@ test("shows the map, Most Visited, Peak Occupancy and the recent lists from real
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   await expect(page.getByText("Visitor activity and important updates across San Pedro.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "San Pedro, Laguna" })).toBeVisible();
-  const mapDisplay = page.getByRole("group", { name: "Map display" });
-  await expect(mapDisplay.getByRole("button", { name: "Boundaries" })).toHaveAttribute("aria-pressed", "true");
-  await expect(mapDisplay.getByRole("button", { name: "Labels" })).toHaveAttribute("aria-pressed", "true");
+  // Boundaries always show; the place-names switch sits inside the map.
+  await expect(page.getByRole("button", { name: "Boundaries" })).toHaveCount(0);
+  await expect(page.locator(".tanaw-dashboard-map").getByRole("button", { name: "Map labels" })).toHaveAttribute("aria-pressed", "true");
   // The city view shows one pin per barangay: its busiest enterprise.
   await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveCount(1);
   await expect(page.locator("#admin-enterprise-map .leaflet-marker-icon")).toHaveAttribute("aria-label", /^San Antonio Plaza, Barangay San Antonio\. Busiest in its barangay/);

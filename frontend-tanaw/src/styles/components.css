@@ -656,6 +656,57 @@ html.dark .tanaw-activation-banner__copy {
   outline-offset: 3px;
 }
 
+/*
+ * A table row or list item that opens as a whole (see openRowFromClick). Its name is the one real
+ * link or button, marked data-row-primary; it reads as plain text and shows the focus ring.
+ */
+.tanaw-row-link {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+@media (hover: hover) {
+  .tanaw-row-link:hover,
+  .tanaw-row-link:hover > :where(th, td) {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  .tanaw-row-link:hover [data-row-primary] {
+    color: var(--tanaw-accent-ink);
+  }
+}
+
+.tanaw-row-link [data-row-primary] {
+  border-radius: 4px;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.tanaw-row-link [data-row-primary]:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-row-chevron {
+  color: var(--tanaw-text-muted);
+  transition:
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.tanaw-row-link:hover .tanaw-row-chevron {
+  color: var(--tanaw-accent-ink);
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-row-link,
+  .tanaw-row-chevron {
+    transition: none;
+  }
+}
+
 .tanaw-interactive-row {
   transition:
     background-color 160ms ease,

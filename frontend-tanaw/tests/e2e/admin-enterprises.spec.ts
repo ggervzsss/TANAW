@@ -273,8 +273,11 @@ test("Admin filters the registered enterprises and opens one enterprise's detail
   await page.getByRole("searchbox", { name: "Search enterprises" }).fill("plaza");
   await expect(page).toHaveURL(/camera=issue/);
 
-  // Details.
-  await page.getByRole("link", { name: "View details for City Plaza" }).click();
+  // Details: the whole row opens them, not just the name.
+  const plazaRow = page.getByRole("row", { name: /City Plaza/ });
+  await expect(plazaRow.getByRole("link", { name: "City Plaza" })).toHaveAttribute("href", "/admin/enterprises/ENT-PLAZA");
+  await expect(plazaRow.getByText("View details")).toHaveCount(0);
+  await plazaRow.getByRole("cell").nth(1).click();
   await expect(page).toHaveURL(/\/admin\/enterprises\/ENT-PLAZA$/);
   await expect(page.getByRole("heading", { level: 1, name: "City Plaza" })).toBeVisible();
   await expect(page.getByText("Barangay Poblacion, San Pedro, Laguna 4023")).toBeVisible();

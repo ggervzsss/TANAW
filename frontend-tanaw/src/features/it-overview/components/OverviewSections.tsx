@@ -1,15 +1,16 @@
 import { Check, ChevronRight, Clock3, TriangleAlert, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Button, cn } from "@/shared/ui-kit";
+import { Button, cn, openRowFromClick } from "@/shared/ui-kit";
 import type { ItOverview } from "../hooks/useItOverview";
 import { firstRows, type ConnectionRow } from "../model/itOverview";
 import { itOverviewPaths } from "../model/paths";
 
-const linkButtonClass =
-  "inline-flex h-10.5 shrink-0 items-center justify-center rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-4 text-sm font-bold whitespace-nowrap text-(--tanaw-text) no-underline shadow-tanaw-resting transition-colors hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)";
 const rowClass = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 border-b border-(--tanaw-border-soft) py-4 max-sm:grid-cols-1";
 const metaClass = "flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] text-(--tanaw-text-secondary)";
+/** A row that opens as a whole: the hover band reaches past the text, which stays aligned with the heading. */
+const clickableRowClass = "tanaw-row-link -mx-3 px-3";
+
 const titleClass = "mt-1 block text-[0.96875rem] font-bold text-(--tanaw-text)";
 const placeClass = "mt-0.5 block text-sm text-(--tanaw-text-secondary)";
 const stateClass = "mt-1.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-bold";
@@ -120,7 +121,7 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
     >
       <ul className="m-0 list-none p-0">
         {shown.map((row) => (
-          <li key={row.id} className={rowClass}>
+          <li key={row.id} onClick={openRowFromClick} className={cn(rowClass, clickableRowClass)}>
             <div className="min-w-0">
               <span className={metaClass}>
                 <span>{row.group}</span>
@@ -128,7 +129,7 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
                 <span>{row.when}</span>
                 <span className="ml-auto text-(--tanaw-text-muted) tabular-nums">{row.code}</span>
               </span>
-              <Link to={row.href} className={cn(titleClass, "no-underline hover:text-(--tanaw-accent-ink) hover:underline")}>
+              <Link data-row-primary to={row.href} className={titleClass}>
                 {row.title}
               </Link>
               <span className={placeClass}>{row.place}</span>
@@ -137,16 +138,13 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
                 {row.stateLabel}
               </span>
             </div>
-            <div>
-              {row.canStart ? (
+            <div className="flex items-center gap-4">
+              {row.canStart && (
                 <Button onClick={() => section.start(row)} loading={section.startingId === row.id} disabled={section.startingId !== null}>
                   Start on it<Hidden> ({row.code})</Hidden>
                 </Button>
-              ) : (
-                <Link to={row.href} className={linkButtonClass}>
-                  Open<Hidden> {row.code}</Hidden>
-                </Link>
               )}
+              <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
             </div>
           </li>
         ))}
@@ -179,21 +177,19 @@ export function ConnectionsSection({ overview }: { overview: ItOverview }) {
     >
       <ul className="m-0 list-none p-0">
         {shown.map((row) => (
-          <li key={`${row.enterpriseId}-${row.kind}`} className={rowClass}>
+          <li key={`${row.enterpriseId}-${row.kind}`} onClick={openRowFromClick} className={cn(rowClass, clickableRowClass)}>
             <div className="min-w-0">
               <span className={cn(stateClass, "mt-0", row.kind === "offline" ? "text-(--tanaw-danger)" : "text-(--tanaw-warn-ink)")}>
                 {connectionIcons[row.kind]}
                 {row.label}
               </span>
-              <Link to={row.href} className={cn(titleClass, "no-underline hover:text-(--tanaw-accent-ink) hover:underline")}>
+              <Link data-row-primary to={row.href} className={titleClass}>
                 {row.place}
               </Link>
               <span className={placeClass}>{row.detail}</span>
               {row.requestCode && <span className={cn(metaClass, "mt-1.5")}>Request {row.requestCode} is open</span>}
             </div>
-            <Link to={row.href} className={linkButtonClass}>
-              Check<Hidden> {row.place}</Hidden>
-            </Link>
+            <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
           </li>
         ))}
       </ul>
@@ -228,18 +224,21 @@ export function AccountsSection({ overview }: { overview: ItOverview }) {
     >
       <ul className="m-0 list-none p-0">
         {shown.map((row) => (
-          <li key={row.id} className={rowClass}>
+          <li key={row.id} onClick={row.action.type === "review" ? openRowFromClick : undefined} className={cn(rowClass, row.action.type === "review" && clickableRowClass)}>
             <div className="min-w-0">
               <span className={metaClass}>{row.kind}</span>
-              <span className={titleClass}>{row.name}</span>
+              {row.action.type === "review" ? (
+                <Link data-row-primary to={row.action.href} aria-label={`${row.action.label} the email change for ${row.name}`} className={titleClass}>
+                  {row.name}
+                </Link>
+              ) : (
+                <span className={titleClass}>{row.name}</span>
+              )}
               <span className={placeClass}>{row.detail}</span>
             </div>
             <div>
               {row.action.type === "review" ? (
-                <Link to={row.action.href} className={linkButtonClass}>
-                  {row.action.label}
-                  <Hidden> the email change for {row.name}</Hidden>
-                </Link>
+                <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
               ) : section.resentIds.has(row.id) ? (
                 <DoneNote>Sent again</DoneNote>
               ) : (

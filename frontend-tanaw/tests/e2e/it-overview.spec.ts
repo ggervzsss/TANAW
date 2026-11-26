@@ -229,7 +229,10 @@ test("shows the greeting, the four figures and what needs IT in each list", asyn
   await expect(requests.getByRole("listitem")).toHaveCount(3);
   await expect(requests.getByRole("listitem").nth(0)).toContainText("Not picked up yet");
   await expect(requests.getByRole("link", { name: "Entrance camera keeps disconnecting" })).toHaveAttribute("href", "/it/requests?request=000148");
-  await expect(requests.getByRole("link", { name: "Open REQ-000145" })).toHaveAttribute("href", "/it/requests?request=000145");
+  // Each row opens as a whole; only "Start on it" stays a button.
+  const req145 = requests.getByRole("listitem").filter({ hasText: "REQ-000145" });
+  await expect(req145.getByRole("link")).toHaveAttribute("href", "/it/requests?request=000145");
+  await expect(req145.getByRole("link", { name: /^Open/ })).toHaveCount(0);
   await expect(requests).not.toContainText("Handled by someone else");
   await expect(requests).not.toContainText("Already resolved");
 
@@ -239,7 +242,8 @@ test("shows the greeting, the four figures and what needs IT in each list", asyn
   await expect(connections.getByRole("listitem").nth(0)).toContainText("No data since 9:12 AM. Both cameras stopped counting with it.");
   await expect(connections.getByRole("listitem").nth(1)).toContainText("1 camera not counting");
   await expect(connections.getByRole("listitem").nth(1)).toContainText("Request REQ-000148 is open");
-  await expect(connections.getByRole("link", { name: "Check Riverside Food Park" })).toHaveAttribute("href", "/it/enterprises/riverside");
+  await expect(connections.getByRole("link", { name: "Riverside Food Park" })).toHaveAttribute("href", "/it/enterprises/riverside");
+  await expect(connections.getByRole("link", { name: /^Check/ })).toHaveCount(0);
   await expect(connections).not.toContainText("Closed Museum");
 
   const accounts = page.getByTestId("it-overview-accounts");
@@ -263,7 +267,8 @@ test("starts on a request right away and says so", async ({ page }) => {
   await requests.getByRole("button", { name: "Start on it (REQ-000148)" }).click();
   await expect(page.getByText("You are on REQ-000148")).toBeVisible();
   await expect(requests.getByText("You started on it just now")).toBeVisible();
-  await expect(requests.getByRole("link", { name: "Open REQ-000148" })).toBeVisible();
+  await expect(requests.getByRole("button", { name: "Start on it (REQ-000148)" })).toHaveCount(0);
+  await expect(requests.getByRole("link", { name: "Entrance camera keeps disconnecting" })).toBeVisible();
   await expect(page.getByRole("definition").nth(0)).toContainText("4 open requests in total, 2 with you");
   expect(calls).toContain("start 000148");
 });

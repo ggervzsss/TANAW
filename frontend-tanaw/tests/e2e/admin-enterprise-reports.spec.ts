@@ -189,12 +189,26 @@ test("lists each enterprise's report for the reporting month, missing first, wit
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(reportRows(page)).toHaveCount(3);
 
-  await page.getByRole("button", { name: "Reporting month October 2026" }).click();
-  await page.getByRole("dialog", { name: "Choose the reporting month" }).getByRole("button", { name: "Today" }).click();
-  await page.getByRole("button", { name: "Apply" }).click();
+  // The reporting month steps one month at a time, up to this month.
+  await page.getByRole("button", { name: "Next month" }).click();
   await expect(page).toHaveURL(/month=November&year=2026/);
+  await expect(page.getByRole("button", { name: "Next month" })).toBeDisabled();
   await expect(page.getByText("4 of 4 enterprises", { exact: true })).toBeVisible();
   await expect(page.getByText("Due Dec 10")).toHaveCount(4);
+
+  // Or jumps to any month since the first enterprise registered (Laguna Lakeside Resort, March 2025).
+  await page.getByRole("button", { name: "Reporting month November 2026" }).click();
+  const months = page.getByRole("dialog", { name: "Choose the reporting month" });
+  await expect(months.getByRole("button", { name: /^October 2026/ })).toHaveAccessibleName("October 2026, Latest month due");
+  await expect(months.getByRole("button", { name: "December 2026" })).toBeDisabled();
+  await months.getByRole("button", { name: "Previous year" }).click();
+  await expect(months.getByRole("button", { name: "Previous year" })).toBeDisabled();
+  await expect(months.getByRole("button", { name: "February 2025" })).toBeDisabled();
+  await months.getByRole("button", { name: "June 2025" }).click();
+  await expect(months).toHaveCount(0);
+  await expect(page).toHaveURL(/month=June&year=2025/);
+  await expect(page.getByRole("button", { name: "Reporting month June 2025" })).toBeFocused();
+  await expect(page.getByText("1 of 1 enterprise", { exact: true })).toBeVisible();
 });
 
 test("opens an enterprise's report details with its history and report log, and closes back to the list", async ({ page }, testInfo) => {
@@ -209,7 +223,9 @@ test("opens an enterprise's report details with its history and report log, and 
   await expect(dialog.getByText("Edwin Ramos")).toBeVisible();
   await expect(dialog.getByText("6, all monitoring")).toBeVisible();
   await expect(dialog.getByText("Jan 2026")).toBeVisible();
-  await expect(dialog.getByRole("combobox", { name: "Year" })).toContainText("2026 (this year)");
+  await expect(dialog.getByText("October 2026 report")).toBeVisible();
+  // Registered this year, so there is no other year to choose.
+  await expect(dialog.getByRole("radiogroup", { name: "Year" })).toHaveCount(0);
   await expect(dialog.getByText("9 of 10", { exact: true })).toBeVisible();
   await expect(dialog.getByText("November, due Dec 10")).toBeVisible();
   await expect(dialog.getByText("July", { exact: true })).toBeVisible();
@@ -229,11 +245,16 @@ test("opens an enterprise's report details with its history and report log, and 
   await dialog.getByRole("button", { name: "Show all 11 months of 2026" }).click();
   await expect(dialog.getByRole("button", { name: /^January 2026/ })).toBeVisible();
 
-  // Opening November closes October; contact details hide for a month with no report.
+  // Opening November closes October and shows its whole log. The header and contact details stay on
+  // the opened month (October), and the dialog has no second scroll box for the months.
   await dialog.getByRole("button", { name: /^November 2026/ }).click();
   await expect(october).toHaveAttribute("aria-expanded", "false");
-  await expect(dialog.getByRole("list", { name: "November 2026 report log" })).toContainText("Not sent yet");
-  await expect(dialog.getByText("Edwin Ramos")).toHaveCount(0);
+  const novemberLog = dialog.getByRole("list", { name: "November 2026 report log" });
+  await expect(novemberLog).toContainText("Not sent yet");
+  await expect(novemberLog).toBeInViewport();
+  await expect(dialog.getByText("Edwin Ramos")).toBeVisible();
+  await expect(dialog.getByText("October 2026 report")).toBeVisible();
+  await expect(dialog.getByRole("region", { name: /scrollable/ })).toHaveCount(0);
   await testInfo.attach("enterprise-report-details-light", { body: await page.screenshot(), contentType: "image/png" });
 
   await page.keyboard.press("Escape");
@@ -249,9 +270,9 @@ test("a link opens one enterprise's details on the linked month, in dark mode to
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("list", { name: "October 2026 report log" })).toContainText("No report was received by Nov 10, 2026.");
   await expect(dialog.getByText("Rosa Lim")).toHaveCount(0);
+  await expect(dialog.getByText("Shown once the October 2026 report is sent.")).toBeVisible();
 
-  await dialog.getByRole("combobox", { name: "Year" }).click();
-  await page.getByRole("option", { name: /^2025/ }).click();
+  await dialog.getByRole("radio", { name: "2025" }).click();
   await expect(dialog.getByText("0 of 10", { exact: true })).toBeVisible();
   await expect(dialog.getByText("None in 2025")).toBeVisible();
   await expect(dialog.getByRole("button", { name: /^December 2025/ })).toHaveAttribute("aria-expanded", "false");

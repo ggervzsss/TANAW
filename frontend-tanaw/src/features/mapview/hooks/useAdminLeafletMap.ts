@@ -38,7 +38,6 @@ type AdminLeafletMapOptions = {
   onViewDetails: (enterpriseId: string) => void;
   /** Whether choosing this pin should also open its barangay. */
   shouldDrillInto: (enterprise: MapEnterprise) => boolean;
-  showBoundaries: boolean;
   showLabels: boolean;
   visibleEnterprises: MapEnterprise[];
 };
@@ -54,7 +53,6 @@ export function useAdminLeafletMap({
   selectedEnterprise,
   onViewDetails,
   shouldDrillInto,
-  showBoundaries,
   showLabels,
   visibleEnterprises,
 }: AdminLeafletMapOptions) {
@@ -152,16 +150,14 @@ export function useAdminLeafletMap({
   );
 
   const mapThemeRef = useRef(mapTheme);
-  const showBoundariesRef = useRef(showBoundaries);
   const applyBoundarySelectionRef = useRef(applyBoundarySelection);
   const selectBarangayRef = useRef(selectBarangay);
 
   useLayoutEffect(() => {
     mapThemeRef.current = mapTheme;
-    showBoundariesRef.current = showBoundaries;
     applyBoundarySelectionRef.current = applyBoundarySelection;
     selectBarangayRef.current = selectBarangay;
-  }, [applyBoundarySelection, mapTheme, selectBarangay, showBoundaries]);
+  }, [applyBoundarySelection, mapTheme, selectBarangay]);
 
   useLayoutEffect(() => {
     if (!boundary || mapRef.current) return undefined;
@@ -262,10 +258,8 @@ export function useAdminLeafletMap({
         .filter((layer): layer is L.Polygon & { feature?: GeoJSON.Feature } => layer instanceof L.Polygon && "feature" in layer)
         .map((layer) => [normalizeBarangayName(getBarangayLabel(layer.feature)), layer.getBounds()]),
     );
-    if (showBoundariesRef.current) {
-      boundaryCasing.addTo(map);
-      boundaryLayer.addTo(map);
-    }
+    boundaryCasing.addTo(map);
+    boundaryLayer.addTo(map);
     const styleMountedBoundaries = () => {
       applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
       if (selectedBarangayNameRef.current) findBoundaryLayerByName(selectedBarangayNameRef.current)?.openTooltip();
@@ -284,23 +278,6 @@ export function useAdminLeafletMap({
       }
     };
   }, [boundary, findBoundaryLayerByName]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const boundaryLayer = boundaryLayerRef.current;
-    const boundaryCasing = boundaryCasingRef.current;
-    if (!map || !boundaryLayer) return;
-    if (showBoundaries) {
-      if (!map.hasLayer(boundaryLayer)) {
-        boundaryCasing?.addTo(map);
-        boundaryLayer.addTo(map);
-        applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
-      }
-    } else if (map.hasLayer(boundaryLayer)) {
-      boundaryLayer.remove();
-      boundaryCasing?.remove();
-    }
-  }, [boundary, showBoundaries]);
 
   useLayoutEffect(() => {
     selectedBarangayNameRef.current = highlightedBarangay;

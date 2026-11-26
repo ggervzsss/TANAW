@@ -27,6 +27,7 @@ export { Tooltip, type TooltipProps } from "./components/Tooltip";
 
 // Patterns
 export { DateRangePicker, type DateRangePickerProps } from "./patterns/DateRangePicker";
+export { MonthPicker, type MonthPickerProps } from "./patterns/MonthPicker";
 export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProps, type MetricTone } from "./patterns/MetricStrip";
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
 export { PortalPageHeader, type PortalPageHeaderProps } from "./patterns/PortalPageHeader";
@@ -58,4 +59,6 @@ export { initialsOf } from "./lib/initials";
 export { dialogIn, fadeInDown, popIn } from "./lib/motion";
 export { hasVisualOverflow } from "./lib/overflow";
 export { useExclusivePopupDismissal } from "./lib/popup-dismissal";
+export { isMonthInRange, pickerMonthLabel, steppedMonth, type PickerMonth } from "./lib/pickerMonth";
+export { endsTextSelection, nestedRowControl, openRowFromClick } from "./lib/rowClick";
 export { toSentenceCase } from "./lib/sentence-case";

@@ -1,17 +1,13 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import { formatShortDate, reviewTone, submissionTone } from "@/features/reports/model/reportStatuses";
-import { Select, StatusPill, cn } from "@/shared/ui-kit";
+import { SegmentedControl, Select, StatusPill, cn } from "@/shared/ui-kit";
 import type { FinalReport, SystemLog } from "@/shared/types";
-import {
-  HISTORY_PREVIEW_MONTHS,
-  missingNote,
-  pendingNote,
-  yearOptionNote,
-  type ReportMonthEntry,
-  type YearSummary,
-} from "../model/enterpriseReports";
+import { HISTORY_PREVIEW_MONTHS, missingNote, pendingNote, yearOptionNote, type ReportMonthEntry, type YearSummary } from "../model/enterpriseReports";
 import { buildReportLog } from "../model/reportLog";
+
+/** Up to this many years show as one row of choices; more use a dropdown. */
+const YEAR_CHOICES_MAX = 4;
 
 type ReportHistoryProps = {
   year: number;
@@ -30,7 +26,18 @@ type ReportHistoryProps = {
   onToggleShowAll: () => void;
 };
 
-/** Report Submission History: a year picker, the year's figures, and the months as a one-open-at-a-time list. */
+/** "Nov 4", or when nothing was sent, the due date that is coming or has passed. */
+function sentLine(entry: ReportMonthEntry) {
+  if (entry.sentAt) return { text: formatShortDate(entry.sentAt), tone: "" };
+  if (entry.submission === "Missing") return { text: `Was due ${formatShortDate(entry.dueAt)}`, tone: "text-(--tanaw-st-missing)" };
+  return { text: `Due ${formatShortDate(entry.dueAt)}`, tone: "text-(--tanaw-text-secondary)" };
+}
+
+/**
+ * Report Submission History: the year, the year's figures, and its months as a one-open-at-a-time
+ * list. The list scrolls with the dialog (no scroll box of its own) under a column header that stays
+ * in view, and an opened month scrolls its report log into view.
+ */
 export function ReportHistory({
   year,
   years,
@@ -60,8 +67,23 @@ export function ReportHistory({
   const visible = showAll ? entries : entries.slice(0, HISTORY_PREVIEW_MONTHS);
   const hasMore = entries.length > HISTORY_PREVIEW_MONTHS;
 
+  // Bring a month the admin opens fully into view, report log included. The month opened with the
+  // dialog stays where it is.
+  const listRef = useRef<HTMLUListElement>(null);
+  const openedOnce = useRef(false);
+  useEffect(() => {
+    if (!openedOnce.current) {
+      openedOnce.current = true;
+      return;
+    }
+    if (!expandedKey) return;
+    const item = listRef.current?.querySelector<HTMLElement>(`[data-month="${expandedKey}"]`);
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    item?.scrollIntoView?.({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+  }, [expandedKey]);
+
   const figures = [
-    { label: "Reports submitted", sub: `due reports in ${year}`, value: `${summary.submitted} of ${summary.due}`, note: null, color: undefined },
+    { label: "Submitted", sub: `of the reports due in ${year}`, value: `${summary.submitted} of ${summary.due}`, note: null, color: undefined },
     {
       label: "Pending",
       sub: "not sent yet, before the due date",
@@ -79,134 +101,130 @@ export function ReportHistory({
   ];
 
   return (
-    <section aria-labelledby={headingId} className="mt-5.5 flex min-h-0 flex-1 flex-col border-t border-(--tanaw-border-soft) pt-4.5">
-      <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2">
+    <section aria-labelledby={headingId} className="mt-4 border-t border-(--tanaw-border-soft) pt-4.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
         <div>
           <h3 id={headingId} className="font-display text-xl font-bold">
             Report Submission History
           </h3>
-          <p className="mt-0.5 text-[0.8125rem] text-(--tanaw-text-muted)">Monthly reports sent by this enterprise. Select a month to see its report log.</p>
+          <p className="mt-0.5 text-[0.8125rem] text-(--tanaw-text-muted)">Select a month to see its report log.</p>
         </div>
-        <Select label="Year" value={String(year)} onChange={(value) => onYearChange(Number(value))} options={yearOptions} className="min-w-56" />
+        {years.length === 1 ? null : years.length <= YEAR_CHOICES_MAX ? (
+          <SegmentedControl
+            ariaLabel="Year"
+            value={String(year)}
+            onChange={(value) => onYearChange(Number(value))}
+            options={years.map((value) => ({ value: String(value), label: String(value) }))}
+            size="sm"
+          />
+        ) : (
+          <Select label="Year" value={String(year)} onChange={(value) => onYearChange(Number(value))} options={yearOptions} className="min-w-56" />
+        )}
       </div>
 
-      <dl className="mt-3.5 grid grid-cols-3 border-y border-(--tanaw-border-soft) max-sm:grid-cols-1">
-        {figures.map((figure, index) => (
-          <div
-            key={figure.label}
-            className={cn("py-3 pr-5", index > 0 && "border-l border-(--tanaw-border-soft) pl-5 max-sm:border-t max-sm:border-l-0 max-sm:pl-0")}
-          >
+      <dl className="mt-3.5 grid grid-cols-3 gap-2.5 max-sm:grid-cols-1">
+        {figures.map((figure) => (
+          <div key={figure.label} className="rounded-xl bg-(--tanaw-surface-inset) px-4 py-3">
             <dt>
               <span className="block text-[0.84375rem] font-bold">{figure.label}</span>
               <span className="block text-xs text-(--tanaw-text-muted)">{figure.sub}</span>
             </dt>
-            <dd className="mt-1.5">
-              <span className={cn("block font-display text-[1.625rem] leading-none font-bold tabular-nums", figure.color)}>{figure.value}</span>
+            <dd className="m-0 mt-1.5">
+              <span className={cn("font-display block text-[1.5rem] leading-none font-bold tabular-nums", figure.color)}>{figure.value}</span>
               {figure.note && <span className="mt-1.5 block text-[0.78125rem] text-(--tanaw-text-secondary)">{figure.note}</span>}
             </dd>
           </div>
         ))}
       </dl>
 
-      <div
-        role="region"
-        aria-label={`Report months of ${year}, scrollable`}
-        tabIndex={0}
-        className="tanaw-er-scroll mt-3 min-h-48 flex-1 overflow-auto overscroll-contain rounded-xl border border-(--tanaw-border-soft)"
-      >
-        <div className="min-w-205">
-          <div
-            aria-hidden="true"
-            className="tanaw-er-month-cols sticky top-0 z-1 bg-(--tanaw-surface-inset) px-3 py-2.75 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase"
-          >
-            <span />
-            <span>Period</span>
-            <span>Report ID</span>
-            <span>Sent on</span>
-            <span>Due</span>
-            <span>Submission</span>
-            <span>Staff review</span>
-            <span>Reviewed by</span>
-          </div>
-          {entries.length === 0 ? (
-            <p className="m-0 px-3 py-6 text-sm text-(--tanaw-text-secondary)">No reporting months in {year} yet.</p>
-          ) : (
-            <ul className="m-0 list-none p-0">
-              {visible.map((entry) => {
-                const open = entry.key === expandedKey;
-                const logId = `er-log-${entry.key}`;
-                const events = open ? buildReportLog(entry, enterpriseName, logs, finalReports) : [];
-                return (
-                  <li key={entry.key} className="tanaw-er-month-item" data-open={open}>
-                    <button type="button" aria-expanded={open} aria-controls={open ? logId : undefined} onClick={() => onToggleMonth(entry.key)} className="tanaw-er-month-row tanaw-er-month-cols">
-                      <ChevronRight size={16} aria-hidden="true" className="tanaw-er-month-chevron" />
-                      <span className="font-bold whitespace-nowrap">{entry.period}</span>
-                      <span className="whitespace-nowrap text-(--tanaw-text-secondary) tabular-nums">
-                        <span className="sr-only">Report ID </span>
-                        {entry.reportCode ?? (entry.submission === "Missing" ? "Not received" : "Not sent yet")}
-                      </span>
-                      <span className="text-(--tanaw-text-secondary)">
-                        <span className="sr-only">Sent on </span>
-                        {entry.sentAt ? formatShortDate(entry.sentAt) : "—"}
-                      </span>
-                      <span className="text-(--tanaw-text-secondary)">
-                        <span className="sr-only">Due </span>
-                        {formatShortDate(entry.dueAt)}
-                      </span>
-                      <span>
-                        <StatusPill tone={submissionTone[entry.submission]}>
-                          <span className="sr-only">Submission: </span>
-                          {entry.submission}
-                        </StatusPill>
-                      </span>
-                      <span>
-                        <StatusPill tone={reviewTone[entry.review]}>
-                          <span className="sr-only">Staff review: </span>
-                          {entry.review}
-                        </StatusPill>
-                      </span>
-                      <span className={cn(!entry.reviewedBy && "text-(--tanaw-text-muted)")}>
-                        <span className="sr-only">Reviewed by </span>
-                        {entry.reviewedBy ?? "—"}
-                      </span>
-                    </button>
-                    {open && (
-                      <div id={logId} className="pt-1 pr-4.5 pb-1.5 pl-11">
-                        <p className="m-0 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase">
-                          Report log · <span className="tracking-normal normal-case">{entry.period}</span>
-                        </p>
-                        <ol aria-label={`${entry.period} report log`} className="m-0 mt-3 list-none py-0 pr-0 pl-1.5">
-                          {events.map((event) => (
-                            <li key={event.id} className="tanaw-er-log-item">
-                              <span aria-hidden="true" className="tanaw-er-log-dot" data-tone={event.tone} />
-                              <p className="m-0 text-sm font-bold">
-                                {event.title} <span className="ml-1.5 text-[0.78125rem] font-medium text-(--tanaw-text-muted)">{event.when}</span>
-                              </p>
-                              <p className="m-0 mt-0.75 text-[0.84375rem] text-(--tanaw-text-secondary)">{event.detail}</p>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {hasMore && (
-            <div className="border-t border-(--tanaw-border-soft) px-2 pt-0.5 pb-2">
-              <button
-                type="button"
-                aria-expanded={showAll}
-                onClick={onToggleShowAll}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-(--tanaw-accent-ink) hover:underline focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
-              >
-                {showAll ? "Show fewer months" : `Show all ${entries.length} months of ${year}`}
-                <ChevronDown size={15} aria-hidden="true" className={cn("transition-transform", showAll && "rotate-180")} />
-              </button>
-            </div>
-          )}
+      <div className="mt-4 rounded-xl border border-(--tanaw-border-soft)">
+        <div
+          aria-hidden="true"
+          className="tanaw-er-month-cols tanaw-er-month-head sticky top-0 z-1 rounded-t-xl border-b border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 py-2.5 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase"
+        >
+          <span />
+          <span>Period</span>
+          <span className="tanaw-er-optional">Report ID</span>
+          <span>Sent</span>
+          <span>Submission</span>
+          <span>Staff review</span>
+          <span className="tanaw-er-optional">Reviewed by</span>
         </div>
+        {entries.length === 0 ? (
+          <p className="m-0 px-3 py-6 text-sm text-(--tanaw-text-secondary)">No reporting months in {year} yet.</p>
+        ) : (
+          <ul ref={listRef} aria-label={`Report months of ${year}`} className="m-0 list-none p-0">
+            {visible.map((entry) => {
+              const open = entry.key === expandedKey;
+              const logId = `er-log-${entry.key}`;
+              const events = open ? buildReportLog(entry, enterpriseName, logs, finalReports) : [];
+              const sent = sentLine(entry);
+              return (
+                <li key={entry.key} data-month={entry.key} className="tanaw-er-month-item" data-open={open}>
+                  <button type="button" aria-expanded={open} aria-controls={open ? logId : undefined} onClick={() => onToggleMonth(entry.key)} className="tanaw-er-month-row tanaw-er-month-cols">
+                    <ChevronRight size={16} aria-hidden="true" className="tanaw-er-month-chevron" />
+                    <span className="font-bold whitespace-nowrap">{entry.period}</span>
+                    <span className="tanaw-er-optional whitespace-nowrap text-(--tanaw-text-secondary) tabular-nums">
+                      <span className="sr-only">Report ID </span>
+                      {entry.reportCode ?? "—"}
+                    </span>
+                    <span className={cn("whitespace-nowrap", sent.tone)}>
+                      <span className="sr-only">Sent </span>
+                      {sent.text}
+                    </span>
+                    <span>
+                      <StatusPill tone={submissionTone[entry.submission]}>
+                        <span className="sr-only">Submission: </span>
+                        {entry.submission}
+                      </StatusPill>
+                    </span>
+                    <span>
+                      <StatusPill tone={reviewTone[entry.review]}>
+                        <span className="sr-only">Staff review: </span>
+                        {entry.review}
+                      </StatusPill>
+                    </span>
+                    <span className={cn("tanaw-er-optional truncate", !entry.reviewedBy && "text-(--tanaw-text-muted)")}>
+                      <span className="sr-only">Reviewed by </span>
+                      {entry.reviewedBy ?? "—"}
+                    </span>
+                  </button>
+                  {open && (
+                    <div id={logId} className="tanaw-er-log pt-1 pr-4.5 pb-2 pl-10.5 max-sm:pl-4">
+                      <p className="m-0 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase">
+                        Report log · <span className="tracking-normal normal-case">{entry.period}</span>
+                      </p>
+                      <ol aria-label={`${entry.period} report log`} className="m-0 mt-3 list-none py-0 pr-0 pl-1.5">
+                        {events.map((event) => (
+                          <li key={event.id} className="tanaw-er-log-item">
+                            <span aria-hidden="true" className="tanaw-er-log-dot" data-tone={event.tone} />
+                            <p className="m-0 text-sm font-bold">
+                              {event.title} <span className="ml-1.5 text-[0.78125rem] font-medium text-(--tanaw-text-muted)">{event.when}</span>
+                            </p>
+                            <p className="m-0 mt-0.75 text-[0.84375rem] text-(--tanaw-text-secondary)">{event.detail}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {hasMore && (
+          <div className="border-t border-(--tanaw-border-soft) px-2 py-0.5">
+            <button
+              type="button"
+              aria-expanded={showAll}
+              onClick={onToggleShowAll}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-(--tanaw-accent-ink) hover:underline focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+            >
+              {showAll ? "Show fewer months" : `Show all ${entries.length} months of ${year}`}
+              <ChevronDown size={15} aria-hidden="true" className={cn("transition-transform", showAll && "rotate-180")} />
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

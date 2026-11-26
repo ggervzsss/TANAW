@@ -2,17 +2,9 @@ import { X } from "lucide-react";
 import { motion } from "motion/react";
 import { useId, useMemo, useRef, useState } from "react";
 import { MONTH_NAMES, submissionTone } from "@/features/reports/model/reportStatuses";
-import { Button, ModalPortal, StatusPill, cn, dialogIn, useDialogFocus } from "@/shared/ui-kit";
+import { ModalPortal, StatusPill, cn, dialogIn, useDialogFocus } from "@/shared/ui-kit";
 import type { FinalReport, SystemLog } from "@/shared/types";
-import {
-  buildMonthEntry,
-  historyMonths,
-  historyYears,
-  needsAllMonths,
-  summarizeYear,
-  type EnterpriseReportProfile,
-  type ReportIndex,
-} from "../model/enterpriseReports";
+import { buildMonthEntry, historyMonths, historyYears, needsAllMonths, summarizeYear, type EnterpriseReportProfile, type ReportIndex } from "../model/enterpriseReports";
 import { monthKeyId, type MonthKey } from "../model/reportMonths";
 import { ReportHistory } from "./ReportHistory";
 
@@ -40,8 +32,10 @@ function formatMonthYear(date: Date) {
 }
 
 /**
- * One enterprise's report details: contact and camera facts, then its report submission history by
- * year. It opens on the viewed month with that month's report log expanded.
+ * One enterprise's report details: a compact line of contact and camera facts, then its report
+ * submission history by year. The header names the opened month's status and stays put while months
+ * are expanded below; the whole dialog body scrolls as one, so the month list and its report logs are
+ * never squeezed into a scroll box of their own.
  */
 export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, reviewers, logs, finalReports, today, onClose }: EnterpriseReportModalProps) {
   const panelRef = useRef<HTMLElement | null>(null);
@@ -71,8 +65,9 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
   );
   const summary = yearSummaries.find((item) => item.year === year) ?? summarizeYear(year, entries);
 
-  const focused = entries.find((entry) => entry.key === expandedKey) ?? buildMonthEntry(profile.id, viewedMonth, reportIndex, reviewers, today);
-  const hideContact = focused.submission !== "Submitted";
+  // The opened month, not the expanded row, sets the header: expanding other months does not change it.
+  const viewed = useMemo(() => buildMonthEntry(profile.id, viewedMonth, reportIndex, reviewers, today), [profile.id, reportIndex, reviewers, today, viewedMonth]);
+  const showContact = viewed.submission === "Submitted";
 
   const chooseYear = (value: number) => {
     setYear(value);
@@ -80,10 +75,14 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
     setShowAll(false);
   };
 
-  const info: { label: string; value: string | null; contact?: boolean; wrap?: boolean }[] = [
-    { label: "Contact person", value: profile.contactPerson, contact: true },
-    { label: "Email", value: profile.email, contact: true, wrap: true },
-    { label: "Phone", value: profile.phone, contact: true },
+  const facts: { label: string; value: string | null; wrap?: boolean }[] = [
+    ...(showContact
+      ? [
+          { label: "Contact person", value: profile.contactPerson },
+          { label: "Email", value: profile.email, wrap: true },
+          { label: "Phone", value: profile.phone },
+        ]
+      : []),
     { label: "Cameras", value: profile.cameras },
     { label: "Registered", value: profile.registeredAt ? formatMonthYear(profile.registeredAt) : null },
   ];
@@ -107,27 +106,26 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
           aria-describedby={subtitleId}
           tabIndex={-1}
           {...dialogIn}
-          className="flex max-h-[calc(100dvh-4rem)] w-full max-w-230 flex-col overflow-hidden rounded-tanaw-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface) text-(--tanaw-text) shadow-[0_24px_64px_rgb(4_20_12/0.28)] outline-none max-sm:max-h-[calc(100dvh-2rem)]"
+          className="rounded-tanaw-xl flex max-h-[calc(100dvh-4rem)] w-full max-w-230 flex-col overflow-hidden border border-(--tanaw-border-soft) bg-(--tanaw-surface) text-(--tanaw-text) shadow-[0_24px_64px_rgb(4_20_12/0.28)] outline-none max-sm:max-h-[calc(100dvh-2rem)]"
         >
-          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-7.5 pt-5.5 pb-4 max-sm:px-5">
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-7.5 pt-5 pb-4 max-sm:px-5">
             <div className="min-w-0">
-              <h2 id={titleId} className="font-display text-[1.75rem] leading-[1.15] font-bold wrap-break-word max-sm:text-2xl">
+              <h2 id={titleId} className="font-display text-[1.625rem] leading-[1.15] font-bold wrap-break-word max-sm:text-2xl">
                 {profile.name}
               </h2>
-              <p id={subtitleId} className="mt-1.5 text-[0.90625rem] text-(--tanaw-text-secondary)">
-                {locationLine(profile.barangay)}
-              </p>
-              <p className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <StatusPill tone={submissionTone[focused.submission]}>
-                  <span className="sr-only">{focused.period} report: </span>
-                  {focused.submission}
-                </StatusPill>
-                <span className="text-[0.8125rem] text-(--tanaw-text-muted)">{focused.period}</span>
+              <p id={subtitleId} className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.90625rem] text-(--tanaw-text-secondary)">
+                <span>{locationLine(profile.barangay)}</span>
                 {profile.category && (
-                  <span className="ml-1 inline-flex min-h-6 items-center rounded-full border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-2.5 text-xs font-semibold text-(--tanaw-text-secondary)">
-                    {profile.category}
-                  </span>
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{profile.category}</span>
+                  </>
                 )}
+              </p>
+              <p className="mt-2.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-(--tanaw-text-secondary)">
+                <span>{viewed.period} report</span>
+                <StatusPill tone={submissionTone[viewed.submission]}>{viewed.submission}</StatusPill>
+                {viewed.submissionNote && <span className="text-(--tanaw-text-muted)">{viewed.submissionNote}</span>}
               </p>
             </div>
             <button
@@ -140,19 +138,22 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
             </button>
           </header>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-7.5 pt-5 pb-3.5 max-sm:px-5">
-            <dl className="m-0 grid grid-cols-3 gap-x-7 gap-y-4 text-[0.90625rem] max-md:grid-cols-2 max-sm:grid-cols-1">
-              {info.map((item) => {
-                const shown = item.contact && hideContact ? null : item.value;
-                return (
-                  <div key={item.label} className="min-w-0">
-                    <dt className="text-[0.78125rem] text-(--tanaw-text-muted)">{item.label}</dt>
-                    <dd className={cn("mt-1 font-semibold", item.wrap && "wrap-anywhere", !shown && "text-(--tanaw-text-muted)")}>
-                      {shown ?? <span aria-label="Not available">—</span>}
-                    </dd>
-                  </div>
-                );
-              })}
+          <div className="tanaw-er-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7.5 pt-4 pb-6 max-sm:px-5">
+            <dl className="tanaw-er-facts m-0">
+              {facts.map((fact) => (
+                <div key={fact.label} className="min-w-0">
+                  <dt className="text-[0.75rem] text-(--tanaw-text-muted)">{fact.label}</dt>
+                  <dd className={cn("m-0 mt-0.5 text-sm font-semibold", fact.wrap && "wrap-anywhere", !fact.value && "text-(--tanaw-text-muted)")}>
+                    {fact.value ?? <span aria-label="Not available">—</span>}
+                  </dd>
+                </div>
+              ))}
+              {!showContact && (
+                <div className="min-w-0">
+                  <dt className="text-[0.75rem] text-(--tanaw-text-muted)">Contact details</dt>
+                  <dd className="m-0 mt-0.5 text-sm text-(--tanaw-text-secondary)">Shown once the {viewed.period} report is sent.</dd>
+                </div>
+              )}
             </dl>
 
             <ReportHistory
@@ -172,12 +173,6 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
               onToggleShowAll={() => setShowAll((current) => !current)}
             />
           </div>
-
-          <footer className="flex shrink-0 justify-end border-t border-(--tanaw-border-soft) px-7.5 py-3.5 max-sm:px-5">
-            <Button variant="secondary" onClick={onClose} className="h-11 min-w-25">
-              Close
-            </Button>
-          </footer>
         </motion.section>
       </motion.div>
     </ModalPortal>

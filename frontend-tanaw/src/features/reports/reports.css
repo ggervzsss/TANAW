@@ -44,12 +44,7 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
   background: var(--tanaw-control-hover);
 }
 
-.tanaw-staff-table :where(th, td):first-child {
-  padding-left: 0;
-}
-
 .tanaw-staff-table :where(th, td):last-child {
-  padding-right: 0;
   text-align: right;
   white-space: nowrap;
 }

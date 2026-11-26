@@ -2,26 +2,13 @@ import { FileSearch } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { currentReportingMonth, monthIndexOf } from "@/features/reports/model/reportStatuses";
-import {
-  Alert,
-  Button,
-  DateRangePicker,
-  EmptyState,
-  Pagination,
-  PortalPageHeader,
-  SearchField,
-  Select,
-  Skeleton,
-  monthRange,
-  rangeEndMonth,
-  type DateRange,
-} from "@/shared/ui-kit";
+import { Alert, Button, EmptyState, MonthPicker, Pagination, PortalPageHeader, SearchField, Select, Skeleton } from "@/shared/ui-kit";
 import { EnterpriseReportList } from "../components/EnterpriseReportList";
 import { EnterpriseReportModal } from "../components/EnterpriseReportModal";
 import { useEnterpriseReportsData } from "../hooks/useEnterpriseReportsData";
 import { buildReportRows, filterReportRows, type SubmissionFilter } from "../model/enterpriseReports";
 import { readReportLink, withReportClosed, withReportMonth, withReportOpen } from "../model/reportLinks";
-import { monthFromKeyId, monthKeyId, periodLabel, sameMonth, type MonthKey } from "../model/reportMonths";
+import { minMonth, monthFromKeyId, monthKeyId, monthOfDate, periodLabel, type MonthKey } from "../model/reportMonths";
 import "../admin-reports.css";
 
 const PAGE_SIZE = 10;
@@ -52,8 +39,7 @@ export function AdminEnterpriseReportsPage() {
   const monthId = monthKeyId(link.month ?? defaultReportingMonth(today));
   const month = useMemo(() => monthFromKeyId(monthId) as MonthKey, [monthId]);
 
-  const [pickedRange, setPickedRange] = useState<DateRange | null>(null);
-  const range = pickedRange && sameMonth(rangeEndMonth(pickedRange), month) ? pickedRange : monthRange(month.year, month.monthIndex, today);
+  const latestDue = useMemo(() => defaultReportingMonth(today), [today]);
 
   const [query, setQuery] = useState("");
   const [enterpriseId, setEnterpriseId] = useState("all");
@@ -76,15 +62,15 @@ export function AdminEnterpriseReportsPage() {
   const currentPage = Math.min(page, pageCount);
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  // Months can be chosen from the first month any enterprise reports for, up to this month.
+  const firstMonth = useMemo(() => profiles.reduce<MonthKey | null>((first, profile) => minMonth(first, profile.firstMonth), null), [profiles]);
   const openProfile = link.enterpriseId ? profiles.find((profile) => profile.id === link.enterpriseId) : undefined;
   const period = periodLabel(month);
   const filtered = query.trim() !== "" || enterpriseId !== "all" || submission !== "all";
 
-  const applyRange = (next: DateRange) => {
-    const end = rangeEndMonth(next);
-    setPickedRange(next);
+  const changeMonth = (next: MonthKey) => {
     setPage(1);
-    setSearchParams(withReportMonth(searchParams, { year: end.year, monthIndex: end.monthIndex }), { replace: true });
+    setSearchParams(withReportMonth(searchParams, next), { replace: true });
   };
   const changeQuery = (value: string) => {
     setQuery(value);
@@ -113,15 +99,15 @@ export function AdminEnterpriseReportsPage() {
         title="Enterprise Reports"
         description={`Who sent their ${period} report, when it arrived, and where it is in review. Select an enterprise to see its report details.`}
         actions={
-          <DateRangePicker
-            variant="field"
+          <MonthPicker
             label="Reporting month"
-            ariaLabel="Choose the reporting month"
-            value={range}
-            onChange={applyRange}
-            today={today}
-            triggerLabel={period}
-            className="min-w-60"
+            value={month}
+            onChange={changeMonth}
+            min={firstMonth}
+            max={monthOfDate(today)}
+            highlight={latestDue}
+            highlightLabel="Latest month due"
+            className="w-74 max-sm:w-full"
           />
         }
       />

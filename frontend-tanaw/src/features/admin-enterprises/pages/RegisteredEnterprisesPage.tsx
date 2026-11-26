@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, ChevronUp, CircleAlert, CircleCheck, CircleM
 import { useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { adminEnterpriseDetailsPath } from "@/app/routers/routes";
-import { Alert, Button, EmptyState, Pagination, PortalPageHeader, SearchField, Select, Skeleton, cn } from "@/shared/ui-kit";
+import { Alert, Button, EmptyState, Pagination, PortalPageHeader, SearchField, Select, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import { useEnterpriseDirectory, useNow } from "../hooks/useEnterpriseDirectory";
 import { plural, type CameraState } from "../model/cameraStatus";
 import {
@@ -269,8 +269,8 @@ const statusColor: Record<CameraState, string> = {
 };
 
 function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: { rows: EnterpriseRow[]; isLoading: boolean; sort: SortDirection; onSort: () => void; empty: ReactNode; listSearch: string }) {
-  const header = "px-4 py-3 text-left text-[11px] font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase first:pl-0";
-  const cell = "px-4 py-4 align-top first:pl-0";
+  const header = "px-4 py-3 text-left text-[11px] font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase first:pl-3 last:pr-3";
+  const cell = "px-4 py-4 align-top first:pl-3 last:pr-3";
   return (
     <div className="mt-2 overflow-x-auto">
       <table className="ae-table w-full min-w-240 border-collapse text-sm text-(--tanaw-text)">
@@ -295,8 +295,8 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
             <th scope="col" className={cn(header, "w-[16%]")}>
               Cameras
             </th>
-            <th scope="col" className={header}>
-              <span className="sr-only">Actions</span>
+            <th scope="col" className={cn(header, "w-10")}>
+              <span className="sr-only">Opens details</span>
             </th>
           </tr>
         </thead>
@@ -310,9 +310,11 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
                 </tr>
               ))
             : rows.map((row) => (
-                <tr key={row.id} className="border-b border-(--tanaw-border-soft)">
+                <tr key={row.id} onClick={openRowFromClick} className="tanaw-row-link border-b border-(--tanaw-border-soft)">
                   <th scope="row" className={cn(cell, "text-left font-normal")}>
-                    <span className="block text-base font-bold">{row.name}</span>
+                    <Link data-row-primary to={adminEnterpriseDetailsPath(row.id)} state={{ listSearch }} className="block text-base font-bold">
+                      {row.name}
+                    </Link>
                     <span className="mt-0.5 line-clamp-2 block text-[13px] text-(--tanaw-text-secondary)">{[row.portfolio, row.address].filter(Boolean).join(". ") || "No address on record"}</span>
                   </th>
                   <td className={cell}>{row.barangay}</td>
@@ -328,10 +330,8 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
                       {row.camera.label}
                     </span>
                   </td>
-                  <td className={cn(cell, "text-right whitespace-nowrap")}>
-                    <Link to={adminEnterpriseDetailsPath(row.id)} state={{ listSearch }} aria-label={`View details for ${row.name}`} className="inline-flex items-center gap-0.5 font-semibold text-(--tanaw-accent-ink) no-underline hover:underline">
-                      View details <ChevronRight size={15} aria-hidden="true" />
-                    </Link>
+                  <td className={cn(cell, "w-10 text-right align-middle")}>
+                    <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                   </td>
                 </tr>
               ))}

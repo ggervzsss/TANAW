@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useOperationalFinalReports } from "@/app/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import type { FinalReport } from "@/shared/types";
-import { Button, PortalPageHeader, Select, StatusPill, Tabs } from "@/shared/ui-kit";
+import { PortalPageHeader, Select, StatusPill, Tabs, openRowFromClick } from "@/shared/ui-kit";
 import { AnnualReportDialog } from "../components/AnnualReportDialog";
 import { MonthlyReportDialog } from "../components/MonthlyReportDialog";
 import { reportEnterprisesQueryKey } from "../hooks/useStaffReports";
@@ -113,7 +114,7 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
               </th>
               <th scope="col">Status</th>
               <th scope="col">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">Opens the report</span>
               </th>
             </tr>
           </thead>
@@ -121,9 +122,11 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
             {reports.map((report) => {
               const status = finalReportStatus(report.status);
               return (
-                <tr key={report.id}>
+                <tr key={report.id} onClick={openRowFromClick} className="tanaw-row-link">
                   <th scope="row" className="font-semibold">
-                    {report.period}
+                    <button type="button" data-row-primary aria-label={`View the ${report.period} report`} onClick={() => onOpen(report)}>
+                      {report.period}
+                    </button>
                   </th>
                   <td className="tanaw-hide-sm text-(--tanaw-text-secondary) tabular-nums">{report.id}</td>
                   <td className="tanaw-num" title={registered ? `${report.enterpriseCount} of the ${registered} enterprises registered today` : undefined}>
@@ -135,9 +138,7 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
                     <StatusPill tone={status.tone}>{status.label}</StatusPill>
                   </td>
                   <td>
-                    <Button size="sm" variant="secondary" aria-label={`View the ${report.period} report`} onClick={() => onOpen(report)}>
-                      View
-                    </Button>
+                    <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                   </td>
                 </tr>
               );
@@ -170,15 +171,17 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
               </th>
               <th scope="col">Status</th>
               <th scope="col">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">Opens the report</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.year}>
+              <tr key={row.year} onClick={openRowFromClick} className="tanaw-row-link">
                 <th scope="row" className="font-semibold">
-                  {row.year}
+                  <button type="button" data-row-primary aria-label={`View the ${row.year} annual report`} onClick={() => onOpen(row)}>
+                    {row.year}
+                  </button>
                 </th>
                 <td className="tanaw-num">{row.monthsIncluded} of 12</td>
                 <td className="tanaw-num font-semibold">{formatCount(row.visitors)}</td>
@@ -186,9 +189,7 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
                   <StatusPill tone={row.complete ? "consolidated" : "waiting"}>{row.complete ? "Consolidated" : "Waiting"}</StatusPill>
                 </td>
                 <td>
-                  <Button size="sm" variant="secondary" aria-label={`View the ${row.year} annual report`} onClick={() => onOpen(row)}>
-                    View
-                  </Button>
+                  <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                 </td>
               </tr>
             ))}

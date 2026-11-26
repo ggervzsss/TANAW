@@ -27,17 +27,50 @@
 }
 
 .tanaw-er-row:focus-visible,
-.tanaw-er-month-row:focus-visible,
-.tanaw-er-scroll:focus-visible {
+.tanaw-er-month-row:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: -2px;
 }
 
+/* The facts line under the dialog header: up to five short facts side by side, wrapping on narrow screens. */
+.tanaw-er-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+}
+
+.tanaw-er-facts > div {
+  max-width: 100%;
+}
+
+/* Month list columns: chevron, period, report ID, sent, submission, staff review, reviewed by. */
 .tanaw-er-month-cols {
   display: grid;
-  grid-template-columns: 18px 1.2fr 1.2fr 0.7fr 0.7fr 1fr 1fr 1fr;
+  grid-template-columns: 18px minmax(7.5rem, 1.05fr) minmax(9.5rem, 1.2fr) minmax(6.5rem, 0.85fr) minmax(6.5rem, 0.8fr) minmax(7rem, 0.85fr) minmax(6rem, 0.9fr);
   align-items: center;
-  column-gap: 12px;
+  column-gap: 14px;
+}
+
+/* Narrow dialogs drop the report ID and reviewer columns; the report log still names both. */
+@media (width < 52rem) {
+  .tanaw-er-month-cols {
+    grid-template-columns: 18px minmax(7rem, 1.2fr) minmax(5.5rem, 0.9fr) minmax(6rem, 0.9fr) minmax(6.5rem, 0.9fr);
+  }
+
+  .tanaw-er-optional {
+    display: none;
+  }
+}
+
+@media (width < 34rem) {
+  .tanaw-er-month-cols {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+
+  .tanaw-er-month-cols > :nth-child(4),
+  .tanaw-er-month-cols > :nth-child(6) {
+    display: none;
+  }
 }
 
 .tanaw-er-month-item + .tanaw-er-month-item {
@@ -48,9 +81,16 @@
   background: var(--tanaw-control-hover);
 }
 
+.tanaw-er-month-item:last-child,
+.tanaw-er-month-item:last-child .tanaw-er-month-row {
+  border-bottom-right-radius: 11px;
+  border-bottom-left-radius: 11px;
+}
+
 .tanaw-er-month-row {
   width: 100%;
-  padding: 12px;
+  min-height: 52px;
+  padding: 10px 12px;
   text-align: left;
   font-size: 0.875rem;
   color: var(--tanaw-text);
@@ -58,6 +98,21 @@
 
 .tanaw-er-month-row:hover {
   background: var(--tanaw-control-hover);
+}
+
+.tanaw-er-month-row:hover .tanaw-er-month-chevron {
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-er-log {
+  animation: tanaw-er-log-in 160ms ease-out;
+}
+
+@keyframes tanaw-er-log-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .tanaw-er-month-chevron {
@@ -106,5 +161,9 @@
   .tanaw-er-row,
   .tanaw-er-month-chevron {
     transition: none;
+  }
+
+  .tanaw-er-log {
+    animation: none;
   }
 }

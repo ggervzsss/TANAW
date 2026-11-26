@@ -275,7 +275,8 @@ test.describe("IT Enterprises list", () => {
     await expect(lakeside).toContainText("Last data 1 min ago");
     await expect(lakeside).toContainText("3 of 4 counting");
     await expect(lakeside).toContainText("Gate A keeps losing its picture");
-    await expect(lakeside.getByRole("link", { name: "Manage Lakeside Park" })).toHaveAttribute("href", "/it/enterprises/ENT-lakeside");
+    await expect(lakeside.getByRole("link", { name: "Lakeside Park" })).toHaveAttribute("href", "/it/enterprises/ENT-lakeside");
+    await expect(lakeside.getByRole("link", { name: /^Manage/ })).toHaveCount(0);
 
     const cuyab = page.getByRole("row", { name: /Cuyab River Eco Park/ });
     await expect(cuyab).toContainText("Invitation sent");
