@@ -19,7 +19,7 @@ export function toastMessage(title: string, text: string): ReactElement {
   );
 }
 
-export type PersonnelSheetState = { mode: "invite" } | { mode: "edit"; accountId: string };
+export type PersonnelDialogState = { mode: "invite" } | { mode: "edit"; accountId: string };
 
 export function usePersonnelPage() {
   const queryClient = useQueryClient();
@@ -27,7 +27,7 @@ export function usePersonnelPage() {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<PersonnelRoleFilter>("all");
   const [showDeactivated, setShowDeactivated] = useState(false);
-  const [sheet, setSheet] = useState<PersonnelSheetState | null>(null);
+  const [dialog, setDialog] = useState<PersonnelDialogState | null>(null);
   const [confirmDeactivate, setConfirmDeactivate] = useState<PersonnelAccount | null>(null);
 
   const accountsQuery = useQuery({ queryKey: lguAccountsQueryKey, queryFn: listLguAccounts });
@@ -35,7 +35,7 @@ export function usePersonnelPage() {
   const rows = useMemo(() => filterPersonnel(accounts, { query, role, showDeactivated }), [accounts, query, role, showDeactivated]);
   const counts = useMemo(() => personnelRoleCounts(accounts, showDeactivated), [accounts, showDeactivated]);
   const callouts = useMemo(() => emailChangeCallouts(accounts), [accounts]);
-  const sheetAccount = sheet?.mode === "edit" ? (accounts.find((account) => account.id === sheet.accountId) ?? null) : null;
+  const dialogAccount = dialog?.mode === "edit" ? (accounts.find((account) => account.id === dialog.accountId) ?? null) : null;
 
   const refreshAccounts = (withEmail = false) =>
     Promise.all([
@@ -106,13 +106,13 @@ export function usePersonnelPage() {
     setRole,
     showDeactivated,
     setShowDeactivated,
-    sheet,
-    sheetAccount,
-    openInvite: () => setSheet({ mode: "invite" }),
-    openEdit: (account: PersonnelAccount) => setSheet({ mode: "edit", accountId: account.id }),
-    closeSheet: () => setSheet(null),
+    dialog,
+    dialogAccount,
+    openInvite: () => setDialog({ mode: "invite" }),
+    openEdit: (account: PersonnelAccount) => setDialog({ mode: "edit", accountId: account.id }),
+    closeDialog: () => setDialog(null),
     onInvited: () => {
-      setSheet(null);
+      setDialog(null);
       setRole("all");
     },
     resend: (account: PersonnelAccount) => resendMutation.mutate(account),

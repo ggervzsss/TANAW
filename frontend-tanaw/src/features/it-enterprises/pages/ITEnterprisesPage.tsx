@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Skeleton, cn } from "@/shared/ui-kit";
-import { RegisterEnterpriseSheet } from "../components/RegisterEnterpriseSheet";
+import { RegisterEnterpriseDialog } from "../components/RegisterEnterpriseDialog";
 import { StateText } from "../components/StateText";
 import { toneText } from "../components/tones";
 import { useResendInvitation } from "../hooks/useEnterpriseActions";
@@ -33,7 +33,7 @@ import "../itEnterprises.css";
 /*
  * IT Enterprises (/it/enterprises): every enterprise account with its sign-in state, desktop app and
  * cameras. ?show=attention|pending|sending picks a chip, ?q= searches, and ?register=1 opens the
- * Register enterprise sheet.
+ * Register enterprise dialog.
  */
 export function ITEnterprisesPage() {
   const [params, setParams] = useSearchParams();
@@ -63,7 +63,7 @@ export function ITEnterprisesPage() {
   const showChip = (key: ChipKey) => setParam({ show: key === "all" ? null : key });
 
   return (
-    <div className="it-enterprises mx-auto w-full max-w-360">
+    <div className="it-enterprises w-full">
       <PortalPageHeader
         title="Enterprises"
         description="Register enterprises, send their sign-in invitations, and keep their desktop apps and cameras sending data."
@@ -165,7 +165,7 @@ export function ITEnterprisesPage() {
         </>
       )}
 
-      <AnimatePresence>{registerOpen && <RegisterEnterpriseSheet key="register-enterprise" onClose={() => setParam({ register: null })} />}</AnimatePresence>
+      <AnimatePresence>{registerOpen && <RegisterEnterpriseDialog key="register-enterprise" onClose={() => setParam({ register: null })} />}</AnimatePresence>
     </div>
   );
 }

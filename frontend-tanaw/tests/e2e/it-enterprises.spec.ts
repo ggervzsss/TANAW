@@ -1,5 +1,5 @@
 // IT Enterprises and Manage an enterprise: the list with its figures, chips and invitation actions,
-// the Register enterprise sheet, and the Connection, Details and account, and Opening hours tabs.
+// the Register enterprise dialog, and the Connection, Details and account, and Opening hours tabs.
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { json, mockPortalSession, portalUser } from "./support/session";
 
@@ -312,7 +312,7 @@ test.describe("IT Enterprises list", () => {
     await expect(page.locator("tbody tr")).toHaveCount(4);
   });
 
-  test("registers an enterprise from the side sheet", async ({ page }) => {
+  test("registers an enterprise from the Register enterprise dialog", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const api = await openIt(page, "/it/enterprises");
 
@@ -355,7 +355,7 @@ test.describe("IT Enterprises list", () => {
     await expect(page).not.toHaveURL(/register=1/);
   });
 
-  test("closes the sheet with Escape", async ({ page }) => {
+  test("closes the dialog with Escape", async ({ page }) => {
     await openIt(page, "/it/enterprises?register=1");
     const sheet = page.getByRole("dialog", { name: "Register enterprise" });
     await expect(sheet).toBeVisible();

@@ -135,7 +135,7 @@ export function ManagerFields(props: FieldsProps) {
   return (
     <fieldset className="min-w-0">
       <legend className="mb-1.5 text-xs font-semibold text-(--tanaw-text-secondary)">Owner or manager</legend>
-      <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
         <TextInput {...props} field="managerFirstName" label="First name" autoComplete="given-name" maxLength={PERSON_NAME_MAX_LENGTH} />
         <TextInput {...props} field="managerMiddleInitial" label="M.I." optional autoComplete="additional-name" maxLength={1} normalize={normalizeMiddleInitial} />
         <TextInput {...props} field="managerLastName" label="Last name" autoComplete="family-name" maxLength={PERSON_NAME_MAX_LENGTH} />

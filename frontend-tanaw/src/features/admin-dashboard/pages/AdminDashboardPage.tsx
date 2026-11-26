@@ -23,7 +23,7 @@ export function AdminDashboardPage() {
   const places = useMemo(() => placeOptions(enterprises), [enterprises]);
 
   return (
-    <div className="tanaw-dashboard mx-auto w-full max-w-360">
+    <div className="tanaw-dashboard w-full">
       <PortalPageHeader title="Dashboard" description="Visitor activity and important updates across San Pedro." />
       <div className="tanaw-dashboard__overview">
         <DashboardMap enterprises={enterprises} isEnterpriseError={mapQuery.isError} onRetry={() => void mapQuery.refetch()} />

@@ -12,7 +12,7 @@ import "../itOverview.css";
 export function ITOverviewPage() {
   const overview = useItOverview();
   return (
-    <div className="it-overview mx-auto w-full max-w-360 pb-14">
+    <div className="it-overview w-full pb-14">
       <PortalPageHeader
         title={overview.greeting}
         description="What needs IT today: requests to handle, places not sending data, and accounts waiting on you."

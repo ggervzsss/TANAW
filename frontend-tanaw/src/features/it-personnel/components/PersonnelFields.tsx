@@ -18,7 +18,7 @@ type TextFieldProps = {
 
 const labelClass = "mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)";
 
-export function SheetTextField({ name, label, value, onChange, error, hint, type = "text", autoComplete, maxLength, optional = false }: TextFieldProps) {
+export function PersonnelTextField({ name, label, value, onChange, error, hint, type = "text", autoComplete, maxLength, optional = false }: TextFieldProps) {
   const id = useId();
   const noteId = `${id}-note`;
   return (
@@ -45,7 +45,7 @@ export function SheetTextField({ name, label, value, onChange, error, hint, type
   );
 }
 
-export function SheetPhoneField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
+export function PersonnelPhoneField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   const id = useId();
   const noteId = `${id}-note`;
   const [typingError, setTypingError] = useState("");
@@ -127,7 +127,7 @@ export function RoleCards({ value, onChange, lockedReason, error }: RoleCardsPro
   return (
     <fieldset data-field-name="role" className="m-0 border-0 p-0" aria-describedby={lockedReason || error ? noteId : undefined}>
       <legend className={labelClass}>Role</legend>
-      <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         {PERSONNEL_ROLES.map((role) => {
           const checked = value === role;
           const disabled = Boolean(lockedReason) && !checked;

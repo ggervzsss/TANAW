@@ -16,12 +16,6 @@ type AccountLayoutProps = {
   role: UserRole;
 };
 
-const centeredTitleClassByPath = new Map<string, string>([
-  [routes.it.help, "mx-auto w-full max-w-6xl"],
-  [routes.admin.help, "mx-auto w-full max-w-6xl"],
-  [routes.staff.help, "mx-auto w-full max-w-6xl"],
-]);
-
 export function AccountLayout({ role }: AccountLayoutProps) {
   const theme = usePortalThemePreference();
   const mainRef = useRef<HTMLElement>(null);
@@ -44,8 +38,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
   const isSettings = isRoleSettingsPath(role, pathname);
   const title = pageHeader?.pathname === pathname ? pageHeader.title : undefined;
-  const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
-  const titleClassName = ["text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl", centeredTitleClassName].filter(Boolean).join(" ");
+  const titleClassName = "text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl";
   const sectionClassName =
     "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100 max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible";
   const mainClassName =

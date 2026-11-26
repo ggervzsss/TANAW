@@ -7,13 +7,12 @@ import { emailDeliveriesQueryKey } from "@/features/email-deliveries";
 import { createLguUpdatePayload, getInitialLguEditState, getInvalidLguEditFieldNames, validateLguEditForm, type LguEditErrors, type LguEditState } from "@/features/lgu-accounts/model";
 import { createLguAccount, lguAccountsQueryKey, updateLguAccount, type CreateLguAccountPayload } from "@/features/lgu-accounts/services";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
-import { Alert, Button } from "@/shared/ui-kit";
+import { Alert, Button, Dialog } from "@/shared/ui-kit";
 import { normalizeMiddleInitial, PERSON_NAME_MAX_LENGTH } from "@/shared/utils/accountValidation";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { toastMessage } from "../hooks/usePersonnelPage";
 import { emailChangeEffect, personnelChanges, roleLabelOf, type PersonnelAccount, type PersonnelChange, type PersonnelRole } from "../model";
-import { RoleCards, SheetPhoneField, SheetTextField } from "./PersonnelFields";
-import { SideSheet } from "./SideSheet";
+import { RoleCards, PersonnelPhoneField, PersonnelTextField } from "./PersonnelFields";
 
 type Props = {
   /** The account being edited; null to invite someone new. */
@@ -27,7 +26,7 @@ const EMPTY_FORM: LguEditState = { firstName: "", middleInitial: "", lastName: "
 
 type Review = { payload: CreateLguAccountPayload; changes: PersonnelChange[] };
 
-export function PersonnelSheet({ account, lockedRoleReason, onClose, onInvited }: Props) {
+export function PersonnelDialog({ account, lockedRoleReason, onClose, onInvited }: Props) {
   const queryClient = useQueryClient();
   const focusFirstInvalidField = useFocusFirstInvalidField();
   const formId = useId();
@@ -114,24 +113,28 @@ export function PersonnelSheet({ account, lockedRoleReason, onClose, onInvited }
         : "The invitation link goes to this address.";
 
   return (
-    <SideSheet
+    <Dialog
       title={account ? `Edit ${account.displayName}` : "Invite personnel"}
       description={account ? "Changes take effect the next time they open TANAW." : "TANAW emails them a link to set a password. If the link expires, you can send a new one from this list."}
       onClose={close}
+      closeLabel="Close"
+      accent="thread"
+      size="xl"
+      initialFocus="input:not([type='hidden'])"
       footer={
         <>
-          <Button type="submit" form={formId} size="lg" loading={busy}>
-            {!editing ? "Send invitation" : review ? "Confirm and save" : "Save changes"}
-          </Button>
           <Button variant="secondary" size="lg" onClick={review ? () => setReview(null) : close} disabled={busy}>
             {review ? "Back to editing" : "Cancel"}
+          </Button>
+          <Button type="submit" form={formId} size="lg" loading={busy}>
+            {!editing ? "Send invitation" : review ? "Confirm and save" : "Save changes"}
           </Button>
         </>
       }
     >
-      <form id={formId} noValidate onSubmit={submit} className="grid gap-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
-          <SheetTextField
+      <form id={formId} noValidate onSubmit={submit} className="grid gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)] items-start gap-3 max-sm:grid-cols-[minmax(0,1fr)_5.5rem]">
+          <PersonnelTextField
             name="firstName"
             label="First name"
             value={form.firstName}
@@ -140,7 +143,7 @@ export function PersonnelSheet({ account, lockedRoleReason, onClose, onInvited }
             autoComplete="given-name"
             maxLength={PERSON_NAME_MAX_LENGTH}
           />
-          <SheetTextField
+          <PersonnelTextField
             name="middleInitial"
             label="Middle initial"
             value={form.middleInitial}
@@ -150,18 +153,22 @@ export function PersonnelSheet({ account, lockedRoleReason, onClose, onInvited }
             maxLength={1}
             optional
           />
+          <div className="max-sm:col-span-2">
+            <PersonnelTextField
+              name="lastName"
+              label="Last name"
+              value={form.lastName}
+              onChange={(value) => update("lastName", value)}
+              error={errors.lastName}
+              autoComplete="family-name"
+              maxLength={PERSON_NAME_MAX_LENGTH}
+            />
+          </div>
         </div>
-        <SheetTextField
-          name="lastName"
-          label="Last name"
-          value={form.lastName}
-          onChange={(value) => update("lastName", value)}
-          error={errors.lastName}
-          autoComplete="family-name"
-          maxLength={PERSON_NAME_MAX_LENGTH}
-        />
-        <SheetTextField name="email" type="email" label="Work email" value={form.email} onChange={(value) => update("email", value)} error={errors.email} hint={emailHint} autoComplete="email" />
-        <SheetPhoneField value={form.phoneLocal} onChange={(value) => update("phoneLocal", value)} error={errors.phoneLocal} />
+        <div className="grid grid-cols-2 items-start gap-3 max-sm:grid-cols-1">
+          <PersonnelTextField name="email" type="email" label="Work email" value={form.email} onChange={(value) => update("email", value)} error={errors.email} hint={emailHint} autoComplete="email" />
+          <PersonnelPhoneField value={form.phoneLocal} onChange={(value) => update("phoneLocal", value)} error={errors.phoneLocal} />
+        </div>
         <RoleCards value={form.role} onChange={(role: PersonnelRole) => update("role", role)} lockedReason={lockedRoleReason} error={errors.role} />
         {nothingChanged && (
           <p role="status" className="text-sm font-semibold text-(--tanaw-text-secondary)">
@@ -170,7 +177,7 @@ export function PersonnelSheet({ account, lockedRoleReason, onClose, onInvited }
         )}
         {review && <ChangeReview changes={review.changes} />}
       </form>
-    </SideSheet>
+    </Dialog>
   );
 }
 

@@ -158,7 +158,7 @@ export function personnelActions(account: PersonnelAccount, accounts: readonly P
   };
 }
 
-/** Roles the edit sheet can offer for this account; the API refuses the others. */
+/** Roles the edit dialog can offer for this account; the API refuses the others. */
 export function lockedRoleReason(account: PersonnelAccount, accounts: readonly PersonnelAccount[], viewerId: string | null | undefined) {
   if (account.role !== "it") return null;
   if (viewerId && account.id === viewerId) return "You cannot remove your own IT access.";

@@ -108,7 +108,7 @@ export function AdminEnterpriseReportsPage() {
   const closeEnterprise = () => setSearchParams(withReportClosed(searchParams));
 
   return (
-    <div className="mx-auto w-full max-w-360">
+    <div className="w-full">
       <PortalPageHeader
         title="Enterprise Reports"
         description={`Who sent their ${period} report, when it arrived, and where it is in review. Select an enterprise to see its report details.`}

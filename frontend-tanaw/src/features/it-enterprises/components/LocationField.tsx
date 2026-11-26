@@ -3,7 +3,7 @@ import { LocationPicker } from "@/features/enterprise-accounts/components/Locati
 import type { LocationDraftState } from "../hooks/useLocationDraft";
 
 /** The location search, the San Pedro map with its pin, and the pin's status. */
-export function LocationField({ draft, mapId, hint }: { draft: LocationDraftState; mapId: string; hint: string }) {
+export function LocationField({ draft, mapId, hint, mapHeightClassName = "h-60" }: { draft: LocationDraftState; mapId: string; hint: string; mapHeightClassName?: string }) {
   const { location, detectedBarangay, error } = draft;
   return (
     <section
@@ -18,7 +18,7 @@ export function LocationField({ draft, mapId, hint }: { draft: LocationDraftStat
       <LocationPicker
         location={location}
         mapId={mapId}
-        mapHeightClassName="h-60"
+        mapHeightClassName={mapHeightClassName}
         onBoundaryDetection={draft.onBoundaryDetection}
         onChange={draft.apply}
         onReject={draft.onReject}

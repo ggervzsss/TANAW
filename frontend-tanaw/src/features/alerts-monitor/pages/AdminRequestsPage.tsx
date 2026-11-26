@@ -63,7 +63,7 @@ export function AdminRequestsPage() {
     : `${requests.length} ${requests.length === 1 ? "request" : "requests"}, newest first.`;
 
   return (
-    <div className="mx-auto w-full max-w-360 pb-14">
+    <div className="w-full pb-14">
       <PortalPageHeader
         back={{ to: routes.admin.dashboard, label: "Dashboard" }}
         title="Requests"

@@ -33,7 +33,7 @@ export function ITEnterpriseManagePage() {
 
   if (notFound) {
     return (
-      <div className="it-enterprises mx-auto w-full max-w-360">
+      <div className="it-enterprises w-full">
         <PortalPageHeader back={BACK} title="Enterprise not found" />
         <EmptyState
           icon={<SearchX size={22} />}
@@ -54,7 +54,7 @@ export function ITEnterpriseManagePage() {
 
   if (isError && !row) {
     return (
-      <div className="it-enterprises mx-auto w-full max-w-360">
+      <div className="it-enterprises w-full">
         <PortalPageHeader back={BACK} title="Manage an enterprise" />
         <Alert
           tone="danger"
@@ -73,7 +73,7 @@ export function ITEnterpriseManagePage() {
 
   if (isLoading || !row) {
     return (
-      <div className="it-enterprises mx-auto w-full max-w-360">
+      <div className="it-enterprises w-full">
         <PortalPageHeader back={BACK} title={<span className="sr-only">Loading enterprise</span>} />
         <div role="status" aria-label="Loading enterprise" className="space-y-4">
           <Skeleton className="h-10 w-full max-w-xl" />
@@ -96,7 +96,7 @@ export function ITEnterpriseManagePage() {
     );
 
   return (
-    <div className="it-enterprises mx-auto w-full max-w-360">
+    <div className="it-enterprises w-full">
       <PortalPageHeader back={BACK} title={row.name} description={headerLine(row, formats)} actions={<StatusLine row={row} />} className="mb-4" />
       <Tabs items={TABS} value={tab} onChange={selectTab} ariaLabel="Enterprise sections" idPrefix="ite" />
       <div role="tabpanel" id={`ite-panel-${tab}`} aria-labelledby={`ite-tab-${tab}`} className="pt-6">

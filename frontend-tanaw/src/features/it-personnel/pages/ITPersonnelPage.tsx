@@ -6,7 +6,7 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import { Alert, Button, PortalPageHeader, SearchField, SegmentedControl } from "@/shared/ui-kit";
 import { DeactivateDialog } from "../components/DeactivateDialog";
 import { EmailChangeCallouts } from "../components/EmailChangeCallouts";
-import { PersonnelSheet } from "../components/PersonnelSheet";
+import { PersonnelDialog } from "../components/PersonnelDialog";
 import { PersonnelTable, type PersonnelRow } from "../components/PersonnelTable";
 import { usePersonnelPage } from "../hooks/usePersonnelPage";
 import { describeAccess, describeLastSignIn, lockedRoleReason, personnelActions, personnelTag, roleLabelOf, type PersonnelRoleFilter } from "../model";
@@ -113,12 +113,12 @@ export function ITPersonnelPage() {
       <p className="mt-3.5 text-[0.8125rem] text-(--tanaw-text-muted)">TANAW always keeps at least one active IT account, and nobody can change the first IT account’s role or turn it off.</p>
 
       <AnimatePresence>
-        {page.sheet && (page.sheet.mode === "invite" || page.sheetAccount) && (
-          <PersonnelSheet
-            key={page.sheet.mode === "edit" ? page.sheet.accountId : "invite"}
-            account={page.sheetAccount}
-            lockedRoleReason={page.sheetAccount ? lockedRoleReason(page.sheetAccount, page.accounts, page.viewerId) : null}
-            onClose={page.closeSheet}
+        {page.dialog && (page.dialog.mode === "invite" || page.dialogAccount) && (
+          <PersonnelDialog
+            key={page.dialog.mode === "edit" ? page.dialog.accountId : "invite"}
+            account={page.dialogAccount}
+            lockedRoleReason={page.dialogAccount ? lockedRoleReason(page.dialogAccount, page.accounts, page.viewerId) : null}
+            onClose={page.closeDialog}
             onInvited={page.onInvited}
           />
         )}

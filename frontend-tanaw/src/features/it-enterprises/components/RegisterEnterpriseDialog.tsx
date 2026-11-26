@@ -16,12 +16,11 @@ import { WEEKDAYS, dayHours, describeDay, type OpeningHours } from "@/features/e
 import { createEnterpriseAccount, enterpriseAccountsQueryKey } from "@/features/enterprise-accounts/services";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { enterpriseHealthQueryKey } from "@/shared/services/enterpriseHealth";
-import { Button } from "@/shared/ui-kit";
+import { Button, Dialog } from "@/shared/ui-kit";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { AddressFields, AttractionFields, CapacityField, ContactNumberInput, EmailField, ManagerFields, NameField, type TextField } from "./EnterpriseFields";
 import { useLocationDraft } from "../hooks/useLocationDraft";
 import { LocationField } from "./LocationField";
-import { SideSheet } from "./SideSheet";
 
 /** "Daily, 8:00 AM – 5:00 PM" when every day is the same, else null. */
 function sameEveryDay(hours: OpeningHours) {
@@ -30,7 +29,7 @@ function sameEveryDay(hours: OpeningHours) {
 }
 
 /** Register enterprise: every detail the backend needs, then the owner gets a sign-in invitation. */
-export function RegisterEnterpriseSheet({ onClose }: { onClose: () => void }) {
+export function RegisterEnterpriseDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const focusFirstInvalidField = useFocusFirstInvalidField();
   const formId = useId();
@@ -98,46 +97,58 @@ export function RegisterEnterpriseSheet({ onClose }: { onClose: () => void }) {
   const hoursSummary = sameEveryDay(form.openingHours);
 
   return (
-    <SideSheet
+    <Dialog
       title="Register enterprise"
       description="TANAW emails the owner a link to set a password and install the desktop app."
       onClose={create.isPending ? () => undefined : onClose}
+      closeLabel="Close"
+      accent="thread"
+      size="2xl"
       footer={
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" form={formId} size="lg" loading={create.isPending}>
-            Register and send invitation
-          </Button>
+        <>
           <Button variant="secondary" size="lg" onClick={onClose} disabled={create.isPending}>
             Cancel
           </Button>
-        </div>
+          <Button type="submit" form={formId} size="lg" loading={create.isPending}>
+            Register and send invitation
+          </Button>
+        </>
       }
     >
-      <form id={formId} noValidate onSubmit={submit} className="grid gap-5 pt-1">
-        <NameField {...fieldProps} />
-        <AttractionFields {...fieldProps} />
-        <LocationField draft={draft} mapId="it-register-enterprise-map" hint="Search above, or click the map to pin the entrance so the place shows in the right spot on the Admin map." />
-        <AddressFields {...fieldProps} />
-        <ManagerFields {...fieldProps} />
-        <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-          <ContactNumberInput {...fieldProps} />
-          <CapacityField {...fieldProps} />
+      <form id={formId} noValidate onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] items-start gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="grid min-w-0 content-start gap-5">
+          <NameField {...fieldProps} />
+          <AttractionFields {...fieldProps} />
+          <AddressFields {...fieldProps} />
+          <ManagerFields {...fieldProps} />
+          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+            <ContactNumberInput {...fieldProps} />
+            <CapacityField {...fieldProps} />
+          </div>
+          <EmailField {...fieldProps} />
+          <div data-field-name="openingHours">
+            <p className="mb-1.5 text-xs font-semibold text-(--tanaw-text-secondary)">Opening hours</p>
+            {editHours ? (
+              <OpeningHoursField value={form.openingHours} onChange={(value) => update("openingHours", value)} error={errors.openingHours} />
+            ) : (
+              <p className="text-sm text-(--tanaw-text)">
+                {hoursSummary ?? "Custom hours."} <span className="text-(--tanaw-text-secondary)">You can change hours and add closed days after registering.</span>{" "}
+                <button type="button" onClick={() => setEditHours(true)} className="font-semibold text-(--tanaw-accent-ink) underline underline-offset-4">
+                  Change hours now
+                </button>
+              </p>
+            )}
+          </div>
         </div>
-        <EmailField {...fieldProps} />
-        <div data-field-name="openingHours">
-          <p className="mb-1.5 text-xs font-semibold text-(--tanaw-text-secondary)">Opening hours</p>
-          {editHours ? (
-            <OpeningHoursField value={form.openingHours} onChange={(value) => update("openingHours", value)} error={errors.openingHours} />
-          ) : (
-            <p className="text-sm text-(--tanaw-text)">
-              {hoursSummary ?? "Custom hours."} <span className="text-(--tanaw-text-secondary)">You can change hours and add closed days after registering.</span>{" "}
-              <button type="button" onClick={() => setEditHours(true)} className="font-semibold text-(--tanaw-accent-ink) underline underline-offset-4">
-                Change hours now
-              </button>
-            </p>
-          )}
+        <div className="min-w-0 lg:sticky lg:top-0">
+          <LocationField
+            draft={draft}
+            mapId="it-register-enterprise-map"
+            mapHeightClassName="h-60 lg:h-112"
+            hint="Search above, or click the map to pin the entrance so the place shows in the right spot on the Admin map."
+          />
         </div>
       </form>
-    </SideSheet>
+    </Dialog>
   );
 }

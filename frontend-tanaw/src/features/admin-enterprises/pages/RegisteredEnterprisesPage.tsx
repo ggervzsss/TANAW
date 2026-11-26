@@ -62,7 +62,7 @@ export function RegisteredEnterprisesPage() {
         : `Showing ${(page - 1) * PAGE_SIZE + 1} to ${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length.toLocaleString("en-US")}`;
 
   return (
-    <div className="admin-enterprises mx-auto w-full max-w-360">
+    <div className="admin-enterprises w-full">
       <Header updatedAt={directory.updatedAt} now={now} isLoading={directory.isLoading} />
 
       {directory.isError && directory.rows.length === 0 ? (

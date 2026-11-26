@@ -250,7 +250,7 @@ test.describe("IT LGU Personnel", () => {
     await expect(lea).toHaveCount(0);
   });
 
-  test("invites personnel from the side sheet", async ({ page }) => {
+  test("invites personnel from the Invite personnel dialog", async ({ page }) => {
     const { calls } = await openPersonnel(page);
 
     await page.getByRole("button", { name: "Invite personnel" }).click();

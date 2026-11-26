@@ -54,7 +54,7 @@ export function SettingsTab(props: SettingsTabProps) {
 
   if (isLoading) {
     return (
-      <div className="grid max-w-5xl gap-4" aria-busy="true">
+      <div className="grid gap-4" aria-busy="true">
         <Skeleton className="h-20 w-full" label="Loading the settings" />
         <Skeleton className="h-20 w-full" />
       </div>
@@ -84,7 +84,7 @@ export function SettingsTab(props: SettingsTabProps) {
   };
 
   return (
-    <form onSubmit={submit} data-settings-draft={draftMarker} className="max-w-5xl [--settings-gutter:1rem] [--settings-line:var(--tanaw-border-soft)]" aria-label="System settings" noValidate>
+    <form onSubmit={submit} data-settings-draft={draftMarker} className="[--settings-gutter:1rem] [--settings-line:var(--tanaw-border-soft)]" aria-label="System settings" noValidate>
       <SettingSection title="Sign-in lockout" description="Stops password guessing on every account, including enterprises." first>
         <div className="flex flex-wrap items-center gap-2.5 text-[0.9375rem] text-(--tanaw-text)">
           <span aria-hidden="true">Lock after</span>

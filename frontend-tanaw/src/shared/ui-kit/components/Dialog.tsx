@@ -6,7 +6,7 @@ import { useDialogFocus } from "../lib/focus-trap";
 import { dialogIn } from "../lib/motion";
 import { ModalPortal } from "./ModalPortal";
 
-export type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
+export type DialogSize = "sm" | "md" | "lg" | "xl" | "2xl" | "full";
 
 export type DialogProps = {
   title: ReactNode;
@@ -19,7 +19,7 @@ export type DialogProps = {
   /** Actions, right-aligned: secondary before primary. */
   footer?: ReactNode;
   onClose: () => void;
-  /** sm 28rem, md 36rem (default), lg 48rem, xl 64rem, full 90rem. */
+  /** sm 28rem, md 36rem (default), lg 48rem, xl 64rem, 2xl 75rem, full 90rem. */
   size?: DialogSize;
   /** Accessible name of the close button. */
   closeLabel?: string;
@@ -27,10 +27,12 @@ export type DialogProps = {
   closeOnBackdrop?: boolean;
   /** A thin accent line at the top: "thread" is the forest, gold, leaf metric thread; "danger" for destructive confirmations. */
   accent?: "none" | "thread" | "danger";
-  /** Classes for the panel, for example a custom max width. */
+  /** Extra classes for the panel. Set the width with size: a max width here would clash with it. */
   className?: string;
   /** Classes for the scrolling body. */
   bodyClassName?: string;
+  /** A selector for the element to focus when it opens, such as the first input; the panel otherwise. */
+  initialFocus?: string;
 };
 
 const sizes: Record<DialogSize, string> = {
@@ -38,6 +40,7 @@ const sizes: Record<DialogSize, string> = {
   md: "max-w-xl",
   lg: "max-w-3xl",
   xl: "max-w-5xl",
+  "2xl": "max-w-300",
   full: "max-w-360",
 };
 
@@ -59,11 +62,12 @@ export function Dialog({
   accent = "none",
   className,
   bodyClassName,
+  initialFocus,
 }: DialogProps) {
   const panelRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  useDialogFocus(panelRef, onClose);
+  useDialogFocus(panelRef, onClose, true, initialFocus);
 
   return (
     <ModalPortal lockScroll>

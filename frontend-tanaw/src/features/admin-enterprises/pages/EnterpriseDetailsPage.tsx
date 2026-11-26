@@ -51,7 +51,7 @@ export function EnterpriseDetailsPage() {
 
   if (directory.isLoading) {
     return (
-      <div className="admin-enterprises mx-auto w-full max-w-360">
+      <div className="admin-enterprises w-full">
         <PortalPageHeader back={back} title={<span className="sr-only">Loading enterprise</span>} />
         <div role="status" aria-label="Loading enterprise" className="space-y-4">
           <Skeleton className="h-28 w-full max-w-2xl" />
@@ -64,7 +64,7 @@ export function EnterpriseDetailsPage() {
 
   if (directory.isError && directory.rows.length === 0) {
     return (
-      <div className="admin-enterprises mx-auto w-full max-w-360">
+      <div className="admin-enterprises w-full">
         <PortalPageHeader back={back} title="Enterprise Details" />
         <Alert
           tone="danger"
@@ -83,7 +83,7 @@ export function EnterpriseDetailsPage() {
 
   if (!row) {
     return (
-      <div className="admin-enterprises mx-auto w-full max-w-360">
+      <div className="admin-enterprises w-full">
         <PortalPageHeader back={back} title="Enterprise not found" />
         <EmptyState
           icon={<SearchX size={22} />}
@@ -140,7 +140,7 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
   };
 
   return (
-    <div className="admin-enterprises mx-auto w-full max-w-360">
+    <div className="admin-enterprises w-full">
       <PortalPageHeader
         back={back}
         title={row.name}

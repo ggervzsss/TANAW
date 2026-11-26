@@ -84,7 +84,7 @@ export function ITRequestsPage() {
   const when = (value: string) => formatWhen(value, now, dateFormat, timeFormat);
 
   return (
-    <div className="mx-auto w-full max-w-360 pb-14">
+    <div className="w-full pb-14">
       <PortalPageHeader
         title="Requests"
         description="Help and approval requests from enterprises and the sign-in page. Only IT changes a request's status. Admin can add notes."
