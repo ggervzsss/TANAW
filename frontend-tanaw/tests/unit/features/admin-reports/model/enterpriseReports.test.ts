@@ -183,7 +183,7 @@ describe("reviewersByReport", () => {
 
   it("prefers the latest logged review decision over the city summary's preparer", () => {
     const reviewers = reviewersByReport(
-      [log("r1", "Ana Reyes", "Report Returned", "2026-11-11T09:00:00"), log("r1", "Maria Santos", "Report Ready to Consolidate", "2026-11-14T09:00:00"), log("r3", "Ana Reyes", "Submit Enterprise Report", "2026-11-02T09:00:00")],
+      [log("r1", "Ana Reyes", "Report Ready to Consolidate", "2026-11-11T09:00:00"), log("r1", "Maria Santos", "Report Consolidated", "2026-11-14T09:00:00"), log("r3", "Ana Reyes", "Submit Enterprise Report", "2026-11-02T09:00:00")],
       [finalReport],
     );
     expect(reviewers.get("r1")).toBe("Maria Santos");

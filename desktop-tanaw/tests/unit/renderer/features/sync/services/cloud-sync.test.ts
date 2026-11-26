@@ -17,7 +17,7 @@ import {
   prepareLocalSampleCounts,
   type LocalReportSubmissionRecord,
 } from "../../../../../../src/features/camera/services/ml-service";
-import { DESKTOP_SAMPLE_PREPARED_EVENT, isRefusedUpload, syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
+import { DESKTOP_SAMPLE_PREPARED_EVENT, isRefusedUpload, refusedUploadReason, syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "../../../../../../src/features/sync/services/cloud-sync";
 
 vi.mock("../../../../../../src/lib/axios", () => ({
   staffApi: {
@@ -79,23 +79,8 @@ describe("desktop report cloud idempotency", () => {
     expect(markLocalReportSynced).toHaveBeenCalledWith("http://127.0.0.1:8765", submission.report_id, submission.submission_id);
   });
 
-  it("uses a new persisted identity for a genuine report revision", async () => {
-    let current = localSubmission("11111111-1111-4111-8111-111111111111");
-    vi.mocked(listLocalReportSubmissions).mockImplementation(async () => [current]);
-    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
-
-    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
-    current = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
-    await expect(syncDesktopReportSubmission(current.report_id, current.submission_id)).resolves.toBe(true);
-
-    expect(vi.mocked(staffApi.post).mock.calls.map((call) => call[1])).toEqual([
-      expect.objectContaining({ submissionId: "11111111-1111-4111-8111-111111111111" }),
-      expect.objectContaining({ submissionId: "22222222-2222-4222-8222-222222222222" }),
-    ]);
-  });
-
-  it("requires the submitted revision and recognizes a background upload already confirmed", async () => {
-    const submission = localSubmission("22222222-2222-4222-8222-222222222222", "Resubmitted");
+  it("requires the saved submission and recognizes a background upload already confirmed", async () => {
+    const submission = localSubmission("22222222-2222-4222-8222-222222222222");
     vi.mocked(listLocalReportSubmissions).mockResolvedValue([{ ...submission, sync_status: "synced" }]);
 
     await expect(syncDesktopReportSubmission(submission.report_id, "older-submission")).resolves.toBe(false);
@@ -143,25 +128,34 @@ describe("desktop report cloud idempotency", () => {
     expect([401, 403, 404, 408, 429, 500, 503].map((status) => isRefusedUpload(httpError(status)))).toEqual(Array(7).fill(false));
     expect(isRefusedUpload(new Error("offline"))).toBe(false);
   });
+
+  it("reads the backend's reason for refusing a report", () => {
+    const detail = "A report for June 2026 has already been submitted. An enterprise sends one report per reporting month, and a submitted report cannot be replaced.";
+    expect(refusedUploadReason(httpError(409, { detail }))).toBe(detail);
+    expect(refusedUploadReason(httpError(409))).toBeNull();
+    expect(refusedUploadReason(httpError(422, { detail: [{ msg: "Field required" }] }))).toBeNull();
+    expect(refusedUploadReason(httpError(503, { detail: "Try again later" }))).toBeNull();
+    expect(refusedUploadReason(new Error("offline"))).toBeNull();
+  });
 });
 
-function httpError(status: number) {
-  return new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_REQUEST", undefined, undefined, { status } as AxiosResponse);
+function httpError(status: number, data?: unknown) {
+  return new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_REQUEST", undefined, undefined, { status, data } as AxiosResponse);
 }
 
-function localSubmission(submissionId: string, status: "Submitted" | "Resubmitted" = "Submitted"): LocalReportSubmissionRecord {
+function localSubmission(submissionId: string): LocalReportSubmissionRecord {
   return {
     report_id: "REP-001",
     submission_id: submissionId,
     period: "June 2026",
-    submitted_at: status === "Submitted" ? "2026-07-02T08:00:00Z" : "2026-07-03T08:00:00Z",
+    submitted_at: "2026-07-02T08:00:00Z",
     entries: 12,
     exits: 7,
     peak_occupancy: 5,
     unique_count: 6,
     notes: null,
     payload: {
-      status,
+      status: "Submitted",
       demo: {
         thisProvMale: "6",
         thisProvFemale: "0",

@@ -1,7 +1,6 @@
 import json
 from datetime import timedelta
 from pathlib import Path
-from uuid import uuid4
 
 import numpy as np
 import pytest
@@ -71,43 +70,34 @@ def test_stale_snapshot_or_forged_metrics_are_rejected(tmp_path: Path) -> None:
         repo.submit(**operation)
 
 
-def test_resubmission_explicitly_refreshes_counts_and_keeps_previous_snapshot(
-    tmp_path: Path,
-) -> None:
+def test_a_submitted_month_cannot_be_submitted_again(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
     operation = request(repo)
     first = repo.submit(**operation)
     observed(service, "additional", vector=np.array([0, 1, 0], dtype=np.float32))
-    revision = request(repo, 2)
-    revision["payload"]["status"] = "Resubmitted"
-    second = repo.submit(**revision)
-    assert first["unique_count"] == 1 and second["unique_count"] == 2
+    second = request(repo, 2)
+    # Neither the same report nor a report under a new reference can replace it.
+    for attempt in (second, {**second, "report_id": "REP-OTHER"}):
+        with pytest.raises(ValueError, match="one report per reporting month"):
+            repo.submit(**attempt)
     assert repo.submit(**operation) == first
-    assert LocalDataStore(str(tmp_path), "park").list_report_submissions()[0]["unique_count"] == 2
+    saved = LocalDataStore(str(tmp_path), "park").list_report_submissions()
+    assert [(item["report_id"], item["unique_count"]) for item in saved] == [("REP-ONE", 1)]
+    assert saved[0]["payload"]["status"] == "Submitted"
     with service.database.connection() as db:
-        assert db.execute("select count(*) from report_submission_snapshots").fetchone()[0] == 2
+        assert db.execute("select count(*) from report_submission_snapshots").fetchone()[0] == 1
 
 
-def test_demographic_revision_can_reuse_original_snapshot_after_source_retention(
-    tmp_path: Path,
-) -> None:
+def test_a_saved_report_reference_cannot_be_reused_for_another_month(tmp_path: Path) -> None:
     service = EstablishmentRegistry(str(tmp_path), "park")
     observed(service)
     repo = EstablishmentReportRepository(service.database)
-    first = request(repo)
-    repo.submit(**first)
-    service.cleanup(SUBMITTED + timedelta(days=200))
-    revised = {
-        **first,
-        "request_id": str(uuid4()),
-        "payload": {**first["payload"], "status": "Resubmitted"},
-        "now": SUBMITTED + timedelta(days=200),
-    }
-    result = repo.submit(**revised)
-    assert result["unique_count"] == 1
-    assert result["counting"]["snapshot_version"] == first["expected_snapshot_version"]
+    repo.submit(**request(repo))
+    later = SUBMITTED + timedelta(days=31)
+    with pytest.raises(ValueError, match="REP-ONE has already been submitted"):
+        repo.submit(**{**request(repo, 0), "period": "November 2026", "now": later})
 
 
 def test_only_selected_calendar_months_raw_evidence_is_consumed(tmp_path: Path) -> None:

@@ -173,8 +173,8 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await choose(page, "Filter reports by reporting period", "All Periods");
   await expect(rows).toHaveCount(original.length);
   const tones = await page.locator(".report-status").evaluateAll((nodes) => nodes.map((node) => ({ tone: node.getAttribute("data-tone"), bg: getComputedStyle(node).backgroundColor })));
-  for (const tone of ["draft", "submitted", "pending", "consolidated", "returned"]) expect(tones.some((item) => item.tone === tone)).toBe(true);
-  expect(new Set(tones.map((item) => item.bg)).size).toBe(5);
+  for (const tone of ["draft", "submitted", "pending", "consolidated"]) expect(tones.some((item) => item.tone === tone)).toBe(true);
+  expect(new Set(tones.map((item) => item.bg)).size).toBe(4);
   expect(await page.evaluate(() => (window as unknown as { __filterPageIdentity: string }).__filterPageIdentity)).toBe("same-document");
   await page.getByRole("combobox", { name: "Filter reports by status" }).click();
   await expect(page.locator(".tanaw-dropdown-menu")).toHaveCSS("background-color", await token(page, "--theme-raised"));

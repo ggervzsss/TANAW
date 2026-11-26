@@ -23,9 +23,9 @@ export type SettingsSaveBarStatus = "idle" | "dirty" | "saving";
 
 /**
  * A settings form shows its save bar only while there is something to keep or discard, or while
- * it is saving. A persistent bar (a single-action form such as a password change) always shows.
+ * it is saving.
  */
-export function getSettingsSaveBarState({ dirty, busy, persistent = false }: { dirty: boolean; busy: boolean; persistent?: boolean }) {
+export function getSettingsSaveBarState({ dirty, busy }: { dirty: boolean; busy: boolean }) {
   const status: SettingsSaveBarStatus = busy ? "saving" : dirty ? "dirty" : "idle";
-  return { status, visible: persistent || status !== "idle", showDiscard: dirty };
+  return { status, visible: status !== "idle", showDiscard: dirty };
 }

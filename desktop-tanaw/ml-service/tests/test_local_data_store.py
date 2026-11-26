@@ -268,7 +268,7 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["notes"], "notes")
             self.assertEqual(reports[0]["payload"]["demo"]["foreignMale"], "2")
 
-    def test_report_submission_identity_persists_and_changes_for_a_new_revision(self) -> None:
+    def test_report_submission_identity_persists_and_cannot_be_replaced(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = str(Path(directory))
             store = LocalDataStore(root)
@@ -283,14 +283,11 @@ class LocalDataStoreTest(unittest.TestCase):
                 first_submission_id,
             )
 
-            revised = reopened.record_report_submission(
-                "REP-001", "Current Period", payload={"status": "Resubmitted"}
-            )
-            self.assertNotEqual(revised["submission_id"], first_submission_id)
-            self.assertEqual(
-                reopened.list_report_submissions()[0]["submission_id"],
-                revised["submission_id"],
-            )
+            with self.assertRaisesRegex(ValueError, "one report per reporting month"):
+                reopened.record_report_submission("REP-001", "Current Period", "changed")
+            reports = reopened.list_report_submissions()
+            self.assertEqual(len(reports), 1)
+            self.assertEqual(reports[0]["submission_id"], first_submission_id)
 
     def test_report_drafts_are_scoped_updated_and_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -352,75 +349,6 @@ class LocalDataStoreTest(unittest.TestCase):
             repeated = store.purge_report_raw_events("REP-001")
             self.assertEqual(repeated["purged_events"], 0)
             self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
-
-    def test_resubmitting_existing_report_preserves_metrics_when_no_new_events_exist(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalDataStore(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "Current Period", "first", {"notes": "first"})
-
-            resubmission = store.record_report_submission(
-                "REP-001", "Current Period", "revised", {"notes": "revised"}
-            )
-
-            self.assertEqual(resubmission["entries"], 1)
-            self.assertEqual(resubmission["unique_count"], 1)
-            reports = store.list_report_submissions()
-            self.assertEqual(reports[0]["entries"], 1)
-            self.assertEqual(reports[0]["unique_count"], 1)
-            self.assertEqual(reports[0]["notes"], "revised")
-
-    def test_resubmitting_existing_report_uses_report_metrics_not_current_counts(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalDataStore(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "June 2026", "first", {"notes": "first"})
-            store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
-
-            resubmission = store.record_report_submission(
-                "REP-001",
-                "June 2026",
-                "revised",
-                {"notes": "revised"},
-                metrics={
-                    "entries": 1,
-                    "exits": 0,
-                    "peak_occupancy": 1,
-                    "unique_count": 1,
-                },
-            )
-
-            self.assertEqual(resubmission["entries"], 1)
-            self.assertEqual(resubmission["unique_count"], 1)
-            self.assertEqual(store.metrics_summary()["entries"], 1)
-            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
-            reports = store.list_report_submissions()
-            self.assertEqual(reports[0]["entries"], 1)
-            self.assertEqual(reports[0]["unique_count"], 1)
-            self.assertEqual(reports[0]["notes"], "revised")
-
-    def test_resubmitting_cloud_report_does_not_consume_current_open_events(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalDataStore(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-
-            resubmission = store.record_report_submission(
-                "REP-CLOUD",
-                "June 2026",
-                "revised",
-                {"status": "Resubmitted"},
-                metrics={
-                    "entries": 5,
-                    "exits": 2,
-                    "peak_occupancy": 4,
-                    "unique_count": 3,
-                },
-            )
-
-            self.assertEqual(resubmission["entries"], 5)
-            self.assertEqual(resubmission["unique_count"], 3)
-            self.assertEqual(store.metrics_summary()["entries"], 1)
-            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
 
     def test_metrics_history_groups_events_and_can_include_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

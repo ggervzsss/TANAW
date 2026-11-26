@@ -11,8 +11,7 @@ import type { IntakeReport } from "@/shared/types";
  *
  * Staff review (where the month's report is in the staff workflow):
  *   Waiting       no report yet: staff are waiting on the enterprise (Submission is Pending or Missing).
- *   Reviewing     a report was sent and awaits the staff decision (stored "Pending Review"; a legacy
- *                 "Returned" report shows Reviewing too).
+ *   Reviewing     a report was sent and awaits the staff decision (stored "Pending Review").
  *   Consolidated  "Ready to Consolidate" (accepted) or "Consolidated" (already in a monthly report).
  */
 

@@ -22,8 +22,8 @@ function notification(overrides: Partial<BackendNotification> = {}): BackendNoti
 }
 
 describe("isStaffReportSubmissionNotification", () => {
-  it.each(["Enterprise Report Submitted", "Enterprise Report Resubmitted"])("keeps actionable %s notifications", (type) => {
-    expect(isStaffReportSubmissionNotification(notification({ type }))).toBe(true);
+  it("keeps actionable report submission notifications", () => {
+    expect(isStaffReportSubmissionNotification(notification())).toBe(true);
   });
 
   it.each([

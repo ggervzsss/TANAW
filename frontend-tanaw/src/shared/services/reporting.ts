@@ -3,10 +3,8 @@ import type { ReportEnterprise } from "../types";
 import {
   createFinalReport,
   listFinalReports,
-  returnFinalReportForRevision,
   updateFinalReportStatus,
   updateIntakeReportStatus,
-  type FinalReportRevisionPayload,
   type FinalReportCreatePayload,
   type FinalReportStatusPayload,
   type UpdateReportStatusPayload,
@@ -35,11 +33,9 @@ export async function notifyEnterprise(payload: EnterpriseNotificationPayload) {
 export {
   createFinalReport,
   listFinalReports,
-  returnFinalReportForRevision,
   updateFinalReportStatus,
   updateIntakeReportStatus,
   type FinalReportCreatePayload,
-  type FinalReportRevisionPayload,
   type FinalReportStatusPayload,
   type UpdateReportStatusPayload,
 };

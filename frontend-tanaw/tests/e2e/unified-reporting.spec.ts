@@ -136,7 +136,6 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
 
   await page.getByRole("button", { name: "View the report from Park" }).click();
   await expect(intakeDialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);
-  await expect(intakeDialog.getByRole("button", { name: "Return for correction" })).toHaveCount(0);
   await expect(intakeDialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await intakeDialog.getByRole("button", { name: "Close report" }).click();
 

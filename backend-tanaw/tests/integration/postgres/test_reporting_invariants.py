@@ -27,13 +27,13 @@ from app.features.realtime.models import RealtimeOutbox
 from app.features.reporting import router as reporting_router
 from app.features.reporting.counting import snapshot_digest
 from app.features.reporting.errors import (
+    DuplicateReportPeriodError,
     InvalidReportWorkflowError,
     ReportAlreadyConsolidatedError,
 )
 from app.features.reporting.final_reports import (
     create_final_report,
     list_final_reports,
-    return_final_report_for_revision,
     to_final_report_summary,
 )
 from app.features.reporting.intake import (
@@ -49,7 +49,6 @@ from app.features.reporting.models import (
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     FinalReportCreate,
-    FinalReportRevisionReturn,
     FinalReportSummary,
     IntakeReportSummary,
     ReportStatusUpdate,
@@ -195,7 +194,6 @@ def _submission(
     report_id: str,
     period: str,
     *,
-    status: str = "Submitted",
     enterprise_key: str = "workflow-fixture",
     entries: int = 12,
     exits: int = 7,
@@ -233,7 +231,7 @@ def _submission(
                 peak=max(entries - exits, 1),
                 unique=unique_count,
             ),
-            "status": status,
+            "status": "Submitted",
             "demo": demographics,
             "metrics": {
                 "entries": entries,
@@ -518,86 +516,48 @@ async def test_period_uniqueness_is_scoped_by_enterprise_and_period(
 
 
 @pytest.mark.asyncio
-async def test_only_returned_reports_can_be_resubmitted(
+async def test_a_submitted_report_cannot_be_replaced(
     postgres_runtime: PostgresRuntime,
 ) -> None:
-    enterprise = await _create_enterprise(postgres_runtime, label="resubmit")
+    enterprise = await _create_enterprise(postgres_runtime, label="replace")
     original = await _ingest(
         postgres_runtime,
         enterprise,
-        _submission("REP-RESUBMIT-001", "June 2026"),
+        _submission("REP-REPLACE-001", "June 2026"),
     )
+    changed = _submission("REP-REPLACE-001", "June 2026", entries=20, exits=10, unique_count=8)
 
-    with pytest.raises(InvalidReportWorkflowError):
-        await _ingest(
-            postgres_runtime,
-            enterprise,
-            _submission(
-                "REP-RESUBMIT-001",
-                "June 2026",
-                status="Resubmitted",
-                entries=20,
-                exits=10,
-                unique_count=8,
-            ),
-        )
+    with pytest.raises(DuplicateReportPeriodError, match="one report per reporting month"):
+        await _ingest(postgres_runtime, enterprise, changed)
 
-    with pytest.raises(InvalidReportWorkflowError):
-        async with postgres_runtime.sessions() as db:
-            await update_report_status(
-                db,
-                original.id,
-                ReportStatusUpdate(status="Returned", remarks="Correct the submitted totals."),
-            )
-
-    # Only a final report audit returns an intake report to its enterprise now.
     async with postgres_runtime.sessions() as db:
-        returned = await db.get(EnterpriseReportSubmission, original.id)
-        assert returned is not None
-        returned.review_status = "Returned"
-        returned.remarks = "Correct the submitted totals."
+        accepted = await update_report_status(
+            db, original.id, ReportStatusUpdate(status="Ready to Consolidate")
+        )
+        assert accepted is not None
         await db.commit()
 
-    revised = await _ingest(
-        postgres_runtime,
-        enterprise,
-        _submission(
-            "REP-RESUBMIT-001",
-            "June 2026",
-            status="Resubmitted",
-            entries=20,
-            exits=10,
-            unique_count=8,
-        ),
-    )
-    assert revised.id == original.id
-    assert revised.status == "Pending Review"
-    assert revised.metrics["entry"] == 20
-
-    with pytest.raises(InvalidReportWorkflowError):
+    with pytest.raises(DuplicateReportPeriodError, match="June 2026"):
         await _ingest(
             postgres_runtime,
             enterprise,
-            _submission(
-                "REP-RESUBMIT-001",
-                "June 2026",
-                status="Resubmitted",
-                entries=30,
-                exits=15,
-                unique_count=10,
-            ),
+            _submission("REP-REPLACE-002", "June 2026", entries=20, exits=10, unique_count=8),
         )
 
     async with postgres_runtime.sessions() as db:
-        count = await db.scalar(
-            select(func.count())
-            .select_from(EnterpriseReportSubmission)
-            .where(
-                EnterpriseReportSubmission.enterprise_profile_id == enterprise.id,
-                EnterpriseReportSubmission.period == "June 2026",
+        stored = list(
+            await db.scalars(
+                select(EnterpriseReportSubmission).where(
+                    EnterpriseReportSubmission.enterprise_profile_id == enterprise.id,
+                    EnterpriseReportSubmission.period == "June 2026",
+                )
             )
         )
-        assert count == 1
+        assert len(stored) == 1
+        assert stored[0].id == original.id
+        assert stored[0].entries == 12
+        assert stored[0].unique_count == 6
+        assert stored[0].review_status == "Ready to Consolidate"
 
 
 @pytest.mark.asyncio
@@ -855,88 +815,6 @@ async def test_concurrent_disjoint_final_reports_receive_unique_codes(
     )
     assert len({report.id for report in finals}) == 2
     assert all(report.id.startswith("CON-JUN-2026-") for report in finals)
-
-
-@pytest.mark.asyncio
-async def test_returned_sources_reconsolidate_into_the_same_final_report(
-    postgres_runtime: PostgresRuntime,
-) -> None:
-    first_enterprise = await _create_enterprise(postgres_runtime, label="revision-one")
-    second_enterprise = await _create_enterprise(postgres_runtime, label="revision-two")
-    first = await _ready_report(
-        postgres_runtime,
-        first_enterprise,
-        _submission("REP-REVISION-001", "June 2026", unique_count=6),
-    )
-    second = await _ready_report(
-        postgres_runtime,
-        second_enterprise,
-        _submission("REP-REVISION-002", "June 2026", unique_count=7),
-    )
-    original_final = await _consolidate(
-        postgres_runtime,
-        [first.id, second.id],
-        prepared_by=f"{TEST_PREPARED_BY_PREFIX} Revision Original",
-    )
-
-    async with postgres_runtime.sessions() as db:
-        returned = await return_final_report_for_revision(
-            db,
-            original_final.id,
-            FinalReportRevisionReturn(
-                sourceReportIds=[first.id],
-                remarks="Correct the first source demographics.",
-            ),
-        )
-        assert returned is not None
-        await db.commit()
-
-    revised_intake = await _ingest(
-        postgres_runtime,
-        first_enterprise,
-        _submission(
-            "REP-REVISION-001",
-            "June 2026",
-            status="Resubmitted",
-            entries=18,
-            exits=9,
-            unique_count=8,
-        ),
-    )
-    async with postgres_runtime.sessions() as db:
-        ready = await update_report_status(
-            db,
-            revised_intake.id,
-            ReportStatusUpdate(status="Ready to Consolidate"),
-        )
-        assert ready is not None
-        await db.commit()
-
-    reconsolidated = await _consolidate(
-        postgres_runtime,
-        [first.id, second.id],
-        prepared_by=f"{TEST_PREPARED_BY_PREFIX} Revision Updated",
-    )
-    assert reconsolidated.id == original_final.id
-    assert reconsolidated.status == "Draft"
-    first_snapshot = next(source for source in reconsolidated.sources if source.id == first.id)
-    assert first_snapshot.unique == 8
-
-    async with postgres_runtime.sessions() as db:
-        final_ids = list(
-            await db.scalars(
-                select(FinalReportSource.final_report_id)
-                .where(FinalReportSource.intake_report_id.in_([first.id, second.id]))
-                .distinct()
-            )
-        )
-        source_count = await db.scalar(
-            select(func.count())
-            .select_from(FinalReportSource)
-            .where(FinalReportSource.intake_report_id.in_([first.id, second.id]))
-        )
-        assert len(final_ids) == 1
-        assert source_count == 2
 
 
 @pytest.mark.asyncio

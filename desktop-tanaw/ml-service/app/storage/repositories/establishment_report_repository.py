@@ -6,7 +6,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from app.config.report_config import reporting_period_key, reporting_period_submission_error
+from app.config.report_config import (
+    one_report_per_month_error,
+    reporting_period_key,
+    reporting_period_submission_error,
+)
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.establishment_repository import (
     TIMEZONE,
@@ -97,9 +101,6 @@ class EstablishmentReportRepository:
         period = begin.strftime("%B %Y")
         request_id = request_id or str(uuid4())
         supplied = json.loads(json.dumps(payload or {}))
-        status = supplied.get("status", "Submitted")
-        if status not in {"Submitted", "Resubmitted"}:
-            raise ValueError("Choose a valid report submission action.")
         digest = hashlib.sha256(
             json.dumps(
                 {
@@ -127,24 +128,15 @@ class EstablishmentReportRepository:
                     )
                 response: dict[str, Any] = json.loads(retried["response_json"])
                 return response
-            existing = db.execute(
-                "select * from report_submissions where report_id=?", (report_id,)
-            ).fetchone()
-            duplicate = db.execute(
-                "select report_id from report_submissions where period=?", (period,)
-            ).fetchone()
-            if duplicate is not None and duplicate["report_id"] != report_id:
-                raise ValueError(f"A report for {period} has already been submitted.")
-            if existing is not None and existing["period"] != period:
-                raise ValueError("A saved report cannot be moved to another reporting period.")
-            if (existing is not None) != (status == "Resubmitted"):
-                raise ValueError("Use the revision workflow to change a saved report.")
+            # An enterprise sends one report per reporting month, and it cannot be replaced.
+            if db.execute("select 1 from report_submissions where period=?", (period,)).fetchone():
+                raise ValueError(one_report_per_month_error(period))
+            if db.execute(
+                "select 1 from report_submissions where report_id=?", (report_id,)
+            ).fetchone():
+                raise ValueError(f"Report {report_id} has already been submitted.")
 
-            frozen = json.loads(existing["payload_json"]).get("counting") if existing else None
-            if frozen and expected_snapshot_version == frozen.get("snapshot_version"):
-                snapshot = frozen
-            else:
-                snapshot = self.establishment.summary(begin, end)
+            snapshot = self.establishment.summary(begin, end)
             if snapshot["reconciliation_state"] in {"not_collected", "configuration_required"}:
                 raise ValueError(
                     "Collect observations and complete camera counting setup before submitting this period."
@@ -197,19 +189,14 @@ class EstablishmentReportRepository:
                 },
                 notes=notes or "",
                 period=period,
-                status=status,
+                status="Submitted",
             )
             submitted_at = now.astimezone(UTC).isoformat()
             db.execute(
                 """insert into report_submissions (
                     report_id,submission_id,period,submitted_at,entries,exits,peak_occupancy,
                     unique_count,notes,payload_json,sync_status)
-                    values (?,?,?,?,?,?,?,?,?,?,'pending_cloud_sync')
-                on conflict(report_id) do update set submission_id=excluded.submission_id,
-                    submitted_at=excluded.submitted_at,entries=excluded.entries,exits=excluded.exits,
-                    peak_occupancy=excluded.peak_occupancy,unique_count=excluded.unique_count,
-                    notes=excluded.notes,payload_json=excluded.payload_json,
-                    sync_status='pending_cloud_sync',synced_at=null""",
+                    values (?,?,?,?,?,?,?,?,?,?,'pending_cloud_sync')""",
                 (
                     report_id,
                     request_id,

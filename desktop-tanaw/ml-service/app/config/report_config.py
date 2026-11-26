@@ -97,6 +97,14 @@ def reporting_period_submission_error(period: str, now: datetime | None = None) 
     )
 
 
+def one_report_per_month_error(period: str) -> str:
+    """Why a second report for a reporting month is refused; matches the backend's wording."""
+    return (
+        f"A report for {period} has already been submitted. An enterprise sends one report "
+        "per reporting month, and a submitted report cannot be replaced."
+    )
+
+
 def reporting_period_key(period: str) -> tuple[int, int] | None:
     period_end = _reporting_period_end_date(period)
     if period_end is None:

@@ -87,11 +87,9 @@ const ACTION_TITLES: Record<string, string> = {
   // Reports
   "Submit Enterprise Report": "Report Submitted",
   "Report Pending Review": "Report Set to Pending Review",
-  "Report Returned": "Report Sent Back for Correction",
   "Report Ready to Consolidate": "Report Review Completed",
   "Report Consolidated": "Report Consolidated",
   "Generate Final Report": "Consolidated Report Generated",
-  "Return Final Report for Revision": "Consolidated Report Returned for Revision",
   "Notify Enterprise": "Message Sent to Enterprise",
   // Requests
   "Send Request": "Request Sent",
@@ -281,8 +279,8 @@ function reportFields(log: SystemLog): ActivityField[] {
   if (log.action === "Submit Enterprise Report") fields.push({ label: "Submission", value: "Submitted", tone: "submitted" });
   if (log.action.startsWith("Report ")) {
     const stored = log.action.slice("Report ".length);
-    if (["Pending Review", "Returned", "Ready to Consolidate", "Consolidated"].includes(stored)) {
-      const review = reviewStatus({ status: stored as "Pending Review" | "Returned" | "Ready to Consolidate" | "Consolidated" });
+    if (["Pending Review", "Ready to Consolidate", "Consolidated"].includes(stored)) {
+      const review = reviewStatus({ status: stored as "Pending Review" | "Ready to Consolidate" | "Consolidated" });
       fields.push({ label: "Staff review", value: review, tone: reviewTone[review] });
     }
   }

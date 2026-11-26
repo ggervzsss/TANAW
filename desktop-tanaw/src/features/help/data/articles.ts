@@ -47,6 +47,7 @@ export const helpArticles: HelpArticle[] = [
     recommended: true,
     sections: [
       { heading: "Review reports", steps: ["Open Reports.", "Choose the report or period you need.", "Review its current status and available values."] },
+      { heading: "One report per month", paragraphs: ["Each reporting month takes one report. Once a month's report is submitted, that month is complete: the report cannot be submitted again or replaced, so review the form before you submit."] },
       { heading: "Synchronization", paragraphs: ["Enterprise Desktop synchronizes supported operational data when backend connectivity is available. Keep the application open and review current issue notices if records remain pending."] },
     ],
     relatedArticleIds: ["support-tickets"],

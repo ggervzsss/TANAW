@@ -1263,17 +1263,9 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   font-size: 15px;
   font-weight: 600;
 }
-.dash-badge-warning {
-  background: var(--tanaw-warning-bg);
-  color: var(--tanaw-warning-text);
-}
 .dark .dash-badge {
   background: rgb(110 231 183 / 0.12);
   color: #6ee7b7;
-}
-.dark .dash-badge-warning {
-  background: rgb(251 191 36 / 0.14);
-  color: #fcd34d;
 }
 
 .dash-report-empty {

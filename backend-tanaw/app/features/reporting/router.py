@@ -16,7 +16,6 @@ from app.features.accounts.enterprise import (
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.activity_logs.service import record_activity_log as record_operational_log
 from app.features.notifications.service import (
-    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     create_role_notifications,
 )
@@ -27,7 +26,6 @@ from app.features.reporting.errors import (
 from app.features.reporting.final_reports import (
     FINAL_REPORT_LIST_LIMIT,
     create_final_report,
-    return_final_report_for_revision,
     update_final_report_status,
 )
 from app.features.reporting.final_reports import (
@@ -46,7 +44,6 @@ from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     FinalReportCreate,
-    FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
     IntakeReportSummary,
@@ -225,39 +222,6 @@ async def generate_final_report(
     return final_report
 
 
-@router.post("/reports/final/{report_id}/return-revision", response_model=FinalReportSummary)
-async def return_final_report_revision(
-    report_id: str,
-    payload: FinalReportRevisionReturn,
-    actor: StaffWorkflowAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FinalReportSummary:
-    try:
-        final_report = await return_final_report_for_revision(db, report_id, payload)
-    except InvalidReportWorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    if final_report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
-
-    await record_operational_log(
-        db,
-        group="Reports",
-        severity="Warning",
-        actor=actor.display_name,
-        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action="Return Final Report for Revision",
-        target=final_report.id,
-        summary=f"{actor.display_name} returned {final_report.id} for source report revision.",
-        source_id=final_report.id,
-        metadata={
-            "period": final_report.period,
-            "sourceReportIds": ",".join(payload.sourceReportIds),
-            "remarks": payload.remarks,
-        },
-    )
-    return final_report
-
-
 @router.patch("/reports/final/{report_id}/status", response_model=FinalReportSummary)
 async def update_final_report_workflow_status(
     report_id: str,
@@ -331,26 +295,14 @@ async def list_report_enterprises(
 async def notify_staff_report_submission(
     db: AsyncSession, actor: Account, report: IntakeReportSummary
 ) -> None:
-    is_resubmission = staff_report_notification_is_resubmission(report)
-    action_label = "resubmitted" if is_resubmission else "submitted"
-    notification_type = (
-        STAFF_REPORT_RESUBMITTED_NOTIFICATION
-        if is_resubmission
-        else STAFF_REPORT_SUBMITTED_NOTIFICATION
-    )
     await create_role_notifications(
         db,
         recipient_roles=[AccountRole.STAFF],
-        title=notification_type,
-        message=f"{report.enterprise} {action_label} {report.code} for {report.period}.",
-        notification_type=notification_type,
+        title=STAFF_REPORT_SUBMITTED_NOTIFICATION,
+        message=f"{report.enterprise} submitted {report.code} for {report.period}.",
+        notification_type=STAFF_REPORT_SUBMITTED_NOTIFICATION,
         severity="Info",
         actor=actor,
         source_type="enterprise.report",
         source_id=report.id,
     )
-
-
-def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bool:
-    payload_status = (report.payload or {}).get("status")
-    return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"

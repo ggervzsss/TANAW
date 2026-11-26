@@ -73,7 +73,7 @@ export const helpArticles: HelpArticle[] = [
     recommended: true,
     sections: [
       { heading: "Review submissions", steps: ["Open Reports and choose the reporting month.", "Select Review next to a report that is Reviewing.", "Check the VAR 2M form and the submission notes."] },
-      { heading: "Record your decision", steps: ["Select Accept report to mark it Consolidated. Submitted reports are not returned to the establishment."] },
+      { heading: "Record your decision", steps: ["Select Accept report to mark it Consolidated."] },
     ],
     relatedArticleIds: ["staff-final-reports"],
   },

@@ -204,7 +204,6 @@ def _authorization(account: CreatedAccount) -> dict[str, str]:
 def _submission(
     submission_id: str,
     *,
-    status: str = "Submitted",
     entries: int = 12,
     notes: str | None = None,
 ) -> dict[str, Any]:
@@ -222,7 +221,7 @@ def _submission(
         "syncStatus": "pending_cloud_sync",
         "payload": {
             "counting": counting_snapshot("June 2026", entries=entries, exits=7, peak=5, unique=6),
-            "status": status,
+            "status": "Submitted",
             "demo": {
                 "thisProvMale": str(unique_count),
                 "thisProvFemale": "0",
@@ -418,63 +417,26 @@ async def test_rolled_back_submission_identity_can_be_retried(
 
 
 @pytest.mark.asyncio
-async def test_resubmission_uses_a_new_identity_and_its_retry_is_idempotent(
-    postgres_runtime: PostgresRuntime,
-) -> None:
-    enterprise, _ = await _create_accounts(postgres_runtime, label="revision")
-    application = _create_test_app(postgres_runtime)
-    first_payload = _submission(str(uuid4()))
-
-    async with AsyncClient(
-        transport=ASGITransport(app=application), base_url="http://test"
-    ) as client:
-        first = await _post_submission(client, enterprise, first_payload)
-        assert first.status_code == 202
-        report_id = first.json()["id"]
-
-        # Only a final report audit returns an intake report to its enterprise now.
-        async with postgres_runtime.sessions() as db:
-            returned = await db.get(EnterpriseReportSubmission, report_id)
-            assert returned is not None
-            returned.review_status = "Returned"
-            returned.remarks = "Revise the totals."
-            await db.commit()
-
-        revised_payload = _submission(
-            str(uuid4()), status="Resubmitted", entries=14, notes="Corrected revision"
-        )
-        revised_payload["submittedAt"] = "2026-07-03T08:00:00Z"
-        revised = await _post_submission(client, enterprise, revised_payload)
-        assert revised.status_code == 202
-        assert revised.json()["metrics"]["entry"] == 14
-        revised_counts = await _side_effect_counts(postgres_runtime, enterprise.id, report_id)
-
-        replay = await _post_submission(client, enterprise, revised_payload)
-        assert replay.status_code == 202
-        assert replay.json() == revised.json()
-
-    assert revised_counts.operations == 2
-    assert revised_counts.activities == 2
-    assert await _side_effect_counts(postgres_runtime, enterprise.id, report_id) == revised_counts
-
-
-@pytest.mark.asyncio
-async def test_different_invalid_submission_still_conflicts_and_does_not_consume_identity(
+async def test_second_submission_for_a_month_conflicts_and_does_not_consume_identity(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     enterprise, _ = await _create_accounts(postgres_runtime, label="workflow-conflict")
     application = _create_test_app(postgres_runtime)
     first_payload = _submission(str(uuid4()))
-    invalid_payload = _submission(str(uuid4()), status="Resubmitted", entries=14)
+    second_payload = _submission(str(uuid4()), entries=14, notes="Corrected totals")
 
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"
     ) as client:
         first = await _post_submission(client, enterprise, first_payload)
         assert first.status_code == 202
-        invalid = await _post_submission(client, enterprise, invalid_payload)
-        assert invalid.status_code == 409
-        assert "cannot be changed" in invalid.json()["detail"].lower()
+        second = await _post_submission(client, enterprise, second_payload)
+        assert second.status_code == 409
+        assert "already been submitted" in second.json()["detail"]
+        assert "one report per reporting month" in second.json()["detail"]
+
+        second_retry = await _post_submission(client, enterprise, second_payload)
+        assert second_retry.status_code == 409
 
         changed_replay = dict(first_payload)
         changed_replay["notes"] = "Different data with a reused identity"

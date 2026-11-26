@@ -166,7 +166,7 @@ export function var3Years(reports: readonly FinalReport[]) {
 }
 
 /**
- * VAR 3 for one year from the finalized monthly reports. Archived, draft and returned reports
+ * VAR 3 for one year from the finalized monthly reports. Archived and draft reports
  * are left out. Each establishment and its recorded attraction code form one column group.
  */
 export function buildVar3(reports: readonly FinalReport[], year: number): Var3Form {

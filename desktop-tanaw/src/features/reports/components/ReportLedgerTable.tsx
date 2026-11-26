@@ -210,9 +210,8 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
 }
 
 function statusTone(row: ReportLedgerRow) {
-  if (row.report.status === "Returned for Revision") return "returned";
   if (row.kind === "pending" || row.statusLabel === "Pending Submission") return "pending";
-  if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "submitted";
+  if (row.report.status === "Submitted") return "submitted";
   if (row.report.status === "Consolidated") return "consolidated";
   return "draft";
 }

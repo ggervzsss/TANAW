@@ -18,11 +18,6 @@ from app.features.notifications.schemas import UserNotificationSummary
 
 SYSTEM_SETTINGS_ID = "default"
 STAFF_REPORT_SUBMITTED_NOTIFICATION = "Enterprise Report Submitted"
-STAFF_REPORT_RESUBMITTED_NOTIFICATION = "Enterprise Report Resubmitted"
-STAFF_REPORT_NOTIFICATION_TYPES = (
-    STAFF_REPORT_SUBMITTED_NOTIFICATION,
-    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
-)
 
 
 def to_user_notification_summary(
@@ -78,7 +73,7 @@ async def list_user_notifications(
     if account.role == AccountRole.STAFF:
         statement = statement.where(
             UserNotification.source_type == "enterprise.report",
-            UserNotification.notification_type.in_(STAFF_REPORT_NOTIFICATION_TYPES),
+            UserNotification.notification_type == STAFF_REPORT_SUBMITTED_NOTIFICATION,
         )
     result = await db.scalars(statement.order_by(UserNotification.created_at.desc()).limit(100))
     return [to_user_notification_summary(notification, account) for notification in result]

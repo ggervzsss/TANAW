@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from app.config.report_config import reporting_period_key
+from app.config.report_config import one_report_per_month_error, reporting_period_key
 from app.storage.local_data_serialization import (
     _camera_breakdown_row,
     _format_day_label,
@@ -489,30 +489,14 @@ class LocalDataStore:
         submitted_at = _utc_now()
         submission_id = str(uuid4())
         summary = self.metrics_summary(include_submitted=False)
-        existing_submission = self._report_submission(report_id)
-        existing_period_submission = self._report_submission_for_period(period)
-        if (
-            existing_period_submission is not None
-            and existing_period_submission["report_id"] != report_id
-        ):
-            raise ValueError(f"A report for {period} has already been submitted.")
-        if existing_submission is not None and metrics is None:
-            summary = {
-                **summary,
-                "entries": existing_submission["entries"],
-                "exits": existing_submission["exits"],
-                "peak_occupancy": existing_submission["peak_occupancy"],
-                "current_occupancy": max(
-                    0, existing_submission["entries"] - existing_submission["exits"]
-                ),
-                "unique_count": existing_submission["unique_count"],
-            }
+        # An enterprise sends one report per reporting month, and it cannot be replaced.
+        if self._report_submission_for_period(period) is not None:
+            raise ValueError(one_report_per_month_error(period))
+        if self._report_submission(report_id) is not None:
+            raise ValueError(f"Report {report_id} has already been submitted.")
         if metrics is not None:
             summary = _summary_with_report_metrics(summary, metrics)
         report_payload = payload or {}
-        payload_status = (
-            report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
-        )
         open_period = summary.get("period")
         open_period_key = (
             reporting_period_key(open_period) if isinstance(open_period, str) else None
@@ -521,15 +505,9 @@ class LocalDataStore:
         open_period_matches_submission = not isinstance(open_period, str) or (
             open_period_key is not None and open_period_key == submission_period_key
         )
-        should_consume_open_events = (
-            existing_submission is None
-            and payload_status != "Resubmitted"
-            and open_period_matches_submission
-        )
+        should_consume_open_events = open_period_matches_submission
         camera_breakdown = (
-            self._camera_breakdown_for_open_events()
-            if should_consume_open_events
-            else self._report_camera_breakdown(report_id)
+            self._camera_breakdown_for_open_events() if should_consume_open_events else []
         )
         with self._connection() as connection:
             connection.execute(
@@ -548,18 +526,6 @@ class LocalDataStore:
                     sync_status
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict(report_id) do update set
-                    submission_id = excluded.submission_id,
-                    period = excluded.period,
-                    submitted_at = excluded.submitted_at,
-                    entries = excluded.entries,
-                    exits = excluded.exits,
-                    peak_occupancy = excluded.peak_occupancy,
-                    unique_count = excluded.unique_count,
-                    notes = excluded.notes,
-                    payload_json = excluded.payload_json,
-                    sync_status = excluded.sync_status,
-                    synced_at = null
                 """,
                 (
                     report_id,
@@ -676,7 +642,7 @@ class LocalDataStore:
         return result.rowcount > 0
 
     def mark_report_upload_rejected(self, report_id: str, submission_id: str) -> bool:
-        """The backend refused this submission, so it is not uploaded again; a resubmission is."""
+        """The backend refused this submission, so it is kept here and not uploaded again."""
         with self._connection() as connection:
             result = connection.execute(
                 """

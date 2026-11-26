@@ -96,7 +96,7 @@ function periodFromValue(value: string): SystemLogPeriod {
 }
 
 function isReportStatus(value: string) {
-  return ["Submitted", "Resubmitted", "Consolidated", "Returned for Revision", "Draft"].includes(value);
+  return ["Submitted", "Consolidated", "Draft"].includes(value);
 }
 
 function stringValue(value: unknown) {

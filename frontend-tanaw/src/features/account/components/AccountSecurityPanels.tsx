@@ -102,17 +102,7 @@ export function PasswordChangePanel(props: PasswordChangePanelProps) {
         </SettingsGroup>
         {saveError && <Alert tone="danger">{saveError}</Alert>}
       </fieldset>
-      {/* A password change is one deliberate action, so its button stays in view, disabled until something is typed. */}
-      <SettingsSaveBar
-        persistent
-        busy={isLoading}
-        dirty={dirty}
-        saveDisabled={!dirty}
-        onDiscard={onClear}
-        discardLabel="Clear"
-        dirtyLabel="Password not updated yet"
-        busyLabel="Updating password..."
-      >
+      <SettingsSaveBar busy={isLoading} dirty={dirty} onDiscard={onClear} busyLabel="Updating password...">
         Update password
       </SettingsSaveBar>
     </form>

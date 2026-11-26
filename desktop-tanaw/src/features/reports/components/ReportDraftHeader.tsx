@@ -21,7 +21,6 @@ export function ReportDraftHeader({ activeReport, activeReportId, isReadOnly }: 
 
 function getReportWorkspaceTitle(activeReport: ReportRecord | null, activeReportId: string | null, isReadOnly: boolean) {
   if (!activeReport) return "Report Workspace";
-  if (activeReport.status === "Returned for Revision") return `Revise Report: ${activeReportId}`;
   if (isReadOnly) return `Submitted Report Details: ${activeReportId}`;
   return `Edit Report: ${activeReportId}`;
 }

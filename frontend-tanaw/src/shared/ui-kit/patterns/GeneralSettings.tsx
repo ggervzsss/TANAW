@@ -275,12 +275,8 @@ type SettingsSaveBarProps = {
   /** True while the form differs from what is saved. */
   dirty: boolean;
   busy: boolean;
-  /** Keep the bar on screen when nothing has changed, for single-action forms. */
-  persistent?: boolean;
   saveDisabled?: boolean;
   onDiscard: () => void;
-  discardLabel?: string;
-  dirtyLabel?: string;
   busyLabel?: string;
   /** The submit button's label. */
   children: ReactNode;
@@ -294,11 +290,8 @@ type SettingsSaveBarProps = {
 export function SettingsSaveBar({
   dirty,
   busy,
-  persistent = false,
   saveDisabled = false,
   onDiscard,
-  discardLabel = "Discard",
-  dirtyLabel = "Unsaved changes",
   busyLabel = "Saving changes...",
   children,
 }: SettingsSaveBarProps) {
@@ -307,7 +300,6 @@ export function SettingsSaveBar({
   const { status, visible, showDiscard } = getSettingsSaveBarState({
     dirty,
     busy,
-    persistent,
   });
 
   // When the bar leaves after a save or discard, keep keyboard users in the form rather than
@@ -350,7 +342,7 @@ export function SettingsSaveBar({
           ) : status === "dirty" ? (
             <>
               <CircleAlert size={16} aria-hidden="true" />
-              {dirtyLabel}
+              Unsaved changes
             </>
           ) : null}
         </p>
@@ -358,7 +350,7 @@ export function SettingsSaveBar({
           <div className="tanaw-settings-action-buttons">
             {showDiscard && (
               <Button variant="secondary" disabled={busy} onClick={onDiscard}>
-                {discardLabel}
+                Discard
               </Button>
             )}
             <Button type="submit" loading={busy} disabled={saveDisabled}>

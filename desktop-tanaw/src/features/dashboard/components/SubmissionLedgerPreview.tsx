@@ -1,4 +1,4 @@
-import { ArrowRight, Check, FileText, RotateCcw } from "lucide-react";
+import { ArrowRight, Check, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ReportRecord } from "../../../types/enterprise";
 import { routePaths } from "../../../app/router/routePaths";
@@ -23,7 +23,6 @@ export function SubmissionLedgerPreview({ reports, enterpriseName, loading = fal
     sentTo: report.syncStatus === "pending" ? "Waiting to sync" : "LGU",
     date: report.date,
     status: report.status,
-    returned: report.status === "Returned for Revision",
     preview: () => onPreviewReport(report),
   }));
   return (
@@ -81,8 +80,8 @@ export function SubmissionLedgerPreview({ reports, enterpriseName, loading = fal
                 <span className="dash-report-cell">{entry.sentTo}</span>
                 <span className="dash-report-cell">{entry.date}</span>
                 <span className="dash-report-status">
-                  <span className={`dash-badge${entry.returned ? " dash-badge-warning" : ""}`}>
-                    {entry.returned ? <RotateCcw size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
+                  <span className="dash-badge">
+                    <Check size={13} aria-hidden="true" />
                     {entry.status}
                   </span>
                 </span>

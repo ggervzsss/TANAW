@@ -119,8 +119,8 @@ export type SystemLog = {
   metadata?: Record<string, string | number | boolean | null>;
 };
 
-export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
-export type FinalReportArchivedFromStatus = "Draft" | "Finalized" | "Returned for Revision";
+export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Consolidated" | "Missing";
+export type FinalReportArchivedFromStatus = "Draft" | "Finalized";
 export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
 export type ReportDemographics = ApiSchemas["ReportDemographicsSummary"];
 

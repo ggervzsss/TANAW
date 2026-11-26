@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.features.reporting.errors import InvalidReportWorkflowError
+from app.features.reporting.errors import DuplicateReportPeriodError, InvalidReportWorkflowError
 from app.features.reporting.intake import report_demographics_from_payload
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.periods import (
@@ -15,10 +15,8 @@ from app.features.reporting.periods import (
 )
 from app.features.reporting.policies import (
     resolve_final_report_status_transition,
-    validate_final_report_revision_return,
     validate_final_report_sources,
     validate_new_report_submission,
-    validate_report_resubmission,
     validate_report_review_transition,
 )
 from app.features.reporting.schemas import (
@@ -30,11 +28,6 @@ from tests.support.counting import counting_snapshot
 
 def test_pending_report_can_be_accepted() -> None:
     validate_report_review_transition("Pending Review", "Ready to Consolidate")
-
-
-def test_intake_review_cannot_return_a_submitted_report() -> None:
-    with pytest.raises(InvalidReportWorkflowError, match="cannot be returned for revision"):
-        validate_report_review_transition("Pending Review", "Returned")
 
 
 def test_departures_of_previous_period_visitors_are_preserved() -> None:
@@ -61,7 +54,7 @@ def test_departures_of_previous_period_visitors_are_preserved() -> None:
     assert report.exits == 5
 
 
-@pytest.mark.parametrize("current_status", ["Ready to Consolidate", "Returned", "Consolidated"])
+@pytest.mark.parametrize("current_status", ["Ready to Consolidate", "Consolidated"])
 def test_non_pending_report_cannot_be_changed_by_review_action(current_status: str) -> None:
     with pytest.raises(InvalidReportWorkflowError):
         validate_report_review_transition(current_status, "Ready to Consolidate")
@@ -72,16 +65,14 @@ def test_consolidated_status_is_not_a_direct_review_action() -> None:
         validate_report_review_transition("Pending Review", "Consolidated")
 
 
-def test_enterprise_submission_changes_require_the_return_resubmission_workflow() -> None:
-    validate_new_report_submission("Submitted")
-    validate_report_resubmission("Returned", "Resubmitted")
+def test_enterprise_sends_one_report_per_reporting_month() -> None:
+    validate_new_report_submission("June 2026", period_has_report=False)
 
-    with pytest.raises(InvalidReportWorkflowError):
-        validate_new_report_submission("Resubmitted")
-    with pytest.raises(InvalidReportWorkflowError):
-        validate_report_resubmission("Pending Review", "Resubmitted")
-    with pytest.raises(InvalidReportWorkflowError):
-        validate_report_resubmission("Returned", "Submitted")
+    with pytest.raises(
+        DuplicateReportPeriodError,
+        match="A report for June 2026 has already been submitted.*one report per reporting month",
+    ):
+        validate_new_report_submission("June 2026", period_has_report=True)
 
 
 def test_final_report_source_ids_must_be_unique() -> None:
@@ -114,30 +105,21 @@ def test_reporting_period_has_canonical_key() -> None:
     assert reporting_period_key("Jun 1 - Jun 30, 2026") is None
 
 
-def test_final_report_revision_return_requires_draft_and_owned_sources() -> None:
-    validate_final_report_revision_return("Draft", {"source-1", "source-2"}, {"source-1"})
-
-    with pytest.raises(InvalidReportWorkflowError):
-        validate_final_report_revision_return("Finalized", {"source-1"}, {"source-1"})
-
-    with pytest.raises(InvalidReportWorkflowError):
-        validate_final_report_revision_return("Draft", {"source-1"}, {"source-2"})
-
-
-def test_returned_final_report_can_be_archived_and_restored() -> None:
+@pytest.mark.parametrize("current_status", ["Draft", "Finalized"])
+def test_final_report_can_be_archived_and_restored(current_status: str) -> None:
     assert resolve_final_report_status_transition(
-        current_status="Returned for Revision",
+        current_status=current_status,
         current_archived_from_status=None,
         requested_status="Archived",
-    ) == ("Archived", "Returned for Revision")
+    ) == ("Archived", current_status)
     assert resolve_final_report_status_transition(
         current_status="Archived",
-        current_archived_from_status="Returned for Revision",
-        requested_status="Returned for Revision",
-    ) == ("Returned for Revision", None)
+        current_archived_from_status=current_status,
+        requested_status="Draft",
+    ) == (current_status, None)
 
 
-def test_desktop_resubmission_uses_the_frozen_snapshot_for_demographic_validation() -> None:
+def test_desktop_submission_uses_the_frozen_snapshot_for_demographic_validation() -> None:
     payload = DesktopReportSubmissionIngest(
         submissionId=uuid4(),
         reportId="REP-963735",
@@ -163,7 +145,7 @@ def test_desktop_resubmission_uses_the_frozen_snapshot_for_demographic_validatio
                 "peak": 58,
                 "unique": 525,
             },
-            "status": "Resubmitted",
+            "status": "Submitted",
         },
     )
 

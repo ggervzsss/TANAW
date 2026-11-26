@@ -55,8 +55,7 @@ test("A submitted report is Reviewing and can only be accepted; an enterprise ye
   await expect(dialog.getByText("City Plaza Shops · October 2026")).toBeVisible();
   await expect(dialog.getByText("No notes were sent with this report.")).toBeVisible();
   await expect(dialog.getByText("Reviewing", { exact: true })).toBeVisible();
-  // TANAW does not return submitted reports, and the enterprise report has no download or print.
-  await expect(dialog.getByRole("button", { name: "Return for correction" })).toHaveCount(0);
+  // The enterprise report has no download or print.
   await expect(dialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Print" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Accept report" })).toBeVisible();

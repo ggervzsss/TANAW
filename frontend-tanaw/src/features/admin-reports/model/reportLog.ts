@@ -40,9 +40,6 @@ function reviewEvent(log: SystemLog, at: Date): DatedEvent | null {
   if (log.action === "Report Ready to Consolidate") {
     return { ...base, title: "Review completed", detail: `${log.actor} marked it ready for the city summary.${remarks ? ` ${remarks}` : ""}` };
   }
-  if (log.action === "Report Returned") {
-    return { ...base, title: "Returned for correction", detail: remarks ? `${log.actor}: ${remarks}` : `${log.actor} sent it back to the enterprise for correction.` };
-  }
   if (log.action === "Report Consolidated") {
     return { ...base, title: "Added to city summary", detail: `${log.actor} marked it consolidated.` };
   }
@@ -69,22 +66,15 @@ export function buildReportLog(entry: ReportMonthEntry, enterpriseName: string, 
   const code = report.code;
   const events: DatedEvent[] = [];
   const reportLogs = logs.filter((log) => log.sourceId === report.id);
-  const submissions = reportLogs
+  // An enterprise sends one report per month, so the earliest logged submission is the only one.
+  const submission = reportLogs
     .filter((log) => log.action === SUBMIT_LOG_ACTION)
     .map((log) => ({ log, at: parseTimestamp(log.timestamp) }))
     .filter((item): item is { log: SystemLog; at: Date } => item.at !== null)
-    .sort((left, right) => left.at.getTime() - right.at.getTime());
+    .sort((left, right) => left.at.getTime() - right.at.getTime())[0];
 
-  if (submissions.length > 0) {
-    submissions.forEach(({ log, at }, index) => {
-      events.push({
-        id: log.id,
-        at: at.getTime(),
-        when: formatLogTime(at),
-        title: index === 0 ? "Report submitted" : "Report resubmitted",
-        detail: `${log.actor} sent ${code}.`,
-      });
-    });
+  if (submission) {
+    events.push({ id: submission.log.id, at: submission.at.getTime(), when: formatLogTime(submission.at), title: "Report submitted", detail: `${submission.log.actor} sent ${code}.` });
   } else if (entry.sentAt) {
     events.push({ id: `${report.id}-sent`, at: entry.sentAt.getTime(), when: formatLogTime(entry.sentAt), title: "Report submitted", detail: `${enterpriseName} sent ${code}.` });
   }

@@ -407,10 +407,6 @@ html.dark .report-status[data-tone="consolidated"] {
   background: var(--theme-success-bg);
   color: var(--theme-success-text);
 }
-html.dark .report-status[data-tone="returned"] {
-  background: var(--theme-returned-bg);
-  color: var(--theme-returned-text);
-}
 html.dark .enterprise-shell .tanaw-status-badge--success {
   background: var(--theme-success-bg) !important;
   color: var(--theme-success-text) !important;

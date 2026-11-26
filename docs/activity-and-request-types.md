@@ -107,10 +107,8 @@ repeated wrong passwords is.
 | Report submitted | Enterprise, from the desktop app | Same |
 | Report set to pending review | Staff or Admin | Same |
 | Report review completed | Staff or Admin | Same |
-| Report sent back for correction | Staff or Admin | Same |
 | Report consolidated | Staff or Admin | Same |
 | Consolidated report generated | Staff or Admin | Same |
-| Consolidated report returned for revision | Staff or Admin | Same |
 | Consolidated report finalized | Staff or Admin | Same |
 | Consolidated report archived | Staff or Admin | Same |
 | Consolidated report restored from the archive | Staff or Admin | Same, but today it reads like a normal status change |

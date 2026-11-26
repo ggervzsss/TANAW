@@ -99,7 +99,6 @@ async def test_report_logs_follow_the_live_workflow_and_link_to_the_report() -> 
         "accepted-id": ["Submit Enterprise Report", "Report Ready to Consolidate"],
         "consolidated-id": ["Submit Enterprise Report", "Report Ready to Consolidate"],
     }
-    assert not any(log.action == "Report Returned" for log in logs)
     review = next(
         log
         for log in logs

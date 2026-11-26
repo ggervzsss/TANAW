@@ -7,7 +7,7 @@ import { formatReportingMonth, intakeReportMonth, sameMonth, type ReportingMonth
  * staff member can do with it.
  *
  *   Review         the report awaits the staff decision (stored "Pending Review").
- *   View           accepted, already in a monthly report, or a legacy returned report (read only).
+ *   View           accepted or already in a monthly report (read only).
  *   Remind         no report yet (Pending before the due date, Missing after it).
  *
  * Rows run Missing, Pending, then Submitted; within each, Waiting, Reviewing, then Consolidated;

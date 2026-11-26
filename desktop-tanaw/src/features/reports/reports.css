@@ -891,10 +891,6 @@
   line-height: 20px;
   color: var(--reports-muted);
 }
-.report-supporting-controls > .reports-text-button {
-  display: block;
-  margin-bottom: 8px;
-}
 .report-supporting-controls > details > summary {
   display: inline-flex;
   align-items: center;
@@ -937,31 +933,6 @@
   animation: reports-panel-rise 240ms var(--reports-ease);
 }
 
-.tanaw-report-remarks {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  border: 0;
-  border-left: 3px solid var(--tanaw-warning-text, #92400e);
-  border-radius: 12px;
-  background: var(--tanaw-warning-bg, #fffbeb);
-}
-.tanaw-report-remarks__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--tanaw-warning-text, #92400e);
-}
-.tanaw-report-remarks__message {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: 21px;
-  color: var(--tanaw-warning-text, #92400e);
-}
 
 /* Shared with the review dialog, so these are not scoped to the workspace. */
 .report-counting-basis {
@@ -1469,9 +1440,6 @@
 }
 :root.dark .report-notes textarea {
   background: var(--tanaw-surface-inset);
-}
-:root.dark .enterprise-shell .tanaw-report-remarks {
-  border-left-color: var(--tanaw-warning-text);
 }
 .tanaw-var1-viewer {
   position: fixed;
@@ -2053,11 +2021,6 @@
   }
 }
 
-/* Returned reports retain their existing Light Mode badge colors. */
-.report-status[data-tone="returned"] {
-  background: var(--tanaw-warning-bg);
-  color: var(--tanaw-warning-text);
-}
 .report-history-results {
   animation: report-results-enter 200ms var(--reports-ease, ease-out);
 }

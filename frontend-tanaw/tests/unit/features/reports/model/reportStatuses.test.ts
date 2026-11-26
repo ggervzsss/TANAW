@@ -23,7 +23,6 @@ describe("submission status", () => {
   it("notes overdue and upcoming reports, but not a report that was sent", () => {
     expect(submissionNote(report({ submittedAt: "2026-11-13T10:00:00+08:00" }), "October", 2026, new Date(2026, 10, 20))).toBeNull();
     expect(submissionNote(report(), "October", 2026, new Date(2026, 10, 20))).toBeNull();
-    expect(submissionNote(report({ status: "Returned" }), "October", 2026, new Date(2026, 10, 20))).toBeNull();
     expect(submissionNote(undefined, "October", 2026, new Date(2026, 10, 22))).toBe("12 days overdue");
     expect(submissionNote(undefined, "November", 2026, new Date(2026, 10, 22))).toBe("Due Dec 10");
   });
@@ -37,7 +36,6 @@ describe("staff review status", () => {
 
   it("maps a sent report to Reviewing until it is accepted, then Consolidated", () => {
     expect(reviewStatus({ status: "Pending Review" })).toBe("Reviewing");
-    expect(reviewStatus({ status: "Returned" })).toBe("Reviewing");
     expect(reviewStatus({ status: "Ready to Consolidate" })).toBe("Consolidated");
     expect(reviewStatus({ status: "Consolidated" })).toBe("Consolidated");
   });

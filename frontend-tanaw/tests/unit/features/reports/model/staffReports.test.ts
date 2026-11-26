@@ -49,7 +49,7 @@ describe("staff report rows", () => {
     const reports = [
       report("a", "Consolidated"),
       report("b", "Pending Review", { submittedAt: "2026-11-13T10:00:00+08:00" }),
-      report("c", "Returned"),
+      report("c", "Ready to Consolidate"),
       report("e", "Ready to Consolidate"),
       report("a", "Pending Review", { id: "older-month", month: "September", period: "September 2026" }),
     ];
@@ -58,13 +58,12 @@ describe("staff report rows", () => {
     expect(rows.map((row) => [row.name, row.submission, row.review, row.action])).toEqual([
       ["Daisy Resort", "Missing", "Waiting", "remind"],
       ["Balon ni Lolo", "Submitted", "Reviewing", "review"],
-      ["City Plaza", "Submitted", "Reviewing", "view"],
       ["Acacia Park", "Submitted", "Consolidated", "view"],
+      ["City Plaza", "Submitted", "Consolidated", "view"],
       ["Echo Mall", "Submitted", "Consolidated", "view"],
     ]);
     expect(rows[0]).toMatchObject({ sent: null, note: "14 days overdue", report: undefined });
     expect(rows[1]).toMatchObject({ sent: "Nov 13", note: null, report: { id: "r-b" } });
-    // A legacy returned report is read only and carries no note.
     expect(rows[2]).toMatchObject({ note: null, action: "view" });
   });
 
@@ -90,16 +89,16 @@ describe("staff report rows", () => {
   });
 
   it("keeps a report from an enterprise that is no longer registered, and uses its newest report", () => {
-    const reports = [report("x", "Pending Review", { enterprise: "Old Museum", barangay: "Nueva" }), report("a", "Returned", { id: "first", submittedAt: "2026-11-02T09:00:00+08:00" }), report("a", "Pending Review", { id: "resent" })];
+    const reports = [report("x", "Pending Review", { enterprise: "Old Museum", barangay: "Nueva" }), report("a", "Consolidated", { id: "older", submittedAt: "2026-11-02T09:00:00+08:00" }), report("a", "Pending Review", { id: "newer" })];
     const rows = staffReportRows([enterprise("a", "Acacia Park")], reports, october, afterDue);
     expect(rows.find((row) => row.enterpriseId === "x")).toMatchObject({ name: "Old Museum", barangay: "Nueva", action: "review" });
-    expect(rows.find((row) => row.enterpriseId === "a")?.report?.id).toBe("resent");
+    expect(rows.find((row) => row.enterpriseId === "a")?.report?.id).toBe("newer");
   });
 });
 
 describe("staff report filters", () => {
   const enterprisesByBarangay = [enterprise("a", "Acacia Park"), enterprise("b", "Balon ni Lolo", "Landayan"), enterprise("c", "City Plaza"), enterprise("d", "Daisy Resort", "Landayan"), enterprise("e", "Echo Mall")];
-  const reports = [report("a", "Pending Review"), report("b", "Returned"), report("c", "Ready to Consolidate")];
+  const reports = [report("a", "Pending Review"), report("b", "Pending Review"), report("c", "Ready to Consolidate")];
   const rows = staffReportRows(enterprisesByBarangay, reports, october, afterDue);
   const names = (filters: Partial<typeof EMPTY_STAFF_REPORT_FILTERS>) => filterStaffReportRows(rows, { ...EMPTY_STAFF_REPORT_FILTERS, ...filters }).map((row) => row.name);
 
@@ -167,7 +166,7 @@ describe("the page caption", () => {
 
 describe("generating the consolidated report", () => {
   it("waits while any received report is still being reviewed", () => {
-    const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Returned"), report("c", "Ready to Consolidate")], october, afterDue);
+    const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Pending Review"), report("c", "Ready to Consolidate")], october, afterDue);
     const progress = staffReportsProgress(rows);
     expect(progress).toMatchObject({ received: 3, consolidated: 1, reviewing: 2, waiting: 2, readyReportIds: ["r-c"], canGenerate: false, generated: false });
     expect(staffReportsSummary(progress, october)).toBe("1 of 3 received reports consolidated. Generate once all 3 are.");

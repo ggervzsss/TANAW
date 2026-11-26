@@ -152,7 +152,7 @@ const report = (id: string, period: string, date: string, status: string, entrie
 const SAMPLE_REPORTS: ReportRecord[] = [
   report("SAMPLE-2026-10", "October 2026", "Nov 7, 2026", "Submitted", 118_402),
   report("SAMPLE-2026-09", "September 2026", "Oct 6, 2026", "Submitted", 109_877),
-  report("SAMPLE-2026-08", "August 2026", "Sep 5, 2026", "Returned for Revision", 121_560),
+  report("SAMPLE-2026-08", "August 2026", "Sep 5, 2026", "Submitted", 121_560),
   report("SAMPLE-2026-07", "July 2026", "Aug 6, 2026", "Submitted", 131_204),
   report("SAMPLE-2026-06", "June 2026", "Jul 7, 2026", "Submitted", 126_998),
   report("SAMPLE-2026-05", "May 2026", "Jun 5, 2026", "Submitted", 140_311, "pending"),

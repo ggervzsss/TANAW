@@ -989,23 +989,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/operational/reports/final/{report_id}/return-revision": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Return Final Report Revision */
-        post: operations["return_final_report_revision_operational_reports_final__report_id__return_revision_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/operational/reports/final/{report_id}/status": {
         parameters: {
             query?: never;
@@ -2439,13 +2422,6 @@ export interface components {
             /** Reportids */
             reportIds: string[];
         };
-        /** FinalReportRevisionReturn */
-        FinalReportRevisionReturn: {
-            /** Remarks */
-            remarks: string;
-            /** Sourcereportids */
-            sourceReportIds: string[];
-        };
         /** FinalReportSourceSummary */
         FinalReportSourceSummary: {
             /** Attractioncode */
@@ -2476,12 +2452,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Draft" | "Finalized" | "Archived" | "Returned for Revision";
+            status: "Draft" | "Finalized" | "Archived";
         };
         /** FinalReportSummary */
         FinalReportSummary: {
             /** Archivedfromstatus */
-            archivedFromStatus?: ("Draft" | "Finalized" | "Returned for Revision") | null;
+            archivedFromStatus?: ("Draft" | "Finalized") | null;
             /** Enterprisecount */
             enterpriseCount: number;
             /** Generatedon */
@@ -2500,7 +2476,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Draft" | "Finalized" | "Archived" | "Returned for Revision";
+            status: "Draft" | "Finalized" | "Archived";
             /** Title */
             title: string;
             /** Totalentry */
@@ -2593,7 +2569,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
             /** Submitted */
             submitted: string;
             /**
@@ -2894,7 +2870,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
         };
         /** RequestAttachmentCreate */
         RequestAttachmentCreate: {
@@ -5392,41 +5368,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FinalReportSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    return_final_report_revision_operational_reports_final__report_id__return_revision_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                report_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FinalReportRevisionReturn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -50,7 +50,7 @@ export function themeServiceFixture() {
   const records = [
     ["October 2026", "Submitted"],
     ["August 2026", "Consolidated"],
-    ["July 2026", "Returned for Revision"],
+    ["July 2026", "Submitted"],
     ["June 2026", "Draft"],
   ].map(([period, status], index) => ({
     ...source,

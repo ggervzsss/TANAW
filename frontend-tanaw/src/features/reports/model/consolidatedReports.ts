@@ -26,7 +26,6 @@ export function parseYear(value: string | null | undefined) {
 const finalStatus: Record<FinalReportStatus, { label: string; tone: RecordStatusTone }> = {
   Finalized: { label: "Consolidated", tone: "consolidated" },
   Draft: { label: "Draft", tone: "pending" },
-  "Returned for Revision": { label: "Returned", tone: "reviewing" },
   Archived: { label: "Archived", tone: "waiting" },
 };
 

@@ -49,22 +49,19 @@ describe("buildReportLog", () => {
       "San Pedro Public Market",
       [
         log("Submit Enterprise Report", "San Pedro Public Market", "2026-11-01T08:30:00"),
-        log("Report Returned", "Ana Reyes", "2026-11-03T10:00:00", { remarks: "Visitor origins need correcting" }),
-        log("Submit Enterprise Report", "San Pedro Public Market", "2026-11-05T11:00:00"),
-        log("Report Ready to Consolidate", "Maria Santos", "2026-11-12T14:20:00"),
-        { ...log("Report Returned", "Other", "2026-11-04T10:00:00"), sourceId: "another-report" },
+        log("Report Ready to Consolidate", "Maria Santos", "2026-11-12T14:20:00", { remarks: "Totals checked." }),
+        { ...log("Report Consolidated", "Other", "2026-11-04T10:00:00"), sourceId: "another-report" },
       ],
       [finalReport],
     );
     expect(events.map((event) => [event.title, event.when])).toEqual([
       ["Added to city summary", "Nov 21"],
       ["Review completed", "Nov 12, 2:20 PM"],
-      ["Report resubmitted", "Nov 5, 11:00 AM"],
-      ["Returned for correction", "Nov 3, 10:00 AM"],
       ["Report submitted", "Nov 1, 8:30 AM"],
     ]);
     expect(events[0]).toMatchObject({ detail: "Included in FR-2026-10, prepared by Jose Cruz.", tone: "submitted" });
-    expect(events[3].detail).toBe("Ana Reyes: Visitor origins need correcting");
+    expect(events[1].detail).toBe("Maria Santos marked it ready for the city summary. Totals checked.");
+    expect(events[2].detail).toBe("San Pedro Public Market sent RPT-2026-10-001.");
     expect(events.slice(1).every((event) => event.tone === "earlier")).toBe(true);
   });
 

@@ -13,7 +13,7 @@ export type EnterpriseIntakeReport = {
   period: string;
   submitted: string;
   submittedAt: string;
-  status: "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated";
+  status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
   code: string;
   remarks: string | null;
   notes: string | null;
@@ -29,8 +29,8 @@ export type EnterpriseIntakeReport = {
 export type EnterpriseFinalReport = {
   id: string;
   period: string;
-  status: "Draft" | "Finalized" | "Archived" | "Returned for Revision";
-  archivedFromStatus?: "Draft" | "Finalized" | "Returned for Revision" | null;
+  status: "Draft" | "Finalized" | "Archived";
+  archivedFromStatus?: "Draft" | "Finalized" | null;
   sources: {
     id: string;
     code: string;

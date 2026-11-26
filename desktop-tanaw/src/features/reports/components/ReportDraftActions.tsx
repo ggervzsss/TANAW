@@ -1,9 +1,7 @@
-import { RotateCcw, Send } from "lucide-react";
-import type { ReportRecord } from "../../../types/enterprise";
+import { Send } from "lucide-react";
 import { notifyWarning } from "../../toasts/services/toast-service";
 
 type ReportDraftActionsProps = {
-  activeReport: ReportRecord | null;
   isReadOnly: boolean;
   isPeriodChanging: boolean;
   metricsError: string | null;
@@ -11,7 +9,7 @@ type ReportDraftActionsProps = {
   onSubmitPrompt: () => void;
 };
 
-export function ReportDraftActions({ activeReport, isReadOnly, isPeriodChanging, metricsError, validationError, onSubmitPrompt }: ReportDraftActionsProps) {
+export function ReportDraftActions({ isReadOnly, isPeriodChanging, metricsError, validationError, onSubmitPrompt }: ReportDraftActionsProps) {
   const warning = metricsError ?? validationError;
 
   if (isReadOnly) return null;
@@ -28,8 +26,8 @@ export function ReportDraftActions({ activeReport, isReadOnly, isPeriodChanging,
         }}
         className="reports-button reports-primary report-submit-button"
       >
-        {activeReport?.status === "Returned for Revision" ? <RotateCcw size={14} /> : <Send size={14} />}
-        {activeReport?.status === "Returned for Revision" ? "Resubmit Report" : "Submit Report"}
+        <Send size={14} />
+        Submit Report
       </button>
     </div>
   );

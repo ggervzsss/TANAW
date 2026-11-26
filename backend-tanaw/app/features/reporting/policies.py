@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import cast
 
-from app.features.reporting.errors import InvalidReportWorkflowError
+from app.features.reporting.errors import DuplicateReportPeriodError, InvalidReportWorkflowError
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.periods import reporting_period_key
 from app.features.reporting.schemas import (
@@ -9,8 +9,7 @@ from app.features.reporting.schemas import (
 )
 
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
-FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
-FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
+FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized"}
 
 
 def resolve_final_report_status_transition(
@@ -57,27 +56,20 @@ def validate_report_review_transition(current_status: str, requested_status: str
         )
     if requested_status != "Ready to Consolidate":
         raise InvalidReportWorkflowError(
-            "Intake review can only accept a pending report as Ready to Consolidate; "
-            "submitted enterprise reports cannot be returned for revision."
+            "Intake review can only accept a pending report as Ready to Consolidate."
         )
 
 
-def validate_new_report_submission(submission_status: str) -> None:
-    if submission_status != "Submitted":
-        raise InvalidReportWorkflowError(
-            "A report can only be resubmitted after a final report audit returns it."
-        )
+def duplicate_report_period_message(period: str) -> str:
+    return (
+        f"A report for {period} has already been submitted. An enterprise sends one report "
+        "per reporting month, and a submitted report cannot be replaced."
+    )
 
 
-def validate_report_resubmission(current_status: str, submission_status: str) -> None:
-    if current_status != "Returned":
-        raise InvalidReportWorkflowError(
-            f"{current_status} reports cannot be changed by enterprise submission."
-        )
-    if submission_status != "Resubmitted":
-        raise InvalidReportWorkflowError(
-            "A returned report must be submitted through the resubmission workflow."
-        )
+def validate_new_report_submission(period: str, *, period_has_report: bool) -> None:
+    if period_has_report:
+        raise DuplicateReportPeriodError(duplicate_report_period_message(period))
 
 
 def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission]) -> None:
@@ -93,19 +85,3 @@ def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission])
     period_keys = {reporting_period_key(report.period) for report in reports}
     if None in period_keys or len(period_keys) > 1:
         raise InvalidReportWorkflowError("A final report can only include one reporting period.")
-
-
-def validate_final_report_revision_return(
-    current_status: str, source_ids: set[str], selected_source_ids: set[str]
-) -> None:
-    if current_status != "Draft":
-        raise InvalidReportWorkflowError("Only draft final reports can be returned for revision.")
-    if not source_ids:
-        raise InvalidReportWorkflowError("This final report has no source reports to return.")
-
-    unknown_source_ids = selected_source_ids - source_ids
-    if unknown_source_ids:
-        joined_ids = ", ".join(sorted(unknown_source_ids))
-        raise InvalidReportWorkflowError(
-            f"Selected source reports do not belong to this final report: {joined_ids}."
-        )

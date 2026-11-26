@@ -15,8 +15,4 @@ describe("settings save bar", () => {
     expect(getSettingsSaveBarState({ dirty: false, busy: true })).toMatchObject({ status: "saving", visible: true, showDiscard: false });
   });
 
-  it("keeps a persistent single-action bar visible, offering Discard only after typing", () => {
-    expect(getSettingsSaveBarState({ dirty: false, busy: false, persistent: true })).toEqual({ status: "idle", visible: true, showDiscard: false });
-    expect(getSettingsSaveBarState({ dirty: true, busy: false, persistent: true })).toEqual({ status: "dirty", visible: true, showDiscard: true });
-  });
 });

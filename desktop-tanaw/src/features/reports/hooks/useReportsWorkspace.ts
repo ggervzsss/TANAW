@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getEstablishmentSummary, getMlServiceStatus, recordLocalReportSubmission } from "../../camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
@@ -28,7 +28,7 @@ import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useOriginsDraft } from "./useOriginsDraft";
 import { monthlyDemoFromDays, reportDays } from "../model/daily-origins";
-import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
+import { useReportsWorkspaceData } from "./useReportsWorkspaceData";
 
 type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
 type Preview = { attractionType?: string; demo: DemoBreakdown; origins?: DailyOrigins; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
@@ -45,24 +45,22 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const [previewReport, setPreviewReport] = useState<Preview | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [revisionMetrics, setRevisionMetrics] = useState<Metrics | null>(null);
   const submitting = useRef(false);
-  const refreshSequence = useRef(0);
   const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
-  const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
+  // A submitted month is done: an enterprise sends one report per month, and it cannot be replaced.
+  const isReadOnly = activeReport ? activeReport.status !== "Draft" : false;
   const attractionType = isReadOnly ? activeReport?.attractionType : currentAttractionType;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
   const { origins, setOrigins, isHydrating } = useOriginsDraft({ activeReportId, draftKey: demographicDraftKey, isReadOnly, period, reportsHistory });
   const data = useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat });
-  const displayedMetrics = revisionMetrics ?? (activeReport ? metricsFromReport(activeReport) : data.liveMetrics);
+  const displayedMetrics = activeReport ? metricsFromReport(activeReport) : data.liveMetrics;
   // Submitted reports made before daily entry keep their monthly totals only.
   const hasDailyOrigins = !isReadOnly || activeReport?.origins !== undefined;
   const days = useMemo(() => reportDays(period, displayedMetrics, origins), [period, displayedMetrics, origins]);
   const derivedDemo = useMemo(() => monthlyDemoFromDays(days), [days]);
   const demo = isReadOnly && activeReport?.demo ? activeReport.demo : derivedDemo;
-  const blockingMetricsError = revisionMetrics?.counting ? reportBaselineError(revisionMetrics.counting) : activeReport?.counting ? null : data.metricsError;
+  const blockingMetricsError = activeReport?.counting ? null : data.metricsError;
   const validationError = validateReportDraft(displayedMetrics, demo, isReadOnly ? [] : days, period, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !isReadOnly,
     checkReportingPeriod: !isReadOnly,
@@ -84,10 +82,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
 
   const handleSelectLedgerRow = (row: ReportLedgerRow) => {
     if (submitting.current) return;
-    refreshSequence.current += 1;
     pendingOperation.current = null;
-    setIsRefreshing(false);
-    setRevisionMetrics(null);
     setPreviewReport(null);
     const nextReportId = row.kind === "history" ? row.report.id : null;
     const nextPeriod = row.report.period ?? row.report.date ?? getCurrentReportingPeriod();
@@ -127,26 +122,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       attractionType: report.status === "Draft" ? currentAttractionType : report.attractionType,
     });
   };
-  const refreshRevisionCounts = async () => {
-    if (isReadOnly || !activeReport) return;
-    const sequence = ++refreshSequence.current;
-    const enterpriseId = useAuthStore.getState().user?.enterpriseId;
-    setIsRefreshing(true);
-    try {
-      const status = await getMlServiceStatus();
-      const snapshot = await getEstablishmentSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, { period });
-      if (sequence !== refreshSequence.current || useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
-      if (snapshot.enterprise_id !== enterpriseId) throw new Error("The report counts belong to another establishment.");
-      const error = reportBaselineError(snapshot);
-      if (error) throw new Error(error);
-      setRevisionMetrics(metricsFromEstablishment(snapshot));
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : "Unable to refresh reconciled counts.");
-    } finally {
-      if (sequence === refreshSequence.current) setIsRefreshing(false);
-    }
-  };
-
   const executeSubmit = async () => {
     if (submitting.current || isReadOnly) return;
     const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, days, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
@@ -171,7 +146,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       notifyWarning("Reconnect this establishment before submitting.");
       return;
     }
-    const statusLabel = activeReportId ? "Resubmitted" : "Submitted";
     const key = JSON.stringify({ enterpriseId, attractionCode, attractionDescription, activeReportId, period, notes, origins, snapshot: counting.snapshot_version });
     if (pendingOperation.current?.key !== key)
       pendingOperation.current = {
@@ -180,7 +154,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         requestId: crypto.randomUUID(),
         auditTrail: [
           ...(activeReport?.auditTrail ?? []),
-          { time: formatPhilippineDateTime(new Date(), timeFormat), action: activeReportId ? "Report Resubmitted" : "Report Submitted", actor: "Enterprise User" },
+          { time: formatPhilippineDateTime(new Date(), timeFormat), action: "Report Submitted", actor: "Enterprise User" },
         ],
       };
     const { reportId, requestId, auditTrail } = pendingOperation.current;
@@ -204,7 +178,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
           origins,
           notes,
           period,
-          status: statusLabel,
+          status: "Submitted",
           // The service normalizes demo to its canonical province fields; the city subset travels separately.
           var1: { thisCityMale: demo.thisCityMale ?? "", thisCityFemale: demo.thisCityFemale ?? "", thisCityUnspecified: demo.thisCityUnspecified ?? "" },
         },
@@ -217,12 +191,14 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       const cloudResult = await syncSubmittedReportToCloud(submission.report_id, submission.submission_id);
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       const reference = submission.report_id;
-      if (cloudResult === "confirmed") {
+      if (cloudResult.status === "confirmed") {
         setReportsHistory((current) => upsertReport(current, { ...report, syncStatus: "synced" }));
-        notifySuccess(`Report ${activeReportId ? "resubmitted" : "submitted"} successfully. Reference ${reference}.`, toastId);
+        notifySuccess(`Report submitted successfully. Reference ${reference}.`, toastId);
       } else {
-        if (cloudResult === "rejected") {
-          notifyError(`TANAW could not upload report ${reference}. A copy is saved on this device. Check Reports History for its upload status.`, toastId);
+        if (cloudResult.status === "rejected") {
+          // The backend's reason (for example, the month already has a report) is shown as given.
+          const reason = cloudResult.reason ? `${cloudResult.reason} ` : "";
+          notifyError(`TANAW did not accept report ${reference}. ${reason}A copy is saved on this device. Check Reports History for its upload status.`, toastId);
         } else {
           notifyWarning(`Report ${reference} was saved on this device. TANAW will retry the upload.`, toastId);
         }
@@ -235,7 +211,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       }
       setShowConfirm(false);
       setActiveReportId(reference);
-      setRevisionMetrics(null);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
     } catch (issue) {
@@ -264,7 +239,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     handlePreviewReport,
     handleSelectLedgerRow,
     hasDailyOrigins,
-    isPeriodChanging: (!activeReport && data.loading) || isRefreshing || isHydrating,
+    isPeriodChanging: (!activeReport && data.loading) || isHydrating,
     isReadOnly,
     isSubmitting,
     ledgerRows,
@@ -272,7 +247,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     period,
     origins,
     previewReport,
-    refreshRevisionCounts,
     setNotes,
     setOrigins,
     setPreviewReport,

@@ -222,20 +222,6 @@
     color: var(--theme-success-text);
   }
 
-  html.dark .enterprise-shell .tanaw-report-remarks {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    box-shadow: var(--theme-shadow);
-  }
-
-  html.dark .enterprise-shell .tanaw-report-remarks__title {
-    color: var(--theme-warning-text);
-  }
-
-  html.dark .enterprise-shell .tanaw-report-remarks__message {
-    color: var(--theme-warning-text);
-  }
-
   html.dark .enterprise-shell table thead {
     background-color: var(--enterprise-panel-bg);
     color: var(--enterprise-muted);

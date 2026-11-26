@@ -206,7 +206,7 @@ def test_target_enterprise_is_missing_for_four_completed_months_and_current_mont
         seeded_review_status(month, current_month) == "Ready to Consolidate"
         for month in pending_months[:-1]
     )
-    # The reporting month mixes waiting and accepted reports by enterprise; none are returned.
+    # The reporting month mixes waiting and accepted reports by enterprise.
     assert seeded_review_status(reporting_month, current_month, 0) == "Ready to Consolidate"
     assert seeded_review_status(reporting_month, current_month, 1) == "Pending Review"
     assert seeded_review_status(reporting_month, current_month, 2) == "Pending Review"

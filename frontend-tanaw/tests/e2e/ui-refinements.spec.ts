@@ -184,7 +184,8 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await expect(currentPasswordToggle).toBeDisabled();
   await expect(currentPassword).not.toHaveCSS("background-color", "rgb(255, 255, 0)");
 
-  await expect(page.getByRole("button", { name: "Update Password" })).toBeDisabled();
+  // Like every settings form, the save bar appears only once something is typed.
+  await expect(page.getByRole("button", { name: "Update password" })).toHaveCount(0);
   await newPassword.fill("Replacement secure passphrase 2026");
   await page.getByRole("button", { name: "Update Password" }).click();
   await expect(currentPassword).toBeFocused();

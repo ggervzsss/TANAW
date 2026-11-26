@@ -9,7 +9,6 @@ import { VisitorDetails } from "./VisitorDetails";
 import { missingDays, type ReportDay } from "../model/daily-origins";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
-import { ReportDraftAlerts } from "./ReportDraftAlerts";
 import { SupplementaryNotes } from "./SupplementaryNotes";
 import { CountingDetails } from "./CountingDetails";
 
@@ -31,7 +30,6 @@ type Props = {
   validationError: string | null;
   onSubmitPrompt: () => void;
   onReview: () => void;
-  onRefreshCounts?: () => void;
   setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
   setNotes: Dispatch<SetStateAction<string>>;
 };
@@ -54,12 +52,11 @@ export function ReportDraftPanel({
   validationError,
   onSubmitPrompt,
   onReview,
-  onRefreshCounts,
   setOrigins,
   setNotes,
 }: Props) {
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
-  const submitted = Boolean(activeReport && ["Submitted", "Resubmitted", "Consolidated"].includes(activeReport.status));
+  const submitted = Boolean(activeReport && ["Submitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
   const uploadRejected = activeReport?.syncStatus === "upload_rejected";
   const steps = [
@@ -168,7 +165,6 @@ export function ReportDraftPanel({
               Review Report Form
             </button>
             <ReportDraftActions
-              activeReport={activeReport}
               isReadOnly={isReadOnly}
               isPeriodChanging={isPeriodChanging}
               metricsError={metricsError}
@@ -190,12 +186,6 @@ export function ReportDraftPanel({
       </div>
       {/* Supporting workflows stay behind one disclosure so the form fits one screen. */}
       <div className="report-supporting-controls">
-        <ReportDraftAlerts activeReport={activeReport} />
-        {activeReport?.status === "Returned for Revision" && onRefreshCounts && (
-          <button type="button" className="reports-text-button" disabled={isPeriodChanging} onClick={onRefreshCounts}>
-            Refresh reconciled counts for this revision
-          </button>
-        )}
         <details>
           <summary>Report details, notes and camera evidence</summary>
           <div className="report-supporting-content">

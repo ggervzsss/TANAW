@@ -61,7 +61,7 @@ export type SubmissionFilter = "all" | SubmissionStatus;
 export type ReportRowFilters = { query: string; enterpriseId: string; submission: SubmissionFilter };
 
 /** Report actions in the activity log that record a staff review decision, by the action name the backend writes. */
-export const REVIEW_LOG_ACTIONS = new Set(["Report Ready to Consolidate", "Report Returned", "Report Consolidated"]);
+export const REVIEW_LOG_ACTIONS = new Set(["Report Ready to Consolidate", "Report Consolidated"]);
 export const SUBMIT_LOG_ACTION = "Submit Enterprise Report";
 
 const SUBMISSION_ORDER: Record<SubmissionStatus, number> = { Missing: 0, Pending: 1, Submitted: 2 };

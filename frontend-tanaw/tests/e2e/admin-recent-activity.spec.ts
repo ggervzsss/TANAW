@@ -47,7 +47,7 @@ const logs: Log[] = [
   }),
   log({ id: "n4", timestamp: "2026-11-20T08:15:00Z", group: "Accounts", severity: "Success", actor: "Carlo Mendoza", actorRole: "IT Personnel", action: "Create Enterprise Account", target: "Laguna Lakeside Resort", summary: "Carlo Mendoza registered enterprise account Laguna Lakeside Resort and sent the activation email.", metadata: { enterpriseId: "ENT-3", barangay: "Landayan" } }),
   log({ id: "n3", timestamp: "2026-11-21T03:00:00Z", group: "Reports", severity: "Success", actor: "Casa San Pedro", actorRole: "Enterprise Account", action: "Submit Enterprise Report", target: "Casa San Pedro", summary: "Casa San Pedro submitted RPT-2026-10-001 for October 2026.", sourceId: "report-1", metadata: { enterpriseId: "ENT-1", period: "October 2026", uniqueCount: 1250 } }),
-  log({ id: "n2", timestamp: "2026-11-22T06:40:00Z", group: "Reports", severity: "Warning", actor: "Maria Santos", actorRole: "LGU Staff", action: "Report Returned", target: "Pacita Complex Mall", summary: "Maria Santos marked RPT-2026-10-008 from Pacita Complex Mall as Returned.", sourceId: "report-8", metadata: { enterpriseId: "ENT-2", period: "October 2026", remarks: "Visitor origins need correcting" } }),
+  log({ id: "n2", timestamp: "2026-11-22T06:40:00Z", group: "Reports", severity: "Success", actor: "Maria Santos", actorRole: "LGU Staff", action: "Report Ready to Consolidate", target: "Pacita Complex Mall", summary: "Maria Santos marked RPT-2026-10-008 from Pacita Complex Mall as Ready to Consolidate.", sourceId: "report-8", metadata: { enterpriseId: "ENT-2", period: "October 2026", remarks: "Totals checked against the gate counts" } }),
   log({
     id: "camera",
     timestamp: "2026-11-22T23:00:00Z",
@@ -109,7 +109,7 @@ test("filters by group, search and date range, and resets with Show all activity
 
   await page.getByRole("searchbox", { name: "Search activity, person, or enterprise" }).fill("pacita");
   await expect(summary(page)).toContainText("1 matching record");
-  await expect(rows(page).first()).toContainText("Report Sent Back for Correction");
+  await expect(rows(page).first()).toContainText("Report Review Completed");
   await page.getByRole("button", { name: "Show all activity" }).first().click();
 
   await page.getByRole("button", { name: "November 2026" }).click();

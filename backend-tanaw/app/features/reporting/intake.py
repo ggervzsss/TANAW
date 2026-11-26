@@ -17,8 +17,8 @@ from app.features.reporting.errors import (
 )
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.policies import (
+    duplicate_report_period_message,
     validate_new_report_submission,
-    validate_report_resubmission,
     validate_report_review_transition,
 )
 from app.features.reporting.schemas import (
@@ -52,94 +52,57 @@ async def ingest_report_submission(
     snapshot = (payload.payload or {}).get("counting")
     if snapshot is not None and snapshot.get("enterprise_id") != profile.enterprise_id:
         raise InvalidReportWorkflowError("The counting snapshot belongs to another establishment.")
-    existing = await db.scalar(
-        select(EnterpriseReportSubmission)
-        .where(
+    existing_report_id = await db.scalar(
+        select(EnterpriseReportSubmission.id).where(
             EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
             EnterpriseReportSubmission.period == payload.period,
         )
-        .with_for_update(of=EnterpriseReportSubmission)
-        .execution_options(populate_existing=True)
     )
-    if existing is None:
-        report_with_reused_id = await db.scalar(
-            select(EnterpriseReportSubmission)
-            .where(
-                EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
-                EnterpriseReportSubmission.report_id == payload.reportId,
-            )
-            .with_for_update(of=EnterpriseReportSubmission)
-            .execution_options(populate_existing=True)
+    validate_new_report_submission(payload.period, period_has_report=existing_report_id is not None)
+    report_with_reused_id = await db.scalar(
+        select(EnterpriseReportSubmission.id).where(
+            EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
+            EnterpriseReportSubmission.report_id == payload.reportId,
         )
-        if report_with_reused_id is not None:
-            raise InvalidReportWorkflowError(
-                "An existing report ID cannot be moved to a different reporting period."
-            )
-    elif existing.report_id != payload.reportId:
-        raise DuplicateReportPeriodError(
-            f"A report for {payload.period} has already been submitted."
+    )
+    if report_with_reused_id is not None:
+        raise InvalidReportWorkflowError(
+            "An existing report ID cannot be moved to a different reporting period."
         )
 
-    report_status = status_from_payload(payload.payload)
-    month = month_from_submission(payload.period)
-    report_payload_json = json.dumps(
-        {
-            **payload.payload,
-            "attractionCode": profile.attraction_code,
-            "attractionDescription": profile.attraction_description,
-        },
-        sort_keys=True,
+    report = EnterpriseReportSubmission(
+        report_id=payload.reportId,
+        enterprise_profile_id=profile.account_id,
+        enterprise_name=profile.enterprise_name,
+        attraction_code=profile.attraction_code,
+        attraction_description=profile.attraction_description,
+        barangay=profile.barangay or "Unassigned",
+        period=payload.period,
+        month=month_from_submission(payload.period),
+        submitted_at=ensure_aware(payload.submittedAt),
+        entries=payload.entries,
+        exits=payload.exits,
+        peak_occupancy=payload.peakOccupancy,
+        unique_count=payload.uniqueCount,
+        status="Submitted",
+        review_status="Pending Review",
+        notes=payload.notes,
+        sync_status=payload.syncStatus,
+        payload_json=json.dumps(
+            {
+                **payload.payload,
+                "attractionCode": profile.attraction_code,
+                "attractionDescription": profile.attraction_description,
+            },
+            sort_keys=True,
+        ),
     )
-
-    if existing is None:
-        validate_new_report_submission(report_status)
-        report = EnterpriseReportSubmission(
-            report_id=payload.reportId,
-            enterprise_profile_id=profile.account_id,
-            enterprise_name=profile.enterprise_name,
-            attraction_code=profile.attraction_code,
-            attraction_description=profile.attraction_description,
-            barangay=profile.barangay or "Unassigned",
-            period=payload.period,
-            month=month,
-            submitted_at=ensure_aware(payload.submittedAt),
-            entries=payload.entries,
-            exits=payload.exits,
-            peak_occupancy=payload.peakOccupancy,
-            unique_count=payload.uniqueCount,
-            status=report_status,
-            review_status="Pending Review",
-            notes=payload.notes,
-            sync_status=payload.syncStatus,
-            payload_json=report_payload_json,
-        )
-        db.add(report)
-        try:
-            await db.flush()
-        except IntegrityError as exc:
-            await db.rollback()
-            raise DuplicateReportPeriodError(
-                f"A report for {payload.period} has already been submitted."
-            ) from exc
-    else:
-        validate_report_resubmission(existing.review_status, report_status)
-        report = existing
-        report.enterprise_name = profile.enterprise_name
-        report.attraction_code = profile.attraction_code
-        report.attraction_description = profile.attraction_description
-        report.barangay = profile.barangay or "Unassigned"
-        report.month = month
-        report.submitted_at = ensure_aware(payload.submittedAt)
-        report.entries = payload.entries
-        report.exits = payload.exits
-        report.peak_occupancy = payload.peakOccupancy
-        report.unique_count = payload.uniqueCount
-        report.status = report_status
-        report.notes = payload.notes
-        report.sync_status = payload.syncStatus
-        report.payload_json = report_payload_json
-        report.review_status = "Pending Review"
-        report.remarks = None
+    db.add(report)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise DuplicateReportPeriodError(duplicate_report_period_message(payload.period)) from exc
 
     profile.gateway_status = "Connected"
     await db.flush()
@@ -275,13 +238,6 @@ def report_non_negative_int(value: object) -> int | None:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value)
     return None
-
-
-def status_from_payload(payload: dict | None) -> str:
-    value = payload.get("status") if isinstance(payload, dict) else None
-    return (
-        value if isinstance(value, str) and value in {"Submitted", "Resubmitted"} else "Submitted"
-    )
 
 
 def month_from_submission(period: str) -> str:

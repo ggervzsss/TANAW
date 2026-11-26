@@ -47,7 +47,6 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     origins,
     period,
     previewReport,
-    refreshRevisionCounts,
     setNotes,
     setOrigins,
     setPreviewReport,
@@ -155,7 +154,6 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
               reportId: activeReportId ?? "TANAW-DRAFT",
             })
           }
-          onRefreshCounts={refreshRevisionCounts}
           setOrigins={setOrigins}
           setNotes={setNotes}
         />

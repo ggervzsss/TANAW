@@ -20,7 +20,7 @@ from app.storage.repositories.establishment_report_repository import (
 from app.storage.repositories.establishment_repository import snapshot_digest
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reports"
-MODES = ["open-space", "entrance-exit", "mixed", "corrected-open-space"]
+MODES = ["open-space", "entrance-exit", "mixed"]
 
 
 def fixture(mode: str) -> dict[str, Any]:
@@ -33,7 +33,7 @@ def produced(tmp_path: Path, mode: str) -> dict[str, Any]:
     service = EstablishmentRegistry(str(tmp_path), "park")
     if mode in {"entrance-exit", "mixed"}:
         observed(service, "doorway")
-    if mode in {"open-space", "corrected-open-space", "mixed"}:
+    if mode in {"open-space", "mixed"}:
         observed(service, "area", internal=True)
     repo = EstablishmentReportRepository(service.database)
     unique = repo.period_summary("October 2026")["counting"]["unique_count"]

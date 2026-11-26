@@ -48,7 +48,7 @@ export function validateReportDraft(
   const allocationError = dailyOriginsError(days) ?? validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
   if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
-    return `A report for ${period} has already been submitted.`;
+    return `A report for ${period} has already been submitted. An enterprise sends one report per reporting month, and a submitted report cannot be replaced.`;
   }
   return null;
 }
@@ -224,7 +224,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
     auditTrail: auditTrailFromPayload(payload.auditTrail) ?? [
       {
         time: formatAuditTime(submission.submitted_at, timeFormat),
-        action: payloadStatus === "Resubmitted" ? "Report Resubmitted" : "Report Submitted",
+        action: "Report Submitted",
         actor: "Enterprise User",
       },
     ],
@@ -260,8 +260,7 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
 
 export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFormat: SystemTimeFormat): ReportRecord {
   const peak = report.metrics.peak == null ? null : nonNegativeInteger(report.metrics.peak);
-  const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
-  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
+  const status = report.status === "Consolidated" ? "Consolidated" : "Submitted";
   return {
     id: report.code,
     attractionType: formatReportAttraction(report.attraction?.code, report.attractionDescription),
@@ -282,7 +281,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
     auditTrail: [
       {
         time: formatAuditTime(report.submittedAt, timeFormat),
-        action: status === "Consolidated" ? "Report Consolidated" : status === "Returned for Revision" ? "Report Returned" : "Report Submitted",
+        action: status === "Consolidated" ? "Report Consolidated" : "Report Submitted",
         actor: status === "Submitted" ? "Enterprise User" : "LGU Staff",
       },
     ],
@@ -394,7 +393,7 @@ function auditTrailFromPayload(value: unknown): ReportRecord["auditTrail"] | und
 }
 
 function isReportStatus(value: string) {
-  return ["Submitted", "Resubmitted", "Consolidated", "Returned for Revision", "Draft"].includes(value);
+  return ["Submitted", "Consolidated", "Draft"].includes(value);
 }
 
 function formatAuditTime(value: string, timeFormat: SystemTimeFormat) {

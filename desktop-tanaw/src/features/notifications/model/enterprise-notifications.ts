@@ -29,7 +29,7 @@ function backendNotificationToEnterpriseNotification(notification: BackendNotifi
 function buildReportNotifications(report: ReportRecord, timeFormat: SystemTimeFormat): EnterpriseNotification[] {
   const notifications: EnterpriseNotification[] = [];
   const deadline = getReportDeadline(report);
-  const isSubmitted = ["Submitted", "Resubmitted", "Consolidated"].includes(report.status);
+  const isSubmitted = ["Submitted", "Consolidated"].includes(report.status);
 
   if (deadline && !isSubmitted) {
     const deadlineDate = Date.parse(deadline);
@@ -51,18 +51,12 @@ function buildReportNotifications(report: ReportRecord, timeFormat: SystemTimeFo
     }
   }
 
-  if (report.status === "Returned for Revision") {
-    notifications.push(
-      createReportNotification(report, "warning", `${report.id} was returned for revision. ${report.remarks ?? "Please review the report remarks."}`, timeFormat, getLatestAuditTime(report)),
-    );
-  }
-
   if (report.status === "Draft") {
     notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
   }
 
-  if (report.status === "Submitted" || report.status === "Resubmitted") {
-    notifications.push(createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
+  if (report.status === "Submitted") {
+    notifications.push(createReportNotification(report, "success", `${report.id} was submitted for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
   }
 
   return notifications;

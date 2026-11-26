@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildLedgerRows, emptyDemo, reportSubmissionErrorMessage, validateDemographicAllocation, type PreparedReportCounts } from "../../../../../../src/features/reports/model/report-workspace";
+import {
+  buildLedgerRows,
+  emptyDemo,
+  reportFromCloudSubmission,
+  reportSubmissionErrorMessage,
+  validateDemographicAllocation,
+  validateReportDraft,
+  type PreparedReportCounts,
+} from "../../../../../../src/features/reports/model/report-workspace";
+import type { EnterpriseIntakeReport } from "../../../../../../src/features/reports/services/report-history";
 import { MlServiceRequestError } from "../../../../../../src/features/camera/services/ml-service.types";
 import { dailyOriginsError, reportDays } from "../../../../../../src/features/reports/model/daily-origins";
 import type { EstablishmentSummary } from "../../../../../../src/features/camera/services/establishment.types";
-import type { DailyOrigins } from "../../../../../../src/types/enterprise";
+import type { DailyOrigins, ReportRecord } from "../../../../../../src/types/enterprise";
 
 const day = (business_date: string, unique_count: number, male_count: number) => ({
   business_date,
@@ -56,10 +65,48 @@ describe("pending report rows", () => {
   });
 });
 
+const ONE_REPORT_PER_MONTH = "A report for October 2026 has already been submitted. An enterprise sends one report per reporting month, and a submitted report cannot be replaced.";
+
+describe("one report per month", () => {
+  const submitted = { id: "REP-OCT", date: "October 2026", period: "October 2026", status: "Submitted", entries: 2, unique: 2 } as ReportRecord;
+
+  it("refuses a second report for a month that already has one", () => {
+    const options = { checkDuplicatePeriod: true, checkReportingPeriod: false };
+    const metrics = { entries: 2, exits: 2, peak: 1, unique: 0 };
+    expect(validateReportDraft(metrics, emptyDemo(), [], "October 2026", [submitted], null, options)).toBe(ONE_REPORT_PER_MONTH);
+    expect(validateReportDraft(metrics, emptyDemo(), [], "November 2026", [submitted], null, options)).toBeNull();
+  });
+
+  it("shows a report TANAW holds as submitted until it is consolidated", () => {
+    const cloud = (status: EnterpriseIntakeReport["status"]) =>
+      reportFromCloudSubmission(
+        {
+          id: "cloud",
+          enterpriseId: "park",
+          enterprise: "Park",
+          category: "Parks",
+          barangay: "Poblacion",
+          month: "October",
+          period: "October 2026",
+          submitted: "2026-11-02T02:00:00Z",
+          submittedAt: "2026-11-02T02:00:00Z",
+          status,
+          code: "REP-OCT",
+          remarks: null,
+          notes: null,
+          metrics: { entry: 2, exit: 2, unique: 2, peak: 1 },
+          payload: { status: "Resubmitted" },
+        },
+        "12-hour",
+      ).status;
+    expect([cloud("Pending Review"), cloud("Ready to Consolidate"), cloud("Consolidated")]).toEqual(["Submitted", "Submitted", "Consolidated"]);
+  });
+});
+
 describe("report submission failures", () => {
   it("show the reason the local service rejected the report", () => {
-    const conflict = new MlServiceRequestError("unknown", "A report for October 2026 has already been submitted.", 409);
-    expect(reportSubmissionErrorMessage(conflict)).toBe("Report not submitted. A report for October 2026 has already been submitted.");
+    const conflict = new MlServiceRequestError("unknown", ONE_REPORT_PER_MONTH, 409);
+    expect(reportSubmissionErrorMessage(conflict)).toBe(`Report not submitted. ${ONE_REPORT_PER_MONTH}`);
   });
 
   it("ask to try again when the service is unreachable or gave no reason", () => {

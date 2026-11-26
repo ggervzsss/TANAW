@@ -34,7 +34,7 @@ describe("dropdown search visibility", () => {
 describe("toSentenceCase", () => {
   it("lowercases every word after the first", () => {
     expect(toSentenceCase("In Review")).toBe("In review");
-    expect(toSentenceCase("Returned for Revision")).toBe("Returned for revision");
+    expect(toSentenceCase("Ready to Consolidate")).toBe("Ready to consolidate");
     expect(toSentenceCase("People in Area: 3")).toBe("People in area: 3");
   });
 

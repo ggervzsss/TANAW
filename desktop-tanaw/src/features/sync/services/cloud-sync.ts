@@ -165,6 +165,16 @@ export function isRefusedUpload(error: unknown) {
   return status !== undefined && REFUSED_UPLOAD_STATUSES.has(status);
 }
 
+/**
+ * The backend's reason for refusing a report upload, such as a second report for a month that
+ * already has one; null when the upload was not refused or the backend gave no readable reason.
+ */
+export function refusedUploadReason(error: unknown) {
+  if (!isRefusedUpload(error) || !isAxiosError<{ detail?: unknown }>(error)) return null;
+  const detail = error.response?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail.trim() : null;
+}
+
 export async function syncDesktopReportSubmissions(limit = 100) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;

@@ -1,6 +1,6 @@
 import type { DailyOrigins } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, saveLocalReportDraft } from "../../camera/services/ml-service";
-import { isRefusedUpload, syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
+import { isRefusedUpload, refusedUploadReason, syncDesktopReportSubmission } from "../../sync/services/cloud-sync";
 
 const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
 
@@ -36,10 +36,12 @@ export function clearLegacyBrowserDemographicDrafts() {
   }
 }
 
-export async function syncSubmittedReportToCloud(reportId: string, submissionId: string): Promise<"confirmed" | "pending" | "rejected"> {
+export type CloudReportResult = { status: "confirmed" } | { status: "pending" } | { status: "rejected"; reason: string | null };
+
+export async function syncSubmittedReportToCloud(reportId: string, submissionId: string): Promise<CloudReportResult> {
   try {
-    return (await syncDesktopReportSubmission(reportId, submissionId)) ? "confirmed" : "pending";
+    return { status: (await syncDesktopReportSubmission(reportId, submissionId)) ? "confirmed" : "pending" };
   } catch (error) {
-    return isRefusedUpload(error) ? "rejected" : "pending";
+    return isRefusedUpload(error) ? { status: "rejected", reason: refusedUploadReason(error) } : { status: "pending" };
   }
 }

@@ -14,7 +14,7 @@ type NotificationsPageProps = {
 const roleDescription: Record<NotificationsPageProps["role"], string> = {
   admin: "Review important situations and escalated requests that may need an Admin decision.",
   it: "Review system activity, enterprise support requests, priority alerts, and technical delivery updates.",
-  staff: "Review enterprise report submissions and resubmissions that require staff action.",
+  staff: "Review enterprise report submissions that require staff action.",
 };
 
 export function NotificationsPage({ role }: NotificationsPageProps) {
