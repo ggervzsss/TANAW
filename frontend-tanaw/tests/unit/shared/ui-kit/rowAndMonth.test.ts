@@ -1,7 +1,7 @@
 // The UI kit's clickable-row rules (which clicks a row leaves to the control under the pointer, and
 // when a text selection keeps the row closed) and the month picker's month arithmetic.
 import { describe, expect, it } from "vitest";
-import { isMonthInRange, pickerMonthLabel, steppedMonth } from "../../../../src/shared/ui-kit/lib/pickerMonth";
+import { isMonthInRange, pickerMonthLabel } from "../../../../src/shared/ui-kit/lib/pickerMonth";
 import { endsTextSelection, nestedRowControl } from "../../../../src/shared/ui-kit/lib/rowClick";
 
 /** A tiny stand-in for DOM elements: `closest` walks up through parents matching tag names. */
@@ -80,15 +80,6 @@ describe("month picker months", () => {
   it("names a month in full", () => {
     expect(pickerMonthLabel(october)).toBe("October 2026");
     expect(pickerMonthLabel({ year: 2025, monthIndex: 0 })).toBe("January 2025");
-  });
-
-  it("steps across year boundaries and stops at the allowed range", () => {
-    expect(steppedMonth({ year: 2026, monthIndex: 0 }, -1)).toEqual({ year: 2025, monthIndex: 11 });
-    expect(steppedMonth({ year: 2025, monthIndex: 11 }, 1)).toEqual({ year: 2026, monthIndex: 0 });
-    const max = { year: 2026, monthIndex: 10 };
-    expect(steppedMonth(october, 1, null, max)).toEqual(max);
-    expect(steppedMonth(max, 1, null, max)).toBeNull();
-    expect(steppedMonth({ year: 2025, monthIndex: 4 }, -1, { year: 2025, monthIndex: 4 })).toBeNull();
   });
 
   it("checks a month against optional first and last months", () => {

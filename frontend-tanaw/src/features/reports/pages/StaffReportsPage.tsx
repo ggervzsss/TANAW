@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { Button, PortalPageHeader, Select } from "@/shared/ui-kit";
+import { Button, MonthPicker, PortalPageHeader, type PickerMonth } from "@/shared/ui-kit";
 import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
 import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
 import { useStaffReports } from "../hooks/useStaffReports";
-import { currentReportingMonth } from "../model/reportStatuses";
-import { formatReportingMonth, monthKey, parseMonthKey, reportingMonthOptions } from "../model/reportingMonth";
+import { currentReportingMonth, monthIndexOf } from "../model/reportStatuses";
+import { formatReportingMonth, monthKey, parseMonthKey, reportingMonth, reportingMonthOptions, type ReportingMonth } from "../model/reportingMonth";
 import {
   EMPTY_STAFF_REPORT_FILTERS,
   filterStaffReportRows,
@@ -28,6 +28,10 @@ const STATUS_ID = "staff-reports-status";
  * `&q=&submission=submitted|pending|missing&review=waiting|reviewing|consolidated&barangay=`, and
  * `&report=<intake report id>` for the open report.
  */
+function toPickerMonth({ month, year }: ReportingMonth): PickerMonth {
+  return { year, monthIndex: monthIndexOf(month) };
+}
+
 export function StaffReportsPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -44,7 +48,8 @@ export function StaffReportsPage() {
   const openReport = reportId ? data.reports.find((report) => report.id === reportId) : undefined;
   const visibleRows = filterStaffReportRows(data.rows, filters);
   const filtered = hasStaffReportFilters(filters);
-  const monthOptions = reportingMonthOptions(data.reports, current).map((option) => [monthKey(option), formatReportingMonth(option)] as const);
+  // Any month from the oldest report up to the newest (at least the current reporting month).
+  const knownMonths = reportingMonthOptions(data.reports, current);
 
   const updateParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -66,7 +71,17 @@ export function StaffReportsPage() {
         description={staffReportsCaption(month)}
         actions={
           <>
-            <Select ariaLabel="Reporting month" value={monthKey(month)} options={monthOptions} onChange={(value) => updateParams({ month: value, report: null })} className="min-w-44" />
+            <MonthPicker
+              label="Reporting month"
+              hideLabel
+              value={toPickerMonth(month)}
+              onChange={(value) => updateParams({ month: monthKey(reportingMonth(value.monthIndex, value.year)), report: null })}
+              min={toPickerMonth(knownMonths[knownMonths.length - 1])}
+              max={toPickerMonth(knownMonths[0])}
+              highlight={toPickerMonth(current)}
+              highlightLabel="Current reporting month"
+              className="w-56"
+            />
             <Button aria-describedby={STATUS_ID} disabled={!progress.canGenerate || data.isLoading || data.isError} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
               Generate consolidated report
             </Button>

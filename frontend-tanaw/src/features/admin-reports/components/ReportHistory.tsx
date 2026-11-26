@@ -35,8 +35,8 @@ function sentLine(entry: ReportMonthEntry) {
 
 /**
  * Report Submission History: the year, the year's figures, and its months as a one-open-at-a-time
- * list. The list scrolls with the dialog (no scroll box of its own) under a column header that stays
- * in view, and an opened month scrolls its report log into view.
+ * list. The table, header included, scrolls with the dialog as one piece (no scroll box or pinned
+ * header of its own), and an opened month scrolls its report log into view.
  */
 export function ReportHistory({
   year,
@@ -140,7 +140,7 @@ export function ReportHistory({
       <div className="mt-4 rounded-xl border border-(--tanaw-border-soft)">
         <div
           aria-hidden="true"
-          className="tanaw-er-month-cols tanaw-er-month-head sticky top-0 z-1 rounded-t-xl border-b border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 py-2.5 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase"
+          className="tanaw-er-month-cols tanaw-er-month-head rounded-t-xl border-b border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 py-2.5 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase"
         >
           <span />
           <span>Period</span>

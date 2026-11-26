@@ -189,10 +189,11 @@ test("lists each enterprise's report for the reporting month, missing first, wit
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(reportRows(page)).toHaveCount(3);
 
-  // The reporting month steps one month at a time, up to this month.
-  await page.getByRole("button", { name: "Next month" }).click();
+  // The reporting month is chosen from a year of months, up to this month; there are no step arrows.
+  await expect(page.getByRole("button", { name: "Next month" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reporting month October 2026" }).click();
+  await page.getByRole("dialog", { name: "Choose the reporting month" }).getByRole("button", { name: "November 2026" }).click();
   await expect(page).toHaveURL(/month=November&year=2026/);
-  await expect(page.getByRole("button", { name: "Next month" })).toBeDisabled();
   await expect(page.getByText("4 of 4 enterprises", { exact: true })).toBeVisible();
   await expect(page.getByText("Due Dec 10")).toHaveCount(4);
 

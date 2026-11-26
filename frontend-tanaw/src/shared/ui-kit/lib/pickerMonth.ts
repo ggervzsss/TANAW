@@ -21,10 +21,3 @@ function ordinal(month: PickerMonth) {
 export function isMonthInRange(month: PickerMonth, min?: PickerMonth | null, max?: PickerMonth | null) {
   return (!min || ordinal(month) >= ordinal(min)) && (!max || ordinal(month) <= ordinal(max));
 }
-
-/** The month `step` months from `month`, or null when that leaves the allowed range. */
-export function steppedMonth(month: PickerMonth, step: number, min?: PickerMonth | null, max?: PickerMonth | null): PickerMonth | null {
-  const date = new Date(month.year, month.monthIndex + step, 1);
-  const next = { year: date.getFullYear(), monthIndex: date.getMonth() };
-  return isMonthInRange(next, min, max) ? next : null;
-}

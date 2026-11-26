@@ -59,6 +59,6 @@ export { initialsOf } from "./lib/initials";
 export { dialogIn, fadeInDown, popIn } from "./lib/motion";
 export { hasVisualOverflow } from "./lib/overflow";
 export { useExclusivePopupDismissal } from "./lib/popup-dismissal";
-export { isMonthInRange, pickerMonthLabel, steppedMonth, type PickerMonth } from "./lib/pickerMonth";
+export { isMonthInRange, pickerMonthLabel, type PickerMonth } from "./lib/pickerMonth";
 export { endsTextSelection, nestedRowControl, openRowFromClick } from "./lib/rowClick";
 export { toSentenceCase } from "./lib/sentence-case";

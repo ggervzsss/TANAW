@@ -106,7 +106,7 @@ test("A submitted report is Reviewing and can only be accepted; an enterprise ye
 test("Before the due date an enterprise without a report is Pending, not Missing", async ({ page }) => {
   await mockReports(page, { now: "2026-11-05T10:00:00+08:00", intake: [] });
   await page.goto("/staff/reports");
-  await expect(page.getByRole("combobox", { name: "Reporting month" })).toContainText("October 2026");
+  await expect(page.getByRole("button", { name: "Reporting month October 2026" })).toBeVisible();
   await expect(page.locator("#staff-reports-status")).toHaveText("No October 2026 reports received yet.");
   // Both enterprises are Pending, not Missing, so the Pending filter lists them. Options carry no counts.
   await page.getByRole("combobox", { name: "Submission" }).click();
