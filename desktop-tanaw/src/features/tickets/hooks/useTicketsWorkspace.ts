@@ -1,4 +1,5 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { useRealtimeEvent } from "../../realtime/realtime-context";
@@ -9,10 +10,12 @@ import { createSupportTicket, getSupportTicket, listSupportTickets, sortSupportT
 import { getTicketRequestError } from "../utils/ticket-presentation";
 import { type TicketFormErrors, type TicketFormField, isSupportTicketCategory, ticketFormFieldOrder, validateTicketForm } from "../model/ticket-form-validation";
 import { getSupportTicketCategoryConfig, ticketCategoryPayloadFields } from "../model/ticket-category-config";
-import { emptyTicketForm, emptyTicketPhotos, initialTicketSort, isSupportTicketSort, isTicketFormState, isTicketPhotoDraft, maxTicketPhotoCount, readTicketPhoto } from "../model/ticket-draft";
+import { emptyTicketForm, emptyTicketPhotos, initialTicketSort, isSupportTicketSort, isTicketFormState, isTicketPhotoDraft, maxTicketPhotoCount, readTicketDraftPrefill, readTicketPhoto } from "../model/ticket-draft";
 
 export function useTicketsWorkspace() {
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const { timeFormat } = useSystemDisplayPreferences();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -67,6 +70,17 @@ export function useTicketsWorkspace() {
   useEffect(() => {
     void refreshTickets();
   }, [refreshTickets]);
+
+  // A screen that sent the person here with a prepared request (the dashboard's "Report this to
+  // the IT") fills the form once; the state is then cleared so Back and reload don't refill it.
+  useEffect(() => {
+    const prefill = readTicketDraftPrefill(location.state);
+    if (!prefill) return;
+    setForm({ ...emptyTicketForm, ...prefill });
+    const rest = { ...(location.state as Record<string, unknown>) };
+    delete rest.ticketDraft;
+    navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state: rest });
+  }, [location, navigate, setForm]);
 
   useRealtimeEvent((event) => {
     if (!event.event_type.startsWith("request.")) return;

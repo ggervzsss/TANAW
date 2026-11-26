@@ -1,6 +1,7 @@
 import { CalendarOff, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { SettingsGroup } from "../../../ui-kit/patterns/GeneralSettings";
+import { Button } from "../../../ui-kit";
+import { SettingsGroup, SettingsRowsSkeleton } from "../../../ui-kit/patterns/GeneralSettings";
 import { addClosure, listClosures, removeClosure, updateOpeningHours, type ClosureSummary } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
@@ -8,8 +9,7 @@ import { listSupportTickets, type SupportTicket } from "../../tickets/services/t
 import { getRequestErrorMessage } from "../model/profile-edit";
 import { WEEKDAYS, dayHours, defaultOpeningHours, setDayHours, validateOpeningHours, weekdayLabels, type DayMode, type OpeningHours, type Weekday } from "../model/opening-hours";
 
-const control =
-  "rounded-lg border border-(--tanaw-border) bg-(--tanaw-surface) px-2.5 py-1.5 text-sm text-(--tanaw-text) outline-none focus:border-tanaw-ledger focus:ring-2 focus:ring-tanaw-ledger/15";
+const control = "tanaw-settings-control";
 
 /** Account changes waiting for IT: a new contact number or enterprise name. */
 export function PendingAccountChanges({ refreshKey }: { refreshKey: number }) {
@@ -28,11 +28,11 @@ export function PendingAccountChanges({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]);
   if (changes.length === 0) return null;
   return (
-    <ul className="enterprise-profile-pending-changes m-0 list-none space-y-2 p-0" aria-label="Changes waiting for IT">
+    <ul className="enterprise-profile-pending-changes m-0 grid list-none gap-2 p-0" aria-label="Changes waiting for IT">
       {changes.map((change) => (
-        <li key={change.id} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-300/30 dark:bg-amber-500/10 dark:text-amber-100">
-          <p className="font-bold">{change.title} is waiting for IT</p>
-          <p className="mt-0.5">
+        <li key={change.id} className="tanaw-settings-note tanaw-enter">
+          <p className="font-semibold">{change.title} is waiting for IT</p>
+          <p className="mt-0.5 text-(--tanaw-text-secondary)">
             {change.accountChange?.label}: {change.accountChange?.currentValue ?? "Not set"} → {change.accountChange?.requestedValue}. It changes once IT approves it.
           </p>
         </li>
@@ -77,13 +77,13 @@ export function OpeningHoursSettings() {
 
   return (
     <SettingsGroup title="Opening hours" description="TANAW shows your place as offline only while it is open. A midday break is two opening times on the same day.">
-      <div className="divide-y divide-(--tanaw-border)" data-testid="opening-hours">
+      <div className="divide-y divide-(--tanaw-border-soft)" data-testid="opening-hours">
         {WEEKDAYS.map((day) => {
           const entry = dayHours(hours, day);
           const periods = entry.periods ?? [];
           return (
-            <div key={day} className="grid gap-2 py-2.5 sm:grid-cols-[6.5rem_9.5rem_minmax(0,1fr)] sm:items-center">
-              <span className="text-sm font-bold text-(--tanaw-text)">{weekdayLabels[day]}</span>
+            <div key={day} className="grid gap-2 py-2.5 first:pt-0 sm:grid-cols-[6.5rem_9.5rem_minmax(0,1fr)] sm:items-center">
+              <span className="text-sm font-semibold text-(--tanaw-text)">{weekdayLabels[day]}</span>
               <select aria-label={`${weekdayLabels[day]} hours`} value={entry.mode} onChange={(event) => update(day, event.target.value as DayMode)} className={control}>
                 <option value="hours">Open</option>
                 <option value="open24h">Open 24 hours</option>
@@ -97,15 +97,15 @@ export function OpeningHoursSettings() {
                       <span className="text-(--tanaw-text-secondary)">to</span>
                       <input type="time" aria-label={`${weekdayLabels[day]} closing time ${index + 1}`} value={period.close} onChange={(event) => update(day, "hours", periods.map((item, at) => (at === index ? { ...item, close: event.target.value } : item)))} className={control} />
                       {periods.length > 1 && (
-                        <button type="button" aria-label={`Remove ${weekdayLabels[day]} opening time ${index + 1}`} onClick={() => update(day, "hours", periods.filter((_, at) => at !== index))} className="rounded-full p-1 text-(--tanaw-text-secondary)">
-                          <X size={14} />
+                        <button type="button" aria-label={`Remove ${weekdayLabels[day]} opening time ${index + 1}`} onClick={() => update(day, "hours", periods.filter((_, at) => at !== index))} className="tanaw-settings-icon-button">
+                          <X size={14} aria-hidden="true" />
                         </button>
                       )}
                     </span>
                   ))}
                   {periods.length < 4 && (
-                    <button type="button" onClick={() => update(day, "hours", [...periods, { open: "13:00", close: "17:00" }])} className="inline-flex items-center gap-1 text-xs font-bold text-tanaw-ledger dark:text-emerald-200">
-                      <Plus size={13} />
+                    <button type="button" onClick={() => update(day, "hours", [...periods, { open: "13:00", close: "17:00" }])} className="tanaw-settings-text-action">
+                      <Plus size={14} aria-hidden="true" />
                       Add a break
                     </button>
                   )}
@@ -117,10 +117,12 @@ export function OpeningHoursSettings() {
           );
         })}
       </div>
-      {error && <p className="mt-2 text-xs font-bold text-tanaw-red">{error}</p>}
-      <button type="button" disabled={!dirty || isSaving} onClick={() => void save()} className="mt-3 rounded-full bg-tanaw-ledger px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
-        {isSaving ? "Saving..." : "Save opening hours"}
-      </button>
+      {error && <p role="alert" className="mt-2 text-[0.8125rem] font-semibold text-(--tanaw-error)">{error}</p>}
+      <div className="mt-4 flex justify-end">
+        <Button size="sm" disabled={!dirty || isSaving} onClick={() => void save()}>
+          {isSaving ? "Saving..." : "Save opening hours"}
+        </Button>
+      </div>
     </SettingsGroup>
   );
 }
@@ -138,11 +140,21 @@ export function TemporaryClosuresSettings() {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    let disposed = false;
     void listClosures()
-      .then(setClosures)
-      .catch(() => undefined);
+      .then((items) => {
+        if (!disposed) setClosures(items);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!disposed) setIsLoaded(true);
+      });
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   async function add() {
@@ -173,17 +185,19 @@ export function TemporaryClosuresSettings() {
 
   return (
     <SettingsGroup title="Temporary closures" description="Mark the days you are closed for a holiday, a vacation or repairs, so TANAW never shows you as offline then.">
-      {closures.length > 0 ? (
-        <ul className="m-0 list-none divide-y divide-(--tanaw-border) p-0">
+      {!isLoaded ? (
+        <SettingsRowsSkeleton label="Loading closures" rows={2} />
+      ) : closures.length > 0 ? (
+        <ul className="tanaw-enter m-0 list-none divide-y divide-(--tanaw-border-soft) p-0">
           {closures.map((closure) => (
-            <li key={closure.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="inline-flex items-center gap-2">
-                <CalendarOff size={15} className="text-tanaw-ledger dark:text-emerald-200" />
-                <span className="font-bold text-(--tanaw-text)">{closure.startDate === closure.endDate ? formatDay(closure.startDate) : `${formatDay(closure.startDate)} to ${formatDay(closure.endDate)}`}</span>
+            <li key={closure.id} className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <CalendarOff size={15} className="shrink-0 text-(--tanaw-accent-ink)" aria-hidden="true" />
+                <span className="font-semibold text-(--tanaw-text)">{closure.startDate === closure.endDate ? formatDay(closure.startDate) : `${formatDay(closure.startDate)} to ${formatDay(closure.endDate)}`}</span>
                 {closure.reason && <span className="text-(--tanaw-text-secondary)">{closure.reason}</span>}
               </span>
-              <button type="button" aria-label="Remove this closure" onClick={() => void remove(closure.id)} className="rounded-full p-1 text-(--tanaw-text-secondary)">
-                <X size={15} />
+              <button type="button" aria-label="Remove this closure" onClick={() => void remove(closure.id)} className="tanaw-settings-icon-button">
+                <X size={15} aria-hidden="true" />
               </button>
             </li>
           ))}
@@ -191,24 +205,24 @@ export function TemporaryClosuresSettings() {
       ) : (
         <p className="text-sm text-(--tanaw-text-secondary)">No closures planned.</p>
       )}
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="text-xs font-bold text-(--tanaw-text-secondary)">
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
           From
           <input type="date" value={start} onChange={(event) => setStart(event.target.value)} className={`mt-1 block ${control}`} />
         </label>
-        <label className="text-xs font-bold text-(--tanaw-text-secondary)">
+        <label className="text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
           To
           <input type="date" value={end} min={start || undefined} onChange={(event) => setEnd(event.target.value)} className={`mt-1 block ${control}`} />
         </label>
-        <label className="min-w-44 flex-1 text-xs font-bold text-(--tanaw-text-secondary)">
+        <label className="min-w-44 flex-1 text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
           Reason (optional)
           <input type="text" value={reason} maxLength={160} placeholder="Closed for renovation" onChange={(event) => setReason(event.target.value)} className={`mt-1 block w-full ${control}`} />
         </label>
-        <button type="button" disabled={!start || isSaving} onClick={() => void add()} className="rounded-full bg-tanaw-ledger px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+        <Button variant="secondary" size="sm" disabled={!start || isSaving} onClick={() => void add()}>
           Add closure
-        </button>
+        </Button>
       </div>
-      {error && <p className="mt-2 text-xs font-bold text-tanaw-red">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-[0.8125rem] font-semibold text-(--tanaw-error)">{error}</p>}
     </SettingsGroup>
   );
 }

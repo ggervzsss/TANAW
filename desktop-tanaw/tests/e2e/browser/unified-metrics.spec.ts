@@ -167,18 +167,49 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await expect(header).toHaveCount(1);
   await expect(header.locator("[data-metric-segment]")).toHaveCount(4);
   const segment = (id: string) => header.locator(`[data-metric-segment="${id}"]`);
+  await expect(header.locator("[data-metric-segment]")).toHaveText([/Cameras/, /Total Entries/, /Live Occupancy/, /Peak Occupancy/]);
   await expect(segment("occupancy").getByText("12", { exact: true })).toBeVisible();
-  await expect(segment("visitors").getByText("40", { exact: true })).toBeVisible();
   await expect(segment("entries").getByText("50", { exact: true })).toBeVisible();
-  await expect(segment("exits").getByText("35", { exact: true })).toBeVisible();
+  await expect(segment("occupancy")).toContainText("current visitor inside");
+  await expect(segment("peak")).toContainText("highest visitor record");
+  await expect(segment("peak").getByText("18", { exact: true })).toBeVisible();
+  await expect(segment("peak")).toContainText("From 2 to 4 PM");
   await expect(page.getByRole("heading", { name: "Visitor Traffic", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Occupancy Trend", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Peak Activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Monitored Locations", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent Reports", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Occupancy Trend" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Demographic Breakdown" })).toHaveCount(0);
+  // The whole dashboard fits the window, with Recent Reports under Visitor Traffic and Monitored
+  // Locations: the page itself does not scroll.
+  const below = async (upper: string, lower: string) =>
+    (await page.locator(lower).boundingBox())!.y >= (await page.locator(upper).boundingBox())!.y + (await page.locator(upper).boundingBox())!.height - 1;
+  expect(await below(".dash-traffic", ".dash-reports")).toBe(true);
+  expect(await below(".dash-locations", ".dash-reports")).toBe(true);
+  const pageOverflow = () => page.locator(".enterprise-content").evaluate((element) => element.scrollHeight - element.clientHeight);
+  for (const [width, height] of [[1440, 1024], [1920, 983], [1600, 811]] as const) {
+    await page.setViewportSize({ width, height });
+    await expect.poll(pageOverflow).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 1440, height: 1024 });
   await page.screenshot({ path: testInfo.outputPath("dashboard-collapsed-1440.png"), fullPage: true });
+  // The open date picker sits above everything after the header, so no text shows through it.
+  await page.getByRole("button", { name: /^Dashboard date range/ }).click();
+  const popover = (await page.locator(".dash-date-popover").boundingBox())!;
+  for (const [x, y] of [
+    [popover.x + 40, popover.y + popover.height - 24],
+    [popover.x + popover.width - 40, popover.y + popover.height - 24],
+    [popover.x + 40, popover.y + popover.height / 2],
+  ]) {
+    expect(await page.evaluate(([px, py]) => Boolean(document.elementFromPoint(px, py)?.closest(".dash-date-popover")), [x, y])).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dash-date-popover")).toHaveCount(0);
   await selectDashboardPeriod(page, "Month");
-  await expect(segment("visitors").getByText("900", { exact: true })).toBeVisible();
+  await expect(segment("entries").getByText("910", { exact: true })).toBeVisible();
+  await expect(segment("peak").getByText("99", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to today" })).toBeVisible();
   await selectDashboardPeriod(page, "Week");
-  await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
+  await expect(segment("entries").getByText("467", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open TANAW Insights" }).click();
   const assistant = page.getByRole("complementary", { name: "TANAW Insights" });
   await expect(assistant).toBeVisible();
@@ -190,6 +221,26 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await expect(assistant.getByRole("button", { name: "Ilan ang bisita ngayong araw?" })).toBeVisible();
   await assistant.getByRole("button", { name: "Tagalog" }).click();
   await expect(assistant.getByRole("button", { name: "Tagalog" })).toHaveAttribute("aria-pressed", "true");
+  // Dragged as wide as it goes, the panel stops just past the end of the Live Occupancy text.
+  const handle = page.getByRole("separator", { name: "Resize TANAW Insights" });
+  const grip = (await handle.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(40, grip.y + grip.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const occupancyTextEnd = await segment("occupancy").evaluate((element) => {
+    let right = 0;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent?.trim()) continue;
+      range.selectNodeContents(node);
+      right = Math.max(right, range.getBoundingClientRect().right);
+    }
+    return right;
+  });
+  await expect.poll(async () => Math.abs((await assistant.boundingBox())!.x - (occupancyTextEnd + 20))).toBeLessThanOrEqual(1);
+  await handle.press("End");
   await assistant.getByRole("button", { name: "Auto" }).click();
   await assistant.getByRole("textbox").fill("Tell me about my reports");
   await assistant.getByRole("button", { name: "Send message" }).click();
@@ -208,26 +259,22 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
 });
 
 for (const count of [0, 1, 5, 7]) {
-  test(`keeps ${count} real reports compact and enables scrolling only beyond five`, async ({ page }) => {
+  test(`shows only the latest of ${count} real reports under Visitor Traffic, never scrolling`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1024 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await signIn(page, count);
-    const reports = page.locator(".overview-reports");
+    await expect.poll(() => page.locator(".enterprise-content").evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+    const reports = page.locator(".dash-reports");
     if (!count) {
       await expect(reports.getByText("Submitted tourism reports will appear here.", { exact: true })).toBeVisible();
       await expect(reports.getByRole("region", { name: "Recent report list" })).toHaveCount(0);
       return;
     }
     const list = reports.getByRole("region", { name: "Recent report list" });
-    await expect(list.getByRole("button")).toHaveCount(count);
-    await expect.poll(() => list.evaluate((element) => element.scrollHeight > element.clientHeight + 1)).toBe(count > 5);
-    if (count <= 5) {
-      const boxes = await list.evaluate((element) => {
-        const row = element.querySelector(".recent-report-row")!.getBoundingClientRect();
-        return { height: element.getBoundingClientRect().height, rowHeight: row.height };
-      });
-      expect(boxes.height).toBeCloseTo(count * boxes.rowHeight + (count - 1) * 8 + 6, 0);
-    }
+    // One report, the latest; every report is a click away under View all.
+    await expect(list.getByRole("button")).toHaveCount(1);
+    expect(await list.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+    await expect(reports.getByRole("link", { name: /View all/ })).toBeVisible();
     await expect(reports.getByRole("button", { name: /Next submitted report|Previous submitted report/ })).toHaveCount(0);
     await list.getByRole("button").last().click();
     await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();

@@ -29,7 +29,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
     next: false,
   });
   const inputClassName =
-    "w-full rounded-tanaw-sm border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3 py-2.5 pr-12 text-sm text-(--tanaw-text) outline-none focus:border-(--tanaw-accent-ink) focus:ring-2 focus:ring-(--tanaw-focus-ring)/30";
+    "tanaw-settings-control min-h-10.5! w-full pr-12!";
 
   const dirty = Boolean(currentPassword || newPassword || passwordConfirmation);
   const draftMarker = useSettingsDraft(dirty);
@@ -59,7 +59,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
       <fieldset disabled={isLoading} className="tanaw-settings-body">
         <SettingsGroup title="Verify your identity">
           <div className="max-w-xl">
-            <label htmlFor="currentPassword" className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">
+            <label htmlFor="currentPassword" className="mb-1.5 block text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
               Current Password
             </label>
             <PasswordInput
@@ -81,7 +81,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
         <SettingsGroup title="New password" description="Check the requirements as you type, then enter the same password again.">
           <div className="tanaw-settings-fields">
             <div>
-              <label htmlFor="newPassword" className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">
+              <label htmlFor="newPassword" className="mb-1.5 block text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
                 New Password
               </label>
               <PasswordInput
@@ -101,7 +101,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
               <PasswordRequirements password={newPassword} />
             </div>
             <div>
-              <label htmlFor="confirmPassword" className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">
+              <label htmlFor="confirmPassword" className="mb-1.5 block text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
                 Confirm New Password
               </label>
               <PasswordInput
@@ -187,9 +187,9 @@ function PasswordInput({ ariaLabel, autoComplete, className, isVisible, maxLengt
         onClick={() => {
           if (value) onToggle();
         }}
-        className="hover:text-tanaw-ledger focus-visible:ring-tanaw-ledger/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-emerald-50 focus-visible:ring-2 focus-visible:outline-none"
+        className="tanaw-settings-icon-button absolute top-1/2 right-1.5 -translate-y-1/2"
       >
-        <Icon size={16} />
+        <Icon size={16} aria-hidden="true" />
       </button>
     </div>
   );

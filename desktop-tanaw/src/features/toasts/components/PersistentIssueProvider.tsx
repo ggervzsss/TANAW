@@ -77,8 +77,8 @@ export function PersistentIssueNotice({ issue }: { issue: PersistentIssue }) {
         aria-hidden="true"
       />
       <div className="min-w-0">
-        <p className="text-[11px] leading-tight font-black tracking-wide uppercase">{issue.title}</p>
-        <p className="mt-1 text-xs leading-relaxed font-semibold opacity-85">{issue.message}</p>
+        <p className="text-xs leading-tight font-bold tracking-wide uppercase">{issue.title}</p>
+        <p className="mt-1 text-[0.8125rem] leading-relaxed font-medium opacity-90">{issue.message}</p>
       </div>
     </div>
   );

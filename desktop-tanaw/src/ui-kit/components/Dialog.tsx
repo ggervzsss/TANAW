@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { useId, useRef, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { useDialogFocus } from "../lib/focus-trap";
-import { dialogIn } from "../lib/motion";
+import { dialogIn, easeOut } from "../lib/motion";
 import { ModalPortal } from "./ModalPortal";
 
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
@@ -72,6 +72,7 @@ export function Dialog({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.22, ease: easeOut }}
         onPointerDown={(event) => {
           if (closeOnBackdrop && event.target === event.currentTarget) onClose();
         }}
@@ -93,7 +94,7 @@ export function Dialog({
           )}
         >
           {accent !== "none" && <div aria-hidden="true" data-dialog-accent={accent} className={cn("h-1 shrink-0", accent === "thread" ? "bg-(image:--tanaw-metric-thread)" : "bg-(--tanaw-danger)")} />}
-          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 py-4 max-sm:px-5">
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 pt-5 pb-4 max-sm:px-5">
             <div className="min-w-0">
               {eyebrow && <p className="mb-1 text-xs font-bold tracking-label text-(--tanaw-gold-ink) uppercase">{eyebrow}</p>}
               <h2 id={titleId} className="font-display text-xl leading-tight font-bold wrap-break-word text-(--tanaw-text)">
@@ -109,7 +110,7 @@ export function Dialog({
               type="button"
               aria-label={closeLabel}
               onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-colors hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 motion-reduce:transition-none"
             >
               <X size={18} aria-hidden="true" />
             </button>
@@ -117,7 +118,7 @@ export function Dialog({
           <div data-dialog-body className={cn("min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-5", bodyClassName)}>
             {children}
           </div>
-          {footer && <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-(--tanaw-border-soft) px-6 py-4 max-sm:px-5">{footer}</footer>}
+          {footer && <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-6 py-4 max-sm:px-5">{footer}</footer>}
         </motion.section>
       </motion.div>
     </ModalPortal>

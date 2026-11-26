@@ -44,19 +44,20 @@ async function geometry(page: Page, selector: string) {
   );
 }
 
+/** The dashboard parts whose size and type must not move when the theme changes. */
+const DASHBOARD_PARTS = ".dash-figure,.dash-traffic,.dash-locations,.dash-reports";
+
 export async function verifyThemeAndFilters(page: Page, info: TestInfo, downloads = true) {
   await page.setViewportSize({ width: 1440, height: 1024 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".overview-layout")).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
-  await expect(page.locator(".overview-metrics")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator(".dash-figures")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator(".overview-layout .design-skeleton")).toHaveCount(0);
   await switchTheme(page, "light");
-  await expect(page.locator(".overview-metric").first()).toHaveCSS("opacity", "1");
+  await expect(page.locator(".dash-figure").first()).toHaveCSS("opacity", "1");
   await page.mouse.move(0, 0);
-  const cardBorder = await token(page, "--tanaw-border-soft");
-  await expect.poll(async () => (await geometry(page, ".overview-metrics,.overview-charts > section,.overview-secondary > section")).every((node) => node.border === cardBorder)).toBe(true);
-  const before = await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section");
+  const before = await geometry(page, DASHBOARD_PARTS);
   await page.evaluate(() => {
     const key = "tanaw-enterprise-theme";
     window.localStorage.setItem(key, "dark");
@@ -65,8 +66,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
     Object.assign(window, { __themeImmediate: { dark: document.documentElement.classList.contains("dark"), elapsed: performance.now() - t } });
   });
   expect(await page.evaluate(() => (window as unknown as { __themeImmediate: { dark: boolean } }).__themeImmediate.dark)).toBe(true);
-  await expect(page.locator(".overview-metrics")).toHaveCSS("background-color", await token(page, "--tanaw-surface"));
-  const dark = await geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section");
+    const dark = await geometry(page, DASHBOARD_PARTS);
   dark.forEach((node, i) => {
     expect({ x: node.x, y: node.y, w: node.w, h: node.h, font: node.font, size: node.size, weight: node.weight }).toEqual({
       x: before[i].x,
@@ -88,7 +88,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   for (const theme of ["light", "dark", "light", "dark"] as const) await switchTheme(page, theme);
   await expect(page.locator("html")).toHaveClass(/dark/);
   await switchTheme(page, "light");
-  await expect.poll(() => geometry(page, ".overview-metric,.overview-charts > section,.overview-secondary > section")).toEqual(before);
+  await expect.poll(() => geometry(page, DASHBOARD_PARTS)).toEqual(before);
   await switchTheme(page, "dark");
   await page.getByRole("button", { name: "Camera Setup", exact: true }).click();
   await page.getByRole("button", { name: "Edit configuration" }).click();

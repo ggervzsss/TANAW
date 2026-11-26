@@ -70,7 +70,7 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
                 setName(event.target.value);
                 clearError();
               }}
-              className="h-11 w-full rounded-[20px] border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+              className="h-11 w-full rounded-tanaw-xl border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
               placeholder="Your name"
             />
             <input
@@ -80,7 +80,7 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
                 setEmail(event.target.value);
                 clearError();
               }}
-              className="h-11 w-full rounded-[20px] border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+              className="h-11 w-full rounded-tanaw-xl border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
               placeholder="Your email"
             />
             <textarea

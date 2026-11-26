@@ -164,6 +164,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
         <ReportLedgerTable
           activeLedgerKey={previewedLedgerKey ?? activeLedgerKey}
           ledgerRows={ledgerRows}
+          isLoading={isPeriodChanging && !ledgerRows.length}
           onDownloadReport={handleDownloadReport}
           onPreviewReport={handlePreviewReport}
           onSelectReport={(row) => {

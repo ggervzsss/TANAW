@@ -50,26 +50,33 @@
   --color-tanaw-green: #055b25; /* = tanaw-civic */
   --color-tanaw-green-dark: #044a1e; /* = tanaw-civic-deep */
 
-  /* Shape */
-  --radius-tanaw-sm: 6px; /* compact selects */
+  /* Shape: one soft scale, 8 / 12 / 16 / 20 / 24. Nothing in the app is square-cornered. */
+  --radius-tanaw-sm: 8px; /* compact selects, chips, menu rows */
   --radius-tanaw-md: 12px; /* buttons, inputs, list items */
-  --radius-tanaw-lg: 16px; /* cards, metric strip */
-  --radius-tanaw-xl: 18px; /* camera list panel */
+  --radius-tanaw-lg: 16px; /* cards, dialogs, metric strip */
+  --radius-tanaw-xl: 20px; /* large panels, camera list panel */
+  --radius-tanaw-2xl: 24px; /* hero and feature panels */
 
-  /* Depth */
-  --shadow-tanaw-resting: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-tanaw-soft: 0 12px 30px rgb(15 23 42 / 0.08);
-  --shadow-tanaw-raised: 0 18px 42px rgb(15 23 42 / 0.12);
+  /* Depth: low, diffuse shadows tinted toward the ink, never a hard drop. */
+  --shadow-tanaw-resting: 0 1px 2px rgb(16 36 27 / 0.04), 0 1px 3px rgb(16 36 27 / 0.04);
+  --shadow-tanaw-soft: 0 2px 6px rgb(16 36 27 / 0.04), 0 12px 28px rgb(16 36 27 / 0.07);
+  --shadow-tanaw-raised: 0 4px 12px rgb(16 36 27 / 0.06), 0 22px 48px rgb(16 36 27 / 0.12);
   --shadow-tanaw-banner: 0 16px 40px rgb(2 20 8 / 0.34);
 
-  /* Motion */
+  /* Motion: ease-out curves only; enter 200-280ms, hover and press 150ms. */
   --ease-tanaw: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-tanaw-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-tanaw-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* ---- Semantic tokens: what components read. Light theme. */
 :root {
   --tanaw-page: #f4f8f5;
   --tanaw-page-gradient: linear-gradient(145deg, #eef5f0, #f6f8f6);
+  /* Civic Green wash at the top of every page, under the topbar: deepest at the edge, gone by ~22rem. */
+  --tanaw-wash-top: #c2dfcb;
+  --tanaw-wash: #e3f0e7;
+  --tanaw-top-wash: linear-gradient(180deg, var(--tanaw-wash-top) 0, var(--tanaw-wash) 9rem, rgb(227 240 231 / 0) 22rem);
   --tanaw-surface: #ffffff;
   --tanaw-surface-raised: #ffffff;
   --tanaw-surface-inset: #f0f5f1;
@@ -171,11 +178,27 @@
   /* Layout */
   --tanaw-topbar-height: 5.5rem;
   --tanaw-content-max: 1880px;
+
+  /* Motion timing, read by component CSS (Tailwind utilities use duration-150/200/300). */
+  --tanaw-duration-fast: 150ms; /* hover, press, focus */
+  --tanaw-duration-base: 220ms; /* menus, popovers, switches */
+  --tanaw-duration-slow: 280ms; /* dialogs, page enter */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tanaw-duration-fast: 1ms;
+    --tanaw-duration-base: 1ms;
+    --tanaw-duration-slow: 1ms;
+  }
 }
 
 /* ---- Dark theme: same names, deepened surfaces, lighter greens for text. */
 .dark {
   --tanaw-page: #0b141d;
+  --tanaw-wash-top: #17432f;
+  --tanaw-wash: #0f2124;
+  --tanaw-top-wash: linear-gradient(180deg, var(--tanaw-wash-top) 0, var(--tanaw-wash) 9rem, rgb(15 33 36 / 0) 22rem);
   --tanaw-page-gradient:
     radial-gradient(circle at 12% 0%, rgb(31 71 60 / 0.1), transparent 35rem),
     linear-gradient(145deg, #0b141d 0%, #0e1721 54%, #101923 100%);
@@ -273,8 +296,9 @@
   --tanaw-chart-tooltip-bg: #1b2834;
   --tanaw-chart-tooltip-text: #eef3f2;
 
-  --shadow-tanaw-soft: 0 14px 34px rgb(0 0 0 / 0.2);
-  --shadow-tanaw-raised: 0 20px 48px rgb(0 0 0 / 0.25);
+  --shadow-tanaw-resting: 0 1px 2px rgb(0 0 0 / 0.18);
+  --shadow-tanaw-soft: 0 2px 6px rgb(0 0 0 / 0.12), 0 14px 34px rgb(0 0 0 / 0.2);
+  --shadow-tanaw-raised: 0 4px 12px rgb(0 0 0 / 0.16), 0 22px 52px rgb(0 0 0 / 0.3);
   --shadow-tanaw-banner: 0 16px 44px rgb(0 0 0 / 0.58);
 }
 

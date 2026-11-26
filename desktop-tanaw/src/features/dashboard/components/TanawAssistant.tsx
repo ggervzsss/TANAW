@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { ArrowUpRight, Bot, Brain, Send, X } from "lucide-react";
+import { ASSISTANT_LAUNCHER_ID } from "../stores/assistant-store";
 import { DEFAULT_ML_SERVICE_BASE_URL, getEstablishmentHourly, getEstablishmentLive, getEstablishmentSummary, getMlServiceStatus } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
@@ -65,7 +66,6 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
   const reduceMotion = useReducedMotion();
   const conversation = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLInputElement>(null);
-  const launcher = useRef<HTMLButtonElement>(null);
   const nextMessageId = useRef(0);
   const savedScroll = useRef(0);
   const followLatest = useRef(false);
@@ -87,7 +87,7 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
   }, []);
   useEffect(() => {
     if (!open) {
-      if (wasOpen.current) launcher.current?.focus({ preventScroll: true });
+      if (wasOpen.current) document.getElementById(ASSISTANT_LAUNCHER_ID)?.focus({ preventScroll: true });
       wasOpen.current = false;
       return;
     }
@@ -166,24 +166,6 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
 
   return (
     <AnimatePresence initial={false}>
-      {!open ? (
-        <motion.button
-          key="assistant-launcher"
-          ref={launcher}
-          type="button"
-          className="assistant-launcher"
-          aria-label="Open TANAW Insights"
-          aria-controls="tanaw-assistant-panel"
-          aria-expanded={false}
-          onClick={onToggle}
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          transition={{ duration: reduceMotion ? 0 : 0.18 }}
-        >
-          <Bot size={48} />
-        </motion.button>
-      ) : null}
       {open ? (
         <AssistantPanel key="assistant-panel" reduceMotion={Boolean(reduceMotion)}>
           <header>
@@ -295,20 +277,146 @@ function ReplyBody({ reply, suggestions }: { reply: Reply; suggestions: (languag
   );
 }
 
+const PANEL_WIDTH_STORAGE_KEY = "tanaw:assistant-width";
+const PANEL_MIN_WIDTH = 360;
+const PANEL_DEFAULT_WIDTH = 420;
+const PANEL_KEY_STEP = 32;
+
+function readPanelWidth() {
+  try {
+    const stored = Number(localStorage.getItem(PANEL_WIDTH_STORAGE_KEY));
+    return Number.isFinite(stored) && stored >= PANEL_MIN_WIDTH ? stored : PANEL_DEFAULT_WIDTH;
+  } catch {
+    return PANEL_DEFAULT_WIDTH;
+  }
+}
+
+/** Space kept between the end of the Live Occupancy text and the panel's edge. */
+const PANEL_TEXT_GAP = 20;
+
+/** Where the text inside an element ends on screen, ignoring the empty part of its column. */
+function textRight(element: Element) {
+  let right = 0;
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent?.trim()) continue;
+    range.selectNodeContents(node);
+    right = Math.max(right, range.getBoundingClientRect().right);
+  }
+  range.detach();
+  return right;
+}
+
+/**
+ * The widest the panel may grow: its left edge stops just past the end of the Live Occupancy text,
+ * so Cameras, Total Entries and Live Occupancy always stay readable.
+ */
+function maxPanelWidth() {
+  const occupancy = document.querySelector('[data-metric-segment="occupancy"]');
+  const right = occupancy ? textRight(occupancy) : 0;
+  const limit = right > 0 ? window.innerWidth - right - PANEL_TEXT_GAP : window.innerWidth * 0.4;
+  return Math.max(PANEL_MIN_WIDTH, Math.round(limit));
+}
+
+/** Where the panel starts: just under the topbar. */
+function topbarBottom() {
+  const topbar = document.querySelector<HTMLElement>(".enterprise-topbar");
+  return topbar ? Math.max(0, Math.round(topbar.getBoundingClientRect().bottom)) : 72;
+}
+
+/**
+ * TANAW Insights docks to the right edge and floats over the dashboard, so opening or widening it
+ * never reflows the page. Its left edge drags (or takes the arrow keys) between a readable minimum
+ * and the start of Total Entries; the chosen width is remembered on this computer.
+ */
 function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduceMotion: boolean }) {
   const present = useIsPresent();
+  const [width, setWidth] = useState(readPanelWidth);
+  const [top, setTop] = useState(topbarBottom);
+  const [maxWidth, setMaxWidth] = useState(maxPanelWidth);
+  const [dragging, setDragging] = useState(false);
+  const shown = Math.min(width, maxWidth);
+
+  useEffect(() => {
+    const update = () => {
+      setTop(topbarBottom());
+      setMaxWidth(maxPanelWidth());
+    };
+    update();
+    window.addEventListener("resize", update);
+    // The limit follows the Live Occupancy text, which arrives after loading and changes as it updates.
+    const figures = document.querySelector("[data-unified-metrics-header]");
+    const watcher = typeof MutationObserver === "undefined" ? null : new MutationObserver(update);
+    if (figures) watcher?.observe(figures, { childList: true, subtree: true, characterData: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      watcher?.disconnect();
+    };
+  }, []);
+
+  const commit = (next: number) => {
+    const limit = maxPanelWidth();
+    setMaxWidth(limit);
+    const clamped = Math.round(Math.max(PANEL_MIN_WIDTH, Math.min(limit, next)));
+    setWidth(clamped);
+    try {
+      localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(clamped));
+    } catch {
+      // The width still applies until the app closes.
+    }
+  };
+
+  const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+  const drag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragging) commit(window.innerWidth - event.clientX);
+  };
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragging(false);
+  };
+  const onHandleKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const moves: Record<string, number> = { ArrowLeft: shown + PANEL_KEY_STEP, ArrowRight: shown - PANEL_KEY_STEP, Home: maxPanelWidth(), End: PANEL_MIN_WIDTH };
+    if (!(event.key in moves)) return;
+    event.preventDefault();
+    commit(moves[event.key]);
+  };
+
   return (
     <motion.aside
       id="tanaw-assistant-panel"
-      className="design-card tanaw-assistant"
+      className={`design-card tanaw-assistant tanaw-assistant-dock${dragging ? " is-resizing" : ""}`}
       aria-label="TANAW Insights"
       aria-hidden={!present}
       {...(!present ? { inert: "" } : {})}
-      initial={{ opacity: 0, x: 10, scale: 0.99 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 8, scale: 0.99 }}
-      transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+      style={{ top, width: shown }}
+      initial={{ opacity: 0, x: 48 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 48 }}
+      transition={{ duration: reduceMotion ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
     >
+      <div
+        className="tanaw-assistant-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize TANAW Insights"
+        aria-valuemin={PANEL_MIN_WIDTH}
+        aria-valuemax={maxWidth}
+        aria-valuenow={shown}
+        tabIndex={0}
+        onPointerDown={startDrag}
+        onPointerMove={drag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDoubleClick={() => commit(PANEL_DEFAULT_WIDTH)}
+        onKeyDown={onHandleKey}
+      >
+        <span aria-hidden="true" />
+      </div>
       {children}
     </motion.aside>
   );

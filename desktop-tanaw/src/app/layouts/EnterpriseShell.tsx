@@ -21,6 +21,8 @@ import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView
 import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { ThemedEnterpriseTopbar } from "./ThemedEnterpriseTopbar";
+import { usePageEnter } from "../../ui-kit/lib/page-enter";
+import { ViewSkeleton, type ViewSkeletonVariant } from "../../ui-kit/patterns/ViewSkeleton";
 import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
 import {
   CameraManagementView,
@@ -59,6 +61,10 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   const updateUser = useAuthStore((state) => state.updateUser);
   const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  // A gentle fade (and a slight rise outside Settings, whose workspace must fill the page) on each
+  // change of page, so the switch reads as a change of place rather than a flash.
+  usePageEnter(mainRef, activeView, { rise: activeView === "settings" ? 0 : 4 });
   const activeViewRef = useRef(activeView);
   activeViewRef.current = activeView;
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -280,9 +286,9 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
       />
 
-      <main className={activeView === "settings" ? "tanaw-settings-page overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"}>
+      <main ref={mainRef} className={activeView === "settings" ? "tanaw-settings-page overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"}>
         {activeView === "settings" ? (
-          <Suspense fallback={<EnterpriseViewLoadingFallback />}>
+          <Suspense fallback={<EnterpriseViewLoadingFallback view="settings" />}>
             {user?.role === "enterprise" && <GeneralSettingsView />}
           </Suspense>
         ) : (
@@ -301,7 +307,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
                   onResetLocalData={resetLocalData}
                 />
               )}
-              <Suspense fallback={<EnterpriseViewLoadingFallback />}>
+              <Suspense fallback={<EnterpriseViewLoadingFallback view={activeView} />}>
                 {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
                 {activeView === "cameras" && mlContextReady && (
                   <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
@@ -337,12 +343,22 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   );
 }
 
-function EnterpriseViewLoadingFallback() {
-  return (
-    <div className="grid min-h-64 place-items-center text-sm font-semibold text-[#047857] dark:text-emerald-300" role="status">
-      Loading view…
-    </div>
-  );
+const viewSkeletons: Record<EnterpriseView, { variant: ViewSkeletonVariant; label: string }> = {
+  dashboard: { variant: "dashboard", label: "Loading dashboard" },
+  cameras: { variant: "cameras", label: "Loading camera setup" },
+  reports: { variant: "reports", label: "Loading reports" },
+  notifications: { variant: "list", label: "Loading notifications" },
+  help: { variant: "help", label: "Loading Help Center" },
+  profile: { variant: "settings", label: "Loading settings" },
+  security: { variant: "settings", label: "Loading settings" },
+  tickets: { variant: "settings", label: "Loading settings" },
+  settings: { variant: "settings", label: "Loading settings" },
+};
+
+/** A skeleton in the shape of the page that is loading, so the layout never jumps when it arrives. */
+function EnterpriseViewLoadingFallback({ view }: { view: EnterpriseView }) {
+  const { variant, label } = viewSkeletons[view];
+  return <ViewSkeleton variant={variant} label={label} />;
 }
 
 function getEnterpriseCameraStorageKey(user: ReturnType<typeof useAuthStore.getState>["user"]) {

@@ -1,34 +1,30 @@
-import type { FormEvent } from "react";
+import { useRef, type FormEvent } from "react";
 import { Pencil, RefreshCw, X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
+import { useDialogFocus } from "../../../ui-kit";
 import { PERSON_NAME_MAX_LENGTH, type PersonNameParts } from "../../../utils/form-validation";
 import type { EditableProfileField } from "../model/profile-edit";
 
 export function ProfileDisplayField({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
   return (
-    <div className="min-w-0">
-      <p className="mb-1.5 text-sm font-semibold text-(--tanaw-text-secondary)">{label}</p>
-      <div className="rounded-tanaw-sm flex min-h-10 items-center gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) py-1 pr-1 pl-3">
-        <span className="min-w-0 flex-1 text-sm font-medium wrap-break-word text-(--tanaw-text)">{value}</span>
-        <button
-          type="button"
-          aria-label={"Edit " + label}
-          title={"Edit " + label}
-          onClick={onEdit}
-          className="rounded-tanaw-sm grid size-8 shrink-0 place-items-center bg-(--tanaw-surface-inset) text-(--tanaw-accent-ink) hover:bg-(--tanaw-selected-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
-        >
-          <Pencil size={15} aria-hidden="true" />
-        </button>
+    <div className="tanaw-settings-field">
+      <div className="min-w-0">
+        <p className="tanaw-settings-field-label">{label}</p>
+        <p className="tanaw-settings-field-value">{value}</p>
       </div>
+      <button type="button" aria-label={"Edit " + label} onClick={onEdit} className="tanaw-settings-field-edit">
+        <Pencil size={14} aria-hidden="true" />
+        Edit
+      </button>
     </div>
   );
 }
 
 export function ReadOnlyIdentityField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-xs font-semibold text-(--tanaw-text-secondary)">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium wrap-break-word text-(--tanaw-text)">{value}</dd>
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
@@ -64,6 +60,10 @@ export function ProfileEditModal({
   phoneLocal,
   value,
 }: ProfileEditModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(panelRef, () => {
+    if (!isSaving) onCancel();
+  });
   const isPhone = field === "phone";
   const isName = field === "managerName";
   const title =
@@ -82,39 +82,41 @@ export function ProfileEditModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+      <div className="tanaw-backdrop-enter fixed inset-0 z-50 flex items-center justify-center bg-[rgb(3_20_12/0.6)] px-4 py-6 backdrop-blur-[6px]">
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="profile-edit-title"
-          className={`enterprise-profile-edit-modal w-full rounded-3xl border border-emerald-100 bg-white shadow-2xl dark:border-emerald-300/20 dark:bg-[#121c31] dark:text-slate-100 ${isName ? "max-w-2xl" : "max-w-lg"}`}
+          ref={panelRef}
+          tabIndex={-1}
+          className={`enterprise-profile-edit-modal tanaw-dialog-enter w-full overflow-hidden rounded-tanaw-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-raised outline-none ${isName ? "max-w-2xl" : "max-w-lg"}`}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5 dark:border-slate-700">
+          <div className="flex items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 pt-5 pb-4">
             <div>
-              <h3 id="profile-edit-title" className="text-lg font-bold text-[#111827] dark:text-slate-100">
+              <h3 id="profile-edit-title" className="font-display text-xl leading-tight font-bold text-(--tanaw-text)">
                 {title}
               </h3>
-              <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-slate-400">{description}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-(--tanaw-text-muted)">{description}</p>
             </div>
             <button
               type="button"
               aria-label="Close profile edit modal"
               onClick={onCancel}
-              className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
 
-          <form onSubmit={onSubmit} noValidate className="space-y-5 px-6 py-5">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-[#0f172a]">
-              <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Current value</p>
-              <p className="mt-1 text-sm font-semibold wrap-break-word text-[#111827] dark:text-slate-100">{currentValue}</p>
+          <form onSubmit={onSubmit} noValidate className="space-y-5 px-6 pt-5 pb-6">
+            <div className="rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-4 py-3">
+              <p className="text-xs font-semibold text-(--tanaw-text-muted)">Current value</p>
+              <p className="mt-1 text-sm font-semibold wrap-break-word text-(--tanaw-text)">{currentValue}</p>
             </div>
 
             {isName ? (
               <fieldset>
-                <legend className="mb-3 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">Structured lead admin name</legend>
+                <legend className="mb-3 block text-sm font-semibold text-(--tanaw-text-secondary)">Structured lead admin name</legend>
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]">
                   <ProfileNameInput
                     name="firstName"
@@ -149,12 +151,12 @@ export function ProfileEditModal({
               </fieldset>
             ) : (
               <label className="block">
-                <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
+                <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">{label}</span>
                 {isPhone ? (
                   <div
-                    className={`focus-within:border-tanaw-ledger focus-within:ring-tanaw-ledger/12 flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:ring-2 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`flex overflow-hidden rounded-tanaw-md border bg-(--tanaw-control-bg) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out focus-within:border-(--tanaw-accent-ink) focus-within:ring-4 focus-within:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
                   >
-                    <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 text-sm font-bold text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <span className="flex items-center border-r border-(--tanaw-control-border) bg-(--tanaw-surface-inset) px-3 text-sm font-semibold text-(--tanaw-text-secondary)">
                       +63
                     </span>
                     <input
@@ -172,7 +174,7 @@ export function ProfileEditModal({
                         onPhoneChange(event.clipboardData.getData("text"));
                       }}
                       placeholder="9123456789"
-                      className="min-w-0 flex-1 bg-transparent p-3.5 text-sm text-[#111827] outline-none dark:text-slate-100"
+                      className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-sm text-(--tanaw-text) outline-none placeholder:text-(--tanaw-text-placeholder)"
                     />
                   </div>
                 ) : (
@@ -184,32 +186,32 @@ export function ProfileEditModal({
                     maxLength={field === "email" ? 254 : field === "enterpriseName" ? 120 : undefined}
                     aria-invalid={Boolean(error)}
                     onChange={(event) => onValueChange(event.target.value)}
-                    className={`focus:border-tanaw-ledger focus:ring-tanaw-ledger/12 w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:ring-2 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                    className={`w-full rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
                   />
                 )}
                 {(error || !isPhone) && (
-                  <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+                  <p className={`mt-1.5 text-[0.8125rem] ${error ? "font-semibold text-(--tanaw-error)" : "text-(--tanaw-text-muted)"}`}>
                     {error || (field === "email" ? "Enter a valid email address." : field === "enterpriseName" ? "Use the name your visitors know you by." : "Use a whole number from 1 to 100,000.")}
                   </p>
                 )}
               </label>
             )}
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 pt-1">
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={isSaving}
-                className="rounded-full border border-gray-200 px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="h-10.5 rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-4.5 text-sm font-semibold text-(--tanaw-text) shadow-tanaw-resting transition-[background-color,border-color,translate,scale] duration-150 ease-tanaw-out hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="bg-tanaw-ledger disabled:bg-tanaw-ledger/70 flex min-w-32 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed"
+                className="flex h-10.5 min-w-32 items-center justify-center gap-2 rounded-tanaw-md bg-(--tanaw-action) px-4.5 text-sm font-semibold text-(--tanaw-on-action) shadow-tanaw-resting transition-[background-color,box-shadow,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-action-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSaving && <RefreshCw size={15} className="animate-spin" />}
+                {isSaving && <RefreshCw size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
                 {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : field === "buildingCapacity" ? "Update Capacity" : "Submit Request"}
               </button>
             </div>
@@ -244,7 +246,7 @@ function ProfileNameInput({
   const descriptionId = `profile-${name}-description`;
   return (
     <label className="block min-w-0">
-      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">{label}</span>
       <input
         autoComplete={autoComplete}
         autoFocus={autoFocus}
@@ -253,10 +255,10 @@ function ProfileNameInput({
         aria-invalid={Boolean(error)}
         aria-describedby={error || helperText ? descriptionId : undefined}
         onChange={(event) => onChange(name, event.target.value)}
-        className={`focus:border-tanaw-ledger focus:ring-tanaw-ledger/12 w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:ring-2 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+        className={`w-full min-w-0 rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
       />
       {(error || helperText) && (
-        <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+        <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-[0.8125rem] ${error ? "font-semibold text-(--tanaw-error)" : "text-(--tanaw-text-muted)"}`}>
           {error || helperText}
         </p>
       )}

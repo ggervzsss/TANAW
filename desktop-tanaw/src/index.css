@@ -50,6 +50,10 @@ body {
   background: #eef5f0;
   font-size: var(--text-base);
   user-select: none;
+  /* Crisp, even Inter at every size; counts keep tabular figures where components ask for them. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 :where(a[href], button, input, select, textarea, summary, [role="button"]):focus-visible {
@@ -1051,8 +1055,84 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 }
 
 .animate-in {
-  animation-duration: 500ms;
+  animation-duration: 280ms;
+  animation-timing-function: var(--ease-tanaw-out);
   animation-fill-mode: both;
+}
+
+/*
+ * Shared entrances. `.tanaw-enter` fades content up into place once (banners, panels that appear
+ * after an action); `.tanaw-stagger > *` does the same for a list, one item after another.
+ */
+.tanaw-enter {
+  animation: tanaw-enter-up var(--tanaw-duration-slow) var(--ease-tanaw-out) backwards;
+}
+.tanaw-stagger > * {
+  animation: tanaw-enter-up var(--tanaw-duration-slow) var(--ease-tanaw-out) backwards;
+}
+.tanaw-stagger > :nth-child(2) {
+  animation-delay: 40ms;
+}
+.tanaw-stagger > :nth-child(3) {
+  animation-delay: 80ms;
+}
+.tanaw-stagger > :nth-child(4) {
+  animation-delay: 120ms;
+}
+.tanaw-stagger > :nth-child(5) {
+  animation-delay: 160ms;
+}
+.tanaw-stagger > :nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+/* Dialogs built without motion/react: the backdrop fades, the panel rises and settles. */
+.tanaw-backdrop-enter {
+  animation: tanaw-fade var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+.tanaw-dialog-enter {
+  animation: tanaw-dialog-rise var(--tanaw-duration-slow) var(--ease-tanaw-out) backwards;
+}
+
+@keyframes tanaw-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tanaw-dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tanaw-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .tanaw-enter,
+  .tanaw-backdrop-enter,
+  .tanaw-dialog-enter,
+  .tanaw-stagger > * {
+    animation: none !important;
+  }
 }
 
 .fade-in {
@@ -1392,9 +1472,10 @@ html:not(.dark) .enterprise-shell .shadow-2xl {
   box-shadow: 0 24px 60px rgb(15 23 42 / 0.18) !important;
 }
 
-html:not(.dark) .enterprise-shell input,
-html:not(.dark) .enterprise-shell select,
-html:not(.dark) .enterprise-shell textarea {
+/* Settings controls carry their own token-based states, so the legacy light adapter skips them. */
+html:not(.dark) .enterprise-shell input:not(.tanaw-settings-control),
+html:not(.dark) .enterprise-shell select:not(.tanaw-settings-control),
+html:not(.dark) .enterprise-shell textarea:not(.tanaw-settings-control) {
   background-color: #ffffff;
   border-color: #9eb3a5;
   color: #0f172a;
@@ -1406,9 +1487,9 @@ html:not(.dark) .enterprise-shell textarea::placeholder {
   opacity: 1;
 }
 
-html:not(.dark) .enterprise-shell input:focus,
-html:not(.dark) .enterprise-shell select:focus,
-html:not(.dark) .enterprise-shell textarea:focus {
+html:not(.dark) .enterprise-shell input:not(.tanaw-settings-control):focus,
+html:not(.dark) .enterprise-shell select:not(.tanaw-settings-control):focus,
+html:not(.dark) .enterprise-shell textarea:not(.tanaw-settings-control):focus {
   border-color: #065f46 !important;
   box-shadow: 0 0 0 3px rgb(6 95 70 / 0.14);
 }
@@ -1477,9 +1558,6 @@ html:not(.dark) .enterprise-shell .recharts-legend-item-text {
   color: #334155 !important;
 }
 
-html:not(.dark) .enterprise-shell .enterprise-ticket-panel-header {
-  background: linear-gradient(90deg, rgb(236 253 245 / 0.95) 0%, rgb(255 255 255 / 0.98) 52%, rgb(255 251 235 / 0.86) 100%);
-}
 
 
 
@@ -1591,4 +1669,12 @@ html.dark .enterprise-shell ::-webkit-scrollbar-thumb {
 
 html.dark .enterprise-shell ::-webkit-scrollbar-thumb:hover {
   background: rgb(174 188 201 / 0.4);
+}
+
+/* Help Center search panel: a calm green wash on the surface, not a solid green block. */
+.enterprise-shell .tanaw-enterprise-card.help-center-hero,
+html.dark .enterprise-shell .tanaw-enterprise-card.help-center-hero {
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--tanaw-selected-bg) 90%, transparent), transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tanaw-selected-bg) 55%, var(--tanaw-surface)), var(--tanaw-surface) 70%) !important;
 }

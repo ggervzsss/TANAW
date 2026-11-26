@@ -1,7 +1,7 @@
 import { SettingsGroup } from "../../ui-kit/patterns/GeneralSettings";
-import { Check, CircleAlert, RotateCcw, Type } from "lucide-react";
+import { Check, CircleAlert, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
-import { Card } from "../../components/Card";
+import { Button } from "../../ui-kit";
 import { useSystemDisplayPreferences, type DisplayPreferences, type InterfaceScalePreference, type TextSizePreference } from "./system-display-preferences";
 
 const textSizeOptions: Array<{ value: TextSizePreference; label: string; description: string }> = [
@@ -27,7 +27,7 @@ export function DisplayPreferencesView() {
         <SaveStatus status={saveStatus} onRetry={retryDisplayPreferencesSave} />
       </div>
       <div className="tanaw-display-layout">
-        <div className="grid content-start gap-3">
+        <div className="grid content-start gap-6">
           <PreferenceRow title="Text size" description="Choose a readable size without changing system zoom.">
             <OptionGroup name="text-size" value={displayPreferences.textSize} options={textSizeOptions} onChange={(textSize) => updateDisplayPreferences({ textSize })} />
           </PreferenceRow>
@@ -38,15 +38,10 @@ export function DisplayPreferencesView() {
         <DisplayPreview preferences={displayPreferences} />
       </div>
 
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          disabled={isDefault || saveStatus === "saving"}
-          onClick={resetDisplayPreferences}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-emerald-400/10"
-        >
-          <RotateCcw size={16} /> Reset to default
-        </button>
+      <div className="mt-5 flex justify-end">
+        <Button variant="secondary" size="sm" leadingIcon={<RotateCcw size={15} aria-hidden="true" />} disabled={isDefault || saveStatus === "saving"} onClick={resetDisplayPreferences}>
+          Reset to default
+        </Button>
       </div>
     </SettingsGroup>
   );
@@ -54,10 +49,10 @@ export function DisplayPreferencesView() {
 
 function PreferenceRow({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <section className="space-y-2">
+    <section className="space-y-2.5">
       <div>
-        <h4 className="text-sm font-bold text-(--tanaw-text)">{title}</h4>
-        <p className="mt-0.5 text-xs text-(--tanaw-text-secondary)">{description}</p>
+        <h4 className="text-sm font-semibold text-(--tanaw-text)">{title}</h4>
+        <p className="mt-0.5 text-[0.8125rem] text-(--tanaw-text-secondary)">{description}</p>
       </div>
       {children}
     </section>
@@ -70,17 +65,14 @@ function OptionGroup<T extends string>({ name, value, options, onChange }: { nam
       <legend className="sr-only">{name === "text-size" ? "Text size" : "Interface scale"}</legend>
       <div className="tanaw-display-options">
         {options.map((option) => {
-          const selected = value === option.value;
           return (
             <label
               key={option.value}
-              className={`rounded-tanaw-sm relative border p-2.5 transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--tanaw-focus-ring) ${selected ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600 dark:border-emerald-400 dark:bg-emerald-400/10 dark:ring-emerald-400" : "border-slate-200 bg-white hover:border-emerald-300 dark:border-white/12 dark:bg-white/4"}`}
+              className="tanaw-choice"
             >
-              <input type="radio" name={name} value={option.value} checked={selected} onChange={() => onChange(option.value)} className="sr-only" />
-              <span className="flex items-center justify-between gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                {option.label} {selected && <Check size={15} className="text-emerald-700 dark:text-emerald-300" aria-hidden="true" />}
-              </span>
-              <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-300">{option.description}</span>
+              <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} className="sr-only" />
+              <span className="tanaw-choice-title">{option.label}</span>
+              <span className="tanaw-choice-description">{option.description}</span>
             </label>
           );
         })}
@@ -93,45 +85,40 @@ function DisplayPreview({ preferences }: { preferences: DisplayPreferences }) {
   const previewFontScale = { small: 0.88, default: 1, large: 1.12, "extra-large": 1.25 }[preferences.textSize];
   const previewPadding = { compact: "1rem", default: "1.35rem", comfortable: "1.75rem" }[preferences.interfaceScale];
   return (
-    <Card className="overflow-hidden rounded-[28px] dark:border-white/10">
-      <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-        <Type size={18} className="text-emerald-700 dark:text-emerald-300" />
-        <h3 className="font-bold text-slate-950 dark:text-white">Live preview</h3>
-      </div>
-      <div className="p-3">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/30" style={{ fontSize: `${previewFontScale}em`, padding: previewPadding }}>
-          <h3 className="text-xl font-bold text-slate-950 dark:text-white">Visitor overview</h3>
-          <p className="mt-2 max-w-2xl leading-6 text-slate-600 dark:text-slate-300">Review the latest visitor count and open the detailed report when you need more context.</p>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/5">
-              <span className="block text-xs font-bold tracking-wide text-slate-500 uppercase dark:text-slate-400">Current visitors</span>
-              <strong className="mt-1 block text-lg text-slate-950 dark:text-white">128 people</strong>
-            </div>
-            <span className="rounded-tanaw-sm bg-(--tanaw-action) px-3 py-2 font-bold text-(--tanaw-on-action)">View report</span>
+    <div className="min-w-0">
+      <h4 className="tanaw-display-preview-title">Live preview</h4>
+      <div className="tanaw-display-preview" style={{ fontSize: `${previewFontScale}em`, padding: previewPadding }}>
+        <h3 className="font-display text-xl font-bold text-(--tanaw-text)">Visitor overview</h3>
+        <p className="mt-2 max-w-2xl leading-6 text-(--tanaw-text-secondary)">Review the latest visitor count and open the detailed report when you need more context.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="rounded-tanaw-md bg-(--tanaw-surface) px-4 py-3 shadow-tanaw-resting">
+            <span className="block text-xs font-medium text-(--tanaw-text-secondary)">Current visitors</span>
+            <strong className="mt-1 block text-lg text-(--tanaw-text) tabular-nums">128 people</strong>
           </div>
+          <span className="rounded-tanaw-md bg-(--tanaw-action) px-3.5 py-2 font-semibold text-(--tanaw-on-action)">View report</span>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
 function SaveStatus({ status, onRetry }: { status: "idle" | "saving" | "saved" | "error"; onRetry: () => void }) {
   if (status === "error") {
     return (
-      <div role="alert" className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300">
-        <CircleAlert size={16} /> Failed to save.
-        <button type="button" onClick={onRetry} className="underline underline-offset-4">
+      <div role="alert" className="tanaw-enter flex items-center gap-2 text-sm font-semibold text-(--tanaw-error)">
+        <CircleAlert size={16} aria-hidden="true" /> Failed to save.
+        <button type="button" onClick={onRetry} className="rounded-tanaw-sm px-1 underline underline-offset-4 hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)">
           Retry
         </button>
       </div>
     );
   }
   return (
-    <div role="status" aria-live="polite" className="flex min-h-6 items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-300">
+    <div role="status" aria-live="polite" className="flex min-h-6 items-center gap-2 text-[0.8125rem] font-medium text-(--tanaw-text-secondary)">
       {status === "saving" ? (
-        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" aria-hidden="true" />
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-(--tanaw-accent-ink) border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
       ) : (
-        <Check size={16} className="text-emerald-600" aria-hidden="true" />
+        <Check size={16} className="text-(--tanaw-accent-ink)" aria-hidden="true" />
       )}
       {status === "saving" ? "Saving…" : status === "saved" ? "Saved" : "Ready"}
     </div>

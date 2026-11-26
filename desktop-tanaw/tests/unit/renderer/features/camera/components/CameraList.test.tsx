@@ -12,6 +12,18 @@ describe("CameraList", () => {
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
   });
 
+  it("shows placeholder rows instead of the empty message while the saved cameras load", () => {
+    const loading = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed={false} loading {...actions} />);
+    expect(loading).toContain('aria-label="Loading cameras"');
+    expect(loading).toContain('aria-busy="true"');
+    expect(loading).not.toContain("No cameras registered.");
+    expect(loading.match(/Add Camera/g)).toHaveLength(1);
+
+    const loaded = renderToStaticMarkup(<CameraList cameras={[camera(1)]} activeCamId={1} cameraLimit={6} collapsed={false} loading {...actions} />);
+    expect(loaded).not.toContain("Loading cameras");
+    expect(loaded).toContain("Camera 1");
+  });
+
   it("keeps an accessible toggle for both sidebar states", () => {
     const expanded = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed={false} {...actions} />);
     const collapsed = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} collapsed {...actions} />);

@@ -172,12 +172,15 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     const mainCard = (await page.locator(".report-create-card").boundingBox())!;
     const createTab = (await page.getByRole("tab", { name: "Create Reports" }).boundingBox())!;
     expect(Math.abs(mainCard.x - 46)).toBeLessThanOrEqual(3);
-    // Positions follow the TANAW type scale (31px page title, 16.5px subtitle).
-    expect(Math.abs(mainCard.y - 261)).toBeLessThanOrEqual(3);
+    // The arrangement is unchanged; the open, card-free layout sits tighter so the page fits the
+    // window: the report body starts right under the tabs, and Create Reports never scrolls.
+    expect(mainCard.y).toBeGreaterThanOrEqual(createTab.y + createTab.height);
+    expect(mainCard.y - (createTab.y + createTab.height)).toBeLessThanOrEqual(24);
     expect(createTab.width).toBe(216);
     expect(createTab.height).toBe(50);
-    expect(Math.abs(visitor.x - 67)).toBeLessThanOrEqual(3);
-    expect(Math.abs(visitor.y - 499)).toBeLessThanOrEqual(3);
+    expect(visitor.x).toBeGreaterThanOrEqual(mainCard.x);
+    expect(visitor.y).toBeGreaterThan(mainCard.y);
+    expect(await page.locator(".enterprise-content").evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
     await page.keyboard.press("Escape");
     await page.locator(".reports-heading h1").click();
     await page.screenshot({ path: testInfo.outputPath("reports-create-1440.png") });

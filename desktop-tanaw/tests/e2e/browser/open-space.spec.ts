@@ -266,13 +266,11 @@ test("shows one establishment dashboard for an Open Space-only setup", async ({ 
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Open Space Activity" })).toHaveCount(0);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
-  await expect(header.getByText("3", { exact: true })).toBeVisible();
-  await expect(page.locator(".overview-peak").getByText("5 people", { exact: true })).toBeVisible();
-  await expect(header.getByText("7", { exact: true })).toBeVisible();
-  await expect(header.getByText("Unique Visitors", { exact: true })).toBeVisible();
-  await expect(header.getByText(/Today.s Entries/, { exact: true })).toBeVisible();
+  await expect(header.locator('[data-metric-segment="occupancy"]').getByText("3", { exact: true })).toBeVisible();
+  // Open Space cameras count people inside, not doorway entries.
+  await expect(header.locator('[data-metric-segment="entries"]')).toContainText("Unavailable for these cameras");
   await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("img", { name: "Today establishment peak occupancy history" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visitor Traffic", exact: true })).toBeVisible();
   await expect(page.getByText(/dwell|duration/i)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("shared-occupancy-dashboard.png"), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -289,9 +287,9 @@ test("adds Entry / Exit and Open Space cameras into one live occupancy without a
   const state = await setup(page, true, true);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
   await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
-  await expect(header.getByText(/Today.s Entries/, { exact: true })).toBeVisible();
+  await expect(header.getByText("Total Entries", { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
-  await expect(header.locator('[data-metric-segment="visitors"]').getByText("20", { exact: true })).toBeVisible();
+  await expect(header.locator('[data-metric-segment="entries"]').getByText("20", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("combined-occupancy.png"), fullPage: true });
   state.setPresence(0);
   let previousRequests = state.liveRequests();

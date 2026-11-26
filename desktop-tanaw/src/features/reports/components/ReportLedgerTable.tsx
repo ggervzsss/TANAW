@@ -3,6 +3,7 @@ import { Download, Search } from "lucide-react";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { ReportPopover } from "./ReportPopover";
+import { Skeleton } from "../../../ui-kit";
 import type { ReportRecord } from "../../../types/enterprise";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
@@ -14,12 +15,17 @@ export type { ReportLedgerRow } from "../model/report-ledger";
 type Props = {
   activeLedgerKey: string;
   ledgerRows: ReportLedgerRow[];
+  /** True while the first reporting periods load; rows show placeholders instead of "none yet". */
+  isLoading?: boolean;
   onDownloadReport: (report: ReportRecord) => void;
   onPreviewReport: (report: ReportRecord) => void;
   onSelectReport: (row: ReportLedgerRow) => void;
 };
 
-export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadReport, onPreviewReport, onSelectReport }: Props) {
+const SKELETON_ROWS = 3;
+const SKELETON_WIDTHS = ["72%", "64%", "40%", "70%", "66%", "48%", "56%"];
+
+export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = false, onDownloadReport, onPreviewReport, onSelectReport }: Props) {
   const openReport = (row: ReportLedgerRow) => {
     onSelectReport(row);
     onPreviewReport(row.report);
@@ -173,7 +179,23 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                 </tr>
               );
             })}
-            {!filteredRows.length && (
+            {!filteredRows.length &&
+              isLoading &&
+              Array.from({ length: SKELETON_ROWS }, (_, row) => (
+                <tr key={`loading-${row}`} className="report-history-skeleton-row">
+                  {SKELETON_WIDTHS.map((width, column) => (
+                    <td key={column}>
+                      {row === 0 && column === 0 && (
+                        <span className="sr-only" role="status">
+                          Loading reports…
+                        </span>
+                      )}
+                      <Skeleton className="report-history-skeleton" style={{ width }} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            {!filteredRows.length && !isLoading && (
               <tr>
                 <td colSpan={7} className="report-history-empty">
                   {ledgerRows.length ? "No matching reports found." : "No reporting periods available yet."}

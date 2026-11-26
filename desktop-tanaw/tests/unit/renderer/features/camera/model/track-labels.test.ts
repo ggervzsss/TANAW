@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MlDetectionTrack } from "../../../../../../src/features/camera/services/ml-service.types";
 import { sexEstimateLabel, trackLabelLines } from "../../../../../../src/features/camera/model/track-labels";
 
-const off = { detectionLabels: false, demographics: false };
+const off = { detectionLabels: false, demographics: false, sampleDashboard: false };
 
 function track(changes: Partial<MlDetectionTrack> = {}): MlDetectionTrack {
   return {
@@ -41,7 +41,7 @@ describe("person box labels", () => {
   });
 
   it("adds the live male/female estimate on the same box", () => {
-    const developer = { detectionLabels: true, demographics: true };
+    const developer = { detectionLabels: true, demographics: true, sampleDashboard: false };
     const lines = trackLabelLines(track({ sex_estimate: { female_probability: 0.28, evidence_weight: 2.34, model: "sex-head@x" } }), {
       analysisMode: "open_space",
       inMonitoredArea: true,

@@ -13,7 +13,7 @@ export { Dialog, type DialogProps, type DialogSize } from "./components/Dialog";
 export { ExpandableText, type ExpandableTextProps } from "./components/ExpandableText";
 export { ModalPortal, type ModalPortalProps } from "./components/ModalPortal";
 export { Select, type SelectOption, type SelectProps } from "./components/Select";
-export { Skeleton, Spinner, type SkeletonProps, type SpinnerProps } from "./components/Spinner";
+export { Skeleton, SkeletonText, Spinner, type SkeletonProps, type SkeletonTextProps, type SpinnerProps } from "./components/Spinner";
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Tooltip, type TooltipProps } from "./components/Tooltip";
 
@@ -21,13 +21,15 @@ export { Tooltip, type TooltipProps } from "./components/Tooltip";
 export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProps, type MetricTone } from "./patterns/MetricStrip";
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
 export { TopbarNavigation } from "./patterns/TopbarNavigation";
+export { ViewSkeleton, type ViewSkeletonProps, type ViewSkeletonVariant } from "./patterns/ViewSkeleton";
 
 // Helpers
 export { cn } from "./lib/cn";
 export { DROPDOWN_SEARCH_MIN_OPTIONS, getNextDropdownIndex, shouldShowDropdownSearch, type DropdownKey } from "./lib/dropdown";
 export { useDialogFocus } from "./lib/focus-trap";
 export { initialsOf } from "./lib/initials";
-export { dialogIn, fadeInDown, popIn } from "./lib/motion";
+export { dialogIn, easeOut, fadeInDown, popIn } from "./lib/motion";
+export { usePageEnter } from "./lib/page-enter";
 export { hasVisualOverflow } from "./lib/overflow";
 export { useExclusivePopupDismissal } from "./lib/popup-dismissal";
 export { toSentenceCase } from "./lib/sentence-case";

@@ -78,37 +78,6 @@ html.dark .overview-main {
   --dashboard-demographic-others: var(--theme-chart-third);
   --dashboard-donut-separator: var(--theme-surface);
 }
-html.dark .enterprise-shell .overview-layout :is(.design-card, .tanaw-assistant, .overview-date, .assistant-launcher) {
-  background: var(--theme-surface);
-  border-color: transparent;
-  box-shadow: var(--theme-shadow);
-}
-html.dark .enterprise-shell .overview-layout :is(.overview-date, .assistant-launcher, .tanaw-assistant) {
-  background: var(--theme-raised);
-}
-html.dark .enterprise-shell .overview-layout .overview-metric-icon {
-  background: var(--theme-accent-tint);
-  color: var(--theme-accent-strong);
-  box-shadow: none;
-  border-color: transparent;
-}
-html.dark .enterprise-shell .overview-layout .overview-metric:hover .overview-metric-icon {
-  background: var(--theme-accent-hover);
-}
-html.dark .enterprise-shell .overview-layout .recent-report-row {
-  background: var(--theme-inset);
-  border-color: transparent;
-}
-html.dark .enterprise-shell .overview-layout .recent-report-row:hover {
-  background: var(--theme-accent-tint);
-  border-color: transparent;
-}
-html.dark .enterprise-shell .overview-layout :is(.residence-legend, .peak-content > div + div, .tanaw-assistant > header) {
-  border-color: var(--theme-divider);
-}
-html.dark .enterprise-shell .overview-layout :is(.peak-content strong, .peak-content svg, .assistant-launcher svg, .demographic-legend svg) {
-  color: var(--theme-accent);
-}
 html.dark .enterprise-shell .overview-layout .assistant-message > div {
   background: var(--theme-surface);
 }
@@ -157,15 +126,6 @@ html.dark .enterprise-shell .overview-layout .tanaw-assistant form input {
 }
 html.dark .enterprise-shell .overview-layout .tanaw-assistant form button {
   color: var(--theme-accent);
-}
-html.dark .enterprise-shell .overview-layout :is(.dashboard-chart-tooltip, .donut-tooltip) {
-  background: var(--theme-raised);
-  border-color: var(--theme-border-soft);
-  color: var(--theme-text);
-  box-shadow: var(--theme-shadow-raised);
-}
-html.dark .enterprise-shell :is(.assistant-conversation, .recent-report-list) {
-  scrollbar-color: var(--theme-scrollbar) transparent;
 }
 html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip {
   background: var(--theme-raised) !important;
@@ -604,4 +564,18 @@ html[data-theme-transition="snapshot"]::view-transition-new(root) {
   html::view-transition-new(root) {
     animation: none !important;
   }
+}
+html.dark .enterprise-shell :is(.assistant-conversation, .dash-report-list) {
+  scrollbar-color: var(--theme-scrollbar) transparent;
+}
+html.dark .enterprise-shell .overview-layout :is(.design-card, .tanaw-assistant) {
+  background: var(--theme-surface);
+  border-color: transparent;
+  box-shadow: var(--theme-shadow);
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant {
+  background: var(--theme-raised);
+}
+html.dark .enterprise-shell .overview-layout .tanaw-assistant > header {
+  border-color: var(--theme-divider);
 }

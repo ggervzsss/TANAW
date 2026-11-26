@@ -1,0 +1,102 @@
+/*
+ * Glass on the enterprise topbar. The green bar, building art and navigation stay as they are; these
+ * layers add a quiet highlight: an inner rim, sharp edge streaks that follow the pointer, a sweep of light
+ * across the round controls. No glows.
+ */
+
+.enterprise-topbar__overlay {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 0 -1px 0 rgb(0 0 0 / 0.12);
+}
+
+/*
+ * Sharp edge highlights. While the pointer is over the bar, a thin streak of light runs along the
+ * top and bottom edges and follows it, like light catching the rim of glass. No blur, no glow.
+ */
+@property --topbar-edge-x {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.enterprise-topbar__edge {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent calc(var(--topbar-edge-x) - 280px),
+    rgb(255 255 255 / 0.35) calc(var(--topbar-edge-x) - 130px),
+    rgb(255 255 255 / 1) var(--topbar-edge-x),
+    rgb(255 255 255 / 0.35) calc(var(--topbar-edge-x) + 130px),
+    transparent calc(var(--topbar-edge-x) + 280px)
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 280ms ease,
+    --topbar-edge-x 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.enterprise-topbar__edge--top {
+  top: 0;
+}
+
+.enterprise-topbar__edge--bottom {
+  bottom: 0;
+  opacity: 0;
+}
+
+.enterprise-topbar:hover .enterprise-topbar__edge {
+  opacity: 1;
+}
+
+.enterprise-topbar:hover .enterprise-topbar__edge--bottom {
+  opacity: 0.9;
+}
+
+/* Round controls: glass rim, inner highlight, and a sweep of light on hover. */
+.enterprise-topbar .tanaw-topbar-compact-control,
+.enterprise-topbar .tanaw-account-control {
+  background-image: linear-gradient(115deg, transparent 32%, rgb(255 255 255 / 0.22) 46%, transparent 60%);
+  background-repeat: no-repeat;
+  background-position: 160% 0;
+  background-size: 250% 100%;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.26),
+    inset 0 -1px 0 rgb(0 0 0 / 0.12);
+  transition:
+    background-position 650ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 200ms ease,
+    border-color 200ms ease,
+    transform 200ms ease;
+}
+
+.enterprise-topbar .tanaw-topbar-compact-control:hover,
+.enterprise-topbar .tanaw-account-control:hover {
+  background-position: -60% 0;
+}
+
+.enterprise-topbar [aria-expanded="true"].tanaw-topbar-compact-control {
+  border-color: rgb(158 241 200 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-topbar__edge {
+    transition: opacity 280ms ease;
+  }
+
+  .enterprise-topbar .tanaw-topbar-compact-control,
+  .enterprise-topbar .tanaw-account-control {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .enterprise-topbar__edge {
+    display: none;
+  }
+}

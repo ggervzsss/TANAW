@@ -47,6 +47,18 @@ export async function readTicketPhoto(file: File): Promise<SupportTicketAttachme
   };
 }
 
+/** Fields another screen can fill in before opening Requests, e.g. the dashboard's "Report this to the IT". */
+export type TicketDraftPrefill = Partial<Omit<TicketFormState, "category">> & { category: TicketFormState["category"] };
+
+/** Reads a prefill from navigation state; anything malformed is ignored. */
+export function readTicketDraftPrefill(state: unknown): TicketDraftPrefill | null {
+  if (!state || typeof state !== "object" || !("ticketDraft" in state)) return null;
+  const draft = (state as { ticketDraft: unknown }).ticketDraft;
+  if (!draft || typeof draft !== "object") return null;
+  const candidate = { ...emptyTicketForm, ...(draft as Partial<TicketFormState>) };
+  return isTicketFormState(candidate) ? candidate : null;
+}
+
 export function isTicketFormState(value: unknown): value is TicketFormState {
   if (!value || typeof value !== "object") return false;
   const form = value as Partial<TicketFormState>;

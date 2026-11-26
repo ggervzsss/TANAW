@@ -39,7 +39,7 @@ export function Badge({ children, tone = "neutral", dot = false, size = "md", sh
       className={cn(
         "tanaw-badge inline-flex max-w-full items-center gap-1.5 border font-semibold whitespace-nowrap",
         shape === "pill" ? "rounded-full" : "rounded-tanaw-sm",
-        size === "sm" ? "px-2 py-0.5 text-[0.6875rem] leading-4" : "px-2.5 py-1 text-xs leading-4",
+        size === "sm" ? "px-2 py-0.5 text-xs leading-4" : "px-2.5 py-1 text-xs leading-4",
         style.badge,
         className,
       )}

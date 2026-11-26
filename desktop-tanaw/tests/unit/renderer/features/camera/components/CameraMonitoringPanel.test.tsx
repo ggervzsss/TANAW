@@ -63,6 +63,17 @@ describe("CameraLiveMetrics", () => {
     expect(paused).toContain('data-ambience-tone="calm"');
     expect(reconnecting).toContain('data-ambience-tone="attention"');
   });
+  it("shows value placeholders while the first readings load, and real values once they arrive", () => {
+    const counts = { ...EMPTY_ML_COUNTS, occupancy: null, entry: null, exit: null };
+    const loading = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady={false} loading counts={counts} health={null} />);
+    expect(loading).toContain('aria-busy="true"');
+    expect(loading).toContain("tanaw-skeleton");
+    expect(loading).not.toContain("—");
+    expect(loading).toContain("Establishment Occupancy");
+
+    const loaded = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady loading counts={{ ...counts, occupancy: 4 }} health={null} />);
+    expect(loaded).toContain(">4</div>");
+  });
   it("keeps an observed zero and suppresses cached values when runtime is unavailable", () => {
     const counts = { ...EMPTY_ML_COUNTS, occupancy: 0, entry: 3, exit: 3 };
     const live = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={counts} health={null} />);

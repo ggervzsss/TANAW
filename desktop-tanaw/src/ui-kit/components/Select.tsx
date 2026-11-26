@@ -191,9 +191,9 @@ export function Select({
   };
 
   const triggerClassName = isDirectory
-    ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition focus:outline-none"
+    ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition duration-150 ease-tanaw-out focus:outline-none"
     : cn(
-        "tanaw-select-trigger flex w-full items-center justify-between gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-left font-semibold text-(--tanaw-text) shadow-tanaw-resting transition outline-none hover:border-(--tanaw-control-border-hover) focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-(--tanaw-control-disabled) disabled:opacity-60",
+        "tanaw-select-trigger flex w-full items-center justify-between gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-left font-semibold text-(--tanaw-text) shadow-tanaw-resting transition duration-150 ease-tanaw-out outline-none hover:border-(--tanaw-control-border-hover) focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-(--tanaw-control-disabled) disabled:opacity-60",
         size === "sm" ? "min-h-8 rounded-tanaw-sm px-2 py-1.5 text-xs" : "min-h-10 rounded-tanaw-md px-3 py-2 text-sm",
         isInvalid && "border-(--tanaw-error)",
       );
@@ -224,17 +224,17 @@ export function Select({
         onKeyDown={handleKeyDown}
         className={triggerClassName}
       >
-        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-muted)")}>
+        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[13px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-muted)")}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {selectedOption?.meta && (
-            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)"}>{selectedOption.meta}</span>
+            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)"}>{selectedOption.meta}</span>
           )}
           <ChevronDown
             size={size === "sm" ? 14 : 16}
             aria-hidden="true"
-            className={cn("shrink-0 transition-transform duration-200", isDirectory ? "tanaw-directory-select-chevron" : "text-(--tanaw-text-muted)", isOpen && "rotate-180")}
+            className={cn("shrink-0 transition-transform duration-200 ease-tanaw-out", isDirectory ? "tanaw-directory-select-chevron" : "text-(--tanaw-text-muted)", isOpen && "rotate-180")}
           />
         </span>
       </button>
@@ -302,7 +302,7 @@ export function Select({
                       onClick={() => selectOption(option)}
                       onMouseEnter={() => setActiveIndex(index)}
                       className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2 text-left text-sm transition-colors",
+                        "flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2 text-left text-sm transition-colors duration-150",
                         option.disabled && "cursor-not-allowed opacity-50",
                         isDirectory
                           ? active || selected
@@ -318,7 +318,7 @@ export function Select({
                       <span className={cn("truncate", isDirectory && "text-xs font-medium")}>{option.label}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {option.meta && (
-                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs text-(--tanaw-text-muted)"}>{option.meta}</span>
+                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs text-(--tanaw-text-muted)"}>{option.meta}</span>
                         )}
                         {selected && <Check size={15} aria-hidden="true" className="text-(--tanaw-accent-ink)" />}
                       </span>

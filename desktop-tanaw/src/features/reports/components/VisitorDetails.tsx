@@ -1,5 +1,6 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { ArrowRight, CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
+import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { confirmAllThisCity, formatReportDate, missingDays, OTHER_ORIGINS, reportingDateKey, setDayOrigin, type ReportDay } from "../model/daily-origins";
 import { var1MonthlyCells } from "../model/var1";
@@ -11,6 +12,8 @@ type Props = {
   hasDailyOrigins: boolean;
   demo: DemoBreakdown;
   metrics: Metrics;
+  /** While TANAW's counts load, figures show placeholders in their own shape. */
+  isLoading?: boolean;
   isReadOnly: boolean;
   period: string;
   setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
@@ -22,9 +25,10 @@ type Row = { label: string; male: Cell; female: Cell; total: Cell };
 const ESTIMATED = "Estimated by TANAW from the cameras. Visitors entered for other origins are deducted from it.";
 const NOT_RECORDED = "TANAW had no male/female estimate for this day.";
 
-export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnly, period, setOrigins }: Props) {
+export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isLoading = false, isReadOnly, period, setOrigins }: Props) {
   const selected = useSelectedDay(days, period);
-  if (!hasDailyOrigins || !selected) return <MonthlyVisitorDetails demo={demo} metrics={metrics} />;
+  const figure = (content: ReactNode) => (isLoading ? <Skeleton className="report-cell-skeleton" /> : content);
+  if (!hasDailyOrigins || !selected) return <MonthlyVisitorDetails demo={demo} metrics={metrics} figure={figure} />;
   const day = selected.day;
   const editable = !isReadOnly && Boolean(day.unique);
   const missing = missingDays(days);
@@ -57,13 +61,13 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnl
                 return (
                   <td key={sex}>
                     <span className="report-origin-locked" title={sexed ? ESTIMATED : NOT_RECORDED} aria-label={sexed ? label : `${label} not recorded`}>
-                      {sexed ? city[sex].toLocaleString() : "—"}
+                      {figure(sexed ? city[sex].toLocaleString() : "—")}
                     </span>
                   </td>
                 );
               })}
               <td className="report-origin-total" aria-label="This City Total">
-                {display(day.thisCity)}
+                {figure(display(day.thisCity))}
               </td>
             </tr>
             {OTHER_ORIGINS.map(({ id, label }) => {
@@ -97,9 +101,9 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnl
           <tfoot>
             <tr>
               <th scope="row">Grand Total</th>
-              <td>{sum("male").toLocaleString()}</td>
-              <td>{sum("female").toLocaleString()}</td>
-              <td>{display(day.unique)}</td>
+              <td>{figure(sum("male").toLocaleString())}</td>
+              <td>{figure(sum("female").toLocaleString())}</td>
+              <td>{figure(display(day.unique))}</td>
             </tr>
           </tfoot>
         </table>
@@ -144,7 +148,7 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isReadOnl
 }
 
 /** Reports submitted before daily entry. */
-function MonthlyVisitorDetails({ demo, metrics }: { demo: DemoBreakdown; metrics: Metrics }) {
+function MonthlyVisitorDetails({ demo, metrics, figure }: { demo: DemoBreakdown; metrics: Metrics; figure: (content: ReactNode) => ReactNode }) {
   const cells = var1MonthlyCells(demo, metrics);
   const row = (label: string, start: number): Row => ({ label, male: cells[start], female: cells[start + 1], total: cells[start + 2] });
   const rows = [row("This City", 0), row("Other City", 3), row("Other Provinces", 6), row("Foreign", 9)];
@@ -164,18 +168,18 @@ function MonthlyVisitorDetails({ demo, metrics }: { demo: DemoBreakdown; metrics
             {rows.map((item) => (
               <tr key={item.label}>
                 <th scope="row">{item.label}</th>
-                <td>{display(item.male)}</td>
-                <td>{display(item.female)}</td>
-                <td className="report-origin-total">{display(item.total)}</td>
+                <td>{figure(display(item.male))}</td>
+                <td>{figure(display(item.female))}</td>
+                <td className="report-origin-total">{figure(display(item.total))}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
               <th scope="row">{grand.label}</th>
-              <td>{display(grand.male)}</td>
-              <td>{display(grand.female)}</td>
-              <td>{display(grand.total)}</td>
+              <td>{figure(display(grand.male))}</td>
+              <td>{figure(display(grand.female))}</td>
+              <td>{figure(display(grand.total))}</td>
             </tr>
           </tfoot>
         </table>

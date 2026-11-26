@@ -26,7 +26,7 @@ const tones: Record<AlertTone, { box: string; icon: ReactNode; title: string }> 
 export function Alert({ tone = "info", title, children, action, icon, className }: AlertProps) {
   const style = tones[tone];
   return (
-    <div role={tone === "danger" || tone === "warning" ? "alert" : "status"} data-tone={tone} className={cn("tanaw-alert flex items-start gap-3 rounded-tanaw-md border px-4 py-3", style.box, className)}>
+    <div role={tone === "danger" || tone === "warning" ? "alert" : "status"} data-tone={tone} className={cn("tanaw-alert tanaw-enter flex items-start gap-3 rounded-tanaw-md border px-4 py-3.5", style.box, className)}>
       {icon !== null && (
         <span aria-hidden="true" className={cn("mt-0.5 shrink-0", style.title)}>
           {icon ?? style.icon}

@@ -1,0 +1,2371 @@
+/*
+ * Enterprise dashboard. One open page, no cards: a green-washed band holds the title and the four
+ * figures, then Visitor Traffic with Monitored Locations, then Recent Reports. Spacing and hairlines
+ * separate the parts. Motion: one entrance sequence; everything after that answers an action.
+ */
+
+.dash {
+  --dash-wash-top: var(--tanaw-wash-top);
+  --dash-wash: var(--tanaw-wash);
+  --dash-page: var(--tanaw-surface);
+  --dash-line: #e3ebe5;
+  --dash-line-strong: var(--tanaw-border);
+  --dash-soft: rgb(5 91 37 / 0.07);
+  --dash-soft-strong: rgb(5 91 37 / 0.12);
+  --dash-alert: #b42318;
+  --dash-alert-soft: #fef3f2;
+  --dash-up: #067647;
+  /* Entries by period: one green, darker where the period beat its usual (validated ordinal ramp). */
+  --dash-above: #055b25;
+  --dash-within: #4f9f72;
+  --dash-below: #86be9b;
+  /* Redesign 3: the usual range as a soft neutral band, the usual count as a dark line. */
+  --dash-band: rgb(31 42 55 / 0.065);
+  --dash-uline: #1f2a37;
+  --dash-guide: var(--tanaw-border);
+  --dash-tip: #10241b;
+  --dash-tip-ink: #ffffff;
+  --dash-gold: var(--tanaw-gold-line);
+  --dash-gold-ink: var(--tanaw-gold-ink);
+  --dash-shadow-pop: 0 2px 4px rgb(16 36 27 / 0.06), 0 24px 56px rgb(16 36 27 / 0.18);
+  --dash-shadow-control: 0 1px 2px rgb(16 36 27 / 0.12), 0 1px 1px rgb(16 36 27 / 0.04);
+  --dash-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dash-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--tanaw-text);
+  width: 100%;
+}
+
+.dark .dash {
+  --dash-wash-top: var(--tanaw-wash-top);
+  --dash-wash: var(--tanaw-wash);
+  --dash-page: #0b141d;
+  --dash-line: rgb(174 188 201 / 0.12);
+  --dash-line-strong: rgb(174 188 201 / 0.24);
+  --dash-soft: rgb(110 231 183 / 0.08);
+  --dash-soft-strong: rgb(110 231 183 / 0.14);
+  --dash-alert: #f97066;
+  --dash-alert-soft: rgb(249 112 102 / 0.09);
+  --dash-up: #6ee7b7;
+  --dash-above: #6ee7b7;
+  --dash-within: #2e8a5a;
+  --dash-below: #255a40;
+  --dash-band: rgb(226 232 240 / 0.07);
+  --dash-uline: #e2e8f0;
+  --dash-guide: rgb(174 188 201 / 0.28);
+  --dash-tip: #f1f5f4;
+  --dash-tip-ink: #0b141d;
+  --dash-shadow-pop: 0 2px 4px rgb(0 0 0 / 0.3), 0 24px 56px rgb(0 0 0 / 0.55);
+  --dash-shadow-control: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+/* The page behind the dashboard: the wash fades into the page under the figures. */
+html .enterprise-shell .enterprise-content:has(.dash) {
+  background: var(--tanaw-surface);
+}
+html.dark .enterprise-shell .enterprise-content:has(.dash) {
+  background: #0b141d;
+}
+
+.dash .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dash :focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.dash-main {
+  gap: 0;
+}
+
+/* ---------- Header ---------- */
+
+/* The green-washed band runs edge to edge behind the title and figures. A spread shadow carries it
+   past the content width without widening the scroll area; the clip keeps it to the band's height. */
+/* The hero stacks above the sections after it, so the date picker that opens from it is never
+   painted under the chart readout, the camera list or any other layer that follows. */
+.dash-hero {
+  position: relative;
+  z-index: 3;
+  isolation: isolate;
+}
+.dash-hero::before {
+  position: absolute;
+  inset: -40px 0 0;
+  z-index: -1;
+  /* A border-image outset paints edge to edge without widening the page or its scroll area. */
+  border-image: linear-gradient(180deg, var(--dash-wash-top) 0%, var(--dash-wash) 42%, var(--dash-wash) 60%, var(--dash-page) 100%) 0 fill / 0 / 0 100vw;
+  content: "";
+  pointer-events: none;
+}
+.dash-hero::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--dash-line);
+  content: "";
+}
+
+.dash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 44px 0 40px;
+}
+
+.dash-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 54px;
+  line-height: 62px;
+  letter-spacing: -0.02em;
+}
+
+/* Green, Seal Gold, green: the civic line signs the page title, flush with its first letter. */
+.dash-title::after {
+  display: block;
+  width: 72px;
+  height: 4px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0b5d2a 0%, #2f8a45 30%, var(--dash-gold) 50%, #2f8a45 70%, #0b5d2a 100%);
+  transform-origin: left center;
+  animation: dash-line-draw 700ms var(--dash-ease-out) 120ms both;
+  content: "";
+}
+.dark .dash-title::after {
+  background: linear-gradient(90deg, #1f7a43 0%, #4fb877 30%, #e2bd5c 50%, #4fb877 70%, #1f7a43 100%);
+}
+@keyframes dash-line-draw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.dash-subtitle {
+  margin-top: 4px;
+  font-size: 19px;
+  line-height: 26px;
+  color: var(--tanaw-text-secondary);
+}
+
+.dash-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- Buttons ---------- */
+
+.dash-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--dash-ease),
+    border-color 150ms var(--dash-ease),
+    color 150ms var(--dash-ease),
+    transform 120ms var(--dash-ease),
+    box-shadow 150ms var(--dash-ease);
+}
+.dash-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.dash-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dash-button-ghost {
+  height: 54px;
+  background: transparent;
+  color: var(--tanaw-accent-ink);
+  font-size: 16px;
+  padding: 0 16px;
+  border-radius: 14px;
+}
+.dash-button-ghost:hover {
+  background: var(--dash-soft);
+}
+.dash-button-quiet {
+  border-color: var(--dash-line-strong);
+  background: var(--tanaw-surface);
+  color: var(--tanaw-text);
+}
+.dash-button-quiet:hover {
+  border-color: var(--tanaw-accent-ink);
+}
+.dash-button-primary {
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+}
+.dash-button-primary:hover:not(:disabled) {
+  background: var(--tanaw-action-hover);
+}
+.dash-button-alert {
+  margin-top: 14px;
+  height: 42px;
+  border-color: var(--dash-alert);
+  background: var(--tanaw-surface);
+  color: var(--dash-alert);
+  font-size: 15px;
+  padding: 0 18px;
+  border-radius: 10px;
+}
+.dash-button-alert:hover {
+  background: var(--dash-alert);
+  color: #fff;
+}
+.dark .dash-button-alert {
+  background: transparent;
+}
+.dark .dash-button-alert:hover {
+  color: #0b141d;
+}
+
+/* ---------- Date range picker ---------- */
+
+.dash-date {
+  position: relative;
+}
+
+/* The date control reads as a heading-level choice, not a card: icon, dates and a chevron, with a
+   soft tint only while pointed at or open. */
+.dash-date-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tanaw-text);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--dash-ease),
+    transform 120ms var(--dash-ease);
+}
+.dash-date-trigger:hover,
+.dash-date-trigger[aria-expanded="true"] {
+  background: var(--dash-soft);
+}
+.dash-date-trigger:active {
+  transform: scale(0.98);
+}
+.dash-date-trigger > svg:first-child {
+  color: var(--tanaw-accent-ink);
+}
+.dash-date-chevron {
+  color: var(--tanaw-text-muted);
+  transition: transform 200ms var(--dash-ease-out);
+}
+.dash-date-trigger[aria-expanded="true"] .dash-date-chevron {
+  transform: rotate(180deg);
+}
+
+/* One flat sheet: a hairline edge and a light shadow so it floats, no inner panels or raised cards. */
+.dash-date-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 620px;
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  border: 1px solid var(--dash-line-strong);
+  border-radius: 12px;
+  background: var(--tanaw-surface);
+  box-shadow: 0 1px 2px rgb(16 36 27 / 0.06), 0 14px 32px rgb(16 36 27 / 0.12);
+  transform-origin: top right;
+  animation: dash-pop 180ms var(--dash-ease-out);
+}
+.dark .dash-date-popover {
+  background: #121d28;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.5);
+}
+
+.dash-date-body {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+}
+
+/* Quick ranges: a plain list; the chosen one is marked by a short green rule and green text. */
+.dash-date-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px 0;
+  border-right: 1px solid var(--dash-line);
+}
+
+.dash-date-preset {
+  position: relative;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tanaw-text-secondary);
+  text-align: left;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    color 150ms var(--dash-ease),
+    background-color 150ms var(--dash-ease);
+}
+.dash-date-preset:hover {
+  color: var(--tanaw-text);
+  background: var(--dash-soft);
+}
+.dash .dash-date-preset:focus-visible {
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+.dash-date-preset[aria-checked="true"] {
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+}
+.dash-date-preset[aria-checked="true"]::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tanaw-action);
+  content: "";
+}
+.dark .dash-date-preset[aria-checked="true"]::before {
+  background: #6ee7b7;
+}
+
+.dash-calendar {
+  padding: 16px 20px 12px;
+}
+
+.dash-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.dash-calendar-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dash-calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tanaw-text-secondary);
+  cursor: pointer;
+}
+.dash-calendar-nav:hover:not(:disabled) {
+  background: var(--dash-soft);
+}
+.dash-calendar-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.dash-calendar-weekdays,
+.dash-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.dash-calendar-weekdays abbr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tanaw-text-muted);
+  text-decoration: none;
+}
+
+.dash-day {
+  position: relative;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tanaw-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+.dash-day span {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  transition:
+    background-color 120ms var(--dash-ease),
+    color 120ms var(--dash-ease),
+    transform 120ms var(--dash-ease);
+}
+.dash-day:hover:not(:disabled) span {
+  background: var(--dash-soft-strong);
+}
+.dash-day:active:not(:disabled) span {
+  transform: scale(0.94);
+}
+.dash-day:disabled {
+  color: var(--tanaw-text-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+.dash-day-in {
+  background: var(--dash-soft);
+}
+.dash-day-start {
+  border-radius: 22px 0 0 22px;
+}
+.dash-day-end {
+  border-radius: 0 22px 22px 0;
+}
+.dash-day-start.dash-day-end {
+  border-radius: 22px;
+}
+.dash-day-start span,
+.dash-day-end span,
+.dash-day-start:hover:not(:disabled) span,
+.dash-day-end:hover:not(:disabled) span {
+  background: var(--tanaw-action);
+  color: #fff;
+  font-weight: 600;
+}
+.dash-day-today span::after {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--tanaw-accent-ink);
+  content: "";
+}
+.dash-day-start.dash-day-today span::after,
+.dash-day-end.dash-day-today span::after {
+  background: #fff;
+}
+.dash-day-blank {
+  height: 46px;
+}
+
+.dash-date-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--dash-line);
+}
+.dash-date-draft {
+  font-size: 15px;
+  font-weight: 600;
+}
+.dash-date-actions {
+  display: flex;
+  gap: 8px;
+}
+/* Cancel is a plain text action beside the one filled button. */
+.dash-date-actions .dash-button-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--tanaw-text-secondary);
+}
+.dash-date-actions .dash-button-quiet:hover {
+  border-color: transparent;
+  background: var(--dash-soft);
+  color: var(--tanaw-text);
+}
+
+/* ---------- Figures ---------- */
+
+.dash-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 56px;
+  padding: 8px 0 56px;
+}
+
+.dash-figure {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dash-figure-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.dash-figure-label small {
+  display: block;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--tanaw-text-muted);
+}
+
+.dash-figure-value {
+  display: flex;
+  align-items: baseline;
+  height: 80px;
+  margin-top: 22px;
+  font-size: 76px;
+  line-height: 80px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+.dash-figure-skeleton {
+  display: block;
+  width: 60%;
+  height: 64px;
+  margin-top: 30px;
+  border-radius: 12px;
+}
+
+.dash-figure-of {
+  margin-left: 12px;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--tanaw-text-muted);
+}
+
+.dash-meter {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  margin: 0 0 0 18px;
+}
+.dash-meter i {
+  display: block;
+  flex: none;
+  width: 26px;
+  height: 8px;
+  border-radius: 999px;
+}
+.dash-meter-on {
+  background: var(--tanaw-live);
+}
+.dash-meter-off {
+  background: var(--dash-alert);
+}
+
+.dash-figure-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--tanaw-text-secondary);
+}
+.dash-figure-note + .dash-figure-note {
+  margin-top: 4px;
+}
+.dash-note-alert {
+  color: var(--dash-alert);
+  font-weight: 600;
+}
+.dash-note-up {
+  color: var(--dash-up);
+  font-weight: 600;
+}
+.dash-figure-note svg {
+  flex: none;
+  margin-top: 3.5px;
+}
+.dash-figure-note .dash-dot {
+  margin-top: 6.5px;
+}
+.dash-note-down {
+  color: var(--dash-alert);
+  font-weight: 600;
+}
+.dash-note-muted {
+  color: var(--tanaw-text-muted);
+}
+
+.dash-dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.dash-dot-live {
+  background: var(--tanaw-live);
+  animation: dash-live 2.4s var(--dash-ease) infinite;
+}
+.dash-dot-alert {
+  background: var(--dash-alert);
+  box-shadow: 0 0 0 3px rgb(180 35 24 / 0.15);
+}
+.dash-dot-off {
+  background: var(--tanaw-text-muted);
+}
+
+/* ---------- Visitor Traffic and Monitored Locations ---------- */
+
+.dash-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 56px;
+  padding: 52px 0 56px;
+}
+
+.dash-section-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dash-section-title {
+  font-family: var(--font-sans);
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.dash-section-sub {
+  margin-top: 6px;
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--tanaw-text-muted);
+}
+.dash-section-sub b {
+  color: var(--tanaw-text);
+  font-weight: 600;
+}
+
+.dash-traffic {
+  min-width: 0;
+}
+
+.dash-readout {
+  min-height: 0;
+  margin: 28px 0 20px;
+}
+.dash-readout-when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tanaw-text-secondary);
+}
+.dash-readout-value {
+  margin-top: 4px;
+  font-size: 54px;
+  line-height: 62px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.dash-readout-value span {
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--tanaw-text-muted);
+}
+
+.dash-tag {
+  padding: 1px 10px;
+  border: 1px solid var(--dash-gold);
+  border-radius: 999px;
+  color: var(--dash-gold-ink);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.dash-cmp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tanaw-text-secondary);
+}
+.dash-cmp-up {
+  color: var(--dash-up);
+}
+.dash-cmp-down {
+  color: var(--dash-alert);
+}
+
+.dash-plot {
+  position: relative;
+  padding-bottom: 40px;
+  border-radius: 10px;
+}
+.dash-plot-area {
+  position: relative;
+}
+.dash-plot-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  overflow: visible;
+}
+
+.dash-grid {
+  stroke: var(--dash-line);
+  stroke-width: 1;
+}
+.dash-axis-base {
+  stroke: var(--dash-line-strong);
+  stroke-width: 1;
+}
+.dash-guide {
+  fill: var(--dash-guide);
+  opacity: 0.7;
+  transition: x 300ms var(--dash-ease-out);
+}
+
+/* Marks follow Dashboard Redesign 3. Bars with rounded tops and square bases; the usual range as a
+   soft band behind them; the usual count as a dark line over them, on a halo in the page color, with
+   white dots. Visitors inside have their own short lane under the bars, sharing the columns, with a
+   2px amber line, a faint area and dots ringed in the page color. */
+.dash-band {
+  fill: var(--dash-band);
+  opacity: 0.9;
+}
+.dash-uline {
+  fill: none;
+  stroke: var(--dash-uline);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.dash-uline-halo {
+  fill: none;
+  stroke: var(--dash-page);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.dash-udot {
+  fill: var(--dash-page);
+  stroke: var(--dash-uline);
+  stroke-width: 2.5;
+  transition:
+    cx 500ms var(--dash-ease-out),
+    cy 500ms var(--dash-ease-out),
+    r 200ms var(--dash-ease),
+    fill 200ms var(--dash-ease),
+    opacity 200ms var(--dash-ease);
+}
+.dash-udot-on {
+  fill: var(--dash-uline);
+  stroke: var(--dash-page);
+  stroke-width: 3;
+  filter: drop-shadow(0 1px 2px rgb(16 36 27 / 0.28));
+}
+.dark .dash-udot-on {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+}
+
+.dash-bar {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition:
+    x 500ms var(--dash-ease-out),
+    y 500ms var(--dash-ease-out),
+    width 500ms var(--dash-ease-out),
+    height 500ms var(--dash-ease-out),
+    fill 250ms var(--dash-ease),
+    opacity 200ms var(--dash-ease);
+}
+.dash-stop-above {
+  stop-color: var(--dash-above);
+}
+.dash-stop-within {
+  stop-color: var(--dash-within);
+}
+.dash-stop-below {
+  stop-color: var(--dash-below);
+}
+.dash-stop-base {
+  stop-opacity: 0.74;
+}
+.dark .dash-stop-base {
+  stop-opacity: 0.62;
+}
+.dash-bar-above {
+  fill: var(--dash-above);
+}
+.dash-bar-within {
+  fill: var(--dash-within);
+}
+.dash-bar-below {
+  fill: var(--dash-below);
+}
+/* The period still under way reads as unfinished. */
+.dash-bar-live {
+  fill-opacity: 0.6;
+}
+
+/* Pointing at the chart dims every bar, tick and dot but the ones being read. */
+.dash-plot-area:hover .dash-bar:not(.dash-bar-selected),
+.dash-plot:focus-visible .dash-bar:not(.dash-bar-selected) {
+  opacity: 0.32;
+}
+.dash-plot-area:hover .dash-udot:not(.dash-udot-on),
+.dash-plot:focus-visible .dash-udot:not(.dash-udot-on) {
+  opacity: 0.5;
+}
+
+.dash-hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dash-peak-tag {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 1px 10px;
+  border: 1px solid var(--dash-gold);
+  border-radius: 999px;
+  background: var(--dash-page);
+  color: var(--dash-gold-ink);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dash-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--dash-tip);
+  color: var(--dash-tip-ink);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(16 36 27 / 0.18);
+  white-space: nowrap;
+  pointer-events: none;
+  transition:
+    left 300ms var(--dash-ease-out),
+    top 300ms var(--dash-ease-out);
+}
+.dash-bubble-start {
+  transform: translate(-14px, -100%);
+}
+.dash-bubble-end {
+  transform: translate(calc(-100% + 14px), -100%);
+}
+
+.dash-y-labels {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 100%;
+  pointer-events: none;
+}
+.dash-y-labels span {
+  position: absolute;
+  right: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tanaw-text-muted);
+}
+
+.dash-x-labels {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 28px;
+  pointer-events: none;
+}
+.dash-x-labels span {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  font-size: 15px;
+  white-space: nowrap;
+  color: var(--tanaw-text-muted);
+}
+.dash-x-labels .dash-x-hidden {
+  visibility: hidden;
+}
+.dash-x-labels .dash-x-selected {
+  color: var(--tanaw-text);
+  font-weight: 600;
+}
+
+.dash-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-top: 22px;
+  font-size: 15px;
+  color: var(--tanaw-text-secondary);
+}
+.dash-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-key {
+  display: inline-block;
+  flex: none;
+}
+.dash-key-above,
+.dash-key-within,
+.dash-key-below {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.dash-key-above {
+  background: var(--dash-above);
+}
+.dash-key-within {
+  background: var(--dash-within);
+}
+.dash-key-below {
+  background: var(--dash-below);
+}
+.dash-key-uline {
+  position: relative;
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--dash-uline);
+}
+.dash-key-uline i {
+  position: absolute;
+  top: -3px;
+  left: 8px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--dash-uline);
+  border-radius: 50%;
+  background: var(--dash-page);
+}
+.dash-key-band {
+  width: 22px;
+  height: 12px;
+  border-radius: 5px;
+  background: var(--dash-band);
+}
+
+.dash-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 14px;
+  color: var(--tanaw-text-muted);
+}
+.dash-footnote svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.dash-chart-skeleton {
+  height: 520px;
+  margin-top: 28px;
+  border-radius: 14px;
+}
+.dash-chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  margin-top: 28px;
+  border-radius: 14px;
+  background: var(--dash-soft);
+  color: var(--tanaw-text-secondary);
+  font-size: 16px;
+  text-align: center;
+}
+
+.dash-locations {
+  min-width: 0;
+}
+.dash-locations-empty {
+  margin-top: 28px;
+  color: var(--tanaw-text-muted);
+  font-size: 16px;
+}
+.dash-location-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 28px;
+}
+.dash-location {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--dash-line);
+}
+.dash-location:first-child {
+  padding-top: 4px;
+  border-top: 0;
+}
+.dash-location-down {
+  margin-top: 6px;
+  padding: 20px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--dash-alert-soft);
+  animation: dash-fade 300ms var(--dash-ease-out);
+}
+.dash-location-down + .dash-location {
+  border-top: 0;
+}
+.dash-location-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--dash-soft);
+  color: var(--tanaw-accent-ink);
+}
+.dash-location-down .dash-location-icon {
+  background: rgb(180 35 24 / 0.1);
+  color: var(--dash-alert);
+}
+.dash-location-body {
+  flex: 1;
+  min-width: 0;
+}
+.dash-location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dash-location-name {
+  overflow: hidden;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-location-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tanaw-accent-ink);
+}
+.dash-location-state-down {
+  color: var(--dash-alert);
+}
+.dash-location-meta {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--tanaw-text-muted);
+}
+.dash-location-down .dash-location-meta {
+  color: var(--tanaw-text-secondary);
+}
+
+/* ---------- Recent Reports ---------- */
+
+.dash-reports {
+  padding: 52px 0 64px;
+  border-top: 1px solid var(--dash-line);
+}
+
+.dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  color: var(--tanaw-accent-ink);
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dash-link svg {
+  transition: transform 150ms var(--dash-ease);
+}
+.dash-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.dash-link:hover svg {
+  transform: translateX(3px);
+}
+
+.dash-report-columns,
+.dash-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 150px 220px;
+  align-items: center;
+  gap: 16px;
+}
+.dash-report-columns {
+  margin-top: 24px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--dash-line-strong);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tanaw-text-muted);
+}
+.dash-report-columns span:last-child {
+  text-align: right;
+}
+
+.dash-report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.dash-report-row {
+  width: 100%;
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--dash-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--tanaw-text-secondary);
+  text-align: left;
+  font-size: 17px;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--dash-ease),
+    transform 120ms var(--dash-ease);
+}
+.dash-report-row:hover {
+  background: var(--dash-soft);
+}
+.dash-report-row:active {
+  transform: scale(0.995);
+}
+.dash-report-name {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.dash-report-name > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.dash-report-name strong {
+  overflow: hidden;
+  color: var(--tanaw-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-report-name small {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--tanaw-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-report-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--dash-soft);
+  color: var(--tanaw-accent-ink);
+}
+.dash-report-status {
+  text-align: right;
+}
+.dash-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--tanaw-success-bg);
+  color: var(--tanaw-success-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dash-badge-warning {
+  background: var(--tanaw-warning-bg);
+  color: var(--tanaw-warning-text);
+}
+.dark .dash-badge {
+  background: rgb(110 231 183 / 0.12);
+  color: #6ee7b7;
+}
+.dark .dash-badge-warning {
+  background: rgb(251 191 36 / 0.14);
+  color: #fcd34d;
+}
+
+.dash-report-empty {
+  margin-top: 24px;
+  color: var(--tanaw-text-muted);
+  font-size: 16px;
+}
+
+/* ---------- Motion ---------- */
+
+.dash-figure {
+  animation: dash-rise 600ms var(--dash-ease-out) both;
+}
+.dash-figure:nth-child(2) {
+  animation-delay: 60ms;
+}
+.dash-figure:nth-child(3) {
+  animation-delay: 120ms;
+}
+.dash-figure:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.dash-intro .dash-bar {
+  animation: dash-grow 700ms var(--dash-ease-out) both;
+}
+.dash-intro .dash-band {
+  animation: dash-fade 600ms var(--dash-ease-out) 300ms both;
+}
+.dash-intro :is(.dash-uline, .dash-uline-halo) {
+  stroke-dasharray: 1;
+  animation: dash-draw 1s var(--dash-ease-out) 450ms both;
+}
+.dash-intro .dash-udot {
+  animation: dash-fade 300ms var(--dash-ease-out) 1.1s both;
+}
+.dash-intro .dash-peak-tag {
+  animation: dash-fade 300ms var(--dash-ease-out) 1s both;
+}
+
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes dash-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes dash-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes dash-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes dash-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+@keyframes dash-live {
+  0% {
+    box-shadow: 0 0 0 0 rgb(69 165 73 / 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgb(69 165 73 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash *,
+  .dash *::before,
+  .dash *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Narrower space ----------
+ * Container queries, so the layout follows the room it has: a narrow window and an open
+ * TANAW Insights panel both shrink the dashboard.
+ */
+
+.dash-main {
+  container: dash / inline-size;
+}
+
+@container dash (max-width: 1240px) {
+  .dash-figures {
+    gap: 36px;
+  }
+  .dash-figure-value {
+    height: 68px;
+    font-size: 60px;
+    line-height: 68px;
+  }
+  .dash-split {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 40px;
+  }
+}
+
+@container dash (max-width: 980px) {
+  .dash-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 36px;
+  }
+  .dash-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+  .dash-report-columns,
+  .dash-report-row {
+    grid-template-columns: minmax(0, 1fr) 110px 130px 170px;
+  }
+}
+
+@container dash (max-width: 640px) {
+  .dash-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 28px 0 28px;
+  }
+  .dash-head-actions {
+    flex-wrap: wrap;
+  }
+  .dash-title {
+    font-size: 40px;
+    line-height: 48px;
+  }
+  .dash-figure-value {
+    height: 56px;
+    font-size: 48px;
+    line-height: 56px;
+  }
+  .dash-readout-value {
+    font-size: 40px;
+    line-height: 48px;
+  }
+  .dash-legend {
+    gap: 12px 18px;
+  }
+  .dash-report-columns {
+    display: none;
+  }
+  .dash-report-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .dash-report-row .dash-report-cell {
+    display: none;
+  }
+}
+
+@container dash (max-width: 440px) {
+  .dash-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .dash-date-popover {
+    position: fixed;
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+  }
+  .dash-date-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash-date-presets {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--dash-line);
+  }
+}
+
+/* ---------- Sparse days and sample data ---------- */
+
+.dash-readout-none {
+  color: var(--tanaw-text-muted);
+  font-size: 24px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Sample data: a compact note beside the date control, so it costs the page no height. */
+.dash-sample-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 520px;
+  min-height: 38px;
+  margin: 0;
+  padding: 4px 4px 4px 12px;
+  border: 1px dashed var(--dash-gold);
+  border-radius: 10px;
+  background: rgb(215 179 90 / 0.1);
+  color: #6f540c;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+.dark .dash-sample-note {
+  color: var(--dash-gold-ink);
+}
+.dash-sample-note svg {
+  flex: none;
+}
+.dash-sample-note strong {
+  margin-right: 4px;
+  font-weight: 700;
+}
+.dash-sample-note span {
+  flex: 1;
+}
+.dash-sample-note button {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dash-gold);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dash-sample-note button:hover {
+  background: rgb(215 179 90 / 0.18);
+}
+
+/* ---------- Loading ----------
+ * Skeletons hold the exact shape of what is coming, with a soft shimmer, so nothing jumps when the
+ * counts arrive; real content then fades in once.
+ */
+.dash {
+  --dash-skeleton: rgb(16 36 27 / 0.06);
+  --dash-skeleton-shine: rgb(16 36 27 / 0.11);
+}
+.dark .dash {
+  --dash-skeleton: rgb(226 232 240 / 0.06);
+  --dash-skeleton-shine: rgb(226 232 240 / 0.12);
+}
+/* The shimmer itself is the app-wide one (src/ui-kit/components/Skeleton.css). */
+.dash .design-skeleton {
+  display: block;
+}
+.dash .dash-figure-skeleton {
+  width: 58%;
+}
+.dash .dash-note-skeleton {
+  width: 72%;
+  height: 16px;
+  margin-top: 18px;
+}
+.dash .dash-line-skeleton {
+  width: 100%;
+  height: 16px;
+  margin-top: 8px;
+}
+.dash .dash-line-skeleton-sm {
+  height: 12px;
+}
+.dash .dash-readout-skeleton {
+  width: 260px;
+  height: 96px;
+  margin: 28px 0 20px;
+}
+.dash-chart-loading .dash-chart-skeleton {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 24px;
+  height: 434px;
+  margin: 0;
+  padding: 0 70px 40px 24px;
+  border-bottom: 1px solid var(--dash-line);
+  background: none;
+}
+.dash-chart-loading .dash-chart-skeleton span {
+  width: 60px;
+  border-radius: 10px 10px 0 0;
+}
+.dash-report-loading .dash-report-row-skeleton {
+  cursor: default;
+}
+.dash-report-loading .dash-report-row-skeleton:hover {
+  background: transparent;
+}
+.dash .dash-report-loading .dash-report-icon {
+  width: 44px;
+  height: 44px;
+}
+.dash-read-note {
+  margin-left: 6px;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--tanaw-text-muted);
+}
+
+/* Content arrives once, softly. */
+.dash-figure-value,
+.dash-figure-note,
+.dash-chart-body,
+.dash-location-list,
+.dash-report-list {
+  animation: dash-fade 360ms var(--dash-ease-out) both;
+}
+
+@keyframes dash-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.dash-badge {
+  white-space: nowrap;
+}
+
+/* Figure titles stand on their own: no icon, a strong display name over a quiet caption. */
+.dash-figure-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.dash-figure-name {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--tanaw-text);
+}
+.dash-figure-alert .dash-figure-name {
+  color: var(--tanaw-text);
+}
+.dash-figure-label small {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--tanaw-text-muted);
+}
+.dash-figure-value {
+  margin-top: 18px;
+}
+.dash-figure-alert .dash-figure-value {
+  color: var(--dash-alert);
+}
+.dash-figure-alert .dash-figure-of {
+  color: var(--tanaw-text-muted);
+}
+
+/* ---------- TANAW Insights dock ---------- */
+
+/* The panel hugs the right edge under the topbar and floats over the page: opening or widening it
+   never reflows the dashboard, which simply runs underneath. Its left edge is the resize handle. */
+.overview-layout.dash {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+}
+.overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  grid-column: auto;
+  grid-row: auto;
+  height: auto;
+  min-height: 0;
+  max-width: 100vw;
+  padding: 12px 14px 10px 18px;
+  overflow: hidden;
+  border: 0;
+  border-left: 1px solid var(--dash-line-strong);
+  border-radius: 0;
+  background: var(--tanaw-surface);
+  box-shadow:
+    -1px 0 0 rgb(255 255 255 / 0.6) inset,
+    -24px 0 48px -20px rgb(16 36 27 / 0.22);
+  animation: none;
+}
+html.dark .enterprise-shell .overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
+  border-left-color: var(--dash-line-strong);
+  background: var(--theme-raised);
+  box-shadow: -24px 0 48px -16px rgb(0 0 0 / 0.6);
+}
+.tanaw-assistant-dock.is-resizing {
+  user-select: none;
+}
+
+.tanaw-assistant-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.tanaw-assistant-resize::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: var(--color-tanaw-green);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  content: "";
+}
+.tanaw-assistant-resize span {
+  position: relative;
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--dash-line-strong);
+  transition:
+    background-color 160ms ease,
+    height 200ms var(--dash-ease-out);
+}
+.tanaw-assistant-resize:hover::before,
+.tanaw-assistant-dock.is-resizing .tanaw-assistant-resize::before {
+  opacity: 0.55;
+}
+.tanaw-assistant-resize:hover span,
+.tanaw-assistant-dock.is-resizing .tanaw-assistant-resize span {
+  height: 56px;
+  background: var(--color-tanaw-green);
+}
+.dark .tanaw-assistant-resize:hover span,
+.dark .tanaw-assistant-dock.is-resizing .tanaw-assistant-resize span {
+  background: #6ee7b7;
+}
+.dash .tanaw-assistant-resize:focus-visible {
+  outline: none;
+}
+.tanaw-assistant-resize:focus-visible span {
+  height: 56px;
+  background: var(--color-tanaw-green);
+  box-shadow: 0 0 0 3px var(--tanaw-focus-ring);
+}
+
+@media (max-width: 640px) {
+  .overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
+    width: 100vw !important;
+  }
+  .tanaw-assistant-resize {
+    display: none;
+  }
+}
+
+/* Docked, the panel is wide enough for comfortable reading: larger type, and a line length that
+   stays readable when it is dragged wide. */
+.dash .tanaw-assistant-dock .assistant-message > div {
+  max-width: 680px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.dash .tanaw-assistant-dock .assistant-message button {
+  font-size: 13px;
+}
+.dash .tanaw-assistant-dock .assistant-question {
+  width: fit-content;
+  max-width: min(560px, calc(100% - 42px));
+  margin-left: auto;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dash .tanaw-assistant-dock .assistant-disclosure {
+  font-size: 12px;
+}
+
+/* ---------- Fit to the window ----------
+ * The dashboard takes exactly the room under the topbar, edge to edge: the header and figures keep
+ * their size, Visitor Traffic and the side column take the height that is left, and Recent Reports
+ * keeps a short share at the bottom. Lists scroll on their own; the page does not. On a short or
+ * narrow window the page scrolls instead of squeezing the chart past readability.
+ */
+html .enterprise-shell .enterprise-content:has(.dash) {
+  padding: 16px 32px 18px;
+}
+html[data-interface-scale] .enterprise-shell .enterprise-content:has(.dash) {
+  padding-top: 16px !important;
+  padding-bottom: 18px !important;
+}
+.enterprise-content:has(> div > .dash) > div {
+  height: 100%;
+}
+.overview-layout.dash {
+  display: flex;
+  flex-direction: column;
+  /* The main column is a size container, so it must be stretched to the width, not shrink-wrapped. */
+  align-items: stretch;
+  height: 100%;
+  max-width: none;
+  /* The dashboard's own side margin, on top of the page padding (which the Display density setting
+     may tighten): about 40px at 1366 wide, growing to about 95px at 1920, never past 120px. */
+  padding-inline: clamp(16px, calc(40px + (100vw - 1366px) * 0.1), 120px);
+}
+.dash-main.overview-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+/* ---- Header: the subtitle sits beside the title; notices share the row with the date control. */
+.dash-hero {
+  flex: none;
+}
+.dash-head {
+  padding: 4px 0 16px;
+}
+.dash-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px;
+}
+.dash-title {
+  font-size: 40px;
+  line-height: 46px;
+}
+.dash-title::after {
+  width: 64px;
+  margin-top: 8px;
+}
+.dash-subtitle {
+  margin-top: 0;
+  font-size: 16px;
+  line-height: 22px;
+}
+.dash-head-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.dash-button-ghost {
+  height: 44px;
+  font-size: 15px;
+}
+.dash-date-trigger {
+  height: 46px;
+  font-size: 16px;
+}
+
+/* ---- Figures */
+.dash-figures {
+  gap: 40px;
+  padding: 0 0 18px;
+}
+.dash-figure-name {
+  font-size: 20px;
+  line-height: 26px;
+}
+.dash-figure-label small {
+  font-size: 14px;
+  line-height: 20px;
+}
+.dash-figure-value {
+  height: 56px;
+  margin-top: 10px;
+  font-size: 52px;
+  line-height: 56px;
+}
+.dash .dash-figure-skeleton {
+  height: 50px;
+  margin-top: 16px;
+}
+.dash-figure-of {
+  margin-left: 10px;
+  font-size: 22px;
+}
+.dash-meter {
+  margin: 0 0 0 16px;
+}
+.dash-figure-note {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.dash-figure-note svg {
+  margin-top: 2.5px;
+}
+.dash-figure-note .dash-dot {
+  margin-top: 5.5px;
+}
+.dash .dash-note-skeleton {
+  margin-top: 12px;
+}
+
+/* ---- Visitor Traffic on the left, Monitored Locations on the right. At least as tall as the chart
+   needs to stay readable; a window shorter than that scrolls instead. */
+.dash-split {
+  flex: 1 1 0;
+  min-height: min-content;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 25%, 440px);
+  gap: clamp(40px, 3.5vw, 72px);
+  padding: 18px 0 0;
+}
+.dash-section-title {
+  font-size: 21px;
+  line-height: 28px;
+}
+.dash-section-sub {
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.dash-traffic {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dash-traffic-head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.dash-traffic-head .dash-section-head {
+  min-width: 0;
+}
+/* The readout keeps one height for every period, so pointing along the chart never resizes the plot. */
+.dash-traffic-head .dash-readout {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 62%;
+  height: 86px;
+  margin: 0;
+  text-align: right;
+  animation: dash-fade 360ms var(--dash-ease-out) both;
+}
+.dash-readout-when {
+  height: 24px;
+  font-size: 14px;
+}
+.dash-readout-value {
+  margin-top: 2px;
+  font-size: 36px;
+  line-height: 40px;
+}
+.dash-readout-value span {
+  margin-left: 8px;
+  font-size: 15px;
+}
+.dash-readout-none {
+  font-size: 22px;
+  line-height: 40px;
+}
+.dash-cmp {
+  justify-content: flex-end;
+  height: 20px;
+  font-size: 14px;
+}
+.dash-traffic-head .dash-cmp {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.dash-traffic-head .dash-read-note {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.dash .dash-readout-skeleton {
+  width: 200px;
+  height: 80px;
+  margin: 0;
+}
+/* The gap keeps the value bubble over the tallest bar clear of the readout above it. */
+.dash-chart-body,
+.dash-chart-loading {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+}
+/* The plot never shrinks under its hour labels; past that the page scrolls instead. */
+.dash-plot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 170px;
+  padding-bottom: 30px;
+}
+.dash-plot-area {
+  flex: 1 1 auto;
+  min-height: 140px;
+}
+.dash-x-labels span {
+  font-size: 13px;
+}
+/* The key and the footnote share one row, and wrap onto two when the column is narrow. */
+.dash-chart-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 28px;
+  margin-top: 8px;
+}
+.dash-legend {
+  gap: 20px;
+  margin-top: 0;
+  font-size: 13px;
+}
+.dash-footnote {
+  margin-top: 0;
+  font-size: 13px;
+}
+.dash-chart-loading .dash-chart-skeleton {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 140px;
+}
+.dash-chart-empty {
+  flex: 1 1 auto;
+  min-height: 160px;
+  margin-top: 12px;
+}
+
+.dash-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  contain: size;
+}
+/* Monitored Locations takes the whole side column; its list scrolls once the cameras outgrow it. */
+.dash-locations {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.dash-location-list,
+.dash-report-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* While rows sit below the fold, the list's bottom edge fades to say there is more. */
+.dash-location-list[data-more="true"],
+.dash-report-list[data-more="true"] {
+  mask-image: linear-gradient(180deg, #000 calc(100% - 32px), transparent);
+}
+/* Rows keep a 12px lane clear of the scrollbar, and the lane is reserved so rows never shift. */
+.dash-location-list {
+  margin-top: 12px;
+  padding-inline-end: 12px;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--dash-line-strong) transparent;
+}
+.dash-locations-empty {
+  margin-top: 12px;
+  font-size: 15px;
+}
+.dash-location {
+  gap: 14px;
+  padding: 12px 0;
+}
+.dash-location:first-child {
+  padding-top: 2px;
+}
+.dash-location.dash-location-down {
+  margin-top: 4px;
+  padding: 16px;
+}
+/* Monitored Locations reads as a quiet list: smaller, simpler type than the figures above it. */
+.dash-location-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.dash-location-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.dash-location-name {
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.dash-location-state {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-location-meta {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 19px;
+}
+.dash-button-alert {
+  height: 36px;
+  margin-top: 10px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+/* ---- Recent Reports: full width under both, with a short share of the height. */
+/* One report only: the section is as tall as its single row and never scrolls. */
+.dash-reports {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  margin-top: 16px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--dash-line);
+}
+.dash-link {
+  flex: none;
+  padding: 2px 0;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.dash-report-columns,
+.dash-report-row {
+  grid-template-columns: minmax(0, 1fr) 200px 200px 220px;
+}
+.dash-report-columns {
+  flex: none;
+  margin-top: 10px;
+  padding: 0 0 8px;
+  font-size: 13px;
+}
+.dash-report-list {
+  flex: 0 1 auto;
+}
+.dash-report-row {
+  padding: 7px 0;
+  font-size: 15px;
+}
+.dash-report-name {
+  gap: 12px;
+}
+.dash-report-name strong {
+  font-size: 15px;
+  line-height: 20px;
+}
+.dash-report-icon,
+.dash .dash-report-loading .dash-report-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+.dash-badge {
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.dash-report-empty {
+  margin-top: 12px;
+  font-size: 15px;
+}
+
+/* A shorter screen, such as a 1366 x 768 laptop, tightens the type so the chart keeps its room. */
+@media (max-height: 860px) {
+  .dash-head {
+    padding: 2px 0 12px;
+  }
+  .dash-title {
+    font-size: 32px;
+    line-height: 38px;
+  }
+  .dash-title::after {
+    width: 56px;
+    height: 3px;
+    margin-top: 6px;
+  }
+  .dash-subtitle {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .dash-button-ghost,
+  .dash-date-trigger {
+    height: 40px;
+  }
+  .dash-figures {
+    padding-bottom: 14px;
+  }
+  .dash-figure-name {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  .dash-figure-label small {
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .dash-figure-value {
+    height: 50px;
+    margin-top: 6px;
+    font-size: 46px;
+    line-height: 50px;
+  }
+  .dash-figure-note {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .dash-split {
+    padding-top: 14px;
+  }
+  .dash-section-title {
+    font-size: 21px;
+    line-height: 26px;
+  }
+  .dash-section-sub {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .dash-readout-value {
+    font-size: 30px;
+    line-height: 34px;
+  }
+  .dash-readout-none {
+    line-height: 34px;
+  }
+  .dash-traffic-head .dash-readout {
+    height: 80px;
+  }
+  .dash-reports {
+    max-height: 200px;
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+}
+@media (max-height: 760px) {
+  .dash-sample-note {
+    min-height: 34px;
+    font-size: 12px;
+  }
+  .dash-sample-note button {
+    height: 24px;
+  }
+  .dash-footnote {
+    font-size: 12px;
+  }
+}
+@media (max-height: 700px) {
+  .dash-title {
+    font-size: 28px;
+    line-height: 34px;
+  }
+  .dash-figure-value {
+    height: 42px;
+    font-size: 38px;
+    line-height: 42px;
+  }
+  .dash-readout-value {
+    font-size: 28px;
+    line-height: 32px;
+  }
+  .dash-readout-none {
+    line-height: 32px;
+  }
+  .dash-traffic-head .dash-readout {
+    height: 78px;
+  }
+}
+
+/* Narrower rooms: the figures wrap to two rows and the page scrolls again. */
+@container dash (max-width: 1240px) {
+  .dash-figures {
+    gap: 28px;
+  }
+  .dash-figure-value {
+    height: 52px;
+    font-size: 48px;
+    line-height: 52px;
+  }
+  .dash-split {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 32px;
+  }
+  .dash-report-columns,
+  .dash-report-row {
+    grid-template-columns: minmax(0, 1fr) 140px 150px 200px;
+  }
+}
+@container dash (max-width: 980px) {
+  .dash-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 24px;
+  }
+  .dash-split {
+    flex: none;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .dash-plot-area {
+    flex: none;
+    height: 300px;
+  }
+  .dash-chart-loading .dash-chart-skeleton {
+    flex: none;
+    height: 300px;
+  }
+  .dash-locations {
+    min-height: 0;
+  }
+  /* Stacked, the camera list takes the height of its cameras again. */
+  .dash-side {
+    contain: none;
+  }
+  .dash-reports {
+    flex: none;
+    max-height: none;
+    padding-bottom: 24px;
+  }
+  .dash-report-list {
+    max-height: 360px;
+  }
+  .dash-report-columns,
+  .dash-report-row {
+    grid-template-columns: minmax(0, 1fr) 110px 130px 170px;
+  }
+}
+@container dash (max-width: 640px) {
+  .dash-title {
+    font-size: 32px;
+    line-height: 38px;
+  }
+  .dash-figure-value {
+    height: 46px;
+    font-size: 42px;
+    line-height: 46px;
+  }
+  .dash-traffic-head {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dash-legend {
+    gap: 10px 18px;
+  }
+  .dash-traffic-head .dash-readout {
+    align-items: flex-start;
+    max-width: 100%;
+    text-align: left;
+  }
+  .dash-cmp {
+    justify-content: flex-start;
+  }
+  .dash-report-columns {
+    display: none;
+  }
+  .dash-report-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .dash-report-row .dash-report-cell {
+    display: none;
+  }
+}
+@media (max-width: 1044px) {
+  .enterprise-content:has(> div > .dash) > div,
+  .overview-layout.dash {
+    height: auto;
+  }
+  .dash-main.overview-main {
+    min-height: 0;
+  }
+}

@@ -122,7 +122,7 @@ export function CameraDialog({
               {description && <p id={`${id}-description`}>{description}</p>}
             </div>
             <button type="button" className="design-icon-button" aria-label={`Close ${title}`} disabled={busy} onClick={onClose}>
-              <X size={30} />
+              <X size={22} aria-hidden="true" />
             </button>
           </header>
           <div className="camera-dialog-content">{children}</div>

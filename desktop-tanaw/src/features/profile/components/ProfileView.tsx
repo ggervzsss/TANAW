@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { MailCheck } from "lucide-react";
-import { Alert } from "../../../ui-kit";
+import { Alert, Button } from "../../../ui-kit";
 import { useSettingsDraft } from "../../../ui-kit/lib/settingsDraft";
 import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "../../../ui-kit/patterns/GeneralSettings";
 import { useAuthStore } from "../../login/stores/auth-store";
@@ -154,47 +154,37 @@ export function ProfileView() {
             }}
           />
 
-          {accountChangeStatus && (
-            <div
-              className={`enterprise-profile-change-notice rounded-2xl border px-4 py-3 text-sm font-semibold ${
-                accountChangeStatus.tone === "success" ? "text-tanaw-ledger border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50 text-amber-800"
-              }`}
-              data-tone={accountChangeStatus.tone}
-            >
-              {accountChangeStatus.message}
-            </div>
-          )}
-
-          {pendingEmailChange ? (
-            <div className="enterprise-profile-pending-email flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="enterprise-profile-pending-email__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/60 bg-white/70 text-amber-700 shadow-sm">
-                  <MailCheck className="h-4.5 w-4.5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="enterprise-profile-pending-email__title text-sm font-bold">Business email change pending</p>
-                  <p className="enterprise-profile-pending-email__copy mt-1.5 text-sm leading-6 text-amber-900/80">
-                    <span className="font-semibold">Proposed address:</span> <strong className="enterprise-profile-pending-email__address wrap-break-word">{pendingEmailChange.requestedEmail}</strong>.{" "}
-                    {pendingEmailChange.status === "verified"
-                      ? "Ownership is verified and TANAW IT can now review it."
-                      : pendingEmailChange.status === "expired"
-                        ? "The verification link expired. Cancel this request and submit a new address."
-                        : "Open the verification link sent to that address before IT can approve it."}
-                  </p>
-                </div>
+          <div className="tanaw-settings-notes">
+            {accountChangeStatus && (
+              <div className="enterprise-profile-change-notice tanaw-settings-note tanaw-enter font-semibold" data-tone={accountChangeStatus.tone} role="status">
+                {accountChangeStatus.message}
               </div>
-              <button
-                type="button"
-                disabled={isEmailChangeCancelling}
-                onClick={() => void handleCancelEmailChange()}
-                className="enterprise-profile-pending-email__cancel shrink-0 rounded-xl border border-amber-300 bg-white px-3.5 py-2.5 text-xs font-bold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
-              >
-                {isEmailChangeCancelling ? "Cancelling..." : "Cancel request"}
-              </button>
-            </div>
-          ) : null}
+            )}
 
-          <PendingAccountChanges refreshKey={accountChangesVersion} />
+            {pendingEmailChange ? (
+              <div className="enterprise-profile-pending-email tanaw-settings-note tanaw-enter flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <MailCheck className="enterprise-profile-pending-email__icon mt-0.5 h-4.5 w-4.5 shrink-0 text-(--tanaw-gold-ink)" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="enterprise-profile-pending-email__title font-semibold text-(--tanaw-text)">Business email change pending</p>
+                    <p className="enterprise-profile-pending-email__copy mt-1 leading-6 text-(--tanaw-text-secondary)">
+                      Proposed address: <strong className="enterprise-profile-pending-email__address font-semibold wrap-break-word text-(--tanaw-text)">{pendingEmailChange.requestedEmail}</strong>.{" "}
+                      {pendingEmailChange.status === "verified"
+                        ? "Ownership is verified and TANAW IT can now review it."
+                        : pendingEmailChange.status === "expired"
+                          ? "The verification link expired. Cancel this request and submit a new address."
+                          : "Open the verification link sent to that address before IT can approve it."}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="secondary" size="sm" className="enterprise-profile-pending-email__cancel" disabled={isEmailChangeCancelling} onClick={() => void handleCancelEmailChange()}>
+                  {isEmailChangeCancelling ? "Cancelling..." : "Cancel request"}
+                </Button>
+              </div>
+            ) : null}
+
+            <PendingAccountChanges refreshKey={accountChangesVersion} />
+          </div>
 
           <div className="tanaw-profile-layout">
             <SettingsGroup title="Contact and operations" description="Edit each field individually. Contact number and enterprise name changes need IT's approval.">
@@ -206,10 +196,10 @@ export function ProfileView() {
               </div>
             </SettingsGroup>
             <SettingsGroup title="Enterprise registration">
-              <div className="mb-2">
+              <div className="tanaw-settings-readonly-note">
                 <SettingsReadOnly>Contact IT personnel to update registration and attraction classification.</SettingsReadOnly>
               </div>
-              <dl className="tanaw-settings-fields rounded-tanaw-sm bg-(--tanaw-surface-inset) p-3">
+              <dl className="tanaw-settings-fields tanaw-settings-readonly">
                 <ReadOnlyIdentityField label="Enterprise ID" value={user?.enterpriseId ?? "Not assigned"} />
                 <ReadOnlyIdentityField label="Registered Address" value={user?.address ?? "Not provided"} />
                 <ReadOnlyIdentityField label="LGU Affiliation" value={user?.barangay ? `Barangay ${user.barangay}` : "San Pedro City"} />

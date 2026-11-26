@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Eye, LifeBuoy, Paperclip, RefreshCw, Send, TicketCheck, UploadCloud, X } from "lucide-react";
-import { Card } from "../../../components/Card";
+import { Skeleton } from "../../../ui-kit";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { SupportTicketSort } from "../services/tickets";
@@ -54,19 +54,19 @@ export function TicketsView() {
   } = useTicketsWorkspace();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 pt-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-950/35 dark:text-red-100">
-          <AlertCircle size={17} className="mt-0.5 shrink-0" />
+        <div role="alert" className="tanaw-enter flex items-start gap-2.5 rounded-tanaw-md border border-(--tanaw-danger-line) bg-(--tanaw-danger-surface) px-4 py-3 text-sm font-semibold text-(--tanaw-danger-text)">
+          <AlertCircle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
           {error}
         </div>
       )}
 
       <div className="tanaw-ticket-layout">
-        <Card className="min-w-0 overflow-hidden">
-          <TicketPanelHeader icon={<LifeBuoy size={18} />} title="New Request" subtitle="Tell IT what happened, in your own words." />
+        <section className="tanaw-ticket-pane">
+          <TicketPanelHeader icon={<LifeBuoy size={17} aria-hidden="true" />} title="New Request" subtitle="Tell IT what happened, in your own words." />
 
-          <form ref={formRef} onSubmit={handleSubmit} aria-busy={isSubmitting} noValidate className="space-y-3 bg-(--tanaw-surface) p-4">
+          <form ref={formRef} onSubmit={handleSubmit} aria-busy={isSubmitting} noValidate className="space-y-5">
             <div className="grid grid-cols-1 gap-4">
               <SelectField
                 name="category"
@@ -136,7 +136,7 @@ export function TicketsView() {
             )}
 
             <label data-field-name="description" className="block scroll-mt-28">
-              <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Description</span>
+              <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">Description</span>
               <textarea
                 value={form.description}
                 onChange={(event) => {
@@ -155,9 +155,9 @@ export function TicketsView() {
             </label>
 
             <div data-field-name="attachments" className="scroll-mt-28">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Attach Photos</span>
-                <span className="text-[11px] font-semibold text-gray-400 dark:text-slate-300">
+              <div className="mb-1.5 flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-(--tanaw-text-secondary)">Attach Photos</span>
+                <span className="text-xs font-semibold text-(--tanaw-text-muted) tabular-nums">
                   {photos.length}/{maxTicketPhotoCount} photos
                 </span>
               </div>
@@ -175,30 +175,30 @@ export function TicketsView() {
                 aria-invalid={Boolean(photoError)}
                 aria-describedby={photoError ? "ticket-attachments-error" : undefined}
                 data-form-error-focus
-                className={`flex w-full flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center transition ${
+                className={`flex w-full flex-col items-center justify-center rounded-tanaw-lg border border-dashed px-4 py-6 text-center transition-[background-color,border-color,color,translate,scale] duration-200 ease-tanaw-out ${
                   isDragActive
-                    ? "border-tanaw-ledger bg-emerald-50 text-tanaw-ledger dark:border-emerald-300/60 dark:bg-emerald-500/15 dark:text-emerald-100"
-                    : "border-gray-200 bg-gray-50 text-gray-500 hover:border-tanaw-ledger/50 hover:bg-emerald-50/70 dark:border-slate-600 dark:bg-[#0f172a] dark:text-slate-200 dark:hover:border-emerald-300/50 dark:hover:bg-emerald-500/10"
-                }`}
+                    ? "scale-[1.01] border-(--tanaw-accent-ink) bg-(--tanaw-interactive-selected-bg) text-(--tanaw-accent-ink)"
+                    : "border-(--tanaw-control-border) bg-(--tanaw-surface-inset) text-(--tanaw-text-secondary) hover:border-(--tanaw-accent-ink) hover:bg-(--tanaw-interactive-hover-bg) hover:text-(--tanaw-accent-ink)"
+                } motion-reduce:scale-100 motion-reduce:transition-none`}
               >
-                <UploadCloud size={22} />
-                <span className="mt-2 text-sm font-bold">Upload or drop photos</span>
-                <span className="mt-1 text-xs font-medium">PNG, JPG, JPEG, or WebP. Max 5 MB each.</span>
+                <UploadCloud size={22} aria-hidden="true" />
+                <span className="mt-2 text-sm font-semibold">Upload or drop photos</span>
+                <span className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">PNG, JPG, JPEG, or WebP. Max 5 MB each.</span>
               </button>
               {photoError ? <TicketFieldError id="ticket-attachments-error" message={photoError} /> : null}
               {photos.length > 0 && (
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {photos.map((photo, index) => (
-                    <div key={`${photo.fileName}-${index}`} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-2.5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
-                      <img src={photo.dataUrl} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
+                    <div key={`${photo.fileName}-${index}`} className="tanaw-enter flex items-center gap-3 rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-2.5">
+                      <img src={photo.dataUrl} alt="" className="h-12 w-12 rounded-tanaw-sm object-cover ring-1 ring-(--tanaw-border-soft)" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold text-[#111827] dark:text-slate-100">{photo.fileName}</p>
-                        <p className="text-[11px] font-semibold text-gray-400 dark:text-slate-300">{formatFileSize(photo.sizeBytes)}</p>
+                        <p className="truncate text-[0.8125rem] font-semibold text-(--tanaw-text)">{photo.fileName}</p>
+                        <p className="text-xs text-(--tanaw-text-muted)">{formatFileSize(photo.sizeBytes)}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
-                        className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-200"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-colors duration-150 hover:bg-(--tanaw-danger-surface) hover:text-(--tanaw-danger)"
                         aria-label={`Remove ${photo.fileName}`}
                       >
                         <X size={15} />
@@ -212,29 +212,29 @@ export function TicketsView() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-5 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(6,95,70,0.2)] transition hover:-translate-y-0.5 hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-tanaw-ledger/70"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-tanaw-md bg-(--tanaw-action) px-5 text-sm font-semibold text-(--tanaw-on-action) shadow-tanaw-resting transition-[background-color,box-shadow,translate,scale,opacity] duration-150 ease-tanaw-out hover:bg-(--tanaw-action-hover) hover:shadow-[0_6px_16px_rgb(5_91_37/0.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:active:scale-100"
             >
-              {isSubmitting ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
+              {isSubmitting ? <RefreshCw size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
               {isSubmitting ? "Sending..." : "Send Request"}
             </button>
           </form>
-        </Card>
+        </section>
 
-        <Card className="min-w-0 overflow-hidden">
+        <section className="tanaw-ticket-pane">
           <TicketPanelHeader
-            icon={<TicketCheck size={20} />}
+            icon={<TicketCheck size={17} aria-hidden="true" />}
             title="Your Requests"
             subtitle={`${openTicketCount} open request${openTicketCount === 1 ? "" : "s"}`}
             actions={
               <div className="w-full sm:w-60">
-                <span className="mb-1 block text-[10px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Sort requests</span>
+                <span className="mb-1 block text-xs font-semibold text-(--tanaw-text-muted)">Sort requests</span>
                 <SelectDropdown value={ticketSort} onChange={(value) => setTicketSort(value as SupportTicketSort)} options={ticketSortOptions} ariaLabel="Sort requests" size="compact" />
               </div>
             }
           />
 
           {tickets.length > 0 ? (
-            <div className="max-h-152 divide-y divide-(--tanaw-border-soft) overflow-y-auto">
+            <div className="tanaw-stagger max-h-152 divide-y divide-(--tanaw-border-soft) overflow-y-auto border-t border-(--tanaw-border-soft)">
               {sortedTickets.map((ticket) => (
                 <article
                   key={ticket.id}
@@ -247,57 +247,60 @@ export function TicketsView() {
                       setSelectedTicketId(ticket.id);
                     }
                   }}
-                  className="cursor-pointer p-4 transition-colors hover:bg-(--tanaw-selected-bg) focus-visible:bg-(--tanaw-selected-bg) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+                  className="cursor-pointer rounded-tanaw-md px-3 py-4 transition-colors duration-150 ease-tanaw-out hover:bg-(--tanaw-interactive-hover-bg) focus-visible:bg-(--tanaw-interactive-hover-bg) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:bg-(--tanaw-interactive-pressed-bg)"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs font-bold text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
+                      <p className="font-mono text-xs font-semibold text-(--tanaw-accent-ink)">{ticket.code}</p>
                       <ExpandableText
                         primary={ticket.title}
                         secondary={ticket.description}
                         ariaLabel="request title and description"
-                        className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100"
-                        secondaryClassName="text-xs leading-relaxed text-gray-500 dark:text-slate-300"
+                        className="mt-1 text-sm font-semibold text-(--tanaw-text)"
+                        secondaryClassName="text-[0.8125rem] leading-relaxed text-(--tanaw-text-muted)"
                         twoLines
                       />
                     </div>
                     <TicketStatusBadge status={ticket.status} />
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-black">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
                     <TicketBadge tone="info">{toSentenceCase(ticket.group)}</TicketBadge>
                     {ticket.affectedArea && <TicketBadge tone="neutral">{ticket.affectedArea}</TicketBadge>}
                     {ticket.camera && <TicketBadge tone="neutral">{ticket.camera}</TicketBadge>}
                     {(ticket.attachments?.length ?? 0) > 0 && (
                       <TicketBadge tone="info">
                         <span className="inline-flex items-center gap-1">
-                          <Paperclip size={11} />
+                          <Paperclip size={12} aria-hidden="true" />
                           {ticket.attachments.length} photo{ticket.attachments.length === 1 ? "" : "s"}
                         </span>
                       </TicketBadge>
                     )}
-                    <span className="ml-auto text-gray-400 dark:text-slate-300">{formatTicketTime(ticket.createdAt, timeFormat)}</span>
-                    <span className="inline-flex items-center gap-1 text-tanaw-ledger dark:text-emerald-200">
-                      <Eye size={11} />
+                    <span className="ml-auto text-(--tanaw-text-muted) tabular-nums">{formatTicketTime(ticket.createdAt, timeFormat)}</span>
+                    <span className="inline-flex items-center gap-1 text-(--tanaw-accent-ink)">
+                      <Eye size={13} aria-hidden="true" />
                       Inspect
                     </span>
                   </div>
                 </article>
               ))}
             </div>
+          ) : isLoading ? (
+            <TicketListSkeleton />
           ) : (
-            <div className="flex min-h-48 flex-col items-center justify-center bg-(--tanaw-surface-inset) px-4 py-8 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
-                {isLoading ? <RefreshCw size={22} className="animate-spin" /> : <CheckCircle2 size={22} />}
+            <div className="tanaw-enter flex min-h-48 flex-col items-center justify-center border-t border-(--tanaw-border-soft) px-6 py-10 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)">
+                <CheckCircle2 size={22} aria-hidden="true" />
               </div>
-              <p className="mt-4 text-sm font-black text-[#111827] dark:text-slate-100">{isLoading ? "Loading requests" : "No requests yet"}</p>
-              <p className="mt-1 max-w-80 text-xs leading-relaxed text-gray-500 dark:text-slate-300">Requests you send to IT appear here with their status and IT\u2019s replies.</p>
+              <p className="mt-4 text-sm font-semibold text-(--tanaw-text)">No requests yet</p>
+              <p className="mt-1 max-w-80 text-[0.8125rem] leading-relaxed text-(--tanaw-text-muted)">Requests you send to IT appear here with their status and IT’s replies.</p>
             </div>
           )}
-        </Card>
+        </section>
       </div>
 
       {selectedTicketId && (
         <TicketDetailModal
+          covered={previewPhoto !== null}
           error={selectedTicketError}
           isLoading={isDetailLoading}
           ticket={selectedTicket}
@@ -315,6 +318,28 @@ export function TicketsView() {
       )}
 
       {previewPhoto && <PhotoPreviewModal photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />}
+    </div>
+  );
+}
+
+/** Request rows in outline while the list loads: code, title, a line of description, tags. */
+function TicketListSkeleton() {
+  return (
+    <div role="status" aria-label="Loading requests" className="tanaw-skeleton-screen divide-y divide-(--tanaw-border-soft) border-t border-(--tanaw-border-soft)">
+      {[78, 64, 70].map((width, row) => (
+        <div key={row} className="space-y-2.5 px-3 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-6 w-24" shape="pill" />
+          </div>
+          <Skeleton className="h-4" style={{ width: `${width}%` }} />
+          <Skeleton className="h-3" style={{ width: `${width - 18}%` }} />
+          <div className="flex gap-2 pt-1">
+            <Skeleton className="h-6 w-32" shape="pill" />
+            <Skeleton className="h-6 w-20" shape="pill" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

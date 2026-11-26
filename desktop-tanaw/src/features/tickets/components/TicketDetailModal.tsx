@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { AlertCircle, ImageIcon, MessageSquare, Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
+import { Skeleton, useDialogFocus } from "../../../ui-kit";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import type { SystemTimeFormat } from "../../../utils/date-time";
 import { canReopenSupportTicket, canReplyToSupportTicket, reopenSupportTicket, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
@@ -16,9 +17,15 @@ type TicketDetailModalProps = {
   onTicketUpdated: (ticket: SupportTicketDetail) => void;
   ticket: SupportTicketDetail | null;
   timeFormat: SystemTimeFormat;
+  /** True while a photo preview sits on top, so Escape closes only the preview. */
+  covered?: boolean;
 };
 
-export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicketUpdated, ticket, timeFormat }: TicketDetailModalProps) {
+export function TicketDetailModal({ covered = false, error, isLoading, onClose, onPreviewPhoto, onTicketUpdated, ticket, timeFormat }: TicketDetailModalProps) {
+  const panelRef = useRef<HTMLElement>(null);
+  // Paused, not disabled, under the photo preview: disabling would run the cleanup and move focus
+  // behind this dialog, so the preview could not return focus to the photo that opened it.
+  useDialogFocus(panelRef, onClose, true, undefined, covered);
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -95,56 +102,53 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-1100 flex items-center justify-center overflow-y-auto bg-[#03140c]/70 p-4 backdrop-blur-md" onPointerDown={onClose}>
+      <div className="tanaw-backdrop-enter fixed inset-0 z-1100 flex items-center justify-center overflow-y-auto bg-[rgb(3_20_12/0.6)] p-4 backdrop-blur-[6px]" onPointerDown={onClose}>
         <section
           role="dialog"
           aria-modal="true"
           aria-label={ticket?.title ?? "Request details"}
-          className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.5)]"
+          ref={panelRef}
+          tabIndex={-1}
+          className="tanaw-dialog-enter my-auto max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-tanaw-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) shadow-tanaw-raised outline-none"
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-[#34d399] to-[#d9b44a]" />
-          <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 px-6 py-5 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
-            <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
+          <div aria-hidden="true" className="h-1 bg-(image:--tanaw-metric-thread)" />
+          <header className="relative flex items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 pt-5 pb-4">
             <div className="min-w-0">
-              <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">{ticket?.code ?? "Request"}</p>
-              <h3 className="truncate text-xl font-black tracking-tight text-[#111827] dark:text-white">{ticket?.title ?? "Request Details"}</h3>
+              <p className="mb-1 font-mono text-xs font-semibold tracking-[0.12em] text-(--tanaw-gold-ink) uppercase">{ticket?.code ?? "Request"}</p>
+              <h3 className="truncate font-display text-xl leading-tight font-bold text-(--tanaw-text)">{ticket?.title ?? "Request Details"}</h3>
             </div>
             <button
               type="button"
               aria-label="Close request details"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-tanaw-ledger focus:ring-4 focus:ring-tanaw-ledger/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 motion-reduce:transition-none"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
           </header>
 
-          <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-white p-6 dark:bg-[#121c31]">
+          <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-(--tanaw-surface-raised) p-6">
             {isLoading && (
-              <div className="flex min-h-72 flex-col items-center justify-center text-center">
-                <RefreshCw size={28} className="animate-spin text-tanaw-ledger dark:text-emerald-200" />
-                <p className="mt-3 text-sm font-black text-[#111827] dark:text-slate-100">Loading the request</p>
-                <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-300">Getting the latest replies from IT.</p>
-              </div>
+              <TicketDetailSkeleton />
             )}
 
             {!isLoading && error && (
-              <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-950/35 dark:text-red-100">
-                <AlertCircle size={17} className="mt-0.5 shrink-0" />
+              <div role="alert" className="tanaw-enter flex items-start gap-2.5 rounded-tanaw-md border border-(--tanaw-danger-line) bg-(--tanaw-danger-surface) px-4 py-3 text-sm font-semibold text-(--tanaw-danger-text)">
+                <AlertCircle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
                 {error}
               </div>
             )}
 
             {!isLoading && !error && ticket && (
-              <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="tanaw-enter grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-5">
-                  <section className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5 dark:border-emerald-300/20 dark:from-emerald-500/10 dark:via-[#172033] dark:to-amber-500/10">
+                  <section className="rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-mono text-xs font-bold tracking-wide text-tanaw-ledger dark:text-emerald-200">{ticket.code}</p>
-                        <h4 className="mt-1 text-lg font-black text-[#111827] dark:text-slate-100">{ticket.title}</h4>
-                        <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">{ticket.description}</p>
+                        <p className="font-mono text-xs font-semibold tracking-wide text-(--tanaw-accent-ink)">{ticket.code}</p>
+                        <h4 className="mt-1 font-display text-lg leading-snug font-bold text-(--tanaw-text)">{ticket.title}</h4>
+                        <p className="mt-2 text-sm leading-relaxed text-(--tanaw-text-secondary)">{ticket.description}</p>
                       </div>
                       <TicketStatusBadge status={ticket.status} />
                     </div>
@@ -159,13 +163,13 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                     {ticket.camera ? <DetailTile label="Camera" value={ticket.camera} /> : null}
                   </section>
 
-                  <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
+                  <section className="rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">
-                        <Paperclip size={16} className="text-tanaw-ledger dark:text-emerald-200" />
+                      <h4 className="flex items-center gap-2 font-display text-base font-bold text-(--tanaw-text)">
+                        <Paperclip size={16} className="text-(--tanaw-accent-ink)" aria-hidden="true" />
                         Photos
                       </h4>
-                      <span className="text-[11px] font-bold text-gray-400 uppercase dark:text-slate-300">{ticket.attachments.length} attached</span>
+                      <span className="text-xs font-semibold text-(--tanaw-text-muted)">{ticket.attachments.length} attached</span>
                     </div>
                     {ticket.attachments.length > 0 ? (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -174,27 +178,27 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                             key={attachment.id ?? `${attachment.fileName}-${index}`}
                             type="button"
                             onClick={() => onPreviewPhoto(attachment)}
-                            className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-600 dark:bg-[#121c31] dark:hover:border-emerald-300/40 dark:hover:bg-emerald-500/10"
+                            className="flex items-center gap-3 rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-3 text-left transition-[background-color,border-color] duration-150 ease-tanaw-out hover:border-(--tanaw-interactive-hover-border) hover:bg-(--tanaw-interactive-hover-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
                           >
-                            <TicketAttachmentImage attachment={attachment} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
+                            <TicketAttachmentImage attachment={attachment} alt="" className="h-16 w-16 rounded-tanaw-sm object-cover ring-1 ring-(--tanaw-border-soft)" />
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-bold text-[#111827] dark:text-slate-100">{attachment.fileName}</span>
-                              <span className="mt-1 block text-[11px] font-semibold text-gray-500 dark:text-slate-300">{formatFileSize(attachment.sizeBytes)}</span>
+                              <span className="block truncate text-sm font-semibold text-(--tanaw-text)">{attachment.fileName}</span>
+                              <span className="mt-1 block text-xs text-(--tanaw-text-muted)">{formatFileSize(attachment.sizeBytes)}</span>
                             </span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <p className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm font-semibold text-gray-500 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-300">
+                      <p className="mt-4 rounded-tanaw-md border border-dashed border-(--tanaw-control-border) bg-(--tanaw-surface-inset) px-4 py-5 text-sm text-(--tanaw-text-muted)">
                         No photos were attached to this request.
                       </p>
                     )}
                   </section>
                 </div>
 
-                <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
-                  <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">
-                    <MessageSquare size={16} className="text-tanaw-ledger dark:text-emerald-200" />
+                <section className="rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-5">
+                  <h4 className="flex items-center gap-2 font-display text-base font-bold text-(--tanaw-text)">
+                    <MessageSquare size={16} className="text-(--tanaw-accent-ink)" aria-hidden="true" />
                     Conversation
                   </h4>
                   <div
@@ -223,20 +227,20 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                     <button
                       type="button"
                       onClick={scrollToLatestMessage}
-                      className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100"
+                      className="tanaw-enter mt-3 w-full rounded-full border border-(--tanaw-success-line) bg-(--tanaw-success-surface) px-3 py-2 text-[0.8125rem] font-semibold text-(--tanaw-success-text) transition-colors duration-150 hover:bg-(--tanaw-interactive-active-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
                     >
                       New message
                     </button>
                   ) : null}
                   {!canReplyToSupportTicket(ticket) ? (
-                    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+                    <div className="mt-4 rounded-tanaw-md border border-(--tanaw-success-line) bg-(--tanaw-success-surface) px-4 py-3 text-sm font-medium text-(--tanaw-success-text)">
                       {canReopenSupportTicket(ticket) ? "This request is resolved, so the conversation is closed. Reopen it if the problem came back." : `This request is ${ticket.status.toLowerCase()}. The conversation is closed.`}
                       {canReopenSupportTicket(ticket) && (
                         <button
                           type="button"
                           disabled={isReopening}
                           onClick={() => void handleReopen()}
-                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-tanaw-ledger transition hover:bg-emerald-100 disabled:opacity-70 dark:border-emerald-300/30 dark:bg-[#172033] dark:text-emerald-100"
+                          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-4 text-sm font-semibold text-(--tanaw-accent-ink) transition-[background-color,border-color,translate,scale] duration-150 ease-tanaw-out hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.99] disabled:opacity-70"
                         >
                           {isReopening ? <RefreshCw size={15} className="animate-spin" /> : null}
                           Reopen request
@@ -244,9 +248,9 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                       )}
                     </div>
                   ) : (
-                    <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
+                    <form className="mt-4 space-y-3 border-t border-(--tanaw-border-soft) pt-4" onSubmit={handleReply}>
                       <label className="block">
-                        <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Reply in TANAW</span>
+                        <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">Reply in TANAW</span>
                         <textarea
                           value={reply}
                           maxLength={2000}
@@ -254,15 +258,15 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                             setReply(event.target.value);
                             if (replyError) setReplyError("");
                           }}
-                          className="min-h-24 w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-[#111827] transition outline-none focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:focus:border-emerald-300/40"
+                          className="min-h-24 w-full resize-y rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none placeholder:text-(--tanaw-text-placeholder) hover:border-(--tanaw-control-border-hover) focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15"
                           placeholder="Add information or respond to IT"
                         />
                       </label>
-                      {replyError ? <p className="text-xs font-semibold text-red-700 dark:text-red-200">{replyError}</p> : null}
+                      {replyError ? <p role="alert" className="text-[0.8125rem] font-semibold text-(--tanaw-error)">{replyError}</p> : null}
                       <button
                         type="submit"
                         disabled={isReplying}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-tanaw-ledger px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
+                        className="inline-flex h-10.5 w-full items-center justify-center gap-2 rounded-tanaw-md bg-(--tanaw-action) px-4 text-sm font-semibold text-(--tanaw-on-action) shadow-tanaw-resting transition-[background-color,box-shadow,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-action-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         {isReplying ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
                         {isReplying ? "Sending..." : "Send Reply"}
@@ -280,35 +284,38 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
 }
 
 export function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; photo: SupportTicketAttachment }) {
+  const panelRef = useRef<HTMLElement>(null);
+  useDialogFocus(panelRef, onClose);
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-1200 flex items-center justify-center overflow-y-auto bg-[#03140c]/75 p-4 backdrop-blur-md" onPointerDown={onClose}>
+      <div className="tanaw-backdrop-enter fixed inset-0 z-1200 flex items-center justify-center overflow-y-auto bg-[rgb(3_20_12/0.66)] p-4 backdrop-blur-[6px]" onPointerDown={onClose}>
         <section
           role="dialog"
           aria-modal="true"
           aria-label={photo.fileName}
-          className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31]"
+          ref={panelRef}
+          tabIndex={-1}
+          className="tanaw-dialog-enter my-auto max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-hidden rounded-tanaw-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) shadow-tanaw-raised outline-none"
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="h-1.5 bg-linear-to-r from-tanaw-ledger via-[#34d399] to-[#d9b44a]" />
-          <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 px-6 py-5 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
-            <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
+          <div aria-hidden="true" className="h-1 bg-(image:--tanaw-metric-thread)" />
+          <header className="relative flex items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-6 pt-5 pb-4">
             <div className="min-w-0">
-              <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">Ticket Photo</p>
-              <h3 className="truncate text-xl font-black tracking-tight text-[#111827] dark:text-white">{photo.fileName}</h3>
+              <p className="mb-1 font-mono text-xs font-semibold tracking-[0.12em] text-(--tanaw-gold-ink) uppercase">Ticket Photo</p>
+              <h3 className="truncate font-display text-xl leading-tight font-bold text-(--tanaw-text)">{photo.fileName}</h3>
             </div>
             <button
               type="button"
               aria-label="Close photo preview"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-tanaw-ledger focus:ring-4 focus:ring-tanaw-ledger/15 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940]"
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 motion-reduce:transition-none"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
           </header>
-          <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-white p-5 dark:bg-[#121c31]">
-            <div className="rounded-3xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-600 dark:bg-[#0f172a]">
-              <TicketAttachmentImage attachment={photo} alt={photo.fileName} className="max-h-[70vh] min-h-72 w-full rounded-2xl object-contain" showError />
+          <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-(--tanaw-surface-raised) p-5">
+            <div className="rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-3">
+              <TicketAttachmentImage attachment={photo} alt={photo.fileName} className="max-h-[70vh] min-h-72 w-full rounded-tanaw-md object-contain" showError />
             </div>
           </div>
         </section>
@@ -320,27 +327,29 @@ export function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; pho
 function TicketAttachmentImage({ alt, attachment, className, showError = false }: { alt: string; attachment: SupportTicketAttachment; className: string; showError?: boolean }) {
   const { error, imageUrl, isLoading } = useTicketAttachmentImageUrl(attachment);
 
-  if (error || isLoading || !imageUrl) {
+  if (!error && (isLoading || !imageUrl)) return <Skeleton className={className} label="Loading image" />;
+
+  if (error || !imageUrl) {
     return (
       <div
-        className={`${className} flex items-center justify-center border border-dashed border-gray-200 bg-white text-center text-gray-500 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-300`}
+        className={`${className} flex items-center justify-center border border-dashed border-(--tanaw-control-border) bg-(--tanaw-surface-inset) text-center text-(--tanaw-text-muted)`}
       >
         <span className="flex max-w-full flex-col items-center gap-2 px-3">
-          {isLoading ? <RefreshCw size={showError ? 28 : 18} className="animate-spin text-tanaw-ledger dark:text-emerald-200" /> : <ImageIcon size={showError ? 30 : 18} />}
-          {showError && <span className="text-sm font-semibold">{error || "Loading image"}</span>}
+          <ImageIcon size={showError ? 30 : 18} aria-hidden="true" />
+          {showError && <span className="text-sm font-semibold">{error}</span>}
         </span>
       </div>
     );
   }
 
-  return <img src={imageUrl} alt={alt} className={className} />;
+  return <img src={imageUrl} alt={alt} className={`tanaw-enter ${className}`} />;
 }
 
 function DetailTile({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
-      <p className="text-[10px] font-black tracking-[0.16em] text-gray-500 uppercase dark:text-slate-400">{label}</p>
-      <p className={`mt-1 text-sm font-bold wrap-break-word text-[#111827] dark:text-slate-100 ${mono ? "font-mono" : ""}`}>{value}</p>
+    <div className="rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface) px-4 py-3">
+      <p className="text-xs font-semibold text-(--tanaw-text-muted)">{label}</p>
+      <p className={`mt-1 text-sm font-semibold wrap-break-word text-(--tanaw-text) ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
 }
@@ -349,17 +358,17 @@ function ConversationItem({ authorName, authorRole, createdAt, message, timeForm
   const isEnterprise = authorRole === "enterprise";
   return (
     <article
-      className={`rounded-2xl border p-3 ${
-        isEnterprise ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"
+      className={`rounded-tanaw-md border p-3.5 ${
+        isEnterprise ? "border-(--tanaw-success-line) bg-(--tanaw-success-surface)" : "border-(--tanaw-info-line) bg-(--tanaw-information-surface)"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black text-[#111827] dark:text-slate-100">{authorName}</p>
-        <p className="text-[10px] font-bold tracking-wide text-gray-500 uppercase dark:text-slate-300">
+        <p className="text-[0.8125rem] font-semibold text-(--tanaw-text)">{authorName}</p>
+        <p className="text-xs text-(--tanaw-text-muted)">
           {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt, timeFormat)}
         </p>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-slate-200">{message}</p>
+      <p className="mt-2 text-sm leading-relaxed text-(--tanaw-text-secondary)">{message}</p>
     </article>
   );
 }
@@ -370,4 +379,37 @@ function authorRoleLabel(role: string) {
   if (role === "staff") return "Staff";
   if (role === "enterprise") return "Enterprise";
   return role;
+}
+
+/** The request in outline while its latest replies load: summary, detail tiles and conversation. */
+function TicketDetailSkeleton() {
+  return (
+    <div role="status" aria-label="Loading the request" className="tanaw-skeleton-screen grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="space-y-5">
+        <div className="space-y-3 rounded-tanaw-lg border border-(--tanaw-border-soft) p-5">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-2/3" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="space-y-2 rounded-tanaw-md border border-(--tanaw-border-soft) px-4 py-3">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-3 rounded-tanaw-lg border border-(--tanaw-border-soft) p-5">
+        <Skeleton className="h-5 w-36" />
+        {[88, 70, 80].map((width, index) => (
+          <div key={index} className="space-y-2 rounded-tanaw-md border border-(--tanaw-border-soft) p-3.5">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3.5" style={{ width: `${width}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

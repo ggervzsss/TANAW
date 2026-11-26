@@ -13,7 +13,7 @@ export type CardProps = HTMLAttributes<HTMLElement> & {
   tone?: "surface" | "inset";
 };
 
-const paddings: Record<CardPadding, string> = { none: "", sm: "p-3", md: "p-4", lg: "p-5 sm:p-6" };
+const paddings: Record<CardPadding, string> = { none: "", sm: "p-4", md: "p-5", lg: "p-6 max-sm:p-5" };
 
 /** A white record card on the page wash: 16px corners, Border Soft, Resting shadow. */
 export function Card({ as = "div", padding = "none", interactive = false, tone = "surface", className, children, ...props }: CardProps) {
@@ -23,7 +23,7 @@ export function Card({ as = "div", padding = "none", interactive = false, tone =
       className={cn(
         "tanaw-card rounded-tanaw-lg border border-(--tanaw-border-soft)",
         tone === "surface" ? "bg-(--tanaw-surface) shadow-tanaw-resting" : "bg-(--tanaw-surface-inset)",
-        interactive && "transition-shadow duration-200 hover:shadow-tanaw-soft",
+        interactive && "transition-[box-shadow,border-color,translate,scale] duration-200 ease-tanaw-out hover:-translate-y-px hover:border-(--tanaw-interactive-hover-border) hover:shadow-tanaw-soft motion-reduce:transition-none motion-reduce:hover:translate-y-0",
         paddings[padding],
         className,
       )}
@@ -54,9 +54,9 @@ export type CardHeaderProps = {
 export function CardHeader({ title, eyebrow, description, icon, actions, level = 2, divided = false, className }: CardHeaderProps) {
   const Heading = `h${level}` as ElementType;
   return (
-    <div className={cn("flex flex-wrap items-start justify-between gap-3 px-5 py-4", divided && "border-b border-(--tanaw-border-soft)", className)}>
+    <div className={cn("flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-4", divided && "border-b border-(--tanaw-border-soft)", className)}>
       <div className="flex min-w-0 items-start gap-3">
-        {icon && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tanaw-md bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)">{icon}</span>}
+        {icon && <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-tanaw-md bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)">{icon}</span>}
         <div className="min-w-0">
           {eyebrow && <p className="mb-1 text-xs font-bold tracking-label text-(--tanaw-label) uppercase">{eyebrow}</p>}
           <Heading className="font-display text-lg leading-tight font-bold text-(--tanaw-text)">{title}</Heading>
@@ -70,5 +70,5 @@ export function CardHeader({ title, eyebrow, description, icon, actions, level =
 
 /** A footer row for a card, usually actions aligned right. */
 export function CardFooter({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex flex-wrap items-center justify-end gap-2 border-t border-(--tanaw-border-soft) px-5 py-3", className)}>{children}</div>;
+  return <div className={cn("flex flex-wrap items-center justify-end gap-3 border-t border-(--tanaw-border-soft) px-5 py-4", className)}>{children}</div>;
 }

@@ -118,7 +118,7 @@ export function Tooltip({ align = "right", ariaLabel = "More information", child
             id={tooltipId}
             role="tooltip"
             style={tooltipStyle}
-            className="tanaw-info-tooltip pointer-events-none fixed z-1300 rounded-tanaw-sm border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) px-3 py-2 text-left text-xs leading-relaxed font-semibold text-(--tanaw-text-secondary) shadow-tanaw-raised"
+            className="tanaw-info-tooltip pointer-events-none fixed z-1300 rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) px-3.5 py-2.5 text-left text-[0.8125rem] leading-relaxed font-medium text-(--tanaw-text-secondary) shadow-tanaw-raised"
           >
             {content}
           </span>,

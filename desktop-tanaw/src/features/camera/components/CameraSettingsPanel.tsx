@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import { CircleDot, Wifi, ScanLine, List, Wrench, Video, X, Pencil, Info } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { DesignSwitch } from "../../../components/DesignSwitch";
+import { SkeletonText } from "../../../ui-kit";
+import { useCameraMorph } from "../hooks/useCameraMorph";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CAMERA_BRANDS, updateCameraConnection, validateCameraConnection } from "../utils/camera-connection";
 import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraModeDescription, cameraModeName } from "../utils/camera-mode";
@@ -32,6 +35,11 @@ type Props = CameraPreviewPanelProps & { activeCam: Camera; editForm: Camera; in
 export function CameraSettingsPanel(props: Props) {
   const { activeCam, editForm, onEditFormChange, onCancelEdit, onSave, counts, area, health, detections, streamUrl, hasStoredPassword, storageKey = "tanaw-camera" } = props;
   const [tab, setTab] = useState<Tab>("information");
+  const reduceMotion = useReducedMotion() ?? false;
+  const identityIconRef = useRef<HTMLSpanElement>(null);
+  const identityTitleRef = useRef<HTMLHeadingElement>(null);
+  useCameraMorph(identityIconRef, `camera-icon-${activeCam.id}`);
+  useCameraMorph(identityTitleRef, `camera-title-${activeCam.id}`);
   const [editorForm, setEditorForm] = useState<Camera | null>(null);
   const [selectedZonePoint, setSelectedZonePoint] = useState<number | null>(null);
   const [previewState, setPreviewState] = useState<CameraPreviewState>(props.initialPreviewState ?? "connecting");
@@ -271,13 +279,15 @@ export function CameraSettingsPanel(props: Props) {
           <p>Update how this camera is configured.</p>
         </div>
         <button type="button" className="design-icon-button" aria-label="Close Camera Settings" disabled={busy} onClick={cancelSettings}>
-          <X size={32} />
+          <X size={22} aria-hidden="true" />
         </button>
       </header>
       <div className="camera-settings-identity">
-        <Video size={36} />
+        <span ref={identityIconRef} className="camera-settings-identity-icon" aria-hidden="true">
+          <Video size={20} />
+        </span>
         <div>
-          <h2>{activeCam.name}</h2>
+          <h2 ref={identityTitleRef}>{activeCam.name}</h2>
           <p>
             {cameraLabel} · {activeCam.zone || "No location assigned"}
           </p>
@@ -319,7 +329,15 @@ export function CameraSettingsPanel(props: Props) {
                 }
               }}
             >
-              <Icon />
+              {tab === id && (
+                <motion.span
+                  className="camera-settings-tab-indicator"
+                  aria-hidden="true"
+                  layoutId={`camera-settings-tab-indicator-${activeCam.id}`}
+                  transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.9 }}
+                />
+              )}
+              <Icon size={18} aria-hidden="true" />
               <span>{label}</span>
             </button>
           ))}
@@ -442,7 +460,7 @@ export function CameraSettingsPanel(props: Props) {
               <p className="design-note">{CAMERA_PLACEMENT_NOTE}</p>
               <SectionHeading title="Monitored Area" description="Choose where this camera should count people." />
               <button className="design-button full-width" type="button" onClick={openEditor}>
-                <Pencil size={20} /> Edit Counting Area
+                <Pencil size={17} aria-hidden="true" /> Edit Counting Area
               </button>
               <p className="design-note">Test your area after changing it. Changes apply to this camera when you save.</p>
             </>
@@ -453,7 +471,7 @@ export function CameraSettingsPanel(props: Props) {
               <DesignSwitch label="Show Detected People" description="Display boxes around detected people." checked={display.people} onChange={(people) => setDisplay({ ...display, people })} />
               <DesignSwitch label="Show Counting Area" description="Display the boundary of the monitored area." checked={display.area} onChange={(area) => setDisplay({ ...display, area })} />
               <p className="settings-display-note">
-                <Info size={20} />
+                <Info size={18} aria-hidden="true" />
                 These display preferences apply to {activeCam.name} only.
               </p>
             </>
@@ -484,6 +502,11 @@ export function CameraSettingsPanel(props: Props) {
                   {diagnosing ? "Running Diagnostics…" : "Run Diagnostics"}
                 </button>
               </div>
+              {diagnosing && !diagnosticResult && (
+                <div className="camera-diagnostics camera-diagnostics--loading" aria-hidden="true">
+                  <SkeletonText lines={5} />
+                </div>
+              )}
               {diagnosticResult && (
                 <ul className="camera-diagnostics" aria-label="Camera diagnostics">
                   {diagnosticResult.map((line) => (

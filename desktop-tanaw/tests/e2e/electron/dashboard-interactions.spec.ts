@@ -105,91 +105,55 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
         }),
       )
       .toBe(true);
-    await page.getByRole("combobox", { name: "Dashboard date range" }).click();
-    await page.getByRole("option", { name: "Past 7 days" }).click();
+    await page.getByRole("button", { name: /^Dashboard date range/ }).click();
+    const picker = page.getByRole("dialog", { name: "Choose the dates to show" });
+    await picker.getByRole("radio", { name: "Last 7 days", exact: true }).click();
+    await picker.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(picker).toHaveCount(0);
     await expect.poll(() => sidecar.requestPaths.filter((pathname) => pathname === "/metrics/establishment/summary").length).toBeGreaterThan(0);
-    await expect(page.locator('[data-metric-segment="visitors"] strong')).toHaveText("280");
-    const charts = page.locator(".overview-chart-canvas");
-    await expect(charts).toHaveCount(2);
+    // 50 + 51 + … + 56 entries across the week.
+    await expect(page.locator('[data-metric-segment="entries"] strong')).toHaveText("371");
+    const chart = page.locator(".dash-plot");
+    await expect(chart).toHaveCount(1);
+    const readout = page.locator(".dash-readout");
     const assertCleanClick = async () => {
       const focus = await page.evaluate(() => {
         const element = document.activeElement!;
         const style = getComputedStyle(element);
-        return { tag: element.tagName, classes: element.getAttribute("class"), tabIndex: element.getAttribute("tabindex"), outline: style.outline, outlineStyle: style.outlineStyle };
+        return { tag: element.tagName, classes: element.getAttribute("class"), outlineStyle: style.outlineStyle };
       });
-      expect(focus.classes).toMatch(/recharts/);
       expect(focus.outlineStyle, JSON.stringify(focus)).toBe("none");
     };
-    // Exercise both mouse-focused SVG portal groups and the keyboard surface.
     for (const theme of ["light", "dark"]) {
       await page.evaluate((value) => document.documentElement.classList.toggle("dark", value === "dark"), theme);
-      for (let index = 0; index < 2; index += 1) {
-        const chart = charts.nth(index);
-        const before = await chart.boundingBox();
-        await chart.scrollIntoViewIfNeeded();
-        const marks = chart.locator(index === 0 ? ".recharts-bar-rectangle path, .recharts-active-bar path" : ".recharts-area-dot");
-        let positions: Array<{ x: number; y: number }> = [];
-        // SVG layout catches up with theme and responsive-container changes on
-        // the next frame. Wait for actual painted marks before clicking them.
-        await expect
-          .poll(
-            async () => {
-              positions = await marks.evaluateAll((elements) =>
-                elements
-                  .map((element) => {
-                    const bounds = element.getBoundingClientRect();
-                    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2, width: bounds.width, height: bounds.height };
-                  })
-                  .filter((bounds) => bounds.width > 0 && bounds.height > 0),
-              );
-              return positions.length;
-            },
-            { message: `${theme} chart ${index} painted data marks` },
-          )
-          .toBeGreaterThanOrEqual(6);
-        const clickMark = async (mark: number) => {
-          // Recharts replaces a hovered bar with its active shape in another
-          // portal. Click the real screen position rather than retrying a now
-          // empty DOM group while that replacement happens under the pointer.
-          await page.mouse.click(positions[mark].x, positions[mark].y);
-        };
-        for (const mark of [0, 2, 5]) {
-          await clickMark(mark);
-          await assertCleanClick();
-          await expect(chart.getByRole("tooltip"), `${theme} chart ${index} tooltip after clicking mark ${mark}`).toBeVisible();
-        }
-        if (index === 1) {
-          const point = await chart.locator(".recharts-area-curve").evaluate((element) => {
-            const path = element as SVGPathElement;
-            const point = path.getPointAtLength(path.getTotalLength() * 0.4);
-            const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(path.getScreenCTM()!);
-            return { x: screenPoint.x, y: screenPoint.y };
-          });
-          await page.mouse.click(point.x, point.y);
-          await assertCleanClick();
-        }
-        const surface = chart.locator('.recharts-surface[tabindex="0"]');
-        for (const fraction of [0.15, 0.5, 0.9]) {
-          const size = await surface.boundingBox();
-          await surface.click({ position: { x: size!.width * fraction, y: size!.height - 45 } });
-          await assertCleanClick();
-        }
-        // The library's internal -1 groups stay out of the Tab order.
-        await page.getByRole("combobox", { name: "Dashboard date range" }).focus();
-        await page.keyboard.press("Tab");
-        if (index === 1) await page.keyboard.press("Tab");
-        await expect(surface).toBeFocused();
-        await page.keyboard.press("ArrowRight");
-        await expect(chart.getByRole("tooltip")).toBeVisible();
-        expect(await chart.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
-        await expect(surface).toHaveCSS("outline-style", "none");
-        expect(await chart.boundingBox()).toEqual(before);
-        await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-${index}-keyboard.png`) });
-        await clickMark(2);
+      await chart.scrollIntoViewIfNeeded();
+      const before = await chart.boundingBox();
+      const columns = chart.locator(".dash-hit");
+      await expect(columns).toHaveCount(7);
+      await expect(chart.locator(".dash-bar")).toHaveCount(7);
+      for (const column of [0, 2, 5]) {
+        await columns.nth(column).click();
         await assertCleanClick();
-        expect(await chart.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
-        await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-${index}-clicked.png`) });
+        await expect(columns.nth(column)).toHaveAttribute("aria-pressed", "true");
+        await expect(chart.locator(".dash-bar-selected")).toHaveCount(1);
       }
+      // Pointing at the chart dims every bar except the one under the pointer.
+      await columns.nth(3).hover();
+      await expect(chart.locator(".dash-bar").nth(0)).not.toHaveCSS("opacity", "1");
+      await expect(chart.locator(".dash-bar-selected")).toHaveCSS("opacity", "1");
+      // Keyboard: the date control is followed by the chart, and arrows move between days.
+      await page.getByRole("button", { name: /^Dashboard date range/ }).focus();
+      await page.keyboard.press("Tab");
+      await expect(chart).toBeFocused();
+      const shown = await readout.textContent();
+      await page.keyboard.press("ArrowLeft");
+      await expect(readout).not.toHaveText(shown ?? "");
+      await expect(chart).toHaveCSS("outline-style", "solid");
+      expect(await chart.boundingBox()).toEqual(before);
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-keyboard.png`) });
+      await columns.nth(2).click();
+      await assertCleanClick();
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-clicked.png`) });
     }
     await page.getByRole("button", { name: "Open TANAW Insights" }).click();
     const assistant = page.getByRole("complementary", { name: "TANAW Insights" });
@@ -207,9 +171,19 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
     await expect(page.getByRole("button", { name: "Open TANAW Insights" })).toBeFocused();
     expect(sidecar.requestPaths).toContain("/reports/local");
     await page.emulateMedia({ reducedMotion: "no-preference" });
+    // The panel docks over the page against the right edge: the dashboard keeps its width underneath it.
+    const mainWidth = () => page.locator(".dash-main").evaluate((element) => element.getBoundingClientRect().width);
+    const widthBefore = await mainWidth();
     await page.getByRole("button", { name: "Open TANAW Insights" }).click();
     await expect(assistant).toBeVisible();
-    expect(await page.locator(".overview-layout").evaluate((element) => getComputedStyle(element).transitionDuration)).toContain("0.32s");
+    await expect(assistant).toHaveCSS("position", "fixed");
+    await expect
+      .poll(async () => {
+        const box = await assistant.boundingBox();
+        return Math.round((box?.x ?? 0) + (box?.width ?? 0));
+      })
+      .toBe(await page.evaluate(() => window.innerWidth));
+    expect(await mainWidth()).toBe(widthBefore);
     await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();
     await expect(assistant).toHaveCount(0);
   } finally {

@@ -22,6 +22,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     activeAction,
     activeCam,
     activeCamId,
+    camerasLoading,
     cameraFormErrors,
     cameraPendingDelete,
     configuredCameraLimit,
@@ -65,7 +66,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const showingSettings = Boolean(isEditMode && activeCam && editForm);
 
   return (
-    <div className="camera-management animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-sans duration-500">
+    <div className="camera-management flex h-full min-h-0 flex-col overflow-hidden font-sans">
       <AnimatePresence>
       {showAddModal && (
         <CameraAddModal key="add-camera"
@@ -111,7 +112,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
                   }
                 }}
               >
-                {deleting ? "Removing?" : "Remove Camera"}
+                {deleting ? "Removing…" : "Remove Camera"}
               </button>
             </>
           }
@@ -128,10 +129,10 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       )}
 
       {!showingSettings && (
-        <div className="camera-page-heading mb-4 flex shrink-0 items-end justify-between gap-4 px-1">
+        <div className="camera-page-heading">
           <div className="min-w-0">
-            <h2 className="truncate text-xl font-bold tracking-tight text-(--tanaw-text)">Camera Monitoring</h2>
-            <p className="text-xs font-medium text-(--tanaw-text-secondary)">Monitor live video, visitor counts, and camera health.</p>
+            <h2>Camera Monitoring</h2>
+            <p>Monitor live video, visitor counts, and camera health.</p>
           </div>
           <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
         </div>
@@ -148,6 +149,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             activeCamId={activeCamId}
             cameraLimit={configuredCameraLimit}
             collapsed={isCameraListCollapsed}
+            loading={camerasLoading}
             onAdd={openAddModal}
             onToggle={() => setIsCameraListCollapsed((current) => !current)}
             onSelect={(cameraId) => {
@@ -158,6 +160,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         )}
         <div className="camera-workspace-main">
           <CameraPreviewPanel
+            loading={camerasLoading}
             runtimeReady={runtimeReady}
             storageKey={storageKey}
             cameras={cameras}

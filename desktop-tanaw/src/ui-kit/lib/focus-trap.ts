@@ -8,11 +8,22 @@ const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
  * Keeps keyboard focus inside a dialog while it is open, closes it on Escape, and returns focus
  * to the element that opened it. The panel must be programmatically focusable
  * and may provide a selector for a preferred initial focus target.
+ *
+ * Pass `paused` while another dialog sits on top: the trap stops handling Escape and Tab but stays
+ * mounted, so focus is not sent behind the dialog and the opener is still restored when it closes.
  */
-export function useDialogFocus(container: ElementRef, onEscape: () => void, enabled = true, initialFocusSelector?: string): void {
+export function useDialogFocus(
+  container: ElementRef,
+  onEscape: () => void,
+  enabled = true,
+  initialFocusSelector?: string,
+  paused = false,
+): void {
   const onEscapeRef = useRef(onEscape);
+  const pausedRef = useRef(paused);
   useEffect(() => {
     onEscapeRef.current = onEscape;
+    pausedRef.current = paused;
   });
 
   useEffect(() => {
@@ -25,7 +36,7 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
       (preferred ?? node).focus();
     });
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || pausedRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

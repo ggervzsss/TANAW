@@ -11,16 +11,14 @@ type TicketPanelHeaderProps = {
 
 export function TicketPanelHeader({ actions, icon, subtitle, title }: TicketPanelHeaderProps) {
   return (
-    <div className="enterprise-ticket-panel-header border-b border-emerald-100 px-6 py-5 dark:border-slate-600">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
+    <div className="enterprise-ticket-panel-header flex min-h-16 flex-col justify-end pb-4">
+      <div className="flex w-full flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-[0.9375rem] leading-snug font-semibold text-(--tanaw-text) [&_svg]:text-(--tanaw-accent-ink)">
             {icon}
-          </span>
-          <div>
-            <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
-            <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
-          </div>
+            {title}
+          </h3>
+          <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-secondary)">{subtitle}</p>
         </div>
         {actions}
       </div>
@@ -41,7 +39,7 @@ export function InputField({ error, label, name, onChange, placeholder, value }:
   const errorId = `ticket-${name}-error`;
   return (
     <label data-field-name={name} className="block scroll-mt-28">
-      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">{label}</span>
       <input
         type="text"
         name={name}
@@ -71,7 +69,7 @@ export function SelectField({ error, label, name, onChange, options, value }: Se
   const errorId = `ticket-${name}-error`;
   return (
     <div data-field-name={name} className="block scroll-mt-28">
-      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">{label}</span>
       <SelectDropdown value={value} onChange={onChange} options={options} ariaLabel={label} ariaInvalid={Boolean(error)} ariaDescribedBy={error ? errorId : undefined} focusOnFormError />
       {error ? <TicketFieldError id={errorId} message={error} /> : null}
     </div>
@@ -80,7 +78,7 @@ export function SelectField({ error, label, name, onChange, options, value }: Se
 
 export function TicketFieldError({ id, message }: { id: string; message: string }) {
   return (
-    <p id={id} role="alert" className="mt-1.5 text-xs font-semibold text-red-700 dark:text-red-200">
+    <p id={id} role="alert" className="tanaw-enter mt-1.5 text-[0.8125rem] font-semibold text-(--tanaw-error)">
       {message}
     </p>
   );

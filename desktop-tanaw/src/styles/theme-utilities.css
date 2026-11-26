@@ -188,12 +188,6 @@
     box-shadow: var(--theme-shadow);
   }
 
-  html.dark .enterprise-shell .enterprise-ticket-panel-header {
-    background: var(--theme-raised);
-    border-color: var(--enterprise-border);
-    box-shadow: var(--theme-shadow);
-  }
-
   html.dark .enterprise-shell .tanaw-status-badge {
     box-shadow: var(--theme-shadow);
   }
@@ -321,56 +315,13 @@
     background-color: var(--enterprise-panel-bg);
   }
 
-  html.dark body .enterprise-shell .enterprise-profile-change-notice[data-tone="info"] {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    color: var(--theme-warning-text);
-    box-shadow: var(--theme-shadow);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-change-notice[data-tone="success"] {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-success-bg);
-    color: var(--theme-success-text);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-pending-email {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    color: var(--theme-warning-text);
-    box-shadow: var(--theme-shadow);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-pending-email__icon {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    color: var(--theme-warning-text);
-    box-shadow: var(--theme-shadow);
-  }
-
+  /* Settings notes are card-free strips; these keep the pending-email text on the dark theme roles. */
   html.dark body .enterprise-shell .enterprise-profile-pending-email__title {
     color: var(--theme-text);
   }
 
   html.dark body .enterprise-shell .enterprise-profile-pending-email__copy {
     color: var(--theme-secondary);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-pending-email__address {
-    color: var(--theme-warning-text);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-pending-email__cancel {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    color: var(--theme-warning-text);
-    box-shadow: var(--theme-shadow);
-  }
-
-  html.dark body .enterprise-shell .enterprise-profile-pending-email__cancel:hover {
-    border-color: var(--theme-border-soft);
-    background: var(--theme-warning-bg);
-    color: var(--theme-warning-text);
   }
 
   html.dark .enterprise-shell input[readonly],

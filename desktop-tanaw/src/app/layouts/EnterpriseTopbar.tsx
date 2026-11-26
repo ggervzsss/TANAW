@@ -1,5 +1,5 @@
-import { Camera, FileText, LayoutDashboard, Menu, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Bot, Camera, FileText, LayoutDashboard, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { TopbarAccount } from "../../ui-kit/patterns/TopbarAccount";
 import { TopbarNavigation } from "../../ui-kit/patterns/TopbarNavigation";
@@ -8,6 +8,8 @@ import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
 import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
 import { TANAW_LOGO } from "../../lib/assets";
+import { ASSISTANT_LAUNCHER_ID, useAssistantStore } from "../../features/dashboard/stores/assistant-store";
+import "./enterprise-topbar-glass.css";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -67,6 +69,15 @@ export function EnterpriseTopbar({
 }: EnterpriseTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
+  const assistantAvailable = useAssistantStore((state) => state.available);
+  const assistantOpen = useAssistantStore((state) => state.open);
+  const toggleAssistant = useAssistantStore((state) => state.toggle);
+
+  // The edge highlights follow the pointer through a CSS variable, without re-rendering.
+  const followPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const bar = event.currentTarget;
+    bar.style.setProperty("--topbar-edge-x", `${event.clientX - bar.getBoundingClientRect().left}px`);
+  };
 
   useEffect(() => {
     if (!isNotificationsOpen) return undefined;
@@ -125,12 +136,14 @@ export function EnterpriseTopbar({
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
-      <div data-topbar-theme={resolvedTheme} className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
+      <div data-topbar-theme={resolvedTheme} className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10" onPointerMove={followPointer}>
         <div className="enterprise-topbar__building" aria-hidden="true">
           <div data-topbar-image="day" className="enterprise-topbar__image enterprise-topbar__image--day" />
           <div data-topbar-image="night" className="enterprise-topbar__image enterprise-topbar__image--night" />
         </div>
         <div className="enterprise-topbar__overlay" aria-hidden="true" />
+        <div className="enterprise-topbar__edge enterprise-topbar__edge--top" aria-hidden="true" />
+        <div className="enterprise-topbar__edge enterprise-topbar__edge--bottom" aria-hidden="true" />
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2">
           <EnterpriseBrand />
 
@@ -155,6 +168,20 @@ export function EnterpriseTopbar({
           </button>
 
           <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
+            {assistantAvailable && (
+              <button
+                id={ASSISTANT_LAUNCHER_ID}
+                type="button"
+                aria-label={assistantOpen ? "Close TANAW Insights" : "Open TANAW Insights"}
+                aria-expanded={assistantOpen}
+                aria-controls={assistantOpen ? "tanaw-assistant-panel" : undefined}
+                title="TANAW Insights"
+                onClick={toggleAssistant}
+                className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md hover:-translate-y-0.5 ${controlClasses.icon}`}
+              >
+                <Bot size={20} />
+              </button>
+            )}
             <div ref={notificationMenuRef} className="sm:relative">
               <NotificationDropdown
                 isOpen={isNotificationsOpen}

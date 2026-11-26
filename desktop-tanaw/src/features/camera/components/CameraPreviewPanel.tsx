@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { CircleAlert, MapPin, Maximize, Minimize, Play, RefreshCw, Settings, Square, Trash2, Video } from "lucide-react";
-import { Button, Card } from "../../../ui-kit";
+import { motion, useReducedMotion } from "motion/react";
+import { Button, Skeleton, SkeletonText } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
+import { useBoundedLoading } from "../hooks/useBoundedLoading";
+import { CAMERA_MORPH_TRANSITION, useCameraMorph } from "../hooks/useCameraMorph";
 import { CameraSettingsPanel } from "./CameraSettingsPanel";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
 import { cameraModeName } from "../utils/camera-mode";
@@ -15,6 +18,8 @@ import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } f
 
 export type CameraPreviewPanelProps = {
   storageKey?: string;
+  /** The saved cameras are still loading; the panel shows a placeholder in its own shape. */
+  loading?: boolean;
   runtimeReady?: boolean;
   cameras?: Camera[];
   activeCam?: Camera;
@@ -55,6 +60,8 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
     setPreviewState("connecting");
   }, [activeCam?.id]);
 
+  if (!activeCam && props.loading && !serviceError && !error) return <CameraMonitorSkeleton />;
+
   if (!activeCam)
     return (
       <div className="camera-empty-state">
@@ -86,6 +93,11 @@ function CameraMonitor({
   runtimeReady = true, serviceError, serviceStatus, storageKey, streamUrl, warnings,
 }: CameraMonitorProps) {
   const previewRef = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion() ?? false;
+  const iconRef = useRef<HTMLSpanElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useCameraMorph(iconRef, `camera-icon-${activeCam.id}`);
+  useCameraMorph(titleRef, `camera-title-${activeCam.id}`);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -95,6 +107,7 @@ function CameraMonitor({
   const controlsDisabled = isRestartingService || isSaving || isTesting;
   const serviceIssue = serviceStatus?.error ?? serviceError;
   const issue = serviceIssue ?? error ?? health?.error ?? counts.error;
+  const metricsLoading = useBoundedLoading(!runtimeReady && !serviceIssue);
   const displayPreferences = readCameraDisplay(cameraDisplayKey(storageKey ?? "tanaw-camera", activeCam.id));
   const canRefresh = Boolean(counts.running && streamUrl);
   const processLabel = starting ? "Starting Camera…" : isStopping ? "Stopping Camera…" : counts.running ? "Stop Camera" : "Start Camera";
@@ -133,12 +146,12 @@ function CameraMonitor({
   }
 
   return (
-    <Card className="camera-preview-card" role="region" aria-label="Selected camera">
+    <div className="camera-preview-card" role="region" aria-label="Selected camera">
       <header className="camera-preview-heading">
-        <span className="camera-identity-icon"><Video size={21} aria-hidden="true" /></span>
+        <span ref={iconRef} className="camera-identity-icon"><Video size={20} aria-hidden="true" /></span>
         <div className="camera-identity">
           <div className="camera-identity-title">
-            <h3 title={activeCam.name}>{activeCam.name}</h3>
+            <h3 ref={titleRef} title={activeCam.name}>{activeCam.name}</h3>
             <CameraStatusBadge status={isStopping ? "stopping" : starting ? "starting" : activeCam.status} />
           </div>
           <p><MapPin size={14} aria-hidden="true" /><span>{activeCam.zone} · {cameraModeName(activeCam.analysisMode)}</span></p>
@@ -149,7 +162,12 @@ function CameraMonitor({
         </div>
       </header>
 
-      <div className="camera-preview-layout">
+      <motion.div
+        className="camera-preview-layout"
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduceMotion ? { duration: 0 } : CAMERA_MORPH_TRANSITION}
+      >
         <section ref={previewRef} className="camera-preview-surface" aria-labelledby="camera-preview-heading">
           <div className="camera-preview-toolbar">
             <h4 id="camera-preview-heading"><Video size={17} aria-hidden="true" />Camera Preview</h4>
@@ -198,8 +216,48 @@ function CameraMonitor({
           </div>
           {fullscreenError && <p className="camera-preview-feedback" role="alert">Fullscreen is unavailable. Try again.</p>}
         </section>
-        <CameraLiveMetrics activeCam={activeCam} area={area} counts={counts} health={health} runtimeReady={runtimeReady && !serviceIssue} />
+        <CameraLiveMetrics activeCam={activeCam} area={area} counts={counts} health={health} runtimeReady={runtimeReady && !serviceIssue} loading={metricsLoading} />
+      </motion.div>
+    </div>
+  );
+}
+
+/** The monitoring layout in outline while the saved cameras load. */
+function CameraMonitorSkeleton() {
+  return (
+    <div className="camera-preview-card camera-preview-card--loading" role="status" aria-label="Loading camera">
+      <div className="camera-preview-heading" aria-hidden="true">
+        <Skeleton className="camera-skeleton-icon" />
+        <span className="camera-identity">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="mt-2 h-3.5 w-32" />
+        </span>
+        <Skeleton className="h-10 w-28" />
       </div>
-    </Card>
+      <div className="camera-preview-layout" aria-hidden="true">
+        <div className="camera-preview-surface">
+          <div className="camera-preview-toolbar">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-9 w-36" />
+          </div>
+          <div className="camera-preview-frame">
+            <Skeleton className="camera-skeleton-stage" />
+          </div>
+        </div>
+        <div className="camera-live-metrics">
+          <div className="camera-metrics-heading">
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <div className="camera-metrics-grid">
+            {[true, false, false, true].map((wide, index) => (
+              <div key={index} className="camera-metric camera-metric--placeholder" data-wide={wide || undefined}>
+                <SkeletonText lines={1} />
+                <Skeleton className="camera-metric-skeleton" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

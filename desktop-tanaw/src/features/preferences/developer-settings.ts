@@ -9,10 +9,12 @@ export type DeveloperSettings = {
   detectionLabels: boolean;
   /** Each person's live male/female estimate. Never stored; Reports keep only daily totals. */
   demographics: boolean;
+  /** Made-up counts on the Dashboard, to preview the full layout. Never saved, sent or reported. */
+  sampleDashboard: boolean;
 };
 
 export const DEVELOPER_SETTINGS_STORAGE_KEY = "tanaw:developer-settings";
-export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = { detectionLabels: false, demographics: false };
+export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = { detectionLabels: false, demographics: false, sampleDashboard: false };
 
 const listeners = new Set<() => void>();
 let cached: { raw: string | null; value: DeveloperSettings } | null = null;
@@ -33,6 +35,7 @@ export function parseDeveloperSettings(raw: string | null): DeveloperSettings {
     return {
       detectionLabels: record.detectionLabels === true,
       demographics: record.demographics === true,
+      sampleDashboard: record.sampleDashboard === true,
     };
   } catch {
     return { ...DEFAULT_DEVELOPER_SETTINGS };
@@ -55,6 +58,17 @@ export function updateDeveloperSettings(patch: Partial<DeveloperSettings>) {
   }
   cached = { raw: readRaw() ?? raw, value: next };
   for (const listener of listeners) listener();
+}
+
+/** Ctrl+Shift+M (Cmd+Shift+M on a Mac) switches the Dashboard's sample data on or off. */
+export const SAMPLE_DASHBOARD_SHORTCUT = "Ctrl+Shift+M";
+
+export function isSampleDashboardShortcut(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">) {
+  return (event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === "m";
+}
+
+export function toggleSampleDashboard() {
+  updateDeveloperSettings({ sampleDashboard: !readDeveloperSettings().sampleDashboard });
 }
 
 function subscribe(listener: () => void) {

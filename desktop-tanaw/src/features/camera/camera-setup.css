@@ -1,4 +1,11 @@
-/* Camera Setup, including its settings and dialogs. */
+/*
+ * Camera Setup: the monitoring workspace, Camera Settings and the camera dialogs.
+ *
+ * The workspace is an open layout on the page wash. Areas are separated by space and hairlines
+ * rather than boxed cards; the video keeps a rounded media surface, Live Metrics sits on one soft
+ * surface, and Camera Settings is a single calm sheet. Neutral surfaces carry the page, green tints
+ * mark structure and selection, and Civic Green and Seal Gold stay small accents.
+ */
 .camera-management,
 .camera-dialog {
   font-family: var(--font-sans) !important;
@@ -9,7 +16,7 @@
   font-family: inherit !important;
 }
 .enterprise-shell .enterprise-content:has(.camera-management) {
-  padding: 30px 36px 28px;
+  padding: 28px 36px 24px;
   background: var(--tanaw-page-gradient);
 }
 .camera-management {
@@ -17,31 +24,68 @@
   --camera-tint: var(--tanaw-selected-bg);
   --camera-border: var(--tanaw-control-border);
   --camera-muted: var(--tanaw-text-muted);
+  --camera-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --camera-hairline: var(--tanaw-border-soft);
+  --camera-soft-surface: color-mix(in srgb, var(--tanaw-surface) 74%, transparent);
+}
+
+/* Page heading */
+.camera-page-heading {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-bottom: 20px;
+  padding-inline: 2px;
 }
 .camera-page-heading h2 {
+  overflow: hidden;
+  color: var(--tanaw-text);
   font-family: var(--font-display) !important;
-  font-size: var(--text-3xl);
-  line-height: 1.2;
+  font-size: 1.75rem;
   font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .camera-page-heading p {
-  font-size: var(--text-sm);
   margin-top: 4px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
   font-weight: 400;
+  line-height: 1.45;
 }
+.camera-page-heading > div::before {
+  /* A short Seal Gold rule names the page without adding a band. */
+  display: block;
+  width: 28px;
+  height: 2px;
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: var(--tanaw-gold-line);
+  content: "";
+}
+.camera-page-heading > p {
+  font-size: 0.8125rem;
+}
+
+/* Workspace: camera rail, then the selected camera. */
 .camera-workspace {
-  --camera-sidebar-track: clamp(214px, 17.5vw, 262px);
-  --camera-sidebar-timing: 250ms cubic-bezier(0.22, 0.75, 0.25, 1);
+  --camera-sidebar-track: clamp(220px, 17.5vw, 264px);
+  --camera-sidebar-timing: 260ms var(--camera-ease);
   display: grid;
   flex: 1;
   grid-template-columns: var(--camera-sidebar-track) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: clamp(10px, 1.1vw, 18px);
+  gap: clamp(14px, 1.4vw, 24px);
   min-height: 0;
   transition: grid-template-columns var(--camera-sidebar-timing);
 }
 .camera-workspace[data-camera-sidebar="collapsed"] {
-  --camera-sidebar-track: 92px;
+  --camera-sidebar-track: 88px;
 }
 .camera-workspace[data-camera-view="settings"] {
   grid-template-columns: minmax(0, 1fr);
@@ -51,14 +95,12 @@
   min-width: 0;
   min-height: 0;
 }
-.camera-list,
-.camera-preview-card,
-.camera-live-metrics {
-  border: 1px solid var(--tanaw-border-soft);
-  border-radius: var(--radius-tanaw-xl);
-  background: var(--tanaw-surface);
-  box-shadow: var(--shadow-tanaw-resting);
+.camera-workspace[data-camera-view="monitoring"] .camera-workspace-main {
+  padding-inline-start: clamp(14px, 1.4vw, 24px);
+  border-inline-start: 1px solid var(--camera-hairline);
 }
+
+/* My Cameras rail */
 .camera-list {
   display: flex;
   min-width: 0;
@@ -66,7 +108,8 @@
   max-height: 100%;
   flex-direction: column;
   align-self: start;
-  padding: 9px;
+  /* 6px all round keeps edge controls' 5px focus rings inside the clip. */
+  padding: 6px;
   overflow: hidden;
 }
 .camera-list-heading {
@@ -74,33 +117,32 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   flex: none;
   align-items: center;
-  gap: 5px;
-  min-height: 49px;
-  padding: 0 2px 8px;
-  border-bottom: 1px solid var(--tanaw-border-soft);
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 2px 8px 6px;
 }
 .camera-list-heading h3 {
   min-width: 0;
   overflow: hidden;
   color: var(--tanaw-text);
-  font-size: var(--text-base);
-  font-weight: 700;
+  font-family: var(--font-display) !important;
+  font-size: 1rem;
+  font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
-  transition: opacity 130ms ease 65ms;
+  transition: opacity 140ms ease 70ms;
 }
 .camera-list-count {
   display: grid;
-  min-width: 23px;
-  height: 23px;
+  min-width: 24px;
+  height: 22px;
   place-items: center;
-  padding-inline: 5px;
-  border: 1px solid var(--tanaw-border-soft);
+  padding-inline: 7px;
   border-radius: 999px;
-  background: var(--tanaw-surface-muted);
+  background: var(--tanaw-surface-inset);
   color: var(--tanaw-text-secondary);
-  font-size: var(--text-xs);
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .camera-sidebar-toggle {
@@ -108,49 +150,64 @@
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid transparent;
-  border-radius: var(--radius-tanaw-sm);
+  border-radius: 10px;
   color: var(--tanaw-text-secondary);
   cursor: pointer;
 }
 .camera-sidebar-toggle:hover {
-  border-color: var(--tanaw-border-soft);
   background: var(--tanaw-control-hover);
   color: var(--tanaw-accent-ink);
 }
 .camera-list-items {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 4px;
   min-height: 0;
-  padding: 8px 1px;
+  padding: 4px 2px 10px;
   overflow: auto;
   scrollbar-width: thin;
 }
 .camera-list-item {
   position: relative;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   width: 100%;
-  min-height: 69px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-tanaw-md);
-  background: var(--tanaw-surface-muted);
+  min-height: 64px;
+  padding: 10px 10px 10px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
   color: var(--tanaw-text);
   text-align: start;
   cursor: pointer;
 }
+.camera-list-item::before {
+  /* The selection mark: a short Civic Green bar that grows in on selection. */
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--tanaw-action);
+  content: "";
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition:
+    opacity 200ms ease,
+    transform 260ms var(--camera-ease);
+}
 .camera-list-item:hover {
-  border-color: var(--tanaw-interactive-hover-border);
   background: var(--tanaw-interactive-hover-bg);
 }
 .camera-list-item[aria-pressed="true"] {
-  border-color: var(--tanaw-interactive-hover-border);
   background: var(--tanaw-interactive-selected-bg);
-  box-shadow: inset 2px 0 var(--tanaw-accent-ink);
+}
+.camera-list-item[aria-pressed="true"]::before {
+  opacity: 1;
+  transform: none;
 }
 .camera-list-item[aria-pressed="true"]:hover {
   background: var(--tanaw-interactive-active-bg);
@@ -159,25 +216,29 @@
   background: var(--tanaw-interactive-pressed-bg);
 }
 .camera-management .camera-list-item:focus-visible {
-  outline-offset: -3px;
+  outline-offset: -2px;
 }
 .camera-list-glyph {
   --camera-status-dot: var(--tanaw-text-muted);
   position: relative;
   display: grid;
-  width: 37px;
-  height: 37px;
+  width: 40px;
+  height: 40px;
   justify-self: center;
   place-items: center;
-  border: 1px solid var(--tanaw-border-soft);
-  border-radius: var(--radius-tanaw-sm);
+  border: 1px solid var(--camera-hairline);
+  border-radius: 12px;
   background: var(--tanaw-surface);
   color: var(--tanaw-text-secondary);
-  font-size: var(--text-xs);
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.03em;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease;
 }
 .camera-list-item[aria-pressed="true"] .camera-list-glyph {
+  border-color: var(--tanaw-interactive-hover-border);
   color: var(--tanaw-accent-ink);
 }
 .camera-list-glyph[data-tone="success"] { --camera-status-dot: var(--tanaw-success-text); }
@@ -194,22 +255,22 @@
   background: var(--camera-status-dot);
   content: "";
   opacity: 0;
-  transition: opacity 140ms ease;
+  transition: opacity 160ms ease;
 }
 .camera-list-glyph > * {
   grid-area: 1 / 1;
-  transition: opacity 140ms ease;
+  transition: opacity 160ms ease;
 }
 .camera-list-glyph > span {
   opacity: 0;
 }
 .camera-list-item-copy {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
-  max-height: 68px;
+  max-height: 72px;
   overflow: hidden;
-  transition: opacity 120ms ease 70ms, max-height var(--camera-sidebar-timing);
+  transition: opacity 140ms ease 80ms, max-height var(--camera-sidebar-timing);
 }
 .camera-list-item strong,
 .camera-list-zone,
@@ -220,28 +281,30 @@
 }
 .camera-list-short-name {
   position: absolute;
-  inset: auto 4px 5px;
+  inset: auto 4px 6px;
   color: var(--tanaw-text-secondary);
-  font-size: 0.65rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   line-height: 1.2;
   text-align: center;
   opacity: 0;
-  transition: opacity 100ms ease;
+  transition: opacity 120ms ease;
 }
 .camera-list-item strong {
-  font-size: var(--text-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .camera-list-zone,
 .camera-list-item-footer {
   color: var(--tanaw-text-secondary);
-  font-size: var(--text-xs);
-  line-height: 1.3;
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 .camera-list-item-footer {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin-top: 2px;
   white-space: nowrap;
 }
@@ -251,22 +314,47 @@
 .camera-list-empty,
 .camera-list-footer p {
   color: var(--tanaw-text-secondary);
-  font-size: var(--text-xs);
-  line-height: 1.45;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 .camera-list-empty {
-  padding: 9px 3px;
+  padding: 10px 8px;
+}
+.camera-list-placeholders {
+  display: grid;
+  gap: 4px;
+}
+.camera-list-placeholder {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 10px 10px 8px;
+}
+.camera-list-placeholder-glyph {
+  width: 40px;
+  height: 40px;
+  justify-self: center;
+  border-radius: 12px;
+}
+.camera-list-placeholder-copy {
+  display: grid;
+  gap: 8px;
+}
+.camera-list[data-compact="true"] .camera-list-placeholder-copy {
+  display: none;
 }
 .camera-list-footer {
   flex: none;
-  padding-top: 8px;
-  border-top: 1px solid var(--tanaw-border-soft);
+  padding-top: 10px;
+  border-top: 1px solid var(--camera-hairline);
 }
 .camera-list-footer p {
-  margin-top: 7px;
+  margin-top: 8px;
 }
 .camera-list-footer .camera-add-button {
-  border-color: var(--tanaw-interactive-hover-border);
+  border-color: transparent;
   background: var(--tanaw-selected-bg);
   color: var(--tanaw-accent-ink);
 }
@@ -278,16 +366,20 @@
   opacity: 0;
   transition-delay: 0ms;
 }
-.camera-list[data-compact="true"] .camera-list-item {
+.camera-list[data-compact="true"] :is(.camera-list-item, .camera-list-placeholder) {
+  grid-template-columns: minmax(0, 1fr) 0;
   gap: 0;
-  padding-bottom: 19px;
+  padding-inline: 4px;
+}
+.camera-list[data-compact="true"] .camera-list-item {
+  padding-bottom: 22px;
 }
 .camera-list[data-compact="true"] .camera-list-item-copy {
   max-height: 0;
 }
 .camera-list[data-compact="true"] .camera-list-short-name {
   opacity: 1;
-  transition-delay: 105ms;
+  transition-delay: 110ms;
 }
 .camera-list[data-compact="true"] .camera-list-glyph > svg {
   opacity: 0;
@@ -302,6 +394,8 @@
 .camera-list[data-compact="true"] .camera-add-button > span {
   display: none;
 }
+
+/* Selected camera */
 .camera-preview-card {
   display: flex;
   height: 100%;
@@ -320,17 +414,18 @@
 .camera-preview-heading {
   flex: none;
   justify-content: flex-start;
-  padding: clamp(12px, 1.25vw, 18px);
-  border-bottom: 1px solid var(--tanaw-border-soft);
+  /* 6px inline room so the edge buttons' focus rings are not clipped by the card. */
+  padding: 6px 6px 18px;
+  border-bottom: 1px solid var(--camera-hairline);
 }
-.camera-identity-icon {
+.camera-identity-icon,
+.camera-settings-identity-icon {
   display: grid;
-  width: 43px;
-  height: 43px;
+  width: 44px;
+  height: 44px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--tanaw-interactive-hover-border);
-  border-radius: var(--radius-tanaw-md);
+  border-radius: 14px;
   background: var(--tanaw-selected-bg);
   color: var(--tanaw-accent-ink);
 }
@@ -341,13 +436,14 @@
 .camera-identity-title {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
 }
 .camera-identity-title h3 {
   overflow: hidden;
   color: var(--tanaw-text);
-  font-size: var(--text-xl);
-  font-weight: 700;
+  font-family: var(--font-display) !important;
+  font-size: 1.25rem;
+  font-weight: 600;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -358,10 +454,11 @@
 .camera-identity p {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin-top: 4px;
   color: var(--tanaw-text-secondary);
-  font-size: var(--text-xs);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 .camera-identity p svg,
 .camera-preview-toolbar h4 svg,
@@ -374,20 +471,19 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 .camera-preview-layout {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) clamp(235px, 22vw, 316px);
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 22vw, 320px);
   align-content: start;
-  gap: clamp(10px, 1.15vw, 18px);
+  gap: clamp(14px, 1.5vw, 24px);
   min-height: 0;
-  padding: clamp(10px, 1vw, 16px);
+  padding: 20px 6px 6px;
   overflow: auto;
   scrollbar-width: thin;
   container-type: size;
-  background: var(--tanaw-surface-inset);
 }
 .camera-preview-surface {
   display: flex;
@@ -395,15 +491,10 @@
   align-self: start;
   min-width: 0;
   max-height: max(18rem, 100cqh);
-  padding: 10px;
-  border: 1px solid var(--tanaw-border-soft);
-  border-radius: var(--radius-tanaw-lg);
-  background: var(--tanaw-surface);
-  box-shadow: var(--shadow-tanaw-resting);
 }
 .camera-preview-toolbar {
   flex: none;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 .camera-preview-actions {
   margin-inline-start: auto;
@@ -412,10 +503,11 @@
 .camera-metrics-heading h4 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--tanaw-text);
-  font-size: var(--text-sm);
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .camera-icon-button {
   aspect-ratio: 1;
@@ -431,8 +523,9 @@
 }
 .camera-preview-frame > .camera-video-preview {
   min-height: 0;
-  border-radius: var(--radius-tanaw-md);
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--tanaw-text) 14%, transparent);
+  border-radius: var(--radius-tanaw-xl);
+  box-shadow: 0 1px 2px rgb(16 36 27 / 0.06), 0 10px 30px rgb(16 36 27 / 0.08);
 }
 .camera-preview-frame .camera-preview-state :is(.camera-preview-state-brand, .camera-preview-state-footer) {
   display: none;
@@ -441,9 +534,8 @@
   width: 100%;
   height: 100%;
   max-height: none;
-  padding: clamp(10px, 1.25vw, 20px);
-  border: 0;
-  border-radius: 0;
+  padding: clamp(12px, 1.25vw, 20px);
+  background: var(--tanaw-page);
 }
 .camera-preview-surface:fullscreen .camera-preview-frame {
   flex: 1;
@@ -453,20 +545,21 @@
 .camera-preview-notices {
   display: grid;
   flex: none;
-  gap: 6px;
-  padding-bottom: 10px;
+  gap: 8px;
+  padding-bottom: 12px;
 }
 .camera-preview-feedback {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  border: 1px solid var(--tanaw-danger-line);
-  border-radius: var(--radius-tanaw-md);
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
   background: var(--tanaw-danger-surface);
   color: var(--tanaw-danger);
-  font-size: var(--text-xs);
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 .camera-preview-feedback span {
   flex: 1 1 170px;
@@ -474,15 +567,85 @@
 }
 .camera-preview-surface > .camera-preview-feedback {
   flex: none;
-  margin-top: 8px;
+  margin-top: 10px;
 }
+.camera-preview-card--loading .camera-preview-heading {
+  gap: 14px;
+}
+.camera-skeleton-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 14px;
+}
+.camera-preview-card--loading .camera-preview-toolbar {
+  min-height: 46px;
+}
+.camera-skeleton-stage {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-tanaw-xl);
+}
+
+/* Empty state */
+.camera-empty-state {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.camera-empty-state > .camera-settings-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.camera-no-selection {
+  display: flex;
+  flex: 1;
+  min-height: 16rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  animation: camera-rise 320ms var(--camera-ease) both;
+}
+.camera-no-selection-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  margin-bottom: 16px;
+  border-radius: 18px;
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+.camera-no-selection h3 {
+  color: var(--tanaw-text);
+  font-family: var(--font-display) !important;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.camera-no-selection p {
+  max-width: 24rem;
+  margin-top: 6px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Live Metrics: one soft surface beside the video. */
 .camera-live-metrics {
-  --metrics-padding: clamp(11px, 1.25vw, 16px);
+  --metrics-padding: clamp(14px, 1.3vw, 18px);
   display: flex;
   flex-direction: column;
   min-width: 0;
   padding: var(--metrics-padding);
-  background: linear-gradient(165deg, var(--tanaw-surface) 28%, color-mix(in srgb, var(--tanaw-surface) 55%, var(--tanaw-surface-inset)));
+  border-radius: var(--radius-tanaw-xl);
+  background: var(--camera-soft-surface);
 }
 .camera-metrics-ambience {
   --metrics-ambient-color: color-mix(in srgb, var(--tanaw-accent-ink) 13%, transparent);
@@ -577,10 +740,8 @@
   flex: none;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-}
-.camera-metrics-heading h4 {
-  font-size: var(--text-base);
+  min-height: 24px;
+  margin-bottom: 14px;
 }
 .camera-metrics-grid {
   display: grid;
@@ -592,62 +753,63 @@
   grid-template-columns: 1fr;
 }
 .camera-metric {
-  --metric-bg: var(--tanaw-surface-muted);
-  --metric-border: var(--tanaw-border-soft);
+  --metric-bg: color-mix(in srgb, var(--tanaw-surface-inset) 70%, transparent);
   --metric-ink: var(--tanaw-text);
+  --metric-label: var(--tanaw-text-secondary);
   display: grid;
   align-content: start;
   gap: 4px;
   min-width: 0;
-  padding: 11px;
-  border: 1px solid var(--metric-border);
-  border-radius: var(--radius-tanaw-md);
+  padding: 12px 14px;
+  border-radius: 14px;
   background: var(--metric-bg);
+  transition: background-color 240ms ease;
 }
 .camera-metric[data-wide] {
   grid-column: 1 / -1;
 }
 .camera-metric[data-tone="occupancy"] {
   --metric-bg: var(--tanaw-selected-bg);
-  --metric-border: var(--tanaw-interactive-hover-border);
   --metric-ink: var(--tanaw-accent-ink);
+  --metric-label: var(--tanaw-accent-ink);
 }
 .camera-metric[data-tone="visitors"] {
-  --metric-bg: color-mix(in srgb, var(--tanaw-warning-bg) 48%, var(--tanaw-surface));
-  --metric-border: color-mix(in srgb, var(--tanaw-warning-line) 58%, var(--tanaw-border-soft));
+  --metric-bg: color-mix(in srgb, var(--tanaw-warning-bg) 55%, transparent);
   --metric-ink: var(--tanaw-warning-text);
+  --metric-label: var(--tanaw-warning-text);
 }
 .camera-metric-label {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 6px;
-  color: var(--metric-ink);
+  gap: 8px;
+  color: var(--metric-label);
 }
 .camera-metric-label h5 {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .camera-metric-label button {
   flex: none;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 .camera-metric-label button:hover {
   background: var(--tanaw-control-hover);
 }
 .camera-metric-value {
   color: var(--metric-ink);
-  font-size: var(--text-2xl);
+  font-size: 1.625rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 .camera-metric[data-tone="occupancy"] .camera-metric-value,
 .camera-metric[data-tone="visitors"] .camera-metric-value {
-  font-size: var(--text-3xl);
+  font-size: 2rem;
 }
 .camera-metric-value[aria-hidden="true"],
 .camera-metric p,
@@ -656,15 +818,32 @@
 }
 .camera-metric p,
 .camera-metrics-note {
-  font-size: var(--text-xs);
-  line-height: 1.4;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.camera-metric-skeleton {
+  width: 56%;
+  height: 30px;
+  margin-block: 4px 2px;
+  border-radius: 8px;
+}
+.camera-metric-skeleton-detail {
+  width: 64%;
+  height: 12px;
+  border-radius: 6px;
+}
+.camera-metric--placeholder {
+  gap: 10px;
+}
+.camera-metric--placeholder .tanaw-skeleton-text {
+  width: 60%;
 }
 .camera-metrics-note {
   display: flex;
   flex: none;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
 }
 .camera-metrics-note svg {
   flex: none;
@@ -687,6 +866,12 @@
     flex-direction: column;
     overflow: auto;
   }
+  .camera-workspace[data-camera-view="monitoring"] .camera-workspace-main {
+    padding-inline-start: 0;
+    padding-top: 14px;
+    border-inline-start: 0;
+    border-top: 1px solid var(--camera-hairline);
+  }
   .camera-list {
     flex: none;
     align-self: stretch;
@@ -698,15 +883,20 @@
     width: max(184px, 46%);
     flex: none;
   }
+  .camera-list-placeholders {
+    display: flex;
+  }
+  .camera-list-placeholder {
+    width: max(184px, 46%);
+  }
   .camera-list[data-compact="true"] {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
   }
   .camera-list[data-compact="true"] .camera-list-heading {
     grid-template-columns: 0 auto auto;
-    border-bottom: 0;
     padding-block: 0;
   }
   .camera-list[data-compact="true"] .camera-list-item {
@@ -742,94 +932,201 @@
     transition: none;
   }
 }
+
+/*
+ * Camera Settings: one calm sheet. A quiet section list on the left, a readable form column on
+ * the right, and a footer that always keeps Cancel and Save Changes in reach.
+ */
 .camera-settings {
+  --settings-gutter: clamp(20px, 2.6vw, 36px);
   font-family: var(--font-sans) !important;
-  border-color: var(--tanaw-border-soft);
-  box-shadow: var(--shadow-tanaw-resting);
+  border-color: transparent;
+  border-radius: var(--radius-tanaw-xl);
+  background: var(--tanaw-surface);
+  box-shadow: 0 1px 2px rgb(16 36 27 / 0.04), 0 14px 36px rgb(16 36 27 / 0.06);
 }
 .camera-settings-heading {
-  padding: 26px 5.2% 12px;
   flex: 0 0 auto;
+  align-items: center;
+  gap: 16px;
+  padding: 26px var(--settings-gutter) 18px;
 }
 .camera-settings-heading span {
+  display: block;
+  color: var(--tanaw-gold-ink);
   font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   line-height: 1.5;
 }
 .camera-settings-heading h1 {
-  font-size: var(--text-2xl);
-  line-height: 1.3;
+  margin: 4px 0 2px;
+  color: var(--tanaw-text);
+  font-family: var(--font-display) !important;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 .camera-settings-heading p {
-  font-size: var(--text-sm);
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.camera-settings-heading .design-icon-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--tanaw-text-secondary);
+}
+.camera-settings-heading .design-icon-button:hover:enabled {
+  background: var(--tanaw-control-hover);
+  color: var(--tanaw-text);
 }
 .camera-settings-identity {
-  padding-block: 10px;
-  min-height: 70px;
   flex: 0 0 auto;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px var(--settings-gutter);
+  border-block: 1px solid var(--camera-hairline);
+  background: transparent;
 }
 .camera-settings-identity h2 {
-  font-size: var(--text-lg);
+  color: var(--tanaw-text);
+  font-family: var(--font-display) !important;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .camera-settings-identity p {
-  font-size: var(--text-sm);
+  margin-top: 2px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
-.camera-settings-identity > svg,
 .camera-settings-identity > .camera-status {
   flex: none;
 }
 .camera-settings-identity :is(h2, p) {
   overflow-wrap: anywhere;
 }
+.camera-settings .camera-status {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
 .camera-settings-body {
-  grid-template-columns: 25% minmax(0, 1fr);
+  grid-template-columns: clamp(200px, 19%, 248px) minmax(0, 1fr);
 }
 .camera-settings-body > nav {
-  padding: 38px 9.5%;
-  gap: 18px;
+  gap: 4px;
+  padding: 20px 14px;
+  border-right-color: var(--camera-hairline);
   overscroll-behavior: contain;
 }
 .camera-settings-body [role="tab"] {
-  font-size: var(--text-base);
-  gap: 28px;
-  padding: 12px 18px;
+  position: relative;
+  isolation: isolate;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.3;
   transition:
-    background 200ms ease,
-    color 200ms ease,
-    border-color 200ms ease;
+    background-color 180ms ease,
+    color 180ms ease;
 }
 .camera-settings-body [role="tab"] svg {
-  width: 40px;
-  height: 40px;
+  width: 18px;
+  height: 18px;
+}
+.camera-settings .camera-settings-body [role="tab"]:hover {
+  background: var(--tanaw-control-hover);
+  color: var(--tanaw-text);
+}
+.camera-settings .camera-settings-body [role="tab"][aria-selected="true"],
+.camera-settings .camera-settings-body [role="tab"][aria-selected="true"]:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+}
+.camera-settings-body [role="tab"]:focus-visible {
+  outline-offset: 1px !important;
+}
+.camera-settings-tab-indicator {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tanaw-selected-bg);
+}
+.camera-settings-tab-indicator::before {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--tanaw-action);
+  content: "";
 }
 .camera-settings-content {
   min-width: 0;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 12px 3% 48px;
-  animation: camera-tab-in 220ms ease;
+  scrollbar-width: thin;
+  padding: 26px var(--settings-gutter) 40px;
+  animation: camera-tab-in 240ms var(--camera-ease, ease-out);
 }
-.camera-settings-content.settings-counting,
-.camera-settings-content.settings-maintenance {
-  padding-top: 42px;
+.camera-settings-content > * {
+  max-width: 44rem;
 }
-.camera-settings-content.settings-display {
-  padding: 48px 4.8% 36px;
+.camera-settings-content::-webkit-scrollbar {
+  width: 10px;
+}
+.camera-settings-content::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 .camera-settings .settings-section-heading {
-  margin-bottom: 30px;
+  margin-bottom: 22px;
+}
+.camera-settings .design-note + .settings-section-heading {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--camera-hairline);
 }
 .camera-settings .settings-section-heading h2 {
-  font-size: var(--text-xl);
+  color: var(--tanaw-text);
+  font-size: 1.25rem;
+  font-weight: 600;
   line-height: 1.3;
 }
-.camera-settings .settings-section-heading p {
-  font-size: var(--text-sm);
-  margin-top: 8px;
+.camera-settings .settings-section-heading p,
+.camera-settings .camera-settings-content > p:not([class]) {
+  margin-top: 6px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 .camera-settings .settings-field {
   margin-bottom: 20px;
 }
-.camera-settings .settings-field > label,
+.camera-settings .settings-field > label {
+  margin-bottom: 8px;
+  color: var(--tanaw-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
 .camera-dialog .settings-field > label {
   font-size: var(--text-sm);
   margin-bottom: 8px;
@@ -838,13 +1135,29 @@
 .camera-settings .settings-field button[aria-haspopup],
 .camera-add-dialog .settings-field input,
 .camera-add-dialog .settings-field button[aria-haspopup] {
-  min-height: 40px;
-  font-size: var(--text-sm);
-  border-radius: var(--radius-tanaw-md);
-  padding: 8px 12px;
+  min-height: 42px;
+  padding: 9px 14px;
   border: 1px solid var(--camera-border, var(--tanaw-control-border));
-  box-shadow: none;
+  border-radius: 12px;
   background: var(--enterprise-card-bg, white);
+  box-shadow: none;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.camera-settings .settings-field :is(input, button[aria-haspopup]):hover {
+  border-color: var(--tanaw-control-border-hover);
+}
+.camera-settings .settings-field input:focus {
+  border-color: var(--tanaw-accent-ink);
+}
+.camera-settings .settings-field input::placeholder {
+  color: var(--tanaw-text-placeholder, var(--tanaw-text-muted));
+}
+.camera-settings #settings-camera-password {
+  padding-inline-end: 48px;
 }
 .camera-settings .settings-field button[aria-haspopup] svg,
 .camera-add-dialog .settings-field button[aria-haspopup] svg {
@@ -853,141 +1166,375 @@
   color: var(--tanaw-text-muted);
 }
 .camera-settings .settings-field small {
-  font-size: 12px;
+  margin: 6px 2px 0;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 .camera-settings .settings-field > label + * {
   width: 100%;
 }
+.camera-settings .connection-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--tanaw-surface-inset);
+  font-size: 0.875rem;
+}
+.camera-settings .connection-status b {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.camera-settings .connection-status span {
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+  text-transform: capitalize;
+}
 .camera-settings-footer {
   flex: 0 0 auto;
-  min-height: 100px;
-  padding: 20px 4%;
+  min-height: 0;
+  padding: 14px var(--settings-gutter);
+  border-top: 1px solid var(--camera-hairline);
+  background: color-mix(in srgb, var(--tanaw-surface-inset) 45%, var(--tanaw-surface));
 }
 .camera-settings-footer > p {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .camera-settings-footer > div {
   flex: none;
+  gap: 10px;
 }
 .camera-settings .design-button,
 .camera-dialog .design-button {
-  min-height: 42px;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  border-radius: var(--radius-tanaw-md);
-  padding: 14px 20px;
   display: inline-flex;
-  justify-content: center;
+  min-height: 42px;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.camera-settings .design-button:hover:enabled {
+  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-hover);
 }
 .camera-settings .design-button.primary,
 .camera-dialog .design-button.primary {
+  min-width: 148px;
+  border-color: var(--tanaw-action);
   background: var(--tanaw-action);
   color: white;
-  border-color: var(--tanaw-action);
-  min-width: 168px;
 }
-.camera-settings .design-button.primary:hover,
+.camera-settings .design-button.primary:hover:enabled,
 .camera-dialog .design-button.primary:hover {
+  border-color: var(--tanaw-action-hover);
   background: var(--tanaw-action-hover);
+}
+.camera-settings .design-button.danger-button:hover:enabled {
+  border-color: var(--tanaw-danger-line);
+  background: var(--tanaw-danger-bg);
 }
 .camera-settings-content > .full-width {
   min-height: 42px;
-  border-radius: var(--radius-tanaw-md);
+  border-radius: 12px;
 }
 .camera-settings .design-switch-row {
-  margin: 8px 0 24px;
-  padding: 18px 0;
-}
-.camera-settings .design-switch-row label,
-.camera-settings .design-switch-row p {
-  font-size: var(--text-sm);
-}
-.camera-settings .design-switch-row label {
-  line-height: 1.35;
-}
-.camera-settings .settings-display .design-switch-row {
   margin: 0;
-  padding: 22px 0;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--camera-hairline);
+}
+.camera-settings .design-switch-row:first-of-type {
+  border-top: 1px solid var(--camera-hairline);
+}
+.camera-settings .design-switch-row p {
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 .camera-settings .settings-display .design-switch-row:last-of-type {
   border-bottom: 0;
 }
-.camera-settings .settings-counting .design-switch {
-  width: 84px;
-  height: 44px;
+.camera-settings .settings-subheading {
+  margin: 28px 0 14px;
+  color: var(--tanaw-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
-.camera-settings .settings-counting .design-switch span {
-  height: 36px;
-  width: 36px;
-}
-.camera-settings .settings-counting .design-switch[aria-checked="true"] span {
-  transform: translateX(39px);
+.camera-settings .counting-methods {
+  gap: 10px;
+  margin-bottom: 8px;
 }
 .camera-settings .counting-method {
-  min-height: 116px;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px 16px;
+  border-color: var(--camera-hairline);
+  border-radius: 14px;
+  background: transparent;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
 }
-.camera-settings .counting-method strong,
+.camera-settings .counting-method:hover {
+  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-hover);
+}
+.camera-settings .counting-method.selected {
+  border-color: color-mix(in srgb, var(--tanaw-accent-ink) 45%, transparent);
+  background: var(--tanaw-selected-bg);
+}
+.camera-settings .counting-method:has(input:focus-visible) {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+.camera-settings .counting-method input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+.camera-settings .counting-method strong {
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
 .camera-settings .counting-method p {
-  font-size: var(--text-sm);
-}
-.camera-settings .settings-subheading {
-  font-size: var(--text-lg);
+  margin-top: 2px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .camera-settings .design-note,
 .camera-dialog .design-note {
-  font-size: var(--text-sm);
-  margin-top: 18px;
+  margin-top: 14px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--enterprise-muted, #595b60);
 }
 .camera-settings .settings-display-note {
-  margin-top: 56px;
-  font-size: var(--text-sm);
+  align-items: flex-start;
+  gap: 10px;
+  margin: 24px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--tanaw-surface-inset);
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.camera-settings .settings-display-note svg {
+  margin-top: 1px;
+  color: var(--tanaw-accent-ink);
+}
+.camera-settings .maintenance-status {
+  margin-bottom: 4px;
+  border-top: 1px solid var(--camera-hairline);
 }
 .camera-settings .maintenance-status > div {
-  font-size: var(--text-base);
-  padding: 20px 0;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom-color: var(--camera-hairline);
+  font-size: 0.875rem;
+}
+.camera-settings .maintenance-status dt {
+  color: var(--tanaw-text-secondary);
+}
+.camera-settings .maintenance-status dd {
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+  text-transform: capitalize;
 }
 .camera-settings .maintenance-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 40px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 .camera-settings .maintenance-actions .design-button {
-  min-width: 246px;
+  min-width: 200px;
   min-height: 42px;
-  border-radius: var(--radius-tanaw-md);
+  border-radius: 12px;
+}
+.camera-settings .camera-settings-content details {
+  margin-block: 16px 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--camera-hairline);
+  border-radius: 14px;
+}
+.camera-settings .camera-settings-content details > summary {
+  border-radius: 8px;
+  color: var(--tanaw-accent-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.camera-settings .camera-settings-content details[open] > summary {
+  margin-bottom: 14px;
+}
+.camera-settings .camera-danger-zone {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 14px;
+}
+.camera-settings .camera-danger-zone h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 .camera-settings .camera-danger-zone p {
-  font-size: var(--text-sm);
+  margin: 4px 0 14px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .camera-settings .camera-danger-zone .design-button {
-  border-radius: var(--radius-tanaw-md);
+  border-radius: 12px;
 }
-.camera-settings-success {
-  padding: 12px 16px;
+.camera-settings .camera-settings-success {
+  padding: 10px 14px;
   margin-bottom: 16px;
   color: var(--tanaw-success-text);
   background: var(--tanaw-success-bg);
-  border: 1px solid var(--tanaw-success-line);
+  border: 0;
   border-radius: 12px;
-  font-size: var(--text-xs);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.camera-settings .camera-settings-error {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .camera-field-error {
   color: var(--tanaw-error);
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-top: 8px;
 }
 .camera-diagnostics {
-  padding: 18px 22px;
-  margin-top: 20px;
+  padding: 14px 16px;
+  margin-top: 14px;
   border: 1px solid var(--tanaw-border);
-  border-radius: var(--radius-tanaw-md);
+  border-radius: 12px;
   line-height: 1.8;
-  font-size: var(--text-xs);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+.camera-diagnostics--loading {
+  padding-block: 18px;
+  border-style: dashed;
+}
+
+/* Service status inside Maintenance › Service diagnostics and controls. */
+.camera-system-status-title {
+  margin-bottom: 10px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.camera-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+.camera-system-status-meta {
+  margin-top: 8px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.camera-system-status-meta + .camera-system-status-meta {
+  margin-top: 0;
+}
+.camera-system-status-action {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--tanaw-control-border);
+  border-radius: 12px;
+  background: var(--tanaw-surface);
+  color: var(--tanaw-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.camera-system-status-action[data-tone="accent"] {
+  border-color: color-mix(in srgb, var(--tanaw-accent-ink) 35%, transparent);
+  color: var(--tanaw-accent-ink);
+}
+.camera-system-status-action:hover:enabled {
+  background: var(--tanaw-control-hover);
+}
+.camera-system-status-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Dark theme: keep the sheet flat and the selection on the moving indicator. */
+html.dark .enterprise-shell .camera-management .camera-settings-identity {
+  background: transparent;
+}
+html.dark .enterprise-shell .camera-management .camera-settings-body [role="tab"][aria-selected="true"],
+html.dark .enterprise-shell .camera-management .camera-settings-body [role="tab"][aria-selected="true"]:hover {
+  background: transparent;
+  box-shadow: none;
+}
+html.dark .camera-management .camera-settings-tab-indicator {
+  background: var(--theme-accent-tint, var(--tanaw-selected-bg));
+}
+html.dark .camera-management .camera-settings-tab-indicator::before {
+  background: var(--tanaw-accent-ink);
+}
+html.dark .camera-management .camera-list-item::before {
+  background: var(--tanaw-accent-ink);
+}
+html.dark .camera-management .camera-preview-frame > .camera-video-preview {
+  border-color: rgb(174 188 201 / 0.14);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.32);
+}
+html.dark .camera-management .camera-settings .connection-status,
+html.dark .camera-management .camera-settings .settings-display-note {
+  background: var(--theme-inset, var(--tanaw-surface-inset));
+}
+html.dark .enterprise-shell .camera-management .camera-settings .counting-method {
+  border-color: var(--theme-divider, var(--camera-hairline));
+  background: transparent;
+}
+html.dark .enterprise-shell .camera-management .camera-settings .counting-method.selected {
+  border-color: transparent;
+  background: var(--theme-accent-tint, var(--tanaw-selected-bg));
+}
+html.dark .camera-management .camera-system-status-action {
+  border-color: var(--theme-divider, var(--tanaw-border));
+  background: var(--theme-raised, var(--tanaw-surface-raised));
+  color: var(--theme-text, var(--tanaw-text));
+}
+html.dark .camera-management .camera-system-status-action[data-tone="accent"] {
+  color: var(--tanaw-accent-ink);
 }
 .camera-dialog-backdrop {
   position: fixed;
@@ -1010,8 +1557,8 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   flex-direction: column;
   padding: 36px 48px 32px;
   background: var(--enterprise-card-bg, white);
-  border: 1px solid var(--tanaw-border);
-  border-radius: var(--radius-tanaw-lg);
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: var(--radius-tanaw-xl);
   box-shadow: var(--shadow-tanaw-raised);
   outline: none;
   animation: camera-dialog-in 280ms cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -1024,7 +1571,8 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   flex: 0 0 auto;
 }
 .camera-dialog h2 {
-  font-size: var(--text-2xl);
+  font-family: var(--font-display) !important;
+  font-size: 1.375rem;
   line-height: 1.3;
   font-weight: 700;
 }
@@ -1046,8 +1594,8 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 20px;
-  padding-top: 28px;
+  gap: 12px;
+  padding-top: 24px;
   flex: 0 0 auto;
 }
 .camera-dialog button:disabled {
@@ -1079,7 +1627,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   padding: 30px;
 }
 .camera-confirm-dialog h2 {
-  font-size: var(--text-xl);
+  font-size: 1.25rem;
 }
 .camera-confirm-dialog p {
   font-size: var(--text-sm);
@@ -1093,7 +1641,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 .camera-add-dialog {
   width: min(998px, 100%);
   padding: 40px 62px 32px;
-  border-radius: var(--radius-tanaw-lg);
+  border-radius: var(--radius-tanaw-xl);
 }
 .camera-add-dialog > header h2 {
   font-size: 1.375rem;
@@ -1144,7 +1692,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 }
 .camera-area-dialog .counting-editor-preview > div {
   min-height: 100%;
-  border-radius: var(--radius-tanaw-md);
+  border-radius: var(--radius-tanaw-lg);
   box-shadow: none;
 }
 .camera-area-dialog .counting-editor-preview > div:focus-within {
@@ -1186,6 +1734,17 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   fill: #fbbf24;
   stroke: #10241b;
 }
+.camera-dialog > header .design-icon-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--tanaw-text-secondary);
+}
+.camera-dialog > header .design-icon-button:hover:enabled {
+  background: var(--tanaw-control-hover);
+  color: var(--tanaw-text);
+}
 .camera-preview-state {
   position: absolute;
   inset: 0;
@@ -1218,7 +1777,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 .camera-preview-state-brand span span {
   margin-left: 8px;
   color: #82a18e;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.6px;
   font-weight: 400;
 }
@@ -1238,7 +1797,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   width: 66px;
   height: 66px;
   border: 1px solid #759d8240;
-  border-radius: var(--radius-tanaw-lg);
+  border-radius: 18px;
   color: #b7d8c0;
   background: #254b3850;
   margin-bottom: 18px;
@@ -1262,7 +1821,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: #91ac9c;
   border-top: 1px solid #a0d6b018;
   padding-top: 14px;
@@ -1300,10 +1859,11 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   min-height: 40px;
   padding: 8px 16px;
   border: 1px solid #8cba9d70;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #e8f2ec;
   background: rgb(5 91 37 / 0.38);
   font-size: 13px;
+  font-weight: 600;
 }
 .camera-preview-retry:hover {
   background: var(--tanaw-action);
@@ -1334,14 +1894,6 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
     opacity: 1;
   }
 }
-@keyframes camera-tab-in {
-  from {
-    opacity: 0.5;
-  }
-  to {
-    opacity: 1;
-  }
-}
 @keyframes camera-dialog-in {
   from {
     opacity: 0;
@@ -1352,81 +1904,84 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
     transform: none;
   }
 }
+@keyframes camera-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes camera-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @media (max-width: 1200px) {
   .camera-settings-body {
-    grid-template-columns: 25% minmax(0, 1fr);
+    grid-template-columns: 208px minmax(0, 1fr);
   }
   .camera-settings-body > nav {
-    padding: 28px 16px;
+    padding: 18px 10px;
   }
   .camera-settings-body [role="tab"] {
-    font-size: var(--text-sm);
-    gap: 18px;
-    padding: 12px;
-  }
-  .camera-settings-body [role="tab"] svg {
-    width: 32px;
-    height: 32px;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 0.875rem;
   }
 }
 @media (max-width: 1000px), (max-height: 800px) {
   .enterprise-shell .enterprise-content:has(.camera-management) {
     padding: 18px 24px;
   }
-  .camera-page-heading h2 {
-    font-size: var(--text-2xl);
+  .camera-page-heading {
+    margin-bottom: 14px;
   }
-  .camera-page-heading p {
-    font-size: var(--text-sm);
+  .camera-page-heading h2 {
+    font-size: 1.5rem;
+  }
+  .camera-page-heading > div::before {
+    margin-bottom: 8px;
+  }
+  .camera-preview-heading {
+    padding-bottom: 14px;
+  }
+  .camera-preview-layout {
+    padding-top: 16px;
   }
   .camera-settings-heading {
-    padding: 18px 5.2% 12px;
+    padding-block: 18px 12px;
   }
   .camera-settings-heading h1 {
-    font-size: var(--text-xl);
+    font-size: 1.375rem;
   }
-  .camera-settings-heading p,
-  .camera-settings-identity p {
-    font-size: var(--text-sm);
+  .camera-settings-identity {
+    padding-block: 10px;
   }
-  .camera-settings-footer {
-    min-height: 80px;
-    padding-block: 14px;
-  }
-  .camera-settings .design-button {
-    min-height: 42px;
-    font-size: var(--text-sm);
-    padding: 12px 18px;
-  }
-  .camera-settings .settings-field input,
-  .camera-settings .settings-field button[aria-haspopup] {
-    min-height: 40px;
-    font-size: var(--text-sm);
-    padding: 12px 22px;
-    border-radius: var(--radius-tanaw-md);
-  }
-  .camera-settings .settings-field > label {
-    margin-bottom: 14px;
-    font-size: var(--text-sm);
-  }
-  .camera-settings-body [role="tab"] {
-    min-height: 44px;
-    font-size: var(--text-sm);
-    gap: 16px;
+  .camera-settings-identity .camera-settings-identity-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
   }
   .camera-settings-body > nav {
-    padding: 22px 14px;
-    gap: 10px;
+    gap: 2px;
+    padding-block: 14px;
   }
-  .camera-settings-body [role="tab"] svg {
-    width: 30px;
-    height: 30px;
-  }
-  .camera-settings .settings-section-heading p {
-    font-size: var(--text-sm);
+  .camera-settings-content {
+    padding-top: 20px;
   }
   .camera-settings .settings-section-heading {
-    margin-bottom: 22px;
+    margin-bottom: 18px;
+  }
+  .camera-settings-footer {
+    padding-block: 12px;
   }
   .camera-dialog {
     padding: 26px 32px;
@@ -1435,79 +1990,61 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
     margin-bottom: 14px;
   }
 }
-
 @media (max-height: 600px) {
   .camera-settings-heading,
   .camera-settings-identity,
   .camera-settings-footer {
     padding-block: 10px;
   }
-  .camera-settings-identity,
-  .camera-settings-footer {
-    min-height: 0;
-  }
   .camera-settings-body > nav {
     padding-block: 8px;
-    gap: 4px;
+  }
+  .camera-settings-body [role="tab"] {
+    min-height: 40px;
   }
 }
 @media (max-width: 760px) {
   .enterprise-shell .enterprise-content:has(.camera-management) {
     padding: 12px;
   }
+  .camera-settings {
+    --settings-gutter: 16px;
+  }
   .camera-settings-body {
     grid-template-columns: minmax(0, 1fr);
   }
   .camera-settings-body > nav {
-    padding: 8px;
     gap: 4px;
+    padding: 8px;
   }
   .camera-settings-body [role="tab"] {
-    min-height: 42px;
-    font-size: var(--text-xs);
+    min-height: 40px;
     gap: 6px;
-    padding: 8px;
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
   }
   .camera-settings-body [role="tab"] svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
-  .camera-settings-content.settings-counting,
-  .camera-settings-content.settings-maintenance,
-  .camera-settings-content.settings-display {
+  .camera-settings-tab-indicator::before {
+    top: auto;
+    right: 12px;
+    bottom: 0;
+    left: 12px;
+    width: auto;
+    height: 2px;
+  }
+  .camera-settings-content {
     padding: 20px 16px;
-  }
-  .camera-settings .settings-display-note {
-    font-size: var(--text-sm);
-    margin: 30px 0;
-  }
-  .camera-settings .design-switch-row label,
-  .camera-settings .design-switch-row p {
-    font-size: var(--text-sm);
-  }
-  .camera-settings .maintenance-status > div {
-    font-size: var(--text-base);
-  }
-  .camera-settings .counting-method {
-    min-height: 100px;
-    padding: 20px;
-    gap: 20px;
-  }
-  .camera-settings .counting-method strong,
-  .camera-settings .counting-method p {
-    font-size: var(--text-sm);
-  }
-  .camera-settings .maintenance-actions {
-    gap: 12px;
   }
   .camera-settings .maintenance-actions .design-button {
     min-width: 0;
+    flex: 1;
   }
   .camera-settings-footer > p {
-    font-size: var(--text-xs);
-  }
-  .camera-settings-footer > div {
-    gap: 10px;
+    font-size: 0.75rem;
   }
   .camera-dialog-backdrop {
     padding: 12px;
@@ -1541,7 +2078,8 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .camera-management *,
+  .camera-management *:not(.tanaw-skeleton),
+  .camera-management *::before,
   .camera-dialog *,
   .camera-dialog-backdrop,
   .camera-dialog {
@@ -1580,15 +2118,25 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
   }
 }
 
-@media (min-width: 1201px) and (min-height: 801px) {
-  .camera-settings-body > nav {
-    padding-top: 48px;
-  }
-  .camera-settings-content.settings-information {
-    padding-top: 2px;
-  }
-  .camera-settings .settings-information .settings-section-heading {
-    margin-bottom: 25px;
-  }
+/*
+ * View changes. The camera's icon and name travel between the monitoring header and the settings
+ * identity row (useCameraMorph); everything around them rises in on the same curve, so opening or
+ * closing Camera Settings reads as one surface changing shape. Reduced motion turns all of it off.
+ */
+.camera-page-heading,
+.camera-list,
+.camera-settings > :is(.camera-settings-heading, .camera-settings-body, .camera-settings-footer) {
+  animation: camera-rise 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-
+.camera-list {
+  animation-delay: 30ms;
+}
+.camera-settings > .camera-settings-body {
+  animation-delay: 40ms;
+}
+.camera-settings > .camera-settings-footer {
+  animation-delay: 70ms;
+}
+.camera-settings-identity :is(p, .camera-status) {
+  animation: camera-fade 320ms ease-out 60ms both;
+}

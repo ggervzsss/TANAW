@@ -60,8 +60,8 @@ export function CameraMonitoringPanel({
   const fallbackIssue = health?.fallback_reason ? "AI fallback mode is active. Visitor counts may be less accurate." : null;
 
   return (
-    <section className="camera-system-status rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
-      <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
+    <section className="camera-system-status">
+      <h4 className="camera-system-status-title">SYSTEM STATUS &amp; CONTROLS</h4>
       <div className="space-y-2">
         <StatusRow
           icon={Activity}
@@ -88,11 +88,11 @@ export function CameraMonitoringPanel({
           />
         ) : null}
       </div>
-      <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400 dark:text-slate-500">
+      <p className="camera-system-status-meta">
         Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
         {health?.api_contract_version ?? "unknown"}
       </p>
-      <p className="truncate text-[9px] font-medium text-gray-400 dark:text-slate-500" title={serviceStatus?.desktopBuild}>
+      <p className="camera-system-status-meta truncate" title={serviceStatus?.desktopBuild}>
         Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
       </p>
 
@@ -115,9 +115,9 @@ export function CameraMonitoringPanel({
                       type="button"
                       onClick={onRestartService}
                       disabled={isRestartingService}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/3 dark:text-slate-300 dark:hover:bg-white/6"
+                      className="camera-system-status-action"
                     >
-                      <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
+                      <RefreshCw size={15} className={isRestartingService ? "animate-spin motion-reduce:animate-none" : ""} /> Service
                     </button>
                   </InfoTooltip>
                 </motion.div>
@@ -129,9 +129,9 @@ export function CameraMonitoringPanel({
               type="button"
               onClick={onTestConnection}
               disabled={isTesting || isProcessingThisCamera}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-tanaw-ledger/30 bg-white px-2 py-2.5 text-[11px] font-bold text-tanaw-ledger transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
+              className="camera-system-status-action" data-tone="accent"
             >
-              <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
+              <Wifi size={15} /> {isTesting ? "Testing..." : "Test"}
             </button>
           </InfoTooltip>
         </motion.div>
@@ -159,10 +159,10 @@ function StatusRow({ icon: Icon, issue, label, tone, tooltip }: StatusRowProps) 
   }[tone];
 
   return (
-    <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-[11px] font-bold transition-colors ${toneClass}`}>
+    <div className={`camera-status-row ${toneClass}`} data-tone={tone}>
       <InfoTooltip content={tooltip} focusable={false} className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <Icon size={14} className="shrink-0" />
+          <Icon size={15} className="shrink-0" />
           <span className="truncate">{label}</span>
         </span>
       </InfoTooltip>

@@ -448,6 +448,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    /** The saved cameras are still being read from the local service for the first time. */
+    camerasLoading: !hydratedFromStorage && !serviceError,
     runtimeReady: Boolean(activeState),
     area: activeState?.area ?? null,
     credentialMetadata,

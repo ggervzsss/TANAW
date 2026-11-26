@@ -1,6 +1,7 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { CalendarDays, Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
+import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { getDemographicAllocationStatus } from "../utils/demographics";
@@ -101,7 +102,18 @@ export function ReportDraftPanel({
         <div className="report-system-count" role="group" aria-label="Visitor counted by TANAW">
           <div>
             <h3>Visitor counted by TANAW</h3>
-            <output aria-label="System unique visitor count">{isPeriodChanging ? "…" : metrics.counting || activeReport ? metrics.unique.toLocaleString() : "—"}</output>
+            <output aria-label="System unique visitor count" aria-busy={isPeriodChanging}>
+              {isPeriodChanging ? (
+                <>
+                  <Skeleton className="report-count-skeleton" />
+                  <span className="sr-only">Loading</span>
+                </>
+              ) : metrics.counting || activeReport ? (
+                metrics.unique.toLocaleString()
+              ) : (
+                "—"
+              )}
+            </output>
             <p>Unique Visitor</p>
           </div>
           <div className="report-readonly">
@@ -119,7 +131,16 @@ export function ReportDraftPanel({
       </div>
       <div className="report-create-body">
         <section className="report-visitor-card" aria-label="Visitor Details">
-          <VisitorDetails days={days} hasDailyOrigins={hasDailyOrigins} demo={demo} metrics={metrics} isReadOnly={isReadOnly || isPeriodChanging} period={period} setOrigins={setOrigins} />
+          <VisitorDetails
+            days={days}
+            hasDailyOrigins={hasDailyOrigins}
+            demo={demo}
+            metrics={metrics}
+            isLoading={isPeriodChanging}
+            isReadOnly={isReadOnly || isPeriodChanging}
+            period={period}
+            setOrigins={setOrigins}
+          />
         </section>
         <aside className="report-next-steps" aria-label="Next Steps">
           <h3>
@@ -167,7 +188,7 @@ export function ReportDraftPanel({
           </div>
         </aside>
       </div>
-      {/* Keep supporting workflows compact; they no longer form stacked workspace cards. */}
+      {/* Supporting workflows stay behind one disclosure so the form fits one screen. */}
       <div className="report-supporting-controls">
         <ReportDraftAlerts activeReport={activeReport} />
         {activeReport?.status === "Returned for Revision" && onRefreshCounts && (
