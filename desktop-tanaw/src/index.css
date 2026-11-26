@@ -1662,11 +1662,3 @@ html.dark .enterprise-shell ::-webkit-scrollbar-thumb {
 html.dark .enterprise-shell ::-webkit-scrollbar-thumb:hover {
   background: rgb(174 188 201 / 0.4);
 }
-
-/* Help Center search panel: a calm green wash on the surface, not a solid green block. */
-.enterprise-shell .tanaw-enterprise-card.help-center-hero,
-html.dark .enterprise-shell .tanaw-enterprise-card.help-center-hero {
-  background:
-    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--tanaw-selected-bg) 90%, transparent), transparent 60%),
-    linear-gradient(135deg, color-mix(in srgb, var(--tanaw-selected-bg) 55%, var(--tanaw-surface)), var(--tanaw-surface) 70%) !important;
-}

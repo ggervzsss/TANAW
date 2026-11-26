@@ -1,0 +1,615 @@
+/*
+ * Help Center. One open page, no cards: the page sits on the shell's green wash, the title
+ * carries the civic line, the search is a single prominent field, and articles and categories
+ * are quiet rows split by hairlines that tint on hover.
+ *
+ * Colour follows 60-30-10: the page surface carries most of the screen, ink and hairlines the
+ * structure, and Civic Green only marks what is current or what can be acted on.
+ */
+
+.help-page {
+  --help-line: var(--tanaw-border-soft);
+  --help-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --help-radius: 12px;
+  --help-line-mid: var(--tanaw-accent-ink);
+  width: 100%;
+  max-width: 75rem;
+  margin-inline: auto;
+  padding: 4px 0 40px;
+  color: var(--tanaw-text);
+  font-family: var(--font-sans);
+}
+.dark .help-page {
+  --help-line-mid: color-mix(in srgb, var(--tanaw-accent-ink) 55%, var(--tanaw-action));
+}
+
+.help-page--article {
+  max-width: 52rem;
+}
+
+/* ---------- Header: label, title with civic line, lede ---------- */
+
+.help-kicker {
+  color: var(--tanaw-accent-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.help-title {
+  margin-top: 4px;
+  color: var(--tanaw-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+/* Green, Seal Gold, green: the same civic line that signs the Dashboard and Settings titles. */
+.help-title::after {
+  display: block;
+  width: 56px;
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--tanaw-action) 0%,
+    var(--help-line-mid) 30%,
+    var(--tanaw-gold-line) 50%,
+    var(--help-line-mid) 70%,
+    var(--tanaw-action) 100%
+  );
+  transform-origin: left center;
+  animation: help-line-draw 700ms var(--help-ease) 120ms both;
+  content: "";
+}
+@keyframes help-line-draw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.help-lede {
+  max-width: 62ch;
+  margin-top: 12px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.help-lede--article {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* ---------- Search: one open, prominent field ---------- */
+
+.help-search {
+  max-width: 46rem;
+  margin-top: 32px;
+}
+.help-search-title {
+  color: var(--tanaw-text);
+  font-size: 1.0625rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.help-search-field {
+  position: relative;
+  margin-top: 12px;
+}
+.help-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  color: var(--tanaw-text-muted);
+  translate: 0 -50%;
+  pointer-events: none;
+  transition: color var(--tanaw-duration-fast) var(--help-ease);
+}
+.help-search-field:focus-within .help-search-icon {
+  color: var(--tanaw-accent-ink);
+}
+.help-search-input {
+  width: 100%;
+  height: 52px;
+  padding-inline: 48px;
+  border: 1px solid var(--tanaw-control-border);
+  border-radius: var(--help-radius);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  font-size: 1rem;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--tanaw-text) 6%, transparent);
+  outline: none;
+  transition:
+    border-color var(--tanaw-duration-fast) var(--help-ease),
+    box-shadow var(--tanaw-duration-base) var(--help-ease);
+}
+.help-search-input::placeholder {
+  color: var(--tanaw-text-placeholder);
+}
+/* The field draws its own clear button. */
+.help-search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.help-search-input:hover {
+  border-color: var(--tanaw-control-border-hover);
+}
+.help-search-input:focus {
+  border-color: var(--tanaw-accent-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tanaw-focus-ring) 22%, transparent);
+}
+.help-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--tanaw-text-muted);
+  translate: 0 -50%;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--help-ease),
+    color var(--tanaw-duration-fast) var(--help-ease);
+}
+.help-search-clear:hover {
+  background: var(--tanaw-control-hover);
+  color: var(--tanaw-text);
+}
+.help-search-clear:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- Layout: categories on the left, articles on the right ---------- */
+
+.help-layout {
+  display: grid;
+  gap: 40px;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--help-line);
+}
+.help-main,
+.help-aside {
+  min-width: 0;
+}
+
+@media (width >= 64rem) {
+  .help-layout {
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+    gap: 40px 32px;
+    align-items: start;
+  }
+  /* Categories lead in the left column, past a hairline; article sections stack on the right. */
+  .help-main {
+    grid-column: 2;
+  }
+  .help-aside {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    padding-right: 32px;
+    border-right: 1px solid var(--help-line);
+  }
+}
+
+.help-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.help-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.help-section-title {
+  color: var(--tanaw-text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.help-section-count {
+  color: var(--tanaw-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Article rows: hairlines between, a soft tint on hover ---------- */
+
+/* Rows bleed 12px past the column so their text lines up with the headings and the tint has room. */
+.help-list,
+.help-topics {
+  margin-inline: -12px;
+  padding: 0;
+  list-style: none;
+}
+.help-list > li {
+  position: relative;
+}
+.help-list > li + li::before {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  left: 12px;
+  height: 1px;
+  background: var(--help-line);
+  transition: opacity var(--tanaw-duration-fast) var(--help-ease);
+  content: "";
+  pointer-events: none;
+}
+/* The hairlines either side of a tinted row step back so the tint reads as one soft shape. */
+.help-list > li:hover::before,
+.help-list > li:hover + li::before,
+.help-list > li:focus-within::before,
+.help-list > li:focus-within + li::before {
+  opacity: 0;
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 12px;
+  border-radius: var(--help-radius);
+  color: inherit;
+  text-align: left;
+  transition: background-color var(--tanaw-duration-base) var(--help-ease);
+}
+.help-row:hover {
+  background: var(--tanaw-control-hover);
+}
+.help-row:active {
+  background: var(--tanaw-selected-bg);
+}
+.help-row:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 0;
+}
+.help-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.help-row-category {
+  margin-bottom: 4px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.help-row-title {
+  color: var(--tanaw-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  transition: color var(--tanaw-duration-fast) var(--help-ease);
+}
+.help-row:hover .help-row-title {
+  color: var(--tanaw-accent-ink);
+}
+.help-row-snippet {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.help-row-arrow {
+  color: var(--tanaw-text-muted);
+  transition:
+    color var(--tanaw-duration-fast) var(--help-ease),
+    translate var(--tanaw-duration-base) var(--help-ease);
+}
+.help-row:hover .help-row-arrow,
+.help-row:focus-visible .help-row-arrow {
+  color: var(--tanaw-accent-ink);
+  translate: 2px 0;
+}
+
+/* ---------- Categories: a quiet list, green only for the current one ---------- */
+
+.help-topics {
+  display: grid;
+  gap: 2px;
+}
+.help-topic {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: var(--help-radius);
+  color: var(--tanaw-text);
+  text-align: left;
+  transition: background-color var(--tanaw-duration-base) var(--help-ease);
+}
+.help-topic:hover {
+  background: var(--tanaw-control-hover);
+}
+.help-topic:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 0;
+}
+.help-topic[aria-current] {
+  background: var(--tanaw-selected-bg);
+}
+.help-topic-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--tanaw-surface-inset);
+  color: var(--tanaw-text-secondary);
+  transition:
+    background-color var(--tanaw-duration-base) var(--help-ease),
+    color var(--tanaw-duration-fast) var(--help-ease);
+}
+.help-topic:hover .help-topic-icon {
+  color: var(--tanaw-accent-ink);
+}
+.help-topic[aria-current] .help-topic-icon {
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+}
+.help-topic-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.help-topic[aria-current] .help-topic-label {
+  color: var(--tanaw-accent-ink);
+}
+.help-topic-count {
+  min-width: 1.5rem;
+  color: var(--tanaw-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ---------- Empty states ---------- */
+
+.help-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px;
+  text-align: center;
+}
+.help-empty--page {
+  padding-block: 64px;
+}
+.help-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+.help-empty-title {
+  margin-top: 16px;
+  color: var(--tanaw-text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+.help-empty-title--page {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.help-empty-text {
+  max-width: 40ch;
+  margin-top: 4px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+/* ---------- Article ---------- */
+
+.help-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-inline-start: -10px;
+  padding-inline: 10px 12px;
+  border-radius: 999px;
+  color: var(--tanaw-accent-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color var(--tanaw-duration-fast) var(--help-ease);
+}
+.help-back > svg {
+  transition: translate var(--tanaw-duration-base) var(--help-ease);
+}
+.help-back:hover {
+  background: var(--tanaw-control-hover);
+}
+.help-back:hover > svg {
+  translate: -2px 0;
+}
+.help-back:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.help-article-header {
+  margin-top: 16px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--help-line);
+}
+
+.help-article-body {
+  display: grid;
+  gap: 32px;
+  padding-block: 32px;
+}
+.help-article-heading {
+  color: var(--tanaw-text);
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.help-article-paragraph {
+  max-width: 68ch;
+  margin-top: 8px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+
+/* Numbered steps: a small green figure on a thread that runs to the next step. */
+.help-steps {
+  max-width: 68ch;
+  margin-top: 16px;
+  padding: 0;
+  list-style: none;
+  counter-reset: help-step;
+}
+.help-steps > li {
+  position: relative;
+  padding: 0 0 16px 40px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  counter-increment: help-step;
+}
+.help-steps > li:last-child {
+  padding-bottom: 0;
+}
+.help-steps > li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  content: counter(help-step);
+}
+.help-steps > li:not(:last-child)::after {
+  position: absolute;
+  top: 28px;
+  bottom: 4px;
+  left: 11.5px;
+  width: 1px;
+  background: var(--help-line);
+  content: "";
+}
+
+.help-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+  padding-block: 24px;
+  border-top: 1px solid var(--help-line);
+}
+.help-support-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+.help-support-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.help-support-title {
+  color: var(--tanaw-text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.help-support-text p {
+  margin-top: 2px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.help-related {
+  padding-top: 32px;
+  border-top: 1px solid var(--help-line);
+}
+
+/* ---------- Accessibility ---------- */
+
+/* Windows High Contrast: keep the current category and row focus visible in system colours. */
+@media (forced-colors: active) {
+  .help-topic[aria-current] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .help-search-input:focus {
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-title::after {
+    animation: none;
+  }
+  .help-search-icon,
+  .help-search-input,
+  .help-search-clear,
+  .help-list > li::before,
+  .help-row,
+  .help-row-title,
+  .help-row-arrow,
+  .help-topic,
+  .help-topic-icon,
+  .help-back,
+  .help-back > svg {
+    transition: none;
+  }
+  .help-row:hover .help-row-arrow,
+  .help-row:focus-visible .help-row-arrow,
+  .help-back:hover > svg {
+    translate: none;
+  }
+}

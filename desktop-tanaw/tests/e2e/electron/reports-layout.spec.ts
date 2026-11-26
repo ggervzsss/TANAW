@@ -162,8 +162,9 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("317");
     await expect(page.getByRole("textbox", { name: "This City Male", exact: true })).toHaveCount(0);
     await expect(page.locator(".report-origin-table tfoot")).toContainText("617");
-    await page.getByRole("button", { name: "All from This City", exact: true }).click();
-    await expect(page.getByText("Visitor origins confirmed for this day.", { exact: true })).toBeVisible();
+    // No day needs confirming: until other origins are entered, all its visitors are This City.
+    await expect(page.getByRole("button", { name: "All from This City", exact: true })).toHaveCount(0);
+    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toBeVisible();
     await expect(page.locator(".report-information")).toHaveCSS("display", "grid");
     const visitor = (await page.locator(".report-visitor-card").boundingBox())!;
     const steps = (await page.locator(".report-next-steps").boundingBox())!;

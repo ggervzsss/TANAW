@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   mergeMissingOriginDays,
-  confirmAllThisCity,
   dailyOriginsError,
   formatReportDate,
   missingDays,
@@ -29,16 +28,17 @@ const metrics = {
 } as unknown as Metrics;
 
 describe("daily visitor origins", () => {
-  it("puts every visitor in This City until the user enters other origins", () => {
+  it("puts every visitor in This City until the user enters other origins, with nothing to confirm", () => {
     const days = reportDays("November 2026", metrics, {}, "2026-11-16");
     expect(days.slice(0, 3).map((item) => [item.thisCity, item.status])).toEqual([
-      [12, "missing"],
+      [12, "complete"],
       [0, "no-visitors"],
-      [5, "missing"],
+      [5, "complete"],
     ]);
     expect(days[3].status).toBe("no-visitors");
     expect(days[20].status).toBe("upcoming");
-    expect(dailyOriginsError(days)).toBe("Enter or confirm visitor origins for 2 days before submitting.");
+    expect(missingDays(days)).toEqual([]);
+    expect(dailyOriginsError(days)).toBeNull();
   });
 
   it("deducts entered origins from This City and caps them at the day's visitors", () => {
@@ -58,19 +58,12 @@ describe("daily visitor origins", () => {
     expect(origins["2026-11-01"].otherProvince.male).toBe(0);
   });
 
-  it("clears a day's badge when the user confirms all visitors came from This City", () => {
-    const origins = confirmAllThisCity({}, "2026-11-03");
-    const days = reportDays("November 2026", metrics, origins, "2026-11-16");
-    expect(days[2].status).toBe("complete");
-    expect(days[2].thisCity).toBe(5);
-    expect(missingDays(days).map((item) => item.date)).toEqual(["2026-11-01"]);
-  });
-
   it("flags a confirmed day again when a recount drops below its entered origins", () => {
     const origins: DailyOrigins = { "2026-11-03": { otherCity: { male: 4, female: 3 }, otherProvince: { male: 0, female: 0 }, foreign: { male: 0, female: 0 } } };
     const days = reportDays("November 2026", metrics, origins, "2026-11-16");
     expect(days[2].status).toBe("missing");
     expect(days[2].thisCity).toBe(0);
+    expect(dailyOriginsError(days)).toBe("Lower the visitor origins for 1 day: they add up to more than TANAW counted.");
   });
 
   it("reads saved origins and ignores malformed entries", () => {
@@ -122,15 +115,13 @@ describe("This City male and female from TANAW's estimate", () => {
   it("derives monthly totals with estimated days split and the rest unspecified", () => {
     const origins: DailyOrigins = {
       "2026-11-01": { otherCity: { male: 1, female: 0 }, otherProvince: { male: 0, female: 0 }, foreign: { male: 0, female: 0 } },
-      "2026-11-02": confirmAllThisCity({}, "2026-11-02")["2026-11-02"],
-      "2026-11-03": confirmAllThisCity({}, "2026-11-03")["2026-11-03"],
     };
     const demo = monthlyDemoFromDays(reportDays("November 2026", sexed, origins, "2026-11-16"));
     expect(demo).toMatchObject({ thisCityMale: "3", thisCityFemale: "6", thisCityUnspecified: "15", thisProvMale: "4", thisProvFemale: "6", thisProvUnspecified: "15" });
   });
 
   it("leaves This City male and female blank in months without any estimate", () => {
-    const demo = monthlyDemoFromDays(reportDays("November 2026", metrics, confirmAllThisCity({}, "2026-11-01"), "2026-11-16"));
+    const demo = monthlyDemoFromDays(reportDays("November 2026", metrics, {}, "2026-11-16"));
     expect([demo.thisCityMale, demo.thisCityFemale, demo.thisCityUnspecified]).toEqual(["", "", "17"]);
   });
 });

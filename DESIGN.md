@@ -17,8 +17,8 @@ whole in a 48 px white circle (36 px on phones) with a faint white ring. Each ap
 copy in its assets directory ([web portal](frontend-tanaw/assets/tanaw-logo.png) and
 [desktop app](desktop-tanaw/assets/tanaw-logo.png)).
 
-**Type.** Bai Jamjuree (400–700) for the TANAW wordmark, page titles and section headings. Inter
-for everything else: body, labels, tables, forms and figures. Both are bundled in each app's
+**Type.** Bai Jamjuree (400–700) for the TANAW wordmark and page titles. Inter for everything
+else: section headings (weight 650), body, labels, tables, forms and figures. Both are bundled in each app's
 `public/fonts` under the SIL Open Font License; never load them from a CDN. Counts use tabular
 figures, and numbers in tables are right-aligned.
 
@@ -48,15 +48,53 @@ The city seal's navy `#2a3063` stays in official artwork.
 
 - Only Civic Green fills an action; other greens are text, outlines or atmosphere.
 - Text is never pure black, and gold is never body text on white.
-- Buttons and badges use sentence case; uppercase tracked labels name figures and columns.
+- Buttons, badges and labels use sentence case; uppercase tracked labels are kept for table
+  column headers only.
 - Every count has a label saying what it counts and, where it matters, when.
 - Text meets WCAG AA contrast in both themes; every control has a visible focus state and
   works from the keyboard. Dialogs keep focus inside, close on Escape and return focus.
 - Official report forms and their print and PDF output follow the DOT layouts, whatever the
   app's own style.
 
+## Default UI style
+
+The desktop app's redesign (Dashboard, General Settings, Camera Setup, Reports, Help Center) is
+the default look for every new or reworked screen in both apps. Reach for it unless a screen
+has a stated reason not to (an official DOT form, for example).
+
+- **Open, not boxed.** No cards: no tile that is a border, a fill and a shadow at once. Sections
+  are separated by a hairline (`--tanaw-border-soft`) and air; lists are rows split by hairlines.
+  Dialogs, popovers and toasts are the only raised surfaces.
+- **Green accent at the top.** Every page sits on a Civic Green wash under the topbar
+  (`--tanaw-top-wash`: deepest at the edge, gone by about 22rem, scrolls away with the page).
+  A page title carries the civic line under it: a short green, Seal Gold, green bar that draws
+  in once.
+- **60-30-10.** About 60% neutral surface, 30% ink and hairlines for structure, 10% Civic Green
+  for what is current, chosen or the one action to take. Seal Gold stays a thin mark.
+- **Type scale.** Page title in Bai Jamjuree 700 (28–36px, tight tracking); section headings in
+  Inter 650 (15–22px); body 14–16px; labels and captions 13px; nothing below 12px. Figures use
+  tabular numbers.
+- **Spacing.** A 4px base, used in steps of 4 and 8 (8, 12, 16, 24, 32, 48). Rows keep at least
+  12px clear of a scrollbar, and the scrollbar lane is reserved so content never shifts.
+- **Soft edges.** Radii 8 (chips), 12 (controls, rows, hover tints), 16 (dialogs, previews),
+  20–24 (hero surfaces). Shadows are soft and rare.
+- **Quiet interaction.** Rows and options tint on hover (`--tanaw-control-hover`) and take the
+  green tint (`--tanaw-selected-bg`) when chosen. A selection highlight glides between options
+  rather than jumping. Radio choices are rows with a dot, not tiles.
+- **Loading.** Content that loads shows a skeleton in its own shape, with the shared calm
+  shimmer; fast loads show no placeholder at all. Never a bare spinner for page content.
+- **Motion.** 150–260ms on `cubic-bezier(0.2, 0.8, 0.2, 1)`; a section fades up a few pixels when
+  it changes; live values glide to new readings. `prefers-reduced-motion` turns movement off
+  and keeps state changes.
+- **Usability.** Nielsen's heuristics guide each screen: the system says what it is doing (live
+  tags, saving status), uses the user's words, keeps actions reversible (Cancel, Back), stays
+  consistent across pages, prevents errors before they happen, and keeps help one step away.
+- **Charts.** Bars for counts, a line for a level over time, a soft band for the usual range;
+  every series is named in a legend in plain words, and pointing at a period names its figures
+  as keyed text beside it, not in a box.
+
 ## What each app decides
 
-Layout, navigation, page structure, spacing scale, density, component shapes and motion are
-each app's choice, as long as the identity and rules above hold. Record an app-specific
-convention in that app's README or beside the code that uses it, not here.
+Layout, navigation, page structure, density and workflows are each app's choice, as long as the
+identity, the rules and the default UI style above hold. Record an app-specific convention in
+that app's README or beside the code that uses it, not here.

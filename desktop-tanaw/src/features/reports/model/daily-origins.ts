@@ -8,6 +8,10 @@ import { reportingMonthKey } from "../utils/reporting-period";
  * female. Users enter the visitors who came from origins the cameras cannot tell (another city,
  * another province, abroad); those are deducted from This City, sex by sex. When TANAW had no
  * male/female estimate for a day, This City has a total only.
+ *
+ * A day needs nothing from the user: until other origins are entered, all of its visitors count
+ * as This City. Only a day whose entered origins add up to more than TANAW counted (after a
+ * recount) needs fixing before the report can be submitted.
  */
 export type OtherOrigin = keyof DayOrigins;
 export type Sex = keyof OriginSexCounts;
@@ -17,7 +21,7 @@ export const OTHER_ORIGINS: ReadonlyArray<{ id: OtherOrigin; label: string }> = 
   { id: "foreign", label: "Foreign" },
 ];
 
-/** complete: origins confirmed · missing: needs the user · no-visitors: nothing to allocate · upcoming: not reached yet. */
+/** complete: ready (This City by default) · missing: entered origins exceed the count · no-visitors: nothing to allocate · upcoming: not reached yet. */
 export type ReportDayStatus = "complete" | "missing" | "no-visitors" | "upcoming";
 export type ReportDay = {
   date: string;
@@ -80,7 +84,7 @@ export function reportDays(period: string, metrics: Metrics, origins: DailyOrigi
     const dayOrigins = origins?.[date] ?? null;
     const others = otherOriginsTotal(dayOrigins);
     const weekdayDate = new Date(Date.UTC(year, month - 1, day));
-    const status: ReportDayStatus = date > today && !unique ? "upcoming" : !unique ? "no-visitors" : dayOrigins && others <= unique ? "complete" : "missing";
+    const status: ReportDayStatus = date > today && !unique ? "upcoming" : !unique ? "no-visitors" : others > unique ? "missing" : "complete";
     const thisCity = unique === null ? null : Math.max(0, unique - others);
     // Only an estimate that splits exactly the counted visitors is used.
     const sexed =
@@ -121,11 +125,6 @@ export function setDayOrigin(origins: DailyOrigins, day: ReportDay, origin: Othe
   return { ...origins, [day.date]: { ...current, [origin]: { ...current[origin], [sex]: Math.min(requested, available) } } };
 }
 
-/** Confirms that every visitor of the day came from This City. */
-export function confirmAllThisCity(origins: DailyOrigins, date: string): DailyOrigins {
-  return { ...origins, [date]: emptyDayOrigins() };
-}
-
 export function missingDays(days: ReportDay[]) {
   return days.filter((day) => day.status === "missing");
 }
@@ -133,7 +132,7 @@ export function missingDays(days: ReportDay[]) {
 export function dailyOriginsError(days: ReportDay[]) {
   const missing = missingDays(days).length;
   if (!missing) return null;
-  return `Enter or confirm visitor origins for ${missing.toLocaleString()} ${missing === 1 ? "day" : "days"} before submitting.`;
+  return `Lower the visitor origins for ${missing.toLocaleString()} ${missing === 1 ? "day" : "days"}: they add up to more than TANAW counted.`;
 }
 
 /**

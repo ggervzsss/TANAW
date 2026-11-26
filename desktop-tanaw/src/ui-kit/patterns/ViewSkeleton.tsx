@@ -31,7 +31,8 @@ export function ViewSkeleton({ variant = "dashboard", label = "Loading view", cl
 }
 
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-5", className)}>{children}</div>;
+  // Pages are card-free, so their outlines are too: a section is a hairline and air, not a box.
+  return <div className={cn("border-t border-(--tanaw-border-soft) py-5", className)}>{children}</div>;
 }
 
 function PageHeading() {
@@ -145,19 +146,32 @@ function ListBody() {
 function HelpBody() {
   return (
     <>
-      <Panel className="space-y-4 p-7">
-        <Skeleton className="h-6 w-52" />
-        <Skeleton className="h-12 w-full max-w-3xl" />
-      </Panel>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <Panel key={index} className="space-y-3">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-5 w-3/4" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-2/3" />
-          </Panel>
-        ))}
+      <div className="space-y-3">
+        <Skeleton className="h-5 w-44" />
+        <Skeleton className="h-13 w-full max-w-3xl rounded-tanaw-md" />
+      </div>
+      <div className="grid gap-10 border-t border-(--tanaw-border-soft) pt-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-40" />
+          <div className="divide-y divide-(--tanaw-border-soft)">
+            {[74, 62, 70].map((width, row) => (
+              <div key={row} className="space-y-2 py-4">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-4" style={{ width: `${width}%` }} />
+                <Skeleton className="h-3" style={{ width: `${width - 14}%` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-28" />
+          {Array.from({ length: 5 }, (_, row) => (
+            <div key={row} className="flex h-11 items-center gap-3">
+              <Skeleton className="h-8 w-8 shrink-0" />
+              <Skeleton className="h-3.5 w-2/3" />
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );

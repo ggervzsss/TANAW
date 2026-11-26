@@ -207,7 +207,7 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await selectDashboardPeriod(page, "Month");
   await expect(segment("entries").getByText("910", { exact: true })).toBeVisible();
   await expect(segment("peak").getByText("99", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back to today" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to present" })).toBeVisible();
   await selectDashboardPeriod(page, "Week");
   await expect(segment("entries").getByText("467", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open TANAW Insights" }).click();

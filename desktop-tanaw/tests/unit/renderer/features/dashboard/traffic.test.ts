@@ -11,6 +11,7 @@ import {
   monotonePath,
   niceScale,
   PLOT_TOP,
+  shadeLevel,
   trafficGeometry,
   rangeChangeFromBefore,
   usualHistoryDates,
@@ -36,6 +37,15 @@ describe("two-hour periods of a day", () => {
     expect(bucketStarts(hourly({}))).toEqual([]);
     expect(bucketStarts(hourly({ 9: 4 }, "unavailable"))).toEqual([]);
     expect(bucketStarts(null)).toEqual([]);
+  });
+
+  it("keeps today's periods on the chart before anything is counted, through the current hour", () => {
+    expect(bucketStarts(hourly({}), 10)).toEqual([8, 10, 12, 14, 16, 18]);
+    expect(bucketStarts(hourly({}), 21)).toEqual([8, 10, 12, 14, 16, 18, 20]);
+    // Before opening hours, today still starts at the current period, which reads as zero.
+    expect(bucketStarts(hourly({}), 2)).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+    expect(bucketStarts(hourly({}, "unavailable"), 10)).toEqual([]);
+    expect(hourlyTraffic(hourly({}), [], "12-hour", 10).map((point) => point.entries)).toEqual([null, null, null, null, null, null]);
   });
 
   it("adds entries per period, keeps uncovered periods as gaps and names them", () => {
@@ -165,23 +175,71 @@ describe("chart geometry", () => {
     expect(month.y(10 ** 9)).toBe(PLOT_TOP);
   });
 
-  it("draws the usual band and line through every run of periods that has a usual, and breaks between runs", () => {
+  it("draws the usual band through every run of periods that has a usual, and breaks between runs", () => {
     const points = [point(0, 10, 1), point(1, 20, 2), point(2, 30, 3, false), point(3, 40, 4), point(4, 50, 5)];
     const g = trafficGeometry(points, 1000, 200, 70, true);
     expect(g.band.match(/M/g)).toHaveLength(2);
     expect(g.band.match(/Z/g)).toHaveLength(2);
-    expect(g.usualLine.match(/M/g)).toHaveLength(2);
-    // A lone period with a usual has no line to join, but its range still shows, as a capsule.
+    // A lone period with a usual still shows its range, as a capsule.
     const lone = trafficGeometry([point(0, 10, 1), point(1, 20, 2, false)], 1000, 200, 70, true);
-    expect(lone.usualLine).toBe("");
     expect(lone.band.match(/Z/g)).toHaveLength(1);
     expect(lone.band).toContain(`V${lone.y(300)}`);
     expect(lone.band.startsWith(`M${lone.x(0) - Math.min(lone.slot * 0.8, lone.barWidth + 12) / 2},${lone.y(500)}`)).toBe(true);
+  });
+
+  it("draws occupancy as one line through the periods that have happened, broken at gaps", () => {
+    const points = [point(0, 10, 4), point(1, 20, 0), point(2, 30, null), point(3, 40, 6), point(4, 50, 9), { ...point(5, null, 3), later: true }];
+    const g = trafficGeometry(points, 1000, 200, 70, true);
+    expect(g.occupancyLine.match(/M/g)).toHaveLength(2);
+    const f = (value: number) => Math.round(value * 10) / 10;
+    expect(g.occupancyLine.startsWith(`M${f(g.x(0))},${f(g.yOccupancy(4))}`)).toBe(true);
+    // A zero reading sits on the baseline: the line stays down when nobody is inside.
+    expect(g.occupancyLine).toContain(`${f(g.x(1))},${f(g.base)}`);
+    expect(trafficGeometry([point(0, 10, 4), point(1, 20, null)], 1000, 200, 70, true).occupancyLine).toBe("");
+  });
+
+  it("gives occupancy its own scale on the same gridlines, so the line never lies flat on the floor", () => {
+    const g = trafficGeometry([point(0, 5000, 600, false), point(1, 4000, 300, false)], 1000, 200, 70, false, 56);
+    // Entries keep their own scale; visitors inside rise to the same height range.
+    expect(g.top).toBeGreaterThanOrEqual(5000);
+    expect(g.occupancyTop).toBeGreaterThanOrEqual(600);
+    expect(g.occupancyTop).toBeLessThan(5000);
+    expect(g.yOccupancy(600)).toBeLessThan(g.base - g.barsH / 2);
+    // Every entries gridline carries a round occupancy value.
+    expect(g.ticks.map((tick) => g.occupancyAt(tick))).toEqual(g.ticks.map((_, k) => (k * g.occupancyTop) / (g.ticks.length - 1)));
+    // The left gutter shifts the plot, and the first slot starts after it.
+    expect(g.left).toBe(56);
+    expect(g.x(0)).toBe(56 + g.slot / 2);
+  });
+
+  it("keeps an empty day's occupancy scale readable", () => {
+    const g = trafficGeometry([point(0, 0, 0, false), point(1, 0, 0, false)], 1000, 200, 70, true);
+    expect(g.occupancyTop).toBeGreaterThanOrEqual(10);
+    expect(g.yOccupancy(0)).toBe(g.base);
+  });
+
+  it("draws no usual band for periods of today that have not happened", () => {
+    const later = { ...point(1, null, null), later: true };
+    expect(trafficGeometry([point(0, 10, 1), later], 1000, 200, 70, true).band.match(/Z/g)).toHaveLength(1);
   });
 
   it("keeps the usual within scale, so a high usual never clips above the plot", () => {
     const g = trafficGeometry([point(0, 100, null), point(1, 120, null)], 1000, 200, 70, true);
     expect(g.top).toBeGreaterThanOrEqual(500);
     expect(g.y(500)).toBeGreaterThanOrEqual(PLOT_TOP);
+  });
+});
+
+describe("bar shades", () => {
+  it("runs from the quietest period to the busiest, which is always the deepest", () => {
+    expect(shadeLevel(5374, 3000, 5374)).toBe(5);
+    expect(shadeLevel(3000, 3000, 5374)).toBe(1);
+    expect(shadeLevel(4200, 3000, 5374)).toBe(3);
+  });
+
+  it("gives no shade to a period without entries, and the deepest when every period is alike", () => {
+    expect(shadeLevel(0, 0, 0)).toBe(0);
+    expect(shadeLevel(0, 10, 50)).toBe(0);
+    expect(shadeLevel(40, 40, 40)).toBe(5);
   });
 });

@@ -15,10 +15,12 @@
   --dash-alert: #b42318;
   --dash-alert-soft: #fef3f2;
   --dash-up: #067647;
-  /* Entries by period: one green, darker where the period beat its usual (validated ordinal ramp). */
-  --dash-above: #055b25;
-  --dash-within: #4f9f72;
-  --dash-below: #86be9b;
+  /* Entries by period: one green that deepens with the count, so the busiest period is Civic Green. */
+  --dash-shade-1: #c3e2cd;
+  --dash-shade-2: #93c9a4;
+  --dash-shade-3: #5aa877;
+  --dash-shade-4: #26804b;
+  --dash-shade-5: #055b25;
   /* Redesign 3: the usual range as a soft neutral band, the usual count as a dark line. */
   --dash-band: rgb(31 42 55 / 0.065);
   --dash-uline: #1f2a37;
@@ -48,9 +50,12 @@
   --dash-alert: #f97066;
   --dash-alert-soft: rgb(249 112 102 / 0.09);
   --dash-up: #6ee7b7;
-  --dash-above: #6ee7b7;
-  --dash-within: #2e8a5a;
-  --dash-below: #255a40;
+  /* On the dark page the busiest period reads brightest. */
+  --dash-shade-1: #1f4936;
+  --dash-shade-2: #286041;
+  --dash-shade-3: #317c4f;
+  --dash-shade-4: #3f9c60;
+  --dash-shade-5: #5cc483;
   --dash-band: rgb(226 232 240 / 0.07);
   --dash-uline: #e2e8f0;
   --dash-guide: rgb(174 188 201 / 0.28);
@@ -832,14 +837,20 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
     fill 250ms var(--dash-ease),
     opacity 200ms var(--dash-ease);
 }
-.dash-stop-above {
-  stop-color: var(--dash-above);
+.dash-stop-1 {
+  stop-color: var(--dash-shade-1);
 }
-.dash-stop-within {
-  stop-color: var(--dash-within);
+.dash-stop-2 {
+  stop-color: var(--dash-shade-2);
 }
-.dash-stop-below {
-  stop-color: var(--dash-below);
+.dash-stop-3 {
+  stop-color: var(--dash-shade-3);
+}
+.dash-stop-4 {
+  stop-color: var(--dash-shade-4);
+}
+.dash-stop-5 {
+  stop-color: var(--dash-shade-5);
 }
 .dash-stop-base {
   stop-opacity: 0.74;
@@ -847,14 +858,20 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 .dark .dash-stop-base {
   stop-opacity: 0.62;
 }
-.dash-bar-above {
-  fill: var(--dash-above);
+.dash-bar-shade-1 {
+  fill: var(--dash-shade-1);
 }
-.dash-bar-within {
-  fill: var(--dash-within);
+.dash-bar-shade-2 {
+  fill: var(--dash-shade-2);
 }
-.dash-bar-below {
-  fill: var(--dash-below);
+.dash-bar-shade-3 {
+  fill: var(--dash-shade-3);
+}
+.dash-bar-shade-4 {
+  fill: var(--dash-shade-4);
+}
+.dash-bar-shade-5 {
+  fill: var(--dash-shade-5);
 }
 /* The period still under way reads as unfinished. */
 .dash-bar-live {
@@ -896,30 +913,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   pointer-events: none;
 }
 
-.dash-bubble {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  padding: 3px 9px;
-  border-radius: 7px;
-  background: var(--dash-tip);
-  color: var(--dash-tip-ink);
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgb(16 36 27 / 0.18);
-  white-space: nowrap;
-  pointer-events: none;
-  transition:
-    left 300ms var(--dash-ease-out),
-    top 300ms var(--dash-ease-out);
-}
-.dash-bubble-start {
-  transform: translate(-14px, -100%);
-}
-.dash-bubble-end {
-  transform: translate(calc(-100% + 14px), -100%);
-}
-
 .dash-y-labels {
   position: absolute;
   top: 0;
@@ -931,6 +924,7 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 .dash-y-labels span {
   position: absolute;
   right: 0;
+  white-space: nowrap;
   font-size: 13px;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
@@ -977,21 +971,39 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   display: inline-block;
   flex: none;
 }
-.dash-key-above,
-.dash-key-within,
-.dash-key-below {
+/* The entries key: one square in a mid shade, or the five shades as a short ramp. */
+.dash-key-shade {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--dash-shade-4);
+}
+.dash-key-ramp {
+  display: inline-flex;
+  gap: 2px;
+}
+.dash-key-ramp i {
   width: 12px;
   height: 12px;
   border-radius: 3px;
 }
-.dash-key-above {
-  background: var(--dash-above);
+.dash-key-step-1 {
+  background: var(--dash-shade-1);
 }
-.dash-key-within {
-  background: var(--dash-within);
+.dash-key-step-2 {
+  background: var(--dash-shade-2);
 }
-.dash-key-below {
-  background: var(--dash-below);
+.dash-key-step-3 {
+  background: var(--dash-shade-3);
+}
+.dash-key-step-4 {
+  background: var(--dash-shade-4);
+}
+.dash-key-step-5 {
+  background: var(--dash-shade-5);
+}
+.dash-legend-ends {
+  color: var(--tanaw-text-muted);
 }
 .dash-key-uline {
   position: relative;
@@ -2356,4 +2368,183 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   .dash-main.overview-main {
     min-height: 0;
   }
+}
+
+/* ---------- Visitor Traffic: entries and occupancy, live today ---------- */
+
+/* "Live" beside the title while today is shown: a small green pulse, no pill. */
+.dash-traffic-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dash-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tanaw-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.dash-live-pulse {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tanaw-live);
+}
+.dash-live-pulse::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--tanaw-live);
+  animation: dash-live-ring 2s var(--dash-ease-out) infinite;
+  content: "";
+}
+@keyframes dash-live-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* The readout names both figures of the period: entries (bars) and occupancy (line). */
+.dash-readout-metrics {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px 28px;
+}
+.dash-readout-metrics .dash-readout-value {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.dash-readout-metrics .dash-key {
+  align-self: center;
+  margin-right: 10px;
+}
+.dash-readout-occupancy {
+  color: var(--tanaw-text);
+}
+
+
+/* The occupancy line's shape glides to each new reading instead of jumping. */
+.dash-uline,
+.dash-uline-halo {
+  transition: d 500ms var(--dash-ease-out);
+}
+
+/* The period in progress today: a Civic Green dot with a slow ring, the reading right now. */
+.dash-udot-now {
+  fill: var(--tanaw-live);
+  stroke: var(--dash-page);
+  stroke-width: 3;
+}
+.dash-udot-pulse {
+  fill: var(--tanaw-live);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dash-live-ring 2s var(--dash-ease-out) infinite;
+  pointer-events: none;
+  transition:
+    cx 500ms var(--dash-ease-out),
+    cy 500ms var(--dash-ease-out);
+}
+
+/*
+ * Pointing at a period shows its two figures beside it: keyed text with a halo in the page colour,
+ * no box. It appears only while pointing or moving with the arrow keys.
+ */
+.dash-hover {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  color: var(--tanaw-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-shadow:
+    0 0 2px var(--dash-page),
+    0 0 4px var(--dash-page),
+    0 0 8px var(--dash-page),
+    0 0 12px var(--dash-page);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    left 220ms var(--dash-ease-out),
+    top 220ms var(--dash-ease-out),
+    opacity 160ms var(--dash-ease);
+}
+.dash-hover > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-hover-left > span {
+  justify-content: flex-end;
+}
+.dash-hover b {
+  color: var(--tanaw-text);
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.dash-hover .dash-key-shade {
+  width: 10px;
+  height: 10px;
+}
+.dash-plot-area:hover .dash-hover,
+.dash-plot:focus-visible .dash-hover {
+  opacity: 1;
+}
+
+/* Entries, with its three shades, reads as one legend group. */
+.dash-legend .dash-legend-group {
+  gap: 16px;
+}
+.dash-legend-group strong {
+  color: var(--tanaw-text);
+  font-weight: 600;
+}
+.dash-legend-group > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-live-pulse::after,
+  .dash-udot-pulse {
+    animation: none;
+    opacity: 0;
+  }
+  .dash-uline,
+  .dash-uline-halo,
+  .dash-hover {
+    transition: none;
+  }
+}
+
+/* The occupancy scale sits on the left in the line's ink, so it reads as the line's axis. Each
+   scale is titled above its numbers. */
+.dash-y-labels-occupancy {
+  right: auto;
+  left: 0;
+}
+.dash-y-labels-occupancy span {
+  color: var(--dash-uline);
+  opacity: 0.78;
+}
+.dash-y-labels .dash-y-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tanaw-text-secondary);
+  opacity: 1;
 }

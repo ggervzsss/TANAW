@@ -25,7 +25,7 @@ export function DashboardHeader({ range, today, onRangeChange, notice }: HeaderP
         {!showingToday && (
           <button type="button" className="dash-button dash-button-ghost" onClick={() => onRangeChange(presetRange("today", today))}>
             <RotateCcw size={16} aria-hidden="true" />
-            Back to today
+            Back to present
           </button>
         )}
         <DateRangePicker range={range} today={today} onChange={onRangeChange} />

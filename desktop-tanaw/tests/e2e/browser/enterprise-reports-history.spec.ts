@@ -196,7 +196,7 @@ test("presents unified daily history and distinguishes observed zero from missin
   await expect(header.locator('[data-metric-segment="entries"]').getByText("0", { exact: true })).toBeVisible();
   await expect(header.locator('[data-metric-segment="peak"]')).toContainText("No visitors recorded yet");
   await selectDashboardPeriod(page, "Today");
-  await expect(page.getByRole("button", { name: "Back to today" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Back to present" })).toHaveCount(0);
   await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });

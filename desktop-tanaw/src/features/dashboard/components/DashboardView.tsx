@@ -133,12 +133,21 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
 
   const isToday = single && range.from === today;
   const elapsedHours = isToday ? (now - dayStartMs(today)) / 3_600_000 : null;
+  const liveOccupancy = live?.occupancy ?? null;
   const points = useMemo(() => {
     if (!single) return dailyTraffic(summary, usualDays, range, rangeLength(range) > 8);
-    const periods = hourlyTraffic(hourly, usualHours, timeFormat);
-    // Today, periods that have not started yet are shown as what usually comes, not as gaps.
-    return elapsedHours === null ? periods : periods.map((point) => ({ ...point, later: Number(point.key.slice(1)) > elapsedHours }));
-  }, [single, hourly, usualHours, timeFormat, summary, usualDays, range, elapsedHours]);
+    if (elapsedHours === null) return hourlyTraffic(hourly, usualHours, timeFormat);
+    // Today is live: every period so far is on the chart, a period with no entries reads as zero
+    // (a flat bar and the line at the floor), and the period in progress carries the occupancy the
+    // cameras read right now. Periods that have not started show what usually comes, not gaps.
+    const nowBucket = Math.floor(elapsedHours / BUCKET_HOURS) * BUCKET_HOURS;
+    return hourlyTraffic(hourly, usualHours, timeFormat, Math.floor(elapsedHours)).map((point) => {
+      const start = Number(point.key.slice(1));
+      if (start > elapsedHours) return { ...point, later: true };
+      const occupancy = start === nowBucket && liveOccupancy !== null ? liveOccupancy : (point.occupancy ?? 0);
+      return { ...point, entries: point.entries ?? 0, occupancy, later: false };
+    });
+  }, [single, hourly, usualHours, timeFormat, summary, usualDays, range, elapsedHours, liveOccupancy]);
   const busiest = busiestIndex(points);
   const changePercent = single ? dayChangeFromUsual(points, elapsedHours) : rangeChangeFromBefore(summary, usualDays, range, today);
   const changeText = describeChange(changePercent, single ? `a usual ${weekdayName(range.from)}` : `the ${rangeLength(range)} days before`);
@@ -226,6 +235,7 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
             busiest={busiest}
             summary={chartSummary}
             inProgressKey={inProgressKey}
+            isLive={isToday}
             partialNote={partialNote}
             footnote={footnote}
             loading={loading}

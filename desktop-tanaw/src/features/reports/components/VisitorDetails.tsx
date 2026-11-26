@@ -1,8 +1,8 @@
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { ArrowRight, CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
+import { CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
 import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
-import { confirmAllThisCity, formatReportDate, missingDays, OTHER_ORIGINS, reportingDateKey, setDayOrigin, type ReportDay } from "../model/daily-origins";
+import { formatReportDate, OTHER_ORIGINS, otherOriginsTotal, reportingDateKey, setDayOrigin, type ReportDay } from "../model/daily-origins";
 import { var1MonthlyCells } from "../model/var1";
 import { ReportDayPicker } from "./ReportDayPicker";
 
@@ -31,9 +31,8 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isLoading
   if (!hasDailyOrigins || !selected) return <MonthlyVisitorDetails demo={demo} metrics={metrics} figure={figure} />;
   const day = selected.day;
   const editable = !isReadOnly && Boolean(day.unique);
-  const missing = missingDays(days);
-  const nextMissing = missing.find((item) => item.date > day.date) ?? missing.find((item) => item.date !== day.date);
   const origins = day.origins;
+  const entered = otherOriginsTotal(origins) > 0;
   const sexed = day.thisCityMale !== null && day.thisCityFemale !== null;
   const city = { male: day.thisCityMale ?? 0, female: day.thisCityFemale ?? 0 };
   const sum = (sex: "male" | "female") => (sexed ? city[sex] : 0) + OTHER_ORIGINS.reduce((total, { id }) => total + (origins?.[id][sex] ?? 0), 0);
@@ -112,36 +111,16 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isLoading
         {day.status === "missing" ? (
           <p data-tone="missing" role="status">
             <CircleAlert aria-hidden="true" />
-            Enter visitors from other origins, or confirm that all came from This City.
+            These origins add up to more than the {(day.unique ?? 0).toLocaleString()} visitors TANAW counted. Lower them to continue.
           </p>
         ) : day.status === "complete" ? (
           <p data-tone="complete" role="status">
             <CircleCheck aria-hidden="true" />
-            Visitor origins confirmed for this day.
+            {entered ? "Visitor origins entered for this day." : "All visitors count as This City unless you enter other origins."}
           </p>
         ) : (
           <p role="status">No visitor origins to enter for this day.</p>
         )}
-        <div>
-          {editable && day.status === "missing" && (
-            <button
-              type="button"
-              className="reports-button"
-              onClick={() => {
-                selected.select(day.date);
-                setOrigins((current) => confirmAllThisCity(current, day.date));
-              }}
-            >
-              All from This City
-            </button>
-          )}
-          {!isReadOnly && nextMissing && (
-            <button type="button" className="reports-text-button" onClick={() => selected.select(nextMissing.date)}>
-              Next day to complete
-              <ArrowRight aria-hidden="true" />
-            </button>
-          )}
-        </div>
       </div>
     </>
   );
@@ -225,8 +204,10 @@ function useSelectedDay(days: ReportDay[], period: string) {
   return { day, select: (date: string) => setSelection({ period, date }) };
 }
 
+/** The day shown first: one that needs fixing, else the latest day with visitors, else today. */
 function defaultDay(days: ReportDay[]) {
   const today = reportingDateKey();
   const reached = days.filter((day) => day.status !== "upcoming");
-  return days.find((day) => day.status === "missing") ?? reached.find((day) => day.date === today) ?? reached[reached.length - 1] ?? days[0];
+  const latestVisited = [...reached].reverse().find((day) => Boolean(day.unique));
+  return days.find((day) => day.status === "missing") ?? latestVisited ?? reached.find((day) => day.date === today) ?? reached[reached.length - 1] ?? days[0];
 }

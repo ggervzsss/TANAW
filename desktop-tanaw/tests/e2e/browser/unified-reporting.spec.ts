@@ -39,6 +39,8 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   const submissions: Record<string, unknown>[] = [];
   const uploads: Record<string, unknown>[] = [];
   const drafts = new Map<string, unknown>();
+  // Origins a saved draft already holds, for days that need fixing before submitting.
+  let seededOrigins: Record<string, unknown> | null = null;
   let uploadAvailable = false;
   let uploadRefusal: string | null = null;
   let uploadWait = Promise.resolve();
@@ -110,7 +112,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
       return reply({ enterprise_id: user.enterpriseId, occupancy: 2, partial_occupancy: 2, state: "estimated", contributions: [], missing_camera_ids: [], excluded_camera_ids: [] });
     if (path === "/metrics/establishment/periods") return reply([{ period: "October 2026", metrics, counting }]);
     if (path.startsWith("/reports/drafts/")) {
-      if (request.method === "GET") return reply(drafts.get(path) ?? null);
+      if (request.method === "GET") return reply(drafts.get(path) ?? (seededOrigins ? { payload: { origins: seededOrigins } } : null));
       if (request.method === "DELETE") {
         drafts.delete(path);
         return reply({ updated: 1 });
@@ -135,6 +137,11 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
       saved = { ...saved, sync_status: "synced" };
       return reply({ updated: 1 });
     }
+    // Like the local service: a refused upload is marked, so background sync never retries it.
+    if (path.endsWith("/upload-rejected")) {
+      saved = { ...saved, sync_status: "upload_rejected" };
+      return reply({ updated: 1 });
+    }
     return reply({ detail: `Unconfigured ${path}` }, 503);
   });
   await page.goto("/#/login");
@@ -155,6 +162,7 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
       uploadAvailable = true;
     },
     setLocalSaveAvailable: (available: boolean) => { localSaveAvailable = available; },
+    seedDraftOrigins: (origins: Record<string, unknown>) => { seededOrigins = origins; },
     refuseUpload: (detail: string) => { uploadRefusal = detail; },
     holdUpload: (until: Promise<void>) => { uploadWait = until; },
   };
@@ -180,7 +188,9 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     // TANAW's male/female estimate of the day's unique visitors fills This City.
     await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("1");
     await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
-    await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeDisabled();
+    // A day needs nothing confirmed: until other origins are entered, all its visitors are This City.
+    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeEnabled();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("1");
     await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("0");
@@ -272,6 +282,8 @@ test("reports validation, failed saving and confirmed upload without duplicate f
   await page.locator("tbody tr").filter({ hasText: "October 2026" }).click();
   await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  // A saved draft whose origins add up to more than the day's 2 visitors (after a recount) blocks submitting.
+  state.seedDraftOrigins({ "2026-10-10": { otherCity: { male: 3, female: 0 } } });
   await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
   const submit = page.getByRole("button", { name: "Submit Report", exact: true });
   const success = page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" });

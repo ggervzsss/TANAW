@@ -11,12 +11,12 @@ type Props = {
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 const STATUS_LABEL: Record<ReportDayStatus, string> = {
   complete: "visitor origins complete",
-  missing: "visitor origins missing",
+  missing: "visitor origins exceed the count",
   "no-visitors": "no visitors recorded",
   upcoming: "not yet reached",
 };
 
-/** Calendar of the reporting month. Red badges mark days whose other visitor origins still need the user. */
+/** Calendar of the reporting month. Red badges mark days whose entered origins add up to more than TANAW counted. */
 export function ReportDayPicker({ days, selectedDate, onSelect }: Props) {
   const missing = missingDays(days).length;
   const first = days[0];
@@ -37,7 +37,7 @@ export function ReportDayPicker({ days, selectedDate, onSelect }: Props) {
           </span>
           <span className="sr-only">Selected day: </span>
           <span>{formatReportDate(selectedDate)}</span>
-          {missing > 0 && <span className="sr-only">, {missing} days missing visitor origins</span>}
+          {missing > 0 && <span className="sr-only">, {missing} days with origins over the count</span>}
           <ChevronDown className="report-day-picker-chevron" aria-hidden="true" />
         </>
       }
@@ -47,7 +47,7 @@ export function ReportDayPicker({ days, selectedDate, onSelect }: Props) {
           <header>
             <strong>{monthLabel}</strong>
             <span data-tone={missing ? "missing" : "complete"} role="status">
-              {missing ? `${missing} ${missing === 1 ? "day needs" : "days need"} visitor origins` : "All days complete"}
+              {missing ? `${missing} ${missing === 1 ? "day needs" : "days need"} fixing` : "All days ready"}
             </span>
           </header>
           <div className="report-day-grid" role="group" aria-label={`Days of ${monthLabel}`}>
@@ -79,8 +79,8 @@ export function ReportDayPicker({ days, selectedDate, onSelect }: Props) {
             ))}
           </div>
           <ul className="report-day-legend" aria-label="Legend">
-            <li data-status="missing">Needs visitor origins</li>
-            <li data-status="complete">Complete</li>
+            <li data-status="missing">Origins over the count</li>
+            <li data-status="complete">Ready</li>
             <li data-status="no-visitors">No visitors</li>
           </ul>
         </div>

@@ -31,17 +31,51 @@ function dayTotal(date: string, today: string) {
   return Math.round(date === today ? base * 1.12 : base);
 }
 
-/** Entries per hour of a date; today stops at the current time. */
+/**
+ * Visitors inside, from the entries just before: a visit lasts a little over an hour, so most of
+ * this hour's entries and some of the last hour's are still in. Nobody is inside before anyone
+ * has entered.
+ */
+const STAY_THIS_HOUR = 0.9;
+const STAY_LAST_HOUR = 0.3;
+function insideAfter(entries: number[], hour: number) {
+  return Math.round((entries[hour] ?? 0) * STAY_THIS_HOUR + (entries[hour - 1] ?? 0) * STAY_LAST_HOUR);
+}
+
+/** Entries per hour of a date, and the most visitors inside in each hour; today stops at the current time. */
 function hoursOf(date: string, today: string, elapsedHours: number) {
   const total = dayTotal(date, today);
-  return Array.from({ length: 24 }, (_, hour) => {
+  const done = (hour: number) => (date !== today ? 1 : Math.max(0, Math.min(1, elapsedHours - hour)));
+  const entries = Array.from({ length: 24 }, (_, hour) => {
     const index = hour - FIRST_HOUR;
-    const open = index >= 0 && index < HOUR_SHARE.length;
-    const share = open ? HOUR_SHARE[index] / SHARE_TOTAL : 0;
-    const done = date !== today ? 1 : Math.max(0, Math.min(1, elapsedHours - hour));
-    const entries = open ? Math.round(total * share * (0.9 + 0.2 * seeded(`${date}:${hour}`)) * done) : 0;
-    return { hour, entries, area_visits: 0, peak_occupancy: open && done > 0 ? Math.round(entries * 0.35) : null, covered_ms: open && done > 0 ? Math.round(HOUR_MS * done) : 0 };
+    const share = index >= 0 && index < HOUR_SHARE.length ? HOUR_SHARE[index] / SHARE_TOTAL : 0;
+    return Math.round(total * share * (0.9 + 0.2 * seeded(`${date}:${hour}`)) * done(hour));
   });
+  return entries.map((count, hour) => {
+    const index = hour - FIRST_HOUR;
+    // The cameras run through opening hours and the hour after closing, while the last visitors leave.
+    const covered = index >= 0 && index <= HOUR_SHARE.length && done(hour) > 0;
+    return { hour, entries: count, area_visits: 0, peak_occupancy: covered ? insideAfter(entries, hour) : null, covered_ms: covered ? Math.round(HOUR_MS * done(hour)) : 0 };
+  });
+}
+
+/** Visitors inside right now: none before the first entry, then as the stay model says. */
+function liveOf(today: string, elapsedHours: number): EstablishmentLive {
+  const hours = hoursOf(today, today, elapsedHours);
+  const occupancy = insideAfter(
+    hours.map((hour) => hour.entries),
+    Math.min(23, Math.floor(elapsedHours)),
+  );
+  const doors = Math.round(occupancy * 0.8);
+  return {
+    ...SAMPLE_LIVE,
+    occupancy,
+    partial_occupancy: occupancy,
+    contributions: [
+      { camera_ids: [9001, 9002, 9005], occupancy: doors, state: "estimated", basis: "entry_exit_balance" },
+      { camera_ids: [9004], occupancy: occupancy - doors, state: "estimated", basis: "observed_presence" },
+    ],
+  };
 }
 
 function dayMetrics(date: string, today: string, elapsedHours: number): DailyEstablishmentMetrics {
@@ -177,7 +211,7 @@ export function sampleDashboard(range: DashboardRange, today: string, elapsedHou
   const span = Math.max(USUAL_WEEKS * 7, rangeLength(range));
   return {
     cameras: SAMPLE_CAMERAS,
-    live: SAMPLE_LIVE,
+    live: liveOf(today, elapsedHours),
     marks: sampleMarks(today, elapsedHours),
     summary: summaryOf(range, today, elapsedHours),
     hourly: single ? hourlyOf(range.from, today, elapsedHours) : null,
