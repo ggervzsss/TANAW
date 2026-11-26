@@ -1779,10 +1779,6 @@ html.dark .enterprise-shell .overview-layout.dash .tanaw-assistant.tanaw-assista
 html .enterprise-shell .enterprise-content:has(.dash) {
   padding: 16px 32px 18px;
 }
-html[data-interface-scale] .enterprise-shell .enterprise-content:has(.dash) {
-  padding-top: 16px !important;
-  padding-bottom: 18px !important;
-}
 .enterprise-content:has(> div > .dash) > div {
   height: 100%;
 }
@@ -1793,8 +1789,8 @@ html[data-interface-scale] .enterprise-shell .enterprise-content:has(.dash) {
   align-items: stretch;
   height: 100%;
   max-width: none;
-  /* The dashboard's own side margin, on top of the page padding (which the Display density setting
-     may tighten): about 40px at 1366 wide, growing to about 95px at 1920, never past 120px. */
+  /* The dashboard's own side margin, on top of the page padding: about 40px at 1366 wide, growing
+     to about 95px at 1920, never past 120px. */
   padding-inline: clamp(16px, calc(40px + (100vw - 1366px) * 0.1), 120px);
 }
 .dash-main.overview-main {

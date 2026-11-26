@@ -55,16 +55,17 @@ def validate_report_review_transition(current_status: str, requested_status: str
         raise InvalidReportWorkflowError(
             f"{current_status} reports cannot be changed through intake review actions."
         )
-    if requested_status not in {"Ready to Consolidate", "Returned"}:
+    if requested_status != "Ready to Consolidate":
         raise InvalidReportWorkflowError(
-            "Intake review can only accept a pending report or return it for revision."
+            "Intake review can only accept a pending report as Ready to Consolidate; "
+            "submitted enterprise reports cannot be returned for revision."
         )
 
 
 def validate_new_report_submission(submission_status: str) -> None:
     if submission_status != "Submitted":
         raise InvalidReportWorkflowError(
-            "A report can only be resubmitted after staff returns the existing submission."
+            "A report can only be resubmitted after a final report audit returns it."
         )
 
 

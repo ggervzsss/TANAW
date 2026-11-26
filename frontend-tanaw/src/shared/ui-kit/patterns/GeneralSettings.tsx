@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   Monitor,
   Moon,
-  Pencil,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -25,6 +24,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../components/Button";
+import { getSettingsSaveBarState } from "../lib/settingsDraft";
 import type { AccountIdentity } from "./TopbarAccount";
 import "./GeneralSettings.css";
 
@@ -154,21 +154,27 @@ export function SettingsGroup({
   title,
   description,
   icon,
+  actions,
   children,
 }: {
   title: string;
   description?: string;
   icon?: ReactNode;
+  /** Status and controls that belong to the whole group, shown at the end of the header row. */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="tanaw-settings-group">
-      <header>
-        <h3 className="flex items-center gap-2 text-sm font-bold">
-          {icon}
-          {title}
-        </h3>
-        {description && <p>{description}</p>}
+      <header className="tanaw-settings-group-header">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-sm font-bold">
+            {icon}
+            {title}
+          </h3>
+          {description && <p className="tanaw-settings-group-description">{description}</p>}
+        </div>
+        {actions && <div className="tanaw-settings-group-actions">{actions}</div>}
       </header>
       {children}
     </section>
@@ -177,7 +183,6 @@ export function SettingsGroup({
 
 type ImageUploadProps = {
   account: Pick<AccountIdentity, "name" | "email" | "role">;
-  onEditEmail?: () => void;
   title: string;
   initials: string;
   image?: string | null;
@@ -191,7 +196,6 @@ type ImageUploadProps = {
 
 export function SettingsImageUpload({
   account,
-  onEditEmail,
   title,
   initials,
   image,
@@ -215,20 +219,8 @@ export function SettingsImageUpload({
       <div className="tanaw-settings-identity">
         <h3>{account.name}</h3>
         <p className="tanaw-settings-identity-role">{account.role}</p>
-        {(account.email || onEditEmail) && (
-          <div className="tanaw-settings-identity-email">
-            <p>{account.email || "Email not provided"}</p>
-            {onEditEmail && (
-              <button
-                type="button"
-                className="tanaw-settings-edit-email"
-                onClick={onEditEmail}
-              >
-                <Pencil size={13} aria-hidden="true" />
-                Edit email
-              </button>
-            )}
-          </div>
+        {account.email && (
+          <p className="tanaw-settings-identity-email">{account.email}</p>
         )}
       </div>
       <div className="tanaw-settings-upload-tools">
@@ -276,48 +268,104 @@ export function SettingsImageUpload({
   );
 }
 
-export function SettingsActions({
-  busy,
-  saveDisabled,
-  dirty,
-  onCancel,
-  detail,
-  children,
-}: {
+const firstEditableField =
+  'input:not([type="file"]):not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled)';
+
+type SettingsSaveBarProps = {
+  /** True while the form differs from what is saved. */
+  dirty: boolean;
   busy: boolean;
+  /** Keep the bar on screen when nothing has changed, for single-action forms. */
+  persistent?: boolean;
   saveDisabled?: boolean;
-  dirty?: boolean;
-  onCancel: () => void;
-  detail?: string;
+  onDiscard: () => void;
+  discardLabel?: string;
+  dirtyLabel?: string;
+  busyLabel?: string;
+  /** The submit button's label. */
   children: ReactNode;
-}) {
+};
+
+/**
+ * The one save model for a settings form: a bar pinned to the bottom of the settings panel
+ * that appears while there are unsaved changes, with Discard and the submit action. It sits in
+ * the form's flow, so the end of the form is never hidden behind it.
+ */
+export function SettingsSaveBar({
+  dirty,
+  busy,
+  persistent = false,
+  saveDisabled = false,
+  onDiscard,
+  discardLabel = "Discard",
+  dirtyLabel = "Unsaved changes",
+  busyLabel = "Saving changes...",
+  children,
+}: SettingsSaveBarProps) {
+  const slot = useRef<HTMLDivElement>(null);
+  const hadFocus = useRef(false);
+  const { status, visible, showDiscard } = getSettingsSaveBarState({
+    dirty,
+    busy,
+    persistent,
+  });
+
+  // When the bar leaves after a save or discard, keep keyboard users in the form rather than
+  // dropping focus to the page.
+  useEffect(() => {
+    if (visible || !hadFocus.current) return;
+    hadFocus.current = false;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    slot.current
+      ?.closest("form")
+      ?.querySelector<HTMLElement>(firstEditableField)
+      ?.focus();
+  }, [visible]);
+
   return (
-    <div className="tanaw-settings-actions">
-      <p role="status" className="tanaw-settings-action-status">
-        {busy ? (
-          <>
-            <LoaderCircle
-              size={16}
-              className="motion-safe:animate-spin"
-              aria-hidden="true"
-            />{" "}
-            Saving changes...
-          </>
-        ) : dirty ? (
-          <>
-            <CircleAlert size={16} aria-hidden="true" /> Unsaved changes
-          </>
-        ) : (
-          detail
+    <div
+      ref={slot}
+      className="tanaw-settings-save-slot"
+      onFocus={() => {
+        hadFocus.current = true;
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && !event.currentTarget.contains(next))
+          hadFocus.current = false;
+      }}
+    >
+      <div className="tanaw-settings-actions" data-visible={visible}>
+        <p role="status" className="tanaw-settings-action-status">
+          {status === "saving" ? (
+            <>
+              <LoaderCircle
+                size={16}
+                className="motion-safe:animate-spin"
+                aria-hidden="true"
+              />
+              {busyLabel}
+            </>
+          ) : status === "dirty" ? (
+            <>
+              <CircleAlert size={16} aria-hidden="true" />
+              {dirtyLabel}
+            </>
+          ) : null}
+        </p>
+        {visible && (
+          <div className="tanaw-settings-action-buttons">
+            {showDiscard && (
+              <Button variant="secondary" disabled={busy} onClick={onDiscard}>
+                {discardLabel}
+              </Button>
+            )}
+            <Button type="submit" loading={busy} disabled={saveDisabled}>
+              {children}
+            </Button>
+          </div>
         )}
-      </p>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={busy || saveDisabled}>
-          {children}
-        </Button>
       </div>
     </div>
   );

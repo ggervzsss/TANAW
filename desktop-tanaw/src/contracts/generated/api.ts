@@ -1435,12 +1435,6 @@ export interface components {
         /** AccountPreferences */
         AccountPreferences: {
             /**
-             * Interfacescale
-             * @default default
-             * @enum {string}
-             */
-            interfaceScale: "compact" | "default" | "comfortable";
-            /**
              * Textsize
              * @default default
              * @enum {string}

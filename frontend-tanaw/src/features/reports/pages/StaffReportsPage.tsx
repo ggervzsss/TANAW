@@ -15,6 +15,7 @@ import {
   hasStaffReportFilters,
   parseStaffReportFilters,
   staffReportFilterParams,
+  staffReportsCaption,
   staffReportsSummary,
   type StaffReportFilters,
   type StaffReportRow,
@@ -62,7 +63,7 @@ export function StaffReportsPage() {
     <>
       <PortalPageHeader
         title="Reports"
-        description={`Accept each ${month.month} report, then generate the consolidated report.`}
+        description={staffReportsCaption(month)}
         actions={
           <>
             <Select ariaLabel="Reporting month" value={monthKey(month)} options={monthOptions} onChange={(value) => updateParams({ month: value, report: null })} className="min-w-44" />
@@ -117,10 +118,9 @@ export function StaffReportsPage() {
         <EnterpriseReportDialog
           key={openReport.id}
           report={openReport}
-          isUpdating={data.review.isPending}
+          isUpdating={data.accept.isPending}
           onClose={closeReport}
-          onAccept={(report) => data.review.mutate({ report, status: "Ready to Consolidate", remarks: "Accepted for consolidation." }, { onSuccess: closeReport })}
-          onReturn={(report, remarks) => data.review.mutate({ report, status: "Returned", remarks }, { onSuccess: closeReport })}
+          onAccept={(report) => data.accept.mutate(report, { onSuccess: closeReport })}
         />
       )}
 

@@ -14,7 +14,7 @@ const user = {
 };
 
 async function mockDisplayAccount(page: Page) {
-  let preferences = { theme: "light", textSize: "default", interfaceScale: "default" };
+  let preferences = { theme: "light", textSize: "default" };
   await page.addInitScript(
     (session) => {
       window.localStorage.setItem("tanaw-auth-session-remember", "true");
@@ -38,19 +38,27 @@ test("applies and reloads enterprise display preferences", async ({ page }) => {
   const readPreferences = await mockDisplayAccount(page);
   await page.goto("/#/enterprise/display-preferences");
   await expect(page.getByRole("heading", { name: "Display Preferences" })).toBeVisible();
+  // Text size is the only display preference; there is no interface scale.
+  await expect(page.getByText("Interface scale")).toHaveCount(0);
+  await expect(page.getByRole("radiogroup", { name: "Text size" }).getByRole("radio")).toHaveCount(4);
+  const previewCard = page.getByTestId("display-preview").locator(".tanaw-display-preview-card");
+  await expect(previewCard).toHaveCSS("font-size", "16px");
   await page.getByRole("radio", { name: /Large Makes text easier/ }).check({ force: true });
-  await page.getByRole("radio", { name: /Compact Reduces workspace/ }).check({ force: true });
   await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
   await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Display preferences saved." })).toHaveCount(1);
-  expect(readPreferences()).toMatchObject({ textSize: "large", interfaceScale: "compact" });
+  expect(readPreferences()).toEqual({ theme: "light", textSize: "large" });
+  // The live preview shows the chosen size exactly.
+  await expect(previewCard).toHaveCSS("font-size", "18px");
+  await expect(page.getByTestId("display-preview")).toContainText("Large text, 18px base size");
   await page.route("**/auth/preferences", (route) => {
     if (route.request().method() !== "PATCH") return route.fallback();
     return route.fulfill({ status: 503, json: { detail: "Save unavailable" } });
   }, { times: 1 });
-  await page.getByRole("radio", { name: /Comfortable Adds room/ }).check({ force: true });
+  await page.getByRole("radio", { name: /Small Fits more text/ }).check({ force: true });
   await expect(page.locator(".tanaw-toast--error")).toContainText("Display preferences could not be saved.");
   await expect(page.locator(".tanaw-toast--success")).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: /Large Makes text easier/ })).toBeChecked();
   await page.reload();
   await expect(page.locator("html")).toHaveCSS("font-size", "18px");
-  await expect(page.locator("html")).toHaveAttribute("data-interface-scale", "compact");
+  await expect(page.locator("html")).not.toHaveAttribute("data-interface-scale");
 });

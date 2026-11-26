@@ -31,7 +31,7 @@ async def test_display_preferences_default_and_partial_update_preserve_theme() -
     updated = await update_preferences(AccountPreferences(textSize="large"), account, db)
 
     assert before == AccountPreferences(theme="dark")
-    assert updated == AccountPreferences(theme="dark", textSize="large", interfaceScale="default")
+    assert updated == AccountPreferences(theme="dark", textSize="large")
     assert get_account_preferences(account) == {"theme": "dark", "textSize": "large"}
     db.flush.assert_awaited_once()
 
@@ -42,22 +42,26 @@ async def test_display_preferences_are_isolated_by_account() -> None:
     account_b = make_account("account-b")
     db = AsyncMock()
 
-    await update_preferences(
-        AccountPreferences(textSize="extra-large", interfaceScale="comfortable"),
-        account_a,
-        db,
-    )
+    await update_preferences(AccountPreferences(textSize="extra-large"), account_a, db)
 
-    assert await get_preferences(account_a) == AccountPreferences(
-        textSize="extra-large", interfaceScale="comfortable"
-    )
+    assert await get_preferences(account_a) == AccountPreferences(textSize="extra-large")
     assert await get_preferences(account_b) == AccountPreferences()
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("textSize", "huge"), ("interfaceScale", "zoomed")],
+    [("theme", "sepia"), ("textSize", "huge")],
 )
 def test_display_preferences_reject_unknown_presets(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
         AccountPreferences.model_validate({field: value})
+
+
+@pytest.mark.asyncio
+async def test_display_preferences_ignore_stored_keys_outside_the_schema() -> None:
+    account = make_account("account-a", '{"textSize": "small", "interfaceScale": "compact"}')
+
+    preferences = await get_preferences(account)
+
+    assert preferences == AccountPreferences(textSize="small")
+    assert "interfaceScale" not in preferences.model_dump()

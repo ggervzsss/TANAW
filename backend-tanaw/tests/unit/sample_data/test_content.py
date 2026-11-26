@@ -16,10 +16,7 @@ from app.features.accounts.models import (
 from app.features.mail.models import EmailOutbox
 from app.features.monitoring.models import OperationalAlert
 from app.features.notifications.models import UserNotification
-from app.features.notifications.service import (
-    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
-    STAFF_REPORT_SUBMITTED_NOTIFICATION,
-)
+from app.features.notifications.service import STAFF_REPORT_SUBMITTED_NOTIFICATION
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import DesktopReportSubmissionIngest
 from app.features.requests.models import Request
@@ -209,10 +206,10 @@ def test_target_enterprise_is_missing_for_four_completed_months_and_current_mont
         seeded_review_status(month, current_month) == "Ready to Consolidate"
         for month in pending_months[:-1]
     )
-    # The reporting month mixes waiting, returned and accepted reports by enterprise.
+    # The reporting month mixes waiting and accepted reports by enterprise; none are returned.
     assert seeded_review_status(reporting_month, current_month, 0) == "Ready to Consolidate"
     assert seeded_review_status(reporting_month, current_month, 1) == "Pending Review"
-    assert seeded_review_status(reporting_month, current_month, 2) == "Returned"
+    assert seeded_review_status(reporting_month, current_month, 2) == "Pending Review"
     assert seeded_review_status(reporting_month, current_month, 4) == "Pending Review"
     assert seeded_review_status(current_month, current_month) == "Pending Review"
 
@@ -378,32 +375,29 @@ def test_report_for_the_month_in_progress_covers_only_elapsed_days() -> None:
     assert last_reported_day(month_start, datetime(2026, 11, 1, 1, tzinfo=UTC)) == date(2026, 11, 1)
 
 
-def test_staff_notification_reports_include_current_submission_and_resubmission() -> None:
+def test_staff_notification_reports_announce_waiting_reporting_month_submissions() -> None:
     reporting_month = datetime(2026, 7, 1, tzinfo=UTC)
     older_report = _report("REP-260601", datetime(2026, 7, 4, tzinfo=UTC), "June 2026")
-    submitted_report = _report("REP-260701", datetime(2026, 8, 4, tzinfo=UTC), "July 2026")
-    submitted_report.review_status = "Pending Review"
-    resubmitted_report = _report("REP-260702", datetime(2026, 8, 9, tzinfo=UTC), "July 2026")
-    resubmitted_report.review_status = "Pending Review"
-    extra_current_report = _report("REP-260703", datetime(2026, 8, 5, tzinfo=UTC), "July 2026")
+    older_report.review_status = "Pending Review"
+    first_report = _report("REP-260701", datetime(2026, 8, 4, tzinfo=UTC), "July 2026")
+    first_report.review_status = "Pending Review"
+    second_report = _report("REP-260702", datetime(2026, 8, 9, tzinfo=UTC), "July 2026")
+    second_report.review_status = "Pending Review"
+    third_report = _report("REP-260704", datetime(2026, 8, 10, tzinfo=UTC), "July 2026")
+    third_report.review_status = "Pending Review"
+    accepted_report = _report("REP-260703", datetime(2026, 8, 5, tzinfo=UTC), "July 2026")
 
     prepared = prepare_staff_notification_reports(
-        [older_report, submitted_report, extra_current_report, resubmitted_report],
+        [older_report, first_report, accepted_report, second_report, third_report],
         reporting_month,
     )
 
-    assert prepared == [
-        (submitted_report, STAFF_REPORT_SUBMITTED_NOTIFICATION),
-        (resubmitted_report, STAFF_REPORT_RESUBMITTED_NOTIFICATION),
-    ]
-    assert submitted_report.review_status == "Pending Review"
-    assert resubmitted_report.review_status == "Pending Review"
-    assert submitted_report.payload_json is not None
-    assert resubmitted_report.payload_json is not None
-    assert json.loads(submitted_report.payload_json)["status"] == "Submitted"
-    assert json.loads(resubmitted_report.payload_json)["status"] == "Resubmitted"
-    assert older_report.review_status == "Ready to Consolidate"
-    assert extra_current_report.review_status == "Ready to Consolidate"
+    assert prepared == [first_report, second_report]
+    for report in (first_report, second_report):
+        assert report.review_status == "Pending Review"
+        assert report.payload_json is not None
+        assert json.loads(report.payload_json)["status"] == "Submitted"
+    assert accepted_report.review_status == "Ready to Consolidate"
 
 
 @pytest.mark.asyncio
@@ -424,7 +418,7 @@ async def test_mock_staff_notifications_match_production_notification_shape() ->
     count = await create_staff_report_notifications(
         db,
         [staff],
-        [(report, STAFF_REPORT_SUBMITTED_NOTIFICATION)],
+        [report],
     )
 
     assert count == 1

@@ -48,39 +48,58 @@ async function mockReports(page: Page, options: { theme?: PortalTheme; now: stri
   return state;
 }
 
-test("Staff returns a report for correction with remarks, and it then opens read only", async ({ page }) => {
+test("A submitted report is Reviewing and can only be accepted; an enterprise yet to send one is Waiting", async ({ page }) => {
   const state = await mockReports(page, { now: "2026-11-24T10:00:00+08:00" });
   await page.goto("/staff/reports?month=2026-10&report=plaza-oct");
   const dialog = page.getByRole("dialog", { name: "Enterprise report", exact: true });
   await expect(dialog.getByText("City Plaza Shops · October 2026")).toBeVisible();
   await expect(dialog.getByText("No notes were sent with this report.")).toBeVisible();
+  await expect(dialog.getByText("Reviewing", { exact: true })).toBeVisible();
+  // TANAW does not return submitted reports, and the enterprise report has no download or print.
+  await expect(dialog.getByRole("button", { name: "Return for correction" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Print" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Accept report" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 
-  await dialog.getByRole("button", { name: "Return for correction" }).click();
-  const returnDialog = page.getByRole("dialog", { name: "Return for correction" });
-  await returnDialog.getByRole("button", { name: "Return report" }).click();
-  await expect(returnDialog.getByText("Say what the enterprise needs to correct.")).toBeVisible();
-  await returnDialog.getByRole("textbox", { name: "What needs correcting" }).fill("The October 14 count is missing.");
-  await returnDialog.getByRole("button", { name: "Return report" }).click();
-  await expect.poll(() => state.updates).toEqual([{ status: "Returned", remarks: "The October 14 count is missing." }]);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page).not.toHaveURL(/report=/);
-
-  const row = page.getByRole("row", { name: /City Plaza Shops/ });
-  await expect(row.getByText("Reviewing", { exact: true })).toBeVisible();
-  await expect(row.getByText("Returned for correction")).toBeVisible();
+  await expect(page.getByText("Reports for October 2026, due November 10. Accept each submitted report, then generate the consolidated report.")).toBeVisible();
+  // Missing first, then Submitted; the submitted report is Reviewing, the missing one Waiting.
+  const rows = page.locator("tbody tr");
+  await expect(rows.nth(0)).toContainText("Laguna Lakeside Resort");
+  await expect(rows.nth(1)).toContainText("City Plaza Shops");
+  const plaza = page.getByRole("row", { name: /City Plaza Shops/ });
+  const resort = page.getByRole("row", { name: /Laguna Lakeside Resort/ });
+  await expect(plaza.getByText("Submitted", { exact: true })).toBeVisible();
+  await expect(plaza.getByText("Reviewing", { exact: true })).toBeVisible();
+  await expect(resort.getByText("Missing", { exact: true })).toBeVisible();
+  await expect(resort.getByText("Waiting", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate consolidated report" })).toBeDisabled();
   await expect(page.locator("#staff-reports-status")).toContainText("consolidated. Generate once");
 
-  // Filter to the reports being reviewed; the filter is kept in the address.
+  // Waiting lists the enterprise that has not sent a report; the filter is kept in the address.
+  await page.getByRole("combobox", { name: "Staff review" }).click();
+  await page.getByRole("option", { name: "Waiting", exact: true }).click();
+  await expect(page).toHaveURL(/review=waiting/);
+  await expect(resort).toBeVisible();
+  await expect(plaza).toHaveCount(0);
+  await expect(page.getByText(/^Showing 1 of \d+ enterprises/)).toBeVisible();
+
   await page.getByRole("combobox", { name: "Staff review" }).click();
   await page.getByRole("option", { name: "Reviewing", exact: true }).click();
   await expect(page).toHaveURL(/review=reviewing/);
-  await expect(page.getByRole("row", { name: /Laguna Lakeside Resort/ })).toHaveCount(0);
-  await expect(page.getByText(/^Showing 1 of \d+ enterprises/)).toBeVisible();
+  await expect(resort).toHaveCount(0);
+  await page.getByRole("button", { name: "Review the report from City Plaza Shops" }).click();
+  await dialog.getByRole("button", { name: "Accept report" }).click();
+  await expect.poll(() => state.updates).toEqual([{ status: "Ready to Consolidate", remarks: "Accepted for consolidation." }]);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/report=/);
+
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(plaza.getByText("Consolidated", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "View the report from City Plaza Shops" }).click();
-  await expect(dialog.getByText("Returned for correction: The October 14 count is missing.")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Download PDF" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });

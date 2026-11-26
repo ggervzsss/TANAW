@@ -295,7 +295,6 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
           <div
             ref={contentScrollRef}
             data-form-scroll-container
-            data-density-adjustable={activeView !== "cameras"}
             className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
           >
             <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>

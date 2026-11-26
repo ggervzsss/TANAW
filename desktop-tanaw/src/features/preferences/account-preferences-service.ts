@@ -13,10 +13,10 @@ export async function updateAccountPreferences(preferences: Partial<AccountPrefe
   return normalizeAccountPreferences(response.data);
 }
 
-function normalizeAccountPreferences(preferences: Partial<AccountPreferences>): AccountPreferences {
+/** The preferences TANAW stores for an account, with defaults for anything the server left out. */
+export function normalizeAccountPreferences(preferences: Partial<AccountPreferences>): AccountPreferences {
   return {
     theme: preferences.theme ?? "system",
     textSize: preferences.textSize ?? "default",
-    interfaceScale: preferences.interfaceScale ?? "default",
   };
 }

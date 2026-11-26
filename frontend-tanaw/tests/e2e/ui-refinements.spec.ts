@@ -124,8 +124,8 @@ test("uses the night topbar, keyboard month filter, and wide report preview", as
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("SAMPLE-FINAL-MAY-2026-0001.pdf");
   await download.saveAs(testInfo.outputPath("official-final-report.pdf"));
-  await expect(viewer.getByRole("button", { name: "Print to PDF" })).toHaveCount(0);
-  await expect(page.locator('iframe[title="Official report print document"]')).toHaveCount(0);
+  await expect(viewer.getByRole("button", { name: "Print", exact: true })).toBeVisible();
+  await expect(page.locator('iframe[title="Report print document"]')).toHaveCount(0);
   await expect(page.locator("html")).not.toHaveAttribute("data-print-invoked", "true");
   await page.keyboard.press("Escape");
   await expect(viewer).toBeHidden();
@@ -142,7 +142,7 @@ test("compiles the finalized months into the annual VAR 3M", async ({ page }, te
   await expect(var3.getByRole("columnheader", { name: "Archie's Event Place - 799" })).toBeVisible();
   await expect(var3.getByRole("rowheader", { name: "May" })).toHaveCSS("background-color", "rgb(255, 255, 0)");
   await expect(var3.getByRole("row", { name: /^May/ })).toContainText("377");
-  await expect(page.getByText("1 of 12 months finalized", { exact: true })).toBeVisible();
+  await expect(page.getByText(/months finalized/)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("annual-report-dark.png"), animations: "disabled" });
   await page.setViewportSize({ width: 390, height: 844 });
   const annual = page.getByRole("dialog", { name: "Annual report (VAR 3M)" });

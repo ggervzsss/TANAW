@@ -9,7 +9,6 @@ export function AccountSecurityPage() {
       errors={password.errors}
       formRef={password.formRef}
       isLoading={password.isLoading}
-      isSuccess={password.isSuccess}
       newPassword={password.newPassword}
       passwordConfirmation={password.passwordConfirmation}
       resetSignal={password.resetSignal}
@@ -18,7 +17,7 @@ export function AccountSecurityPage() {
       onNewPasswordChange={(value) => password.updateField("newPassword", value)}
       onConfirmationChange={(value) => password.updateField("confirmPassword", value)}
       onSubmit={password.submit}
-      onCancel={password.reset}
+      onClear={password.reset}
     />
   );
 }

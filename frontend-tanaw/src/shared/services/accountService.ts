@@ -8,7 +8,6 @@ export const accountPreferencesQueryKey = ["account-preferences"] as const;
 export type AccountPreferences = {
   theme: "light" | "dark" | "system";
   textSize: "small" | "default" | "large" | "extra-large";
-  interfaceScale: "compact" | "default" | "comfortable";
 };
 
 export type ProfileUpdatePayload = {
@@ -60,7 +59,6 @@ function normalizeAccountPreferences(preferences: Partial<AccountPreferences>): 
   return {
     theme: preferences.theme ?? "system",
     textSize: preferences.textSize ?? "default",
-    interfaceScale: preferences.interfaceScale ?? "default",
   };
 }
 

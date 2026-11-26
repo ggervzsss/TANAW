@@ -25,7 +25,6 @@ export function useAccountProfileForm() {
     phone: authUser?.phone ?? "",
   };
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [fieldResetSignal, setFieldResetSignal] = useState(0);
   const [isReadingImage, setIsReadingImage] = useState(false);
   const [imageError, setImageError] = useState("");
@@ -74,7 +73,6 @@ export function useAccountProfileForm() {
     }
     const apiName = composeApiPersonName({ firstName, middleInitial, lastName });
     setIsLoading(true);
-    setIsSuccess(false);
     try {
       const updated = await updateCurrentProfile({
         firstName: apiName.firstName,
@@ -85,9 +83,7 @@ export function useAccountProfileForm() {
       });
       updateUser(updated);
       setDisplayImageDraft({ dataUrl: updated.displayImageDataUrl ?? null, fileName: "", sourceDataUrl: updated.displayImageDataUrl ?? null });
-      setIsSuccess(true);
       setFieldResetSignal((current) => current + 1);
-      window.setTimeout(() => setIsSuccess(false), 2600);
       toast.success("Profile updated.");
       return true;
     } catch (error) {
@@ -104,7 +100,6 @@ export function useAccountProfileForm() {
     const version = ++imageVersion.current;
     setIsReadingImage(true);
     setImageError("");
-    setIsSuccess(false);
     try {
       const upload = await readProfileImageFile(file);
       if (version !== imageVersion.current) return;
@@ -128,18 +123,15 @@ export function useAccountProfileForm() {
     imageChanged: displayImageDataUrl !== authDisplayImageDataUrl,
     isReadingImage,
     isLoading,
-    isSuccess,
     profileName,
     saveError,
     clearFieldError: (field: keyof typeof errors) => {
       setErrors((current) => ({ ...current, [field]: undefined }));
       setSaveError("");
-      setIsSuccess(false);
     },
     removeImage: () => {
       imageVersion.current++;
       setImageError("");
-      setIsSuccess(false);
       setDisplayImageDraft({ dataUrl: null, fileName: "", sourceDataUrl: authDisplayImageDataUrl });
     },
     reset: () => {
@@ -148,7 +140,6 @@ export function useAccountProfileForm() {
       setImageError("");
       setErrors({});
       setSaveError("");
-      setIsSuccess(false);
       setFieldResetSignal((current) => current + 1);
       setDisplayImageDraft({ dataUrl: authDisplayImageDataUrl, fileName: "", sourceDataUrl: authDisplayImageDataUrl });
     },

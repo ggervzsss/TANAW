@@ -85,7 +85,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
 
   await page.goto("/staff/reports?month=2026-10");
   await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
-  await expect(page.getByText("Accept each October report, then generate the consolidated report.")).toBeVisible();
+  await expect(page.getByText("Reports for October 2026, due November 10. Accept each submitted report, then generate the consolidated report.")).toBeVisible();
   const generate = page.getByRole("button", { name: "Generate consolidated report", exact: true });
   const status = page.locator("#staff-reports-status");
   await expect(generate).toBeDisabled();
@@ -137,6 +137,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await page.getByRole("button", { name: "View the report from Park" }).click();
   await expect(intakeDialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);
   await expect(intakeDialog.getByRole("button", { name: "Return for correction" })).toHaveCount(0);
+  await expect(intakeDialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await intakeDialog.getByRole("button", { name: "Close report" }).click();
 
   await expect(generate).toBeEnabled();
@@ -154,6 +155,8 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(monthlyDialog.getByText(/Report History|Establishment counting details|Citywide arrivals|Camera evidence/)).toHaveCount(0);
   await expect(monthlyTable).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: testInfo.outputPath("staff-unified-consolidated-light.png"), animations: "disabled" });
+  await expect(monthlyDialog.getByRole("button", { name: "Download PDF" })).toBeVisible();
+  await expect(monthlyDialog.getByRole("button", { name: "Print", exact: true })).toBeVisible();
   await monthlyDialog.getByRole("button", { name: "Finalize monthly report" }).click();
   await expect(monthlyDialog.getByRole("button", { name: "Finalize monthly report" })).toHaveCount(0);
   await monthlyDialog.getByRole("button", { name: "Close report" }).click();
@@ -163,7 +166,8 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(monthlyRow).toContainText(final.id);
   await expect(monthlyRow).toContainText("1 of 2");
   await expect(monthlyRow.getByText("Consolidated", { exact: true })).toBeVisible();
-  await expect(monthlyRow.getByRole("button", { name: "Download the October 2026 report as PDF" })).toBeVisible();
+  await expect(monthlyRow.getByRole("button", { name: "View the October 2026 report" })).toBeVisible();
+  await expect(monthlyRow.getByRole("button", { name: /PDF/ })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("consolidated-reports-light.png"), animations: "disabled" });
 
   await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
@@ -171,10 +175,15 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   const annualRow = page.getByRole("table", { name: "Annual reports" }).getByRole("row", { name: /2026/ });
   await expect(annualRow).toContainText("1 of 12");
   await expect(annualRow.getByText("Waiting", { exact: true })).toBeVisible();
+  await expect(annualRow.getByRole("button", { name: /PDF/ })).toHaveCount(0);
   await annualRow.getByRole("button", { name: "View the 2026 annual report" }).click();
   await expect(page).toHaveURL(/annual=2026/);
   const annualDialog = page.getByRole("dialog", { name: "Annual report (VAR 3M)" });
   await expect(annualDialog.getByRole("columnheader", { name: "Park - 411" })).toBeVisible();
+  await expect(annualDialog.getByText("City of San Pedro, Laguna · 2026", { exact: true })).toBeVisible();
+  await expect(annualDialog.getByRole("combobox", { name: "Report year" })).toHaveCount(0);
+  await expect(annualDialog.getByText(/months finalized/)).toHaveCount(0);
+  await expect(annualDialog.getByRole("button", { name: "Print", exact: true })).toBeVisible();
   await expect(annualDialog.getByRole("row", { name: /^October/ })).toContainText("2");
   expect(generations).toBe(1);
 });

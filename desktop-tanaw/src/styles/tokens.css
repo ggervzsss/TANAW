@@ -302,14 +302,6 @@
   --shadow-tanaw-banner: 0 16px 44px rgb(0 0 0 / 0.58);
 }
 
-html[data-interface-scale="compact"] {
-  --tanaw-topbar-height: 5rem;
-}
-
-html[data-interface-scale="comfortable"] {
-  --tanaw-topbar-height: 6rem;
-}
-
 @media (max-width: 640px) {
   :root {
     --tanaw-topbar-height: 4.5rem;

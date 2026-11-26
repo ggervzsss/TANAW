@@ -28,9 +28,13 @@ from app.features.reporting.schemas import (
 from tests.support.counting import counting_snapshot
 
 
-def test_pending_report_can_be_accepted_or_returned() -> None:
+def test_pending_report_can_be_accepted() -> None:
     validate_report_review_transition("Pending Review", "Ready to Consolidate")
-    validate_report_review_transition("Pending Review", "Returned")
+
+
+def test_intake_review_cannot_return_a_submitted_report() -> None:
+    with pytest.raises(InvalidReportWorkflowError, match="cannot be returned for revision"):
+        validate_report_review_transition("Pending Review", "Returned")
 
 
 def test_departures_of_previous_period_visitors_are_preserved() -> None:
@@ -60,7 +64,7 @@ def test_departures_of_previous_period_visitors_are_preserved() -> None:
 @pytest.mark.parametrize("current_status", ["Ready to Consolidate", "Returned", "Consolidated"])
 def test_non_pending_report_cannot_be_changed_by_review_action(current_status: str) -> None:
     with pytest.raises(InvalidReportWorkflowError):
-        validate_report_review_transition(current_status, "Returned")
+        validate_report_review_transition(current_status, "Ready to Consolidate")
 
 
 def test_consolidated_status_is_not_a_direct_review_action() -> None:

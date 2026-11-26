@@ -7,8 +7,10 @@ import { notifyError, notifySuccess } from "../toasts/services/toast-service";
 import { getAccountPreferences, updateAccountPreferences } from "./account-preferences-service";
 import {
   defaultDisplayPreferences,
+  sameDisplayPreferences,
   SystemDisplayPreferencesContext,
   textSizeRootValue,
+  toDisplayPreferences,
   type DisplayPreferences,
   type PreferenceSaveStatus,
 } from "./system-display-preferences";
@@ -51,7 +53,7 @@ export function SystemDisplayPreferencesProvider({ children }: { children: React
     void getAccountPreferences()
       .then((preferences) => {
         if (disposed || activeAccountIdRef.current !== accountId || interactionVersionRef.current !== interactionVersion) return;
-        const display = { textSize: preferences.textSize, interfaceScale: preferences.interfaceScale };
+        const display = toDisplayPreferences(preferences);
         confirmedRef.current = display;
         desiredRef.current = display;
         setLocalState({ accountId, preferences: display, status: "saved" });
@@ -69,7 +71,6 @@ export function SystemDisplayPreferencesProvider({ children }: { children: React
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.textSize = displayPreferences.textSize;
-    root.dataset.interfaceScale = displayPreferences.interfaceScale;
     root.style.setProperty("--tanaw-root-font-size", textSizeRootValue(displayPreferences.textSize));
   }, [displayPreferences]);
 
@@ -80,7 +81,7 @@ export function SystemDisplayPreferencesProvider({ children }: { children: React
       try {
         const saved = await updateAccountPreferences(snapshot);
         if (activeAccountIdRef.current !== targetAccountId) return;
-        const confirmed = { textSize: saved.textSize, interfaceScale: saved.interfaceScale };
+        const confirmed = toDisplayPreferences(saved);
         confirmedRef.current = confirmed;
         failedDesiredRef.current = null;
         if (sameDisplayPreferences(desiredRef.current, snapshot)) {
@@ -129,10 +130,6 @@ export function SystemDisplayPreferencesProvider({ children }: { children: React
       {children}
     </SystemDisplayPreferencesContext.Provider>
   );
-}
-
-function sameDisplayPreferences(left: DisplayPreferences, right: DisplayPreferences) {
-  return left.textSize === right.textSize && left.interfaceScale === right.interfaceScale;
 }
 
 async function getSystemSettings() {

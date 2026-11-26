@@ -2,7 +2,7 @@ import type { FormEvent, RefObject } from "react";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { Alert } from "@/shared/ui-kit";
 import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
-import { SettingsActions, SettingsGroup } from "@/shared/ui-kit/patterns/GeneralSettings";
+import { SettingsGroup, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "@/shared/utils/passwordPolicy";
 import type { PasswordErrors } from "../model";
 import { AccountField } from "./AccountField";
@@ -12,9 +12,8 @@ type PasswordChangePanelProps = {
   errors: PasswordErrors;
   formRef: RefObject<HTMLFormElement | null>;
   isLoading: boolean;
-  isSuccess: boolean;
   newPassword: string;
-  onCancel: () => void;
+  onClear: () => void;
   onConfirmationChange: (value: string) => void;
   onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
@@ -30,9 +29,8 @@ export function PasswordChangePanel(props: PasswordChangePanelProps) {
     errors,
     formRef,
     isLoading,
-    isSuccess,
     newPassword,
-    onCancel,
+    onClear,
     onConfirmationChange,
     onCurrentPasswordChange,
     onNewPasswordChange,
@@ -104,9 +102,19 @@ export function PasswordChangePanel(props: PasswordChangePanelProps) {
         </SettingsGroup>
         {saveError && <Alert tone="danger">{saveError}</Alert>}
       </fieldset>
-      <SettingsActions busy={isLoading} dirty={dirty} saveDisabled={!dirty} detail={isSuccess ? "Password updated" : undefined} onCancel={onCancel}>
-        Update Password
-      </SettingsActions>
+      {/* A password change is one deliberate action, so its button stays in view, disabled until something is typed. */}
+      <SettingsSaveBar
+        persistent
+        busy={isLoading}
+        dirty={dirty}
+        saveDisabled={!dirty}
+        onDiscard={onClear}
+        discardLabel="Clear"
+        dirtyLabel="Password not updated yet"
+        busyLabel="Updating password..."
+      >
+        Update password
+      </SettingsSaveBar>
     </form>
   );
 }

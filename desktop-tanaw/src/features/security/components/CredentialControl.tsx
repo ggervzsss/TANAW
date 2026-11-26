@@ -13,11 +13,10 @@ export type PasswordChangeValues = {
 
 type CredentialControlProps = {
   isLoading: boolean;
-  isSuccess: boolean;
   onSubmit: (values: PasswordChangeValues) => Promise<boolean>;
 };
 
-export function CredentialControl({ isLoading, isSuccess, onSubmit }: CredentialControlProps) {
+export function CredentialControl({ isLoading, onSubmit }: CredentialControlProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -37,12 +36,13 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isLoading || !dirty) return;
-    await onSubmit({
+    const updated = await onSubmit({
       confirmPassword: passwordConfirmation,
       currentPassword,
       newPassword,
     });
-    reset();
+    // Keep what was typed after a failed attempt so it can be corrected; clear it once saved.
+    if (updated) reset();
   };
 
   const reset = () => {
@@ -123,8 +123,8 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
           </div>
         </SettingsGroup>
       </fieldset>
-      <SettingsActions busy={isLoading} dirty={dirty} saveDisabled={!dirty} detail={isSuccess ? "Password updated" : undefined} onCancel={reset}>
-        Update Password
+      <SettingsActions busy={isLoading} dirty={dirty} onDiscard={reset}>
+        Update password
       </SettingsActions>
     </form>
   );

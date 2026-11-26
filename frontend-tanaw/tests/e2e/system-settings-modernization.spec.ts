@@ -33,7 +33,7 @@ test("persists independent settings, rolls back failures, and confirms security 
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "settings-token", user }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
   await page.route("**/auth/preferences", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light", textSize: "default", interfaceScale: "default" }) }),
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light", textSize: "default" }) }),
   );
   await page.route("**/auth/system-settings", async (route) => {
     if (route.request().method() === "PATCH") {

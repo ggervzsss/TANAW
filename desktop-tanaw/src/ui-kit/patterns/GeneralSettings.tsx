@@ -154,22 +154,35 @@ export function SettingsGroup({
   title,
   description,
   icon,
+  actions,
   children,
 }: {
   title: string;
   description?: string;
   icon?: ReactNode;
+  /** Status and actions that belong to the whole group, such as a save state or Reset. */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
+  const heading = (
+    <>
+      <h3>
+        {icon}
+        {title}
+      </h3>
+      {description && <p>{description}</p>}
+    </>
+  );
   return (
     <section className="tanaw-settings-group">
-      <header>
-        <h3>
-          {icon}
-          {title}
-        </h3>
-        {description && <p>{description}</p>}
-      </header>
+      {actions ? (
+        <header className="tanaw-settings-group-header">
+          <div className="min-w-0">{heading}</div>
+          <div className="tanaw-settings-group-actions">{actions}</div>
+        </header>
+      ) : (
+        <header>{heading}</header>
+      )}
       {children}
     </section>
   );
@@ -298,24 +311,31 @@ export function SettingsImageUpload({
   );
 }
 
+/**
+ * The save bar of a settings form. It appears only while the form has unsaved changes (or is
+ * saving them), sticks to the bottom of the settings panel, and offers Discard and the form's
+ * one save action. A form with nothing to save shows no Cancel or Save buttons at all.
+ */
 export function SettingsActions({
   busy,
   saveDisabled,
   dirty,
-  onCancel,
-  detail,
+  onDiscard,
   children,
 }: {
   busy: boolean;
   saveDisabled?: boolean;
-  dirty?: boolean;
-  onCancel: () => void;
-  detail?: string;
+  dirty: boolean;
+  onDiscard: () => void;
   children: ReactNode;
 }) {
+  const open = dirty || busy;
+  // The status paragraph stays mounted while the form is clean (empty and visually hidden), so
+  // screen readers announce "Unsaved changes" when the bar appears: a live region inserted with
+  // its text already inside is often not announced.
   return (
-    <div className="tanaw-settings-actions">
-      <p role="status" className="tanaw-settings-action-status">
+    <div className={open ? "tanaw-settings-actions tanaw-enter" : "contents"}>
+      <p role="status" className={open ? "tanaw-settings-action-status" : "sr-only"}>
         {busy ? (
           <>
             <LoaderCircle
@@ -329,18 +349,18 @@ export function SettingsActions({
           <>
             <CircleAlert size={16} aria-hidden="true" /> Unsaved changes
           </>
-        ) : (
-          detail
-        )}
+        ) : null}
       </p>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={busy || saveDisabled}>
-          {children}
-        </Button>
-      </div>
+      {open && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" disabled={busy} onClick={onDiscard}>
+            Discard
+          </Button>
+          <Button type="submit" disabled={busy || saveDisabled}>
+            {children}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

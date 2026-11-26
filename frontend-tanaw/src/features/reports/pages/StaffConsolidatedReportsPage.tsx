@@ -20,7 +20,6 @@ import {
   parseYear,
   type AnnualReportRow,
 } from "../model/consolidatedReports";
-import { downloadAnnualReportPdf, downloadFinalReportPdf } from "../utils/pdf";
 
 const EMPTY_REPORTS: FinalReport[] = [];
 const formatCount = (value: number | null) => (value === null ? "Not recorded" : value.toLocaleString("en-US"));
@@ -82,14 +81,12 @@ export function StaffConsolidatedReportsPage() {
         ) : tab === "monthly" ? (
           <MonthlyTable reports={monthly} year={year} registered={registered} onOpen={(report) => updateParams({ report: report.id })} />
         ) : (
-          <AnnualTable rows={annual} onOpen={(row) => updateParams({ annual: String(row.year) })} onDownload={(row) => downloadAnnualReportPdf(reports, row.year)} />
+          <AnnualTable rows={annual} onOpen={(row) => updateParams({ annual: String(row.year) })} />
         )}
       </div>
 
       {openMonthly && <MonthlyReportDialog key={openMonthly.id} report={openMonthly} onClose={() => updateParams({ report: null })} />}
-      {annualYear !== null && !isLoading && (
-        <AnnualReportDialog reports={reports} year={annualYear} onYearChange={(value) => updateParams({ annual: String(value) })} onClose={() => updateParams({ annual: null })} />
-      )}
+      {annualYear !== null && !isLoading && <AnnualReportDialog key={annualYear} reports={reports} year={annualYear} onClose={() => updateParams({ annual: null })} />}
     </>
   );
 }
@@ -138,14 +135,9 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
                     <StatusPill tone={status.tone}>{status.label}</StatusPill>
                   </td>
                   <td>
-                    <span className="inline-flex gap-2">
-                      <Button size="sm" variant="secondary" aria-label={`View the ${report.period} report`} onClick={() => onOpen(report)}>
-                        View
-                      </Button>
-                      <Button size="sm" variant="secondary" aria-label={`Download the ${report.period} report as PDF`} onClick={() => downloadFinalReportPdf(report)}>
-                        PDF
-                      </Button>
-                    </span>
+                    <Button size="sm" variant="secondary" aria-label={`View the ${report.period} report`} onClick={() => onOpen(report)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               );
@@ -162,7 +154,7 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
   );
 }
 
-function AnnualTable({ rows, onOpen, onDownload }: { rows: readonly AnnualReportRow[]; onOpen: (row: AnnualReportRow) => void; onDownload: (row: AnnualReportRow) => void }) {
+function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpen: (row: AnnualReportRow) => void }) {
   return (
     <>
       <div className="overflow-x-auto">
@@ -194,14 +186,9 @@ function AnnualTable({ rows, onOpen, onDownload }: { rows: readonly AnnualReport
                   <StatusPill tone={row.complete ? "consolidated" : "waiting"}>{row.complete ? "Consolidated" : "Waiting"}</StatusPill>
                 </td>
                 <td>
-                  <span className="inline-flex gap-2">
-                    <Button size="sm" variant="secondary" aria-label={`View the ${row.year} annual report`} onClick={() => onOpen(row)}>
-                      View
-                    </Button>
-                    <Button size="sm" variant="secondary" aria-label={`Download the ${row.year} annual report as PDF`} onClick={() => onDownload(row)}>
-                      PDF
-                    </Button>
-                  </span>
+                  <Button size="sm" variant="secondary" aria-label={`View the ${row.year} annual report`} onClick={() => onOpen(row)}>
+                    View
+                  </Button>
                 </td>
               </tr>
             ))}

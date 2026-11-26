@@ -26,7 +26,7 @@ async function mockPortal(page: Page, role: "admin" | "staff" | "it") {
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: `${role}-token`, user }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
   await page.route("**/auth/preferences", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light", textSize: "default", interfaceScale: "default" }) }),
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light", textSize: "default" }) }),
   );
   await page.route("**/auth/system-settings", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ values: {} }) }));
   await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
@@ -42,10 +42,12 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
 
   const search = page.getByRole("searchbox", { name: "Search help articles" });
   await search.focus();
-  await search.fill("returned report");
-  await expect(page.getByText("Resolve a returned report")).toBeVisible();
-  await search.fill("return reason");
-  await expect(page.getByText("Resolve a returned report")).toBeVisible();
+  await search.fill("DOT reports");
+  await expect(page.getByText("Generate and download DOT reports")).toBeVisible();
+  await search.fill("VAR 3M");
+  await expect(page.getByText("Generate and download DOT reports")).toBeVisible();
+  await search.fill("finalize it");
+  await expect(page.getByText("Generate and download DOT reports")).toBeVisible();
   await search.fill("quantum pineapple");
   await expect(page.getByText("No help articles found")).toBeVisible();
   await page.getByRole("button", { name: "Clear help search" }).click();
@@ -53,8 +55,8 @@ test("filters Staff guidance and supports title, keyword, content, empty, articl
   await page.getByText("Review submissions for a reporting period").click();
   await expect(page).toHaveURL(/\/staff\/help\/staff-submit-reports$/);
   await expect(page.getByRole("heading", { name: "Review submissions", exact: true })).toBeVisible();
-  await page.getByText("Resolve a returned report").click();
-  await expect(page).toHaveURL(/\/staff\/help\/staff-returned-reports$/);
+  await page.getByText("Generate and download DOT reports").click();
+  await expect(page).toHaveURL(/\/staff\/help\/staff-final-reports$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/staff\/help\/staff-submit-reports$/);
 });

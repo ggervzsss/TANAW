@@ -5,6 +5,8 @@ import { getSystemSettings } from "../services/systemSettingsService";
 import { resolveSystemTimeFormat } from "../utils/dateTime";
 import {
   defaultDisplayPreferences,
+  normalizeDisplayPreferences,
+  sameDisplayPreferences,
   systemSettingsQueryKey,
   SystemDisplayPreferencesContext,
   textSizeRootValue,
@@ -44,10 +46,10 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
     void getAccountPreferences()
       .then((preferences) => {
         if (disposed || activeAccountIdRef.current !== accountId || interactionVersionRef.current !== interactionVersion) return;
-        const display = { textSize: preferences.textSize, interfaceScale: preferences.interfaceScale };
+        const display = normalizeDisplayPreferences(preferences);
         confirmedRef.current = display;
         desiredRef.current = display;
-        setLocalState({ accountId, preferences: display, status: "saved" });
+        setLocalState({ accountId, preferences: display, status: "idle" });
       })
       .catch(() => {
         if (!disposed && activeAccountIdRef.current === accountId && interactionVersionRef.current === interactionVersion) {
@@ -62,7 +64,6 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.textSize = displayPreferences.textSize;
-    root.dataset.interfaceScale = displayPreferences.interfaceScale;
     root.style.setProperty("--tanaw-root-font-size", textSizeRootValue(displayPreferences.textSize));
   }, [displayPreferences]);
 
@@ -73,7 +74,7 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
       try {
         const saved = await updateAccountPreferences(snapshot);
         if (activeAccountIdRef.current !== targetAccountId) return;
-        const confirmed = { textSize: saved.textSize, interfaceScale: saved.interfaceScale };
+        const confirmed = normalizeDisplayPreferences(saved);
         confirmedRef.current = confirmed;
         failedDesiredRef.current = null;
         if (sameDisplayPreferences(desiredRef.current, snapshot)) {
@@ -121,8 +122,4 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
       {children}
     </SystemDisplayPreferencesContext.Provider>
   );
-}
-
-function sameDisplayPreferences(left: DisplayPreferences, right: DisplayPreferences) {
-  return left.textSize === right.textSize && left.interfaceScale === right.interfaceScale;
 }

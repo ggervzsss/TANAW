@@ -84,11 +84,9 @@ def should_skip_target_report(
     )
 
 
-# Staff review of the reporting month (the month just closed), by enterprise position: some are
-# still waiting, one was resubmitted after a return, one is back with the enterprise for
-# correction, and the rest are accepted.
-REPORTING_MONTH_REVIEW = {1: "Pending Review", 2: "Returned", 4: "Pending Review"}
-RESUBMITTED_ENTERPRISE_INDEX = 4
+# Enterprise positions whose reporting-month (the month just closed) report is still waiting for
+# staff to accept it. The other reporting-month reports are accepted.
+REPORTING_MONTH_PENDING_INDEXES = frozenset({1, 2, 4})
 # An enterprise (by position) that has not sent its reporting-month report at all.
 MISSING_REPORT_ENTERPRISE_INDEX = 9
 
@@ -98,11 +96,16 @@ def seeded_review_status(
 ) -> str:
     """Older months are consolidated into finalized monthly reports. The three months before the
     reporting month are accepted and wait for the target enterprise's late reports. The reporting
-    month has a mix of review states. The month in progress has no reports yet."""
+    month has some reports waiting for staff and the rest accepted. The month in progress has no
+    reports yet."""
     if month_start >= current_month:
         return "Pending Review"
     if month_start == add_months(current_month, -1):
-        return REPORTING_MONTH_REVIEW.get(enterprise_index, "Ready to Consolidate")
+        return (
+            "Pending Review"
+            if enterprise_index in REPORTING_MONTH_PENDING_INDEXES
+            else "Ready to Consolidate"
+        )
     open_months = {add_months(current_month, offset) for offset in range(-4, -1)}
     return "Ready to Consolidate" if month_start in open_months else "Consolidated"
 

@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui-kit";
 import { updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport } from "@/shared/types";
 import { var2mFromFinalReport } from "../model/varForms";
-import { downloadFinalReportPdf } from "../utils/pdf";
+import { downloadFinalReportPdf, printFinalReportPdf } from "../utils/pdf";
 import { ReportPreviewDialog } from "./ReportPreviewDialog";
 import { Var2mSheet } from "./VarSheets";
 
@@ -32,6 +32,7 @@ export function MonthlyReportDialog({ report, onClose }: MonthlyReportDialogProp
       description={`${report.period} · ${report.id}`}
       onClose={onClose}
       onDownload={() => downloadFinalReportPdf(currentReport)}
+      onPrint={() => printFinalReportPdf(currentReport)}
       actions={
         currentReport.status === "Draft" && (
           <Button loading={finalize.isPending} onClick={() => finalize.mutate()}>

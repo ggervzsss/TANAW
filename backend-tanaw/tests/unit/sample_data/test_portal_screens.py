@@ -81,15 +81,12 @@ async def test_latest_telemetry_carries_the_camera_summary() -> None:
 async def test_report_logs_follow_the_live_workflow_and_link_to_the_report() -> None:
     waiting = _report("waiting", "Pending Review", datetime(2026, 11, 4, 2, tzinfo=UTC))
     accepted = _report("accepted", "Ready to Consolidate", datetime(2026, 11, 5, 2, tzinfo=UTC))
-    returned = _report("returned", "Returned", datetime(2026, 11, 6, 2, tzinfo=UTC))
-    returned.remarks = "Please verify the entry and exit variance before resubmission."
-    resubmitted = _report("resubmitted", "Pending Review", datetime(2026, 11, 9, 2, tzinfo=UTC))
-    resubmitted.payload_json = json.dumps({"status": "Resubmitted"})
+    consolidated = _report("consolidated", "Consolidated", datetime(2026, 11, 6, 2, tzinfo=UTC))
     db = MagicMock()
     db.flush = AsyncMock()
 
     count = await create_activity_logs(
-        db, {"reports": [waiting, accepted, returned, resubmitted]}, [], GENERATED_AT
+        db, {"reports": [waiting, accepted, consolidated]}, [], GENERATED_AT
     )
 
     logs: list[ActivityLog] = db.add_all.call_args.args[0]
@@ -100,19 +97,17 @@ async def test_report_logs_follow_the_live_workflow_and_link_to_the_report() -> 
     assert by_report == {
         "waiting-id": ["Submit Enterprise Report"],
         "accepted-id": ["Submit Enterprise Report", "Report Ready to Consolidate"],
-        "returned-id": ["Submit Enterprise Report", "Report Returned"],
-        "resubmitted-id": [
-            "Submit Enterprise Report",
-            "Report Returned",
-            "Submit Enterprise Report",
-        ],
+        "consolidated-id": ["Submit Enterprise Report", "Report Ready to Consolidate"],
     }
+    assert not any(log.action == "Report Returned" for log in logs)
     review = next(
-        log for log in logs if log.action == "Report Returned" and log.source_id == "returned-id"
+        log
+        for log in logs
+        if log.action == "Report Ready to Consolidate" and log.source_id == "accepted-id"
     )
     assert review.actor == REPORTING_STAFF_NAME
     assert review.activity_group == "Reports"
-    assert json.loads(review.metadata_json or "{}")["remarks"] == returned.remarks
+    assert review.severity == "Success"
     assert all(log.timestamp <= GENERATED_AT for log in logs)
 
 

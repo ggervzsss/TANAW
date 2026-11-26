@@ -542,13 +542,20 @@ async def test_only_returned_reports_can_be_resubmitted(
             ),
         )
 
+    with pytest.raises(InvalidReportWorkflowError):
+        async with postgres_runtime.sessions() as db:
+            await update_report_status(
+                db,
+                original.id,
+                ReportStatusUpdate(status="Returned", remarks="Correct the submitted totals."),
+            )
+
+    # Only a final report audit returns an intake report to its enterprise now.
     async with postgres_runtime.sessions() as db:
-        returned = await update_report_status(
-            db,
-            original.id,
-            ReportStatusUpdate(status="Returned", remarks="Correct the submitted totals."),
-        )
+        returned = await db.get(EnterpriseReportSubmission, original.id)
         assert returned is not None
+        returned.review_status = "Returned"
+        returned.remarks = "Correct the submitted totals."
         await db.commit()
 
     revised = await _ingest(

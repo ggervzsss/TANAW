@@ -14,6 +14,63 @@ export function downloadPdfDocument(pdf: string, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+export const PRINT_FRAME_TITLE = "Report print document";
+/**
+ * Browsers print a PDF asynchronously and do not reliably say when the print dialog closes, and
+ * removing the frame too early can cancel the print. The hidden frame is removed when the next
+ * print starts, or after this long.
+ */
+export const PRINT_CLEANUP_MS = 10 * 60_000;
+
+let endActivePrint: (() => void) | null = null;
+
+/**
+ * Prints the generated PDF at once: it loads into a hidden frame and opens the browser's print
+ * dialog. If the browser does not allow printing from the frame, the PDF is downloaded as
+ * `fileName` instead and `onDownloaded` runs so the caller can tell the user. A new tab is not
+ * used, because the frame loads after the click and popup blockers would stop it silently.
+ */
+export function printPdfDocument(pdf: string, fileName: string, onDownloaded?: () => void) {
+  endActivePrint?.();
+  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+  const frame = document.createElement("iframe");
+  frame.title = PRINT_FRAME_TITLE;
+  frame.tabIndex = -1;
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;";
+
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    window.clearTimeout(timer);
+    if (endActivePrint === end) endActivePrint = null;
+    frame.remove();
+    URL.revokeObjectURL(url);
+  };
+  const timer = window.setTimeout(end, PRINT_CLEANUP_MS);
+  endActivePrint = end;
+
+  frame.addEventListener(
+    "load",
+    () => {
+      try {
+        const view = frame.contentWindow;
+        if (!view) throw new Error("The print frame has no window.");
+        view.focus();
+        view.print();
+      } catch {
+        end();
+        downloadPdfDocument(pdf, fileName);
+        onDownloaded?.();
+      }
+    },
+    { once: true },
+  );
+  frame.src = url;
+  document.body.appendChild(frame);
+}
+
 export function buildPdfDocument(pages: string[]) {
   const objects: string[] = [];
   const pageObjectIds: number[] = [];

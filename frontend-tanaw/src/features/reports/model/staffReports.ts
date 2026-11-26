@@ -1,14 +1,17 @@
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
-import { formatShortDate, reportSentAt, reviewStatus, submissionNote, submissionStatus, type ReviewStatus, type SubmissionStatus } from "./reportStatuses";
+import { formatShortDate, MONTH_NAMES, reportDueDate, reportSentAt, reviewStatus, submissionNote, submissionStatus, type ReviewStatus, type SubmissionStatus } from "./reportStatuses";
 import { formatReportingMonth, intakeReportMonth, sameMonth, type ReportingMonth } from "./reportingMonth";
 
 /*
  * The Staff Reports screen: one row per registered enterprise for the chosen month, and what the
  * staff member can do with it.
  *
- *   Review         the report is waiting for a staff decision (stored "Pending Review").
- *   View           returned for correction, accepted, or already in a monthly report (read only).
+ *   Review         the report awaits the staff decision (stored "Pending Review").
+ *   View           accepted, already in a monthly report, or a legacy returned report (read only).
  *   Remind         no report yet (Pending before the due date, Missing after it).
+ *
+ * Rows run Missing, Pending, then Submitted; within each, Waiting, Reviewing, then Consolidated;
+ * then by enterprise name.
  */
 
 export type StaffReportAction = "review" | "view" | "remind";
@@ -23,7 +26,7 @@ export type StaffReportRow = {
   review: ReviewStatus;
   /** "Nov 9", or null when nothing was sent. */
   sent: string | null;
-  /** "Returned for correction", "Due Nov 10" or "12 days overdue"; null for a report sent on its own. */
+  /** "Due Nov 10" or "12 days overdue"; null once a report was sent. */
   note: string | null;
   action: StaffReportAction;
 };
@@ -41,11 +44,12 @@ function actionFor(report: IntakeReport | undefined): StaffReportAction {
   return report.status === "Pending Review" ? "review" : "view";
 }
 
-/** Work to do first: reports to review, then enterprises to remind, then returned, then consolidated. */
-function rank(row: StaffReportRow) {
-  if (row.action === "review") return 0;
-  if (row.action === "remind") return 1;
-  return row.review === "Reviewing" ? 2 : 3;
+const SUBMISSION_ORDER: Record<SubmissionStatus, number> = { Missing: 0, Pending: 1, Submitted: 2 };
+const REVIEW_ORDER: Record<ReviewStatus, number> = { Waiting: 0, Reviewing: 1, Consolidated: 2 };
+
+/** Missing, Pending, then Submitted; then Waiting, Reviewing, then Consolidated; then by name. */
+export function compareStaffReportRows(a: StaffReportRow, b: StaffReportRow) {
+  return SUBMISSION_ORDER[a.submission] - SUBMISSION_ORDER[b.submission] || REVIEW_ORDER[a.review] - REVIEW_ORDER[b.review] || a.name.localeCompare(b.name);
 }
 
 export function staffReportRows(enterprises: readonly ReportEnterprise[], reports: readonly IntakeReport[], month: ReportingMonth, today: Date): StaffReportRow[] {
@@ -73,7 +77,7 @@ export function staffReportRows(enterprises: readonly ReportEnterprise[], report
       action: actionFor(report),
     };
   });
-  return rows.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  return rows.sort(compareStaffReportRows);
 }
 
 // Filters ---------------------------------------------------------------------------------------
@@ -122,8 +126,7 @@ export function rowMatchesFilters(row: StaffReportRow, filters: StaffReportFilte
   return (
     matchesQuery &&
     (filters.submission === "all" || row.submission === filters.submission) &&
-    // A month with no report shows Waiting too, but filtering by review means received reports.
-    (filters.review === "all" || (Boolean(row.report) && row.review === filters.review)) &&
+    (filters.review === "all" || row.review === filters.review) &&
     (filters.barangay === "all" || row.barangay === filters.barangay)
   );
 }
@@ -165,7 +168,9 @@ export function reminderFailedMessage(name: string, monthLabel: string) {
 export type StaffReportsProgress = {
   received: number;
   consolidated: number;
+  /** Received reports awaiting the staff decision. */
   reviewing: number;
+  /** Enterprises that have not sent a report yet. */
   waiting: number;
   /** Accepted reports not yet in a monthly report: what Generate would include. */
   readyReportIds: string[];
@@ -182,7 +187,7 @@ export type StaffReportsProgress = {
  */
 export function staffReportsProgress(rows: readonly StaffReportRow[]): StaffReportsProgress {
   const received = rows.filter((row) => row.report);
-  const count = (status: ReviewStatus) => received.filter((row) => row.review === status).length;
+  const count = (status: ReviewStatus) => rows.filter((row) => row.review === status).length;
   const consolidated = count("Consolidated");
   const readyReportIds = received.flatMap((row) => (row.report?.status === "Ready to Consolidate" ? [row.report.id] : []));
   const allAccepted = received.length > 0 && consolidated === received.length;
@@ -196,6 +201,16 @@ export function staffReportsProgress(rows: readonly StaffReportRow[]): StaffRepo
     canGenerate: allAccepted && readyReportIds.length > 0,
     generated: allAccepted && readyReportIds.length === 0,
   };
+}
+
+/**
+ * The page caption: "Reports for October 2026, due November 10. Accept each submitted report, then
+ * generate the consolidated report." The due year is named only when it differs from the month's.
+ */
+export function staffReportsCaption(month: ReportingMonth) {
+  const due = reportDueDate(month.month, month.year);
+  const dueYear = due.getFullYear() === month.year ? "" : `, ${due.getFullYear()}`;
+  return `Reports for ${formatReportingMonth(month)}, due ${MONTH_NAMES[due.getMonth()]} ${due.getDate()}${dueYear}. Accept each submitted report, then generate the consolidated report.`;
 }
 
 /** One line beside the filters saying whether the month can be generated yet. */

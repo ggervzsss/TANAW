@@ -28,14 +28,6 @@ html {
   font-size: var(--tanaw-root-font-size);
 }
 
-html[data-interface-scale="compact"] [data-density-adjustable="true"] {
-  padding: clamp(1rem, 2vw, 1.5rem) !important;
-}
-
-html[data-interface-scale="comfortable"] [data-density-adjustable="true"] {
-  padding: clamp(2rem, 3vw, 3rem) !important;
-}
-
 html,
 body,
 #root {

@@ -25,6 +25,21 @@ export function defaultOpeningHours(): OpeningHours {
   return { days: WEEKDAYS.map((day) => ({ day, mode: "hours", periods: [{ open: "08:00", close: "17:00" }] })) };
 }
 
+/** The hours the profile form starts from: the saved hours, or the default week when none are saved. */
+export function savedOpeningHours(saved: OpeningHours | null | undefined): OpeningHours {
+  return saved ?? defaultOpeningHours();
+}
+
+/** A stable key for comparing two sets of hours by content, whatever order the days or fields came in. */
+export function openingHoursKey(hours: OpeningHours) {
+  return JSON.stringify(
+    WEEKDAYS.map((day) => {
+      const entry = dayHours(hours, day);
+      return [day, entry.mode, (entry.periods ?? []).map((period) => [period.open, period.close])];
+    }),
+  );
+}
+
 export function dayHours(hours: OpeningHours, day: Weekday): DayHours {
   return hours.days.find((entry) => entry.day === day) ?? { day, mode: "closed", periods: [] };
 }

@@ -166,7 +166,7 @@ async def update_intake_report_status(
     await record_operational_log(
         db,
         group="Reports",
-        severity="Warning" if payload.status == "Returned" else "Success",
+        severity="Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
         action=f"Report {payload.status}",

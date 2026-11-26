@@ -49,3 +49,8 @@ it("drops a queued update after an account switch and allows the next account to
   patch.mockResolvedValueOnce({ data: { theme: "light" } });
   await expect(updateAccountPreferences({ theme: "light" })).resolves.toMatchObject({ theme: "light" });
 });
+
+it("returns only theme and text size, with defaults for missing values", async () => {
+  patch.mockResolvedValueOnce({ data: { textSize: "large", interfaceScale: "comfortable" } });
+  await expect(updateAccountPreferences({ textSize: "large" })).resolves.toEqual({ theme: "system", textSize: "large" });
+});

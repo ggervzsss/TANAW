@@ -13,6 +13,7 @@ import {
   requestEnterpriseNameChange,
   updateBuildingCapacity,
   updateLeadAdminName,
+  updateOpeningHours,
   updateProfileImage,
 } from "../../login/api/login";
 import { notifyError, notifyInfo, notifySuccess } from "../../toasts/services/toast-service";
@@ -22,6 +23,9 @@ import { PHILIPPINE_MOBILE_ERROR, type PersonNameParts, formatPersonName, normal
 import { ProfileDisplayField, ProfileEditModal, ReadOnlyIdentityField } from "./ProfileEditor";
 import { OpeningHoursSettings, PendingAccountChanges, TemporaryClosuresSettings } from "./ProfileHoursSettings";
 import { getInitials, getRequestErrorMessage, validateModalValue, validateStructuredName, type EditableProfileField } from "../model/profile-edit";
+import { openingHoursKey, savedOpeningHours, validateOpeningHours, type OpeningHours } from "../model/opening-hours";
+
+const HOURS_INVALID_MESSAGE = "Fix the opening hours before saving. No changes were saved.";
 
 type AccountChangeStatus = {
   message: string;
@@ -32,7 +36,6 @@ export function ProfileView() {
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [activeModal, setActiveModal] = useState<EditableProfileField | null>(null);
   const [modalValue, setModalValue] = useState("");
   const [modalName, setModalName] = useState<PersonNameParts>({ firstName: "", middleInitial: "", lastName: "" });
@@ -58,6 +61,13 @@ export function ProfileView() {
   const [saveError, setSaveError] = useState("");
   const imageVersion = useRef(0);
   const logoChanged = displayImageDataUrl !== (user?.displayImageDataUrl ?? null);
+  // Opening hours are a draft of this form too: they save and discard with the logo.
+  const savedHours = savedOpeningHours(user?.openingHours);
+  const savedHoursKey = openingHoursKey(savedHours);
+  const [hours, setHours] = useState<OpeningHours>(savedHours);
+  const [hoursError, setHoursError] = useState("");
+  const hoursChanged = openingHoursKey(hours) !== savedHoursKey;
+  const formDirty = logoChanged || hoursChanged || isReadingImage;
   const modalDirty =
     activeModal === "managerName"
       ? formatPersonName(modalName) !== formatPersonName(parsePersonName(user?.managerName ?? ""))
@@ -66,7 +76,7 @@ export function ProfileView() {
         : activeModal === "phone"
           ? Boolean(modalPhoneLocal)
           : activeModal === "buildingCapacity" && modalValue !== String(buildingCapacity);
-  const draftMarker = useSettingsDraft(logoChanged || isReadingImage || modalDirty);
+  const draftMarker = useSettingsDraft(formDirty || modalDirty);
 
   useEffect(() => {
     imageVersion.current++;
@@ -75,6 +85,13 @@ export function ProfileView() {
     setIsReadingImage(false);
     setImageError("");
   }, [user?.id, user?.displayImageDataUrl]);
+
+  // Start again from the saved hours only when their content changes (a save, another account),
+  // not when an unrelated profile edit replaces the user object.
+  useEffect(() => {
+    setHours(savedOpeningHours(useAuthStore.getState().user?.openingHours));
+    setHoursError("");
+  }, [user?.id, savedHoursKey]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -93,21 +110,56 @@ export function ProfileView() {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isLoading || isReadingImage || !logoChanged) return;
-    setIsSuccess(false);
+    if (isLoading || isReadingImage || !(logoChanged || hoursChanged)) return;
+    if (hoursChanged) {
+      const problem = validateOpeningHours(hours);
+      if (problem) {
+        // The detail stays beside the hours; the summary sits by the save bar, and the hours scroll
+        // into view because the sticky bar can be far from them. Nothing is saved, the logo included.
+        setHoursError(problem);
+        setSaveError(HOURS_INVALID_MESSAGE);
+        const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        event.currentTarget
+          .querySelector<HTMLElement>('[data-testid="opening-hours"]')
+          ?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+        return;
+      }
+    }
     setIsLoading(true);
     setSaveError("");
-    try {
-      const updated = await updateProfileImage(displayImageDataUrl);
-      updateUser(updated);
-      setIsLoading(false);
-      setIsSuccess(true);
-      setTimeout(() => setIsSuccess(false), 3000);
-      notifySuccess("Profile logo saved.");
-    } catch {
-      setIsLoading(false);
-      setSaveError("Unable to update profile logo.");
+    const failures: string[] = [];
+    if (logoChanged) {
+      try {
+        updateUser(await updateProfileImage(displayImageDataUrl));
+        notifySuccess("Profile logo saved.");
+      } catch {
+        failures.push("Unable to update profile logo.");
+      }
     }
+    if (hoursChanged) {
+      try {
+        updateUser(await updateOpeningHours(hours));
+        notifySuccess("Opening hours saved.");
+      } catch (failure) {
+        // The detailed message shows inside the Opening hours group; the form alert only names it,
+        // so the same text is not shown or announced twice.
+        setHoursError(getRequestErrorMessage(failure, "Unable to save the opening hours."));
+        failures.push("Opening hours were not saved.");
+      }
+    }
+    setIsLoading(false);
+    if (failures.length > 0) setSaveError(failures.join(" "));
+  };
+
+  const discardChanges = () => {
+    imageVersion.current++;
+    setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
+    setDisplayImageFileName("");
+    setIsReadingImage(false);
+    setImageError("");
+    setHours(savedHours);
+    setHoursError("");
+    setSaveError("");
   };
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +168,6 @@ export function ProfileView() {
     const version = ++imageVersion.current;
     setIsReadingImage(true);
     setImageError("");
-    setIsSuccess(false);
 
     try {
       const upload = await readProfileImageFile(file);
@@ -150,7 +201,6 @@ export function ProfileView() {
               setDisplayImageDataUrl(null);
               setDisplayImageFileName("");
               setImageError("");
-              setIsSuccess(false);
             }}
           />
 
@@ -214,27 +264,21 @@ export function ProfileView() {
                 )}
               </dl>
             </SettingsGroup>
-            <OpeningHoursSettings />
+            <OpeningHoursSettings
+              hours={hours}
+              error={hoursError}
+              onChange={(next) => {
+                setHours(next);
+                setHoursError("");
+                setSaveError((current) => (current === HOURS_INVALID_MESSAGE ? "" : current));
+              }}
+            />
             <TemporaryClosuresSettings />
           </div>
           {saveError && <Alert tone="danger">{saveError}</Alert>}
         </fieldset>
-        <SettingsActions
-          busy={isLoading}
-          dirty={logoChanged}
-          saveDisabled={!logoChanged || isReadingImage}
-          detail={isSuccess ? "Logo saved" : "Logo changes are saved here."}
-          onCancel={() => {
-            imageVersion.current++;
-            setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
-            setDisplayImageFileName("");
-            setIsSuccess(false);
-            setIsReadingImage(false);
-            setImageError("");
-            setSaveError("");
-          }}
-        >
-          Save Changes
+        <SettingsActions busy={isLoading} dirty={formDirty} saveDisabled={isReadingImage} onDiscard={discardChanges}>
+          Save changes
         </SettingsActions>
       </form>
 

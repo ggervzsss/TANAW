@@ -80,13 +80,16 @@ export const helpArticles: HelpArticle[] = [
   },
   {
     id: "display-preferences",
-    title: "Adjust text size and interface scale",
+    title: "Adjust text size",
     summary: "Make Enterprise Desktop easier to read while keeping theme and system zoom separate.",
     category: "Getting Started",
-    keywords: ["large text", "font", "compact", "accessibility", "display"],
+    keywords: ["large text", "font", "text size", "accessibility", "display"],
     sections: [
-      { heading: "Change your display", steps: ["Open the account menu.", "Choose General Settings, then Appearance.", "Select a Text size and Interface scale. Changes save immediately."] },
-      { heading: "Reset", paragraphs: ["Choose Reset to default to restore standard sizing. Your theme does not change."] },
+      {
+        heading: "Change your display",
+        steps: ["Open the account menu.", "Choose General Settings, then Appearance.", "Select a Text size. The live preview beside it shows the size, and the change saves immediately."],
+      },
+      { heading: "Reset", paragraphs: ["Choose Reset to default to restore the standard text size. Your theme does not change."] },
     ],
     relatedArticleIds: ["account-session"],
   },

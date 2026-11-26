@@ -32,14 +32,6 @@
   background: var(--tanaw-surface);
   color: var(--tanaw-text);
 }
-html[data-interface-scale="compact"] .tanaw-settings-workspace {
-  --settings-gutter: clamp(1rem, 2.4vw, 2.25rem);
-  --settings-flow: 1.35rem;
-}
-html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
-  --settings-gutter: clamp(1.4rem, 3.4vw, 3.5rem);
-  --settings-flow: 2.1rem;
-}
 
 /* ---------- Header: green wash, title, civic line ---------- */
 
@@ -286,6 +278,21 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+/* A group whose status and actions (save state, Reset) sit level with its title. */
+.tanaw-settings-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+.tanaw-settings-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: 2rem;
+}
 
 /* ---------- Fields: label over value, an Edit action at the end, a hairline under each ---------- */
 
@@ -507,22 +514,30 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   min-width: 0;
 }
 
+/* The same Edit action as a field row, sized to sit inline after the email. */
 .tanaw-settings-edit-email {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  min-height: 1.9rem;
-  padding-inline: 0.5rem;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding-inline: 0.65rem;
   border-radius: 999px;
   color: var(--tanaw-accent-ink);
   font-size: 0.8125rem;
   font-weight: 600;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--settings-ease),
+    scale var(--tanaw-duration-fast) var(--settings-ease);
 }
 .tanaw-settings-edit-email:hover {
   background: var(--tanaw-selected-bg);
 }
+.tanaw-settings-edit-email:active {
+  scale: 0.97;
+}
 .tanaw-settings-edit-email:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
 }
 
 .tanaw-settings-upload-tools {
@@ -605,10 +620,6 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   flex: none;
   color: var(--tanaw-accent-ink);
 }
-.tanaw-settings-actions p:empty {
-  display: none;
-}
-
 /* Keep persistent connection messages clear of Settings actions. */
 body:has(.tanaw-settings-actions) .tanaw-connection-notice {
   inset-inline: 1rem auto;
@@ -722,8 +733,8 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
 /* ---------- Choices: radio rows, card-free ---------- */
 
 /*
- * A radio shown as a row with a title and a line of description (performance profile, text size,
- * interface scale). Resting is open; hover tints; the chosen one gets a filled green dot and a
+ * A radio shown as a row with a title and a line of description (performance profile, text
+ * size). Resting is open; hover tints; the chosen one gets a filled green dot and a
  * soft green wash.
  */
 .tanaw-choice {
@@ -805,22 +816,132 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
   border-top: 0;
 }
 
-.tanaw-display-options {
+/*
+ * Display preferences: the text size choices and the live preview side by side, each under a
+ * title of the same style so both columns start level; they stack in a narrow panel.
+ */
+.tanaw-display-layout {
+  gap: 1.5rem 2.5rem;
+  align-items: stretch;
+}
+.tanaw-display-column {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
-  gap: 0.25rem;
+  grid-template-rows: auto 1fr;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.tanaw-display-column-title {
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
-.tanaw-display-preview-title {
-  margin-bottom: 0.6rem;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 600;
+.tanaw-display-options {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
 }
+/* Each size shows an "Aa" at its own size, so the choice can be read before it is made. */
+.tanaw-display-options .tanaw-choice {
+  padding-right: 3.75rem;
+}
+.tanaw-display-sample {
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  translate: 0 -50%;
+  color: var(--tanaw-text-secondary);
+  font-weight: 600;
+  line-height: 1;
+}
+.tanaw-choice:has(input:checked) .tanaw-display-sample {
+  color: var(--tanaw-accent-ink);
+}
+
+/*
+ * The preview is set in the chosen size's own pixel size (inline) and measured in em inside, so
+ * it shows that size exactly. Its colours are theme tokens, so it follows light and dark mode.
+ */
 .tanaw-display-preview {
+  display: grid;
+  align-content: center;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: clamp(1rem, 3cqi, 1.5rem);
+  border: 1px solid var(--tanaw-border-soft);
   border-radius: var(--radius-tanaw-lg);
   background: var(--tanaw-surface-inset);
-  transition: padding var(--tanaw-duration-base) var(--settings-ease);
+}
+.tanaw-display-preview-card {
+  display: grid;
+  gap: 0.5em;
+  min-width: 0;
+  padding: 1.1em 1.25em 1.25em;
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-surface);
+  box-shadow: var(--shadow-tanaw-resting);
+  color: var(--tanaw-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  transition: font-size var(--tanaw-duration-base) var(--settings-ease);
+}
+.tanaw-display-preview-eyebrow {
+  color: var(--tanaw-gold-ink);
+  font-size: 0.6875em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tanaw-display-preview-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.4em;
+  font-size: 1.75em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.tanaw-display-preview-figure span {
+  color: var(--tanaw-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.5em;
+  font-weight: 500;
+}
+.tanaw-display-preview-body {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875em;
+}
+.tanaw-display-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-top: 0.35em;
+}
+.tanaw-display-preview-actions span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25em;
+  padding-inline: 0.9em;
+  border-radius: var(--radius-tanaw-md);
+  font-size: 0.875em;
+  font-weight: 600;
+}
+.tanaw-display-preview-actions span:first-child {
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+}
+.tanaw-display-preview-actions span + span {
+  border: 1px solid var(--tanaw-control-border);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+}
+.tanaw-display-preview figcaption {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
 }
 
 /* Developer switches sit as rows split by hairlines. */
@@ -930,10 +1051,12 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
   }
 }
 
-@container (width >= 48rem) {
+@container (width >= 44rem) {
   .tanaw-display-layout {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   }
+}
+@container (width >= 48rem) {
   .tanaw-ticket-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   }
@@ -987,6 +1110,8 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
   .tanaw-settings-link > svg,
   .tanaw-settings-return,
   .tanaw-settings-field-edit,
+  .tanaw-settings-edit-email,
+  .tanaw-display-preview-card,
   .tanaw-theme-preview,
   .tanaw-choice,
   .tanaw-choice::before {
@@ -996,6 +1121,7 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
   .tanaw-settings-link:hover > svg,
   .tanaw-theme-option:hover .tanaw-theme-preview,
   .tanaw-settings-field-edit:active,
+  .tanaw-settings-edit-email:active,
   .tanaw-choice:active {
     translate: none;
     scale: none;

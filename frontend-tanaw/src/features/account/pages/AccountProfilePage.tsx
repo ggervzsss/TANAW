@@ -1,32 +1,32 @@
 import { useState } from "react";
 import { Alert } from "@/shared/ui-kit";
-import { SettingsActions, SettingsGroup, SettingsImageUpload, SettingsReadOnly } from "@/shared/ui-kit/patterns/GeneralSettings";
+import { SettingsGroup, SettingsImageUpload, SettingsReadOnly, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { roleAccessLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import { PERSON_NAME_MAX_LENGTH } from "@/shared/utils/accountValidation";
 import { AccountField } from "../components";
 import { useAccountProfileForm } from "../hooks";
+import { isProfileDraftDirty, profileFieldValue, type ProfileDraft, type ProfileFieldName } from "../model";
 
-const profileFields = [
-  { name: "firstName", label: "First Name", maxLength: PERSON_NAME_MAX_LENGTH },
-  { name: "middleInitial", label: "Middle Initial", maxLength: 1 },
-  { name: "lastName", label: "Last Name", maxLength: PERSON_NAME_MAX_LENGTH },
-  { name: "phone", label: "Phone", maxLength: 18, type: "tel" },
-] as const;
-
-type ProfileFieldName = (typeof profileFields)[number]["name"];
+const profileFields: ReadonlyArray<{ name: ProfileFieldName; label: string; maxLength: number; type?: string; autoComplete: string; hint?: string }> = [
+  { name: "firstName", label: "First Name", maxLength: PERSON_NAME_MAX_LENGTH, autoComplete: "given-name" },
+  { name: "middleInitial", label: "Middle Initial", maxLength: 1, autoComplete: "additional-name", hint: "Optional. One letter." },
+  { name: "lastName", label: "Last Name", maxLength: PERSON_NAME_MAX_LENGTH, autoComplete: "family-name" },
+  { name: "phone", label: "Phone", maxLength: 18, type: "tel", autoComplete: "tel", hint: "Optional. Philippine mobile number, such as +63 917 123 4567." },
+];
 
 export function AccountProfilePage({ role }: { role: UserRole }) {
   const profile = useAccountProfileForm();
-  const [draft, setDraft] = useState<Partial<Record<ProfileFieldName, string>>>({});
+  const [draft, setDraft] = useState<ProfileDraft>({});
   const saved = { ...profile.profileName, phone: profile.user.phone };
-  const dirty = profile.imageChanged || profileFields.some(({ name }) => (draft[name] ?? saved[name]) !== saved[name]);
+  const dirty = isProfileDraftDirty(saved, draft, profile.imageChanged);
   const draftMarker = useSettingsDraft(dirty || profile.isReadingImage);
 
   return (
     <form
       data-settings-draft={draftMarker}
+      noValidate
       onSubmit={async (event) => {
         event.preventDefault();
         if (dirty && (await profile.save(event))) setDraft({});
@@ -47,20 +47,19 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
           removeLabel="Remove photo"
         />
         <div className="tanaw-profile-layout">
-          <SettingsGroup title="Name and contact" description="Edit the name and phone number shown on your account.">
+          <SettingsGroup title="Name and contact" description="The name and phone number shown on your account.">
             <div className="tanaw-settings-fields">
               {profileFields.map((field) => (
                 <AccountField
                   key={`${field.name}-${profile.fieldResetSignal}`}
                   {...field}
                   defaultValue={saved[field.name]}
-                  value={draft[field.name] ?? saved[field.name]}
+                  value={profileFieldValue(saved, draft, field.name)}
                   onValueChange={(value) => {
                     setDraft((current) => ({ ...current, [field.name]: value }));
                     profile.clearFieldError(field.name);
                   }}
                   error={profile.errors[field.name]}
-                  editable
                 />
               ))}
             </div>
@@ -79,18 +78,17 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
         </div>
         {profile.saveError && <Alert tone="danger">{profile.saveError}</Alert>}
       </fieldset>
-      <SettingsActions
+      <SettingsSaveBar
         busy={profile.isLoading}
         dirty={dirty}
-        saveDisabled={!dirty || profile.isReadingImage}
-        detail={profile.isSuccess ? "Profile saved" : undefined}
-        onCancel={() => {
+        saveDisabled={profile.isReadingImage}
+        onDiscard={() => {
           setDraft({});
           profile.reset();
         }}
       >
-        Save Changes
-      </SettingsActions>
+        Save changes
+      </SettingsSaveBar>
     </form>
   );
 }

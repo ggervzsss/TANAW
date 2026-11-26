@@ -10,7 +10,6 @@ export function SecurityView() {
   const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
-  const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
 
   const handlePasswordUpdate = async ({ confirmPassword, currentPassword, newPassword }: PasswordChangeValues) => {
     if (!currentPassword) {
@@ -27,15 +26,12 @@ export function SecurityView() {
       return false;
     }
 
-    setIsPasswordSuccess(false);
     setIsPasswordLoading(true);
     try {
       const session = await changePassword(currentPassword, newPassword);
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       setSession(session);
-      setIsPasswordSuccess(true);
       notifySuccess("Password updated.");
-      window.setTimeout(() => setIsPasswordSuccess(false), 3000);
       return true;
     } catch {
       notifyError("Unable to update password. Check your current password and try again.");
@@ -45,7 +41,5 @@ export function SecurityView() {
     }
   };
 
-  return (
-    <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
-  );
+  return <CredentialControl isLoading={isPasswordLoading} onSubmit={handlePasswordUpdate} />;
 }

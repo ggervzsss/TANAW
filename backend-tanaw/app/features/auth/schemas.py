@@ -110,7 +110,6 @@ class StatusResponse(BaseModel):
 class AccountPreferences(BaseModel):
     theme: Literal["light", "dark", "system"] = "system"
     textSize: Literal["small", "default", "large", "extra-large"] = "default"
-    interfaceScale: Literal["compact", "default", "comfortable"] = "default"
 
 
 class SystemSettingsPayload(BaseModel):

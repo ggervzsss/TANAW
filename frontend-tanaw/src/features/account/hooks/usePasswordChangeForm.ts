@@ -12,7 +12,6 @@ export function usePasswordChangeForm() {
   const focusFirstInvalidField = useFocusFirstInvalidField();
   const formRef = useRef<HTMLFormElement>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -37,7 +36,6 @@ export function usePasswordChangeForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isLoading) return;
-    setIsSuccess(false);
     setSaveError("");
     const form = event.currentTarget;
     const nextErrors = getPasswordErrors(currentPassword, newPassword, passwordConfirmation);
@@ -57,9 +55,7 @@ export function usePasswordChangeForm() {
       const session = await changePassword(currentPassword, newPassword);
       queryClient.removeQueries({ queryKey: currentUserQueryKey });
       setSession(session);
-      setIsSuccess(true);
       toast.success("Password updated.");
-      window.setTimeout(() => setIsSuccess(false), 2600);
       clearValues();
       setErrors({});
     } catch {
@@ -71,7 +67,6 @@ export function usePasswordChangeForm() {
   }
 
   function updateField(field: "currentPassword" | "newPassword" | "confirmPassword", value: string) {
-    setIsSuccess(false);
     setSaveError("");
     if (field === "currentPassword") setCurrentPassword(value);
     else if (field === "newPassword") setNewPassword(value);
@@ -82,9 +77,8 @@ export function usePasswordChangeForm() {
   const reset = () => {
     clearValues();
     setErrors({});
-    setIsSuccess(false);
     setSaveError("");
   };
 
-  return { currentPassword, errors, formRef, isLoading, isSuccess, newPassword, passwordConfirmation, reset, resetSignal, saveError, submit, updateField };
+  return { currentPassword, errors, formRef, isLoading, newPassword, passwordConfirmation, reset, resetSignal, saveError, submit, updateField };
 }

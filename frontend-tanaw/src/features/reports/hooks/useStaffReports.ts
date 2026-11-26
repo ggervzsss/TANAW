@@ -15,8 +15,6 @@ const EMPTY_REPORTS: IntakeReport[] = [];
 
 export const reportEnterprisesQueryKey = ["report-enterprises"];
 
-type ReviewDecision = { report: IntakeReport; status: "Ready to Consolidate" | "Returned"; remarks: string };
-
 export function apiErrorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data && typeof error.response.data === "object" ? (error.response.data as { detail?: unknown }).detail : null;
@@ -25,7 +23,10 @@ export function apiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-/** Enterprise reports for one month, with the review, reminder and generate actions. */
+/**
+ * Enterprise reports for one month, with the accept, reminder and generate actions. Staff accept a
+ * submitted report; TANAW does not return reports to the enterprise.
+ */
 export function useStaffReports(month: ReportingMonth, today: Date) {
   const queryClient = useQueryClient();
   const preparedBy = useAuthStore((state) => state.user?.displayName) ?? "LGU Staff";
@@ -38,12 +39,12 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
   const [remindedIds, setRemindedIds] = useState<ReadonlySet<string>>(() => new Set());
   const monthLabel = formatReportingMonth(month);
 
-  const review = useMutation({
-    mutationFn: ({ report, status, remarks }: ReviewDecision) => updateIntakeReportStatus(report.id, { status, remarks }),
+  const accept = useMutation({
+    mutationFn: (report: IntakeReport) => updateIntakeReportStatus(report.id, { status: "Ready to Consolidate", remarks: "Accepted for consolidation." }),
     onSuccess: (updated) => {
       queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current = []) => current.map((report) => (report.id === updated.id ? updated : report)));
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      toast.success(updated.status === "Returned" ? `${updated.enterprise}'s report was returned for correction.` : `${updated.enterprise}'s report was accepted.`);
+      toast.success(`${updated.enterprise}'s report was accepted.`);
     },
     onError: (error) => toast.error(apiErrorMessage(error, "The report could not be updated. Refresh the list and try again.")),
   });
@@ -91,7 +92,7 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
     progress,
     isLoading: enterprisesQuery.isLoading || reportsQuery.isLoading,
     isError: enterprisesQuery.isError || reportsQuery.isError,
-    review,
+    accept,
     generate,
     remind,
     wasReminded: (row: StaffReportRow) => remindedIds.has(`${row.enterpriseId}:${monthLabel}`),

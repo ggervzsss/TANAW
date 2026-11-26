@@ -23,7 +23,7 @@ function userFor(role: "it" | "admin" | "staff") {
 
 async function mockPortal(page: Page, role: Parameters<typeof userFor>[0]) {
   const user = userFor(role);
-  let preferences = { theme: "dark", textSize: "extra-large", interfaceScale: "comfortable" };
+  let preferences = { theme: "dark", textSize: "extra-large" };
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "integration-token", user }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
   await page.route("**/auth/preferences", (route) => {
@@ -63,7 +63,11 @@ for (const { role, path, previousTitle } of [
     await expect(profile.getByRole("heading", { name: userFor(role).displayName })).toBeVisible();
     await expect(profile.getByText(userFor(role).email, { exact: true })).toHaveCount(1);
     await expect(profile.getByRole("button", { name: "Edit email" })).toHaveCount(0);
-    await expect(main.getByRole("button", { name: "Save Changes" })).toBeInViewport();
+    // One edit model: fields are always editable and the save bar appears only with unsaved changes.
+    await expect(profile.getByRole("button", { name: /^(Edit|Lock) / })).toHaveCount(0);
+    await expect(profile.getByLabel("First Name", { exact: true })).toBeEditable();
+    await expect(main.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+    await expect(main.getByRole("button", { name: "Discard" })).toHaveCount(0);
     await expect(main.getByRole("button", { name: "Requests", exact: true })).toHaveCount(role === "staff" ? 0 : 1);
     await expect(main.getByRole("button", { name: "System Settings" })).toHaveCount(role === "it" ? 1 : 0);
     await expect(main.getByRole("button", { name: "Developer Settings" })).toHaveCount(0);
@@ -169,10 +173,13 @@ test("restricts Admin settings and saves profile changes through the existing AP
   await expect(branding.getByRole("button")).toHaveCount(0);
   await branding.getByText("TANAW", { exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/settings$/);
-  const save = page.getByRole("button", { name: "Save Changes" });
-  await expect(save).toBeDisabled();
-  await page.getByRole("button", { name: "Edit First Name" }).click();
+  const save = page.getByRole("button", { name: "Save changes" });
+  const discardChanges = page.getByRole("button", { name: "Discard", exact: true });
+  await expect(save).toHaveCount(0);
   await page.getByLabel("First Name", { exact: true }).fill("Discarded");
+  await expect(page.getByRole("status").filter({ hasText: "Unsaved changes" })).toBeVisible();
+  await expect(save).toBeInViewport();
+  await expect(discardChanges).toBeInViewport();
   await page.getByRole("button", { name: "Back from General Settings" }).click();
   const discard = page.getByRole("dialog", { name: "Discard unsaved settings?" });
   await expect(discard).toBeVisible();
@@ -184,16 +191,17 @@ test("restricts Admin settings and saves profile changes through the existing AP
   await expect(signOut).toBeVisible();
   await signOut.getByRole("button", { name: "Keep editing" }).click();
   await expect(page.getByLabel("First Name", { exact: true })).toHaveValue("Discarded");
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardChanges.click();
   await expect(page.getByLabel("First Name", { exact: true })).toHaveValue("Integration");
-  await page.getByRole("button", { name: "Edit First Name" }).click();
+  await expect(save).toHaveCount(0);
+  await expect(page.getByLabel("First Name", { exact: true })).toBeFocused();
   await page.getByLabel("First Name", { exact: true }).fill("");
   await save.click();
   await expect(page.getByLabel("First Name", { exact: true })).toHaveAttribute("aria-invalid", "true");
   await page.getByLabel("First Name", { exact: true }).fill("Updated");
   await save.click();
   await expect(page.getByText("Profile updated.")).toBeVisible();
-  await expect(save).toBeDisabled();
+  await expect(save).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open account menu" })).toHaveText(/Updated User/);
   await page.getByRole("button", { name: "Requests", exact: true }).click();
   await expect(page.getByText("Requests people sent to IT, with their conversations and status.", { exact: true })).toBeVisible();

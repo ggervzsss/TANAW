@@ -2,17 +2,30 @@ import { createContext, useContext } from "react";
 import type { SystemTimeFormat } from "../utils/dateTime";
 
 export type TextSizePreference = "small" | "default" | "large" | "extra-large";
-export type InterfaceScalePreference = "compact" | "default" | "comfortable";
 export type DisplayPreferences = {
   textSize: TextSizePreference;
-  interfaceScale: InterfaceScalePreference;
 };
 export type PreferenceSaveStatus = "idle" | "saving" | "saved" | "error";
 
+export const textSizePreferences: readonly TextSizePreference[] = ["small", "default", "large", "extra-large"];
+
 export const defaultDisplayPreferences: DisplayPreferences = {
   textSize: "default",
-  interfaceScale: "default",
 };
+
+/** Keeps only the display preferences TANAW applies; an unknown text size falls back to the default. */
+export function normalizeDisplayPreferences(preferences: { textSize?: string | null }): DisplayPreferences {
+  const textSize = textSizePreferences.find((value) => value === preferences.textSize);
+  return { textSize: textSize ?? defaultDisplayPreferences.textSize };
+}
+
+export function sameDisplayPreferences(left: DisplayPreferences, right: DisplayPreferences) {
+  return left.textSize === right.textSize;
+}
+
+export function isDefaultDisplayPreferences(preferences: DisplayPreferences) {
+  return sameDisplayPreferences(preferences, defaultDisplayPreferences);
+}
 
 export function textSizeRootValue(textSize: TextSizePreference) {
   if (textSize === "small") return "14px";

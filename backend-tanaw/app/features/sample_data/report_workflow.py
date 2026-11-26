@@ -8,10 +8,7 @@ from app.features.accounts.models import Account, AccountRole
 from app.features.activity_logs.models import ActivityLog
 from app.features.monitoring.models import EnterpriseTelemetrySnapshot
 from app.features.notifications.models import UserNotification
-from app.features.notifications.service import (
-    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
-    STAFF_REPORT_SUBMITTED_NOTIFICATION,
-)
+from app.features.notifications.service import STAFF_REPORT_SUBMITTED_NOTIFICATION
 from app.features.reporting.counting import complete_sum
 from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import (
@@ -40,8 +37,6 @@ from app.features.sample_data.helpers import (
     seeded_review_status,
     should_skip_target_report,
 )
-
-RETURN_REMARKS = "Please verify the entry and exit variance before resubmission."
 
 
 async def create_operational_history(
@@ -183,7 +178,7 @@ async def create_operational_history(
                 status="Submitted",
                 review_status=review_status,
                 notes="Monthly visitor count submitted for LGU review.",
-                remarks=RETURN_REMARKS if review_status == "Returned" else None,
+                remarks=None,
                 sync_status="synced",
                 payload_json=json.dumps(
                     {
@@ -223,53 +218,27 @@ async def create_operational_history(
 
 def prepare_staff_notification_reports(
     reports: list[EnterpriseReportSubmission], reporting_month: datetime
-) -> list[tuple[EnterpriseReportSubmission, str]]:
-    """The reporting month's reports still waiting for staff: the first was just submitted and
-    the second was resubmitted after staff returned it."""
+) -> list[EnterpriseReportSubmission]:
+    """The reporting month's first two reports still waiting for staff, each announced to staff
+    as a new submission."""
     period = period_label(reporting_month)
-    candidates = [
+    return [
         report
         for report in reports
         if report.period == period and report.review_status == "Pending Review"
     ][:2]
-    prepared: list[tuple[EnterpriseReportSubmission, str]] = []
-
-    for index, report in enumerate(candidates):
-        is_resubmission = index == 1
-        notification_type = (
-            STAFF_REPORT_RESUBMITTED_NOTIFICATION
-            if is_resubmission
-            else STAFF_REPORT_SUBMITTED_NOTIFICATION
-        )
-        payload = json.loads(report.payload_json or "{}")
-        payload["status"] = "Resubmitted" if is_resubmission else "Submitted"
-        report.payload_json = json.dumps(payload, sort_keys=True)
-        report.review_status = "Pending Review"
-        report.notes = (
-            "Revised monthly visitor count resubmitted for LGU review."
-            if is_resubmission
-            else "Monthly visitor count submitted for LGU review."
-        )
-        report.remarks = None
-        prepared.append((report, notification_type))
-
-    return prepared
 
 
 async def create_staff_report_notifications(
     db: AsyncSession,
     lgu_accounts: list[Account],
-    report_notifications: list[tuple[EnterpriseReportSubmission, str]],
+    reports: list[EnterpriseReportSubmission],
 ) -> int:
     staff_accounts = [account for account in lgu_accounts if account.role == AccountRole.STAFF]
+    notification_type = STAFF_REPORT_SUBMITTED_NOTIFICATION
     count = 0
     for staff_account in staff_accounts:
-        for report, notification_type in report_notifications:
-            action_label = (
-                "resubmitted"
-                if notification_type == STAFF_REPORT_RESUBMITTED_NOTIFICATION
-                else "submitted"
-            )
+        for report in reports:
             db.add(
                 UserNotification(
                     id=sample_uuid(
@@ -282,7 +251,7 @@ async def create_staff_report_notifications(
                     recipient_role=staff_account.role.value,
                     title=notification_type,
                     message=(
-                        f"{report.enterprise_name} {action_label} "
+                        f"{report.enterprise_name} submitted "
                         f"{report.report_id} for {report.period}."
                     ),
                     notification_type=notification_type,
@@ -342,17 +311,10 @@ async def create_activity_logs(
     logs: list[ActivityLog] = []
     for report in history["reports"]:
         submitted_at = report.submitted_at
-        if _is_resubmission(report):
-            logs.append(_submission_log(report, submitted_at - timedelta(days=3), "first"))
-            logs.append(
-                _review_log(report, "Returned", submitted_at - timedelta(days=2), RETURN_REMARKS)
-            )
         logs.append(_submission_log(report, submitted_at))
         reviewed_at = max(submitted_at, min(submitted_at + timedelta(days=1), range_end))
         if report.review_status in {"Ready to Consolidate", "Consolidated"}:
             logs.append(_review_log(report, "Ready to Consolidate", reviewed_at, None))
-        elif report.review_status == "Returned":
-            logs.append(_review_log(report, "Returned", reviewed_at, report.remarks))
     db.add_all(logs)
     count = len(logs)
     for final_report in final_reports:
@@ -379,15 +341,9 @@ async def create_activity_logs(
     return count
 
 
-def _is_resubmission(report: EnterpriseReportSubmission) -> bool:
-    return bool(json.loads(report.payload_json or "{}").get("status") == "Resubmitted")
-
-
-def _submission_log(
-    report: EnterpriseReportSubmission, at: datetime, variant: str = "latest"
-) -> ActivityLog:
+def _submission_log(report: EnterpriseReportSubmission, at: datetime) -> ActivityLog:
     return ActivityLog(
-        id=sample_uuid("activity-report", report.id, variant),
+        id=sample_uuid("activity-report", report.id, "latest"),
         timestamp=at,
         activity_group="Reports",
         severity="Success",
@@ -415,7 +371,7 @@ def _review_log(
         id=sample_uuid("activity-review", report.id, status, at.isoformat()),
         timestamp=at,
         activity_group="Reports",
-        severity="Warning" if status == "Returned" else "Success",
+        severity="Success",
         actor=REPORTING_STAFF_NAME,
         actor_role="LGU Staff",
         action=f"Report {status}",

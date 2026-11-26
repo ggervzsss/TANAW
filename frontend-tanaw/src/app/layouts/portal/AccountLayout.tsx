@@ -135,7 +135,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} data-page-scroller data-density-adjustable={!isSettings} className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
+        <main ref={mainRef} data-page-scroller className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
           {isSettings ? (
             outlet
           ) : (

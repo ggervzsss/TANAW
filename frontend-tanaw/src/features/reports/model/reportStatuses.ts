@@ -9,11 +9,11 @@ import type { IntakeReport } from "@/shared/types";
  *   Pending    no report yet, and the due date has not passed.
  *   Missing    no report, and the due date has passed.
  *
- * Staff review (where the report is in review), from the stored intake status:
- *   Waiting       "Pending Review": received, no staff decision yet.
- *   Reviewing     "Returned": staff sent it back for correction; review continues when it is resent.
+ * Staff review (where the month's report is in the staff workflow):
+ *   Waiting       no report yet: staff are waiting on the enterprise (Submission is Pending or Missing).
+ *   Reviewing     a report was sent and awaits the staff decision (stored "Pending Review"; a legacy
+ *                 "Returned" report shows Reviewing too).
  *   Consolidated  "Ready to Consolidate" (accepted) or "Consolidated" (already in a monthly report).
- * A month with no report shows Waiting.
  */
 
 export type SubmissionStatus = "Submitted" | "Pending" | "Missing";
@@ -68,17 +68,16 @@ export function submissionStatus(report: IntakeReport | undefined, month: string
 
 export function reviewStatus(report: Pick<IntakeReport, "status"> | undefined): ReviewStatus {
   if (!report) return "Waiting";
-  if (report.status === "Returned") return "Reviewing";
   if (report.status === "Ready to Consolidate" || report.status === "Consolidated") return "Consolidated";
-  return "Waiting";
+  return "Reviewing";
 }
 
 /**
- * The small note under a submission status: "Returned for correction", "12 days overdue" or
- * "Due Dec 10". A report that was sent gets no lateness note; the sent date already shows when.
+ * The small note under a submission status: "12 days overdue" or "Due Dec 10". A report that was
+ * sent gets no note; the sent date already shows when.
  */
 export function submissionNote(report: IntakeReport | undefined, month: string, year: number | string, today: Date) {
-  if (report) return report.status === "Returned" ? "Returned for correction" : null;
+  if (report) return null;
   const due = reportDueDate(month, year);
   if (today.getTime() <= due.getTime()) return `Due ${formatShortDate(due)}`;
   const overdue = daysAfter(due, today);

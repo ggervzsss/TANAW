@@ -27,12 +27,11 @@ from app.features.notifications.models import UserNotification
 from app.features.realtime.models import RealtimeOutbox
 from app.features.reporting import router as reporting_router
 from app.features.reporting.counting import snapshot_digest
-from app.features.reporting.intake import update_report_status
 from app.features.reporting.models import (
     EnterpriseReportSubmission,
     ReportSubmissionOperation,
 )
-from app.features.reporting.schemas import IntakeReportSummary, ReportStatusUpdate
+from app.features.reporting.schemas import IntakeReportSummary
 from tests.support.counting import counting_snapshot
 from tests.support.postgres import PostgresRuntime, open_postgres_runtime
 
@@ -433,13 +432,12 @@ async def test_resubmission_uses_a_new_identity_and_its_retry_is_idempotent(
         assert first.status_code == 202
         report_id = first.json()["id"]
 
+        # Only a final report audit returns an intake report to its enterprise now.
         async with postgres_runtime.sessions() as db:
-            returned = await update_report_status(
-                db,
-                report_id,
-                ReportStatusUpdate(status="Returned", remarks="Revise the totals."),
-            )
+            returned = await db.get(EnterpriseReportSubmission, report_id)
             assert returned is not None
+            returned.review_status = "Returned"
+            returned.remarks = "Revise the totals."
             await db.commit()
 
         revised_payload = _submission(

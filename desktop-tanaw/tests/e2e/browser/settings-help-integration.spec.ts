@@ -30,7 +30,7 @@ async function mockEnterprise(page: Page) {
     return route.fulfill({ json: { ...user, displayImageDataUrl: null } });
   });
   await page.route("**/auth/preferences", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "dark", textSize: "extra-large", interfaceScale: "comfortable" }) }),
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "dark", textSize: "extra-large" }) }),
   );
   await page.route("**/auth/system-settings", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ values: {} }) }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
@@ -72,14 +72,25 @@ test("integrates Enterprise display and Help Center navigation at practical wind
   const emailEditor = page.getByRole("dialog", { name: "Change Business Email" });
   await expect(emailEditor).toBeVisible();
   await emailEditor.getByRole("button", { name: "Close profile edit modal" }).click();
-  const save = page.getByRole("button", { name: "Save Changes", exact: true });
-  await expect(save).toBeDisabled();
+  // One edit model per form: with nothing to save there is no save bar, and no second save button.
+  const save = page.getByRole("button", { name: "Save changes", exact: true });
+  const discardDraft = page.getByRole("button", { name: "Discard", exact: true });
+  await expect(save).toHaveCount(0);
+  await expect(discardDraft).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save opening hours" })).toHaveCount(0);
+  // Changing the opening hours shows the save bar, which stays on screen while the panel scrolls.
+  const monday = panel.getByLabel("Monday hours", { exact: true });
+  await monday.selectOption("closed");
+  await expect(page.getByRole("status").filter({ hasText: "Unsaved changes" })).toBeVisible();
   await expect(save).toBeInViewport();
-  // The last section scrolls into view while the Save button stays on screen.
   const lastSection = panel.getByText("Temporary closures", { exact: true });
   await lastSection.scrollIntoViewIfNeeded();
   await expect(lastSection).toBeInViewport();
   await expect(save).toBeInViewport();
+  // Discard puts the hours back and hides the bar.
+  await discardDraft.click();
+  await expect(monday).toHaveValue("hours");
+  await expect(save).toHaveCount(0);
   await page.setViewportSize({ width: 800, height: 600 });
   await page.getByLabel("Upload establishment logo", { exact: true }).setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("not an image") });
   await expect(page.getByText("Upload a PNG, JPG, or WebP image.")).toBeVisible();
@@ -93,9 +104,10 @@ test("integrates Enterprise display and Help Center navigation at practical wind
   await discard.getByRole("button", { name: "Discard changes" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/settings\/appearance$/);
   await page.getByRole("button", { name: "Edit profile" }).click();
-  await expect(save).toBeDisabled();
+  await expect(save).toHaveCount(0);
   await page.getByRole("button", { name: "Remove logo" }).click();
   await save.click();
+  await expect(save).toHaveCount(0);
   await expect(page.getByText("Profile logo saved.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Edit profile.*IE/ })).toBeVisible();
   await page.getByRole("button", { name: "Appearance" }).click();

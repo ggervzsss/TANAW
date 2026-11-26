@@ -2,12 +2,11 @@ import { CalendarOff, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../../ui-kit";
 import { SettingsGroup, SettingsRowsSkeleton } from "../../../ui-kit/patterns/GeneralSettings";
-import { addClosure, listClosures, removeClosure, updateOpeningHours, type ClosureSummary } from "../../login/api/login";
-import { useAuthStore } from "../../login/stores/auth-store";
+import { addClosure, listClosures, removeClosure, type ClosureSummary } from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { listSupportTickets, type SupportTicket } from "../../tickets/services/tickets";
 import { getRequestErrorMessage } from "../model/profile-edit";
-import { WEEKDAYS, dayHours, defaultOpeningHours, setDayHours, validateOpeningHours, weekdayLabels, type DayMode, type OpeningHours, type Weekday } from "../model/opening-hours";
+import { WEEKDAYS, dayHours, setDayHours, weekdayLabels, type DayMode, type OpeningHours, type Weekday } from "../model/opening-hours";
 
 const control = "tanaw-settings-control";
 
@@ -41,39 +40,14 @@ export function PendingAccountChanges({ refreshKey }: { refreshKey: number }) {
   );
 }
 
-/** Opening hours, day by day, saved right away. */
-export function OpeningHoursSettings() {
-  const user = useAuthStore((state) => state.user);
-  const updateUser = useAuthStore((state) => state.updateUser);
-  const saved = user?.openingHours ?? null;
-  const [hours, setHours] = useState<OpeningHours>(saved ?? defaultOpeningHours());
-  const [error, setError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const dirty = JSON.stringify(hours) !== JSON.stringify(saved ?? defaultOpeningHours());
-
+/**
+ * Opening hours, day by day. A draft of the profile form: changes wait for the form's save bar
+ * (Save changes or Discard), like the logo above them.
+ */
+export function OpeningHoursSettings({ hours, error, onChange }: { hours: OpeningHours; error: string; onChange: (hours: OpeningHours) => void }) {
   const update = (day: Weekday, mode: DayMode, periods = dayHours(hours, day).periods ?? []) => {
-    setError("");
-    setHours(setDayHours(hours, { day, mode, periods: mode === "hours" ? (periods.length ? periods : [{ open: "08:00", close: "17:00" }]) : [] }));
+    onChange(setDayHours(hours, { day, mode, periods: mode === "hours" ? (periods.length ? periods : [{ open: "08:00", close: "17:00" }]) : [] }));
   };
-
-  async function save() {
-    const problem = validateOpeningHours(hours);
-    if (problem) {
-      setError(problem);
-      return;
-    }
-    setIsSaving(true);
-    try {
-      updateUser(await updateOpeningHours(hours));
-      notifySuccess("Opening hours saved.");
-    } catch (failure) {
-      const message = getRequestErrorMessage(failure, "Unable to save the opening hours.");
-      setError(message);
-      notifyError(message);
-    } finally {
-      setIsSaving(false);
-    }
-  }
 
   return (
     <SettingsGroup title="Opening hours" description="TANAW shows your place as offline only while it is open. A midday break is two opening times on the same day.">
@@ -118,11 +92,6 @@ export function OpeningHoursSettings() {
         })}
       </div>
       {error && <p role="alert" className="mt-2 text-[0.8125rem] font-semibold text-(--tanaw-error)">{error}</p>}
-      <div className="mt-4 flex justify-end">
-        <Button size="sm" disabled={!dirty || isSaving} onClick={() => void save()}>
-          {isSaving ? "Saving..." : "Save opening hours"}
-        </Button>
-      </div>
     </SettingsGroup>
   );
 }

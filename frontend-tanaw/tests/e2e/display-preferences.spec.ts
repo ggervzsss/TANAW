@@ -20,7 +20,7 @@ const user = {
 };
 
 async function mockDisplayAccount(page: Page) {
-  let preferences = { theme: "dark", textSize: "default", interfaceScale: "default" };
+  let preferences = { theme: "dark", textSize: "default" };
   let failNextPatch = false;
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "display-token", user }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
@@ -46,18 +46,28 @@ test("applies, persists, reloads, resets, and retries account display preference
 
   await expect(page.getByRole("heading", { name: "Display Preferences" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-text-size", "default");
+  await expect(page.getByRole("group", { name: "Text size" })).toBeVisible();
+  await expect(page.getByText("Interface scale")).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: /Comfortable/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset to default" })).toBeDisabled();
+  const preview = page.getByRole("region", { name: "Live preview" });
+  await expect(preview).toContainText("Default · 16px text");
+  await expect(preview.getByText("Visitor overview")).toHaveCSS("font-family", /Bai Jamjuree/);
+
   await page.getByRole("radio", { name: /Large Makes text easier/ }).check({ force: true });
-  await page.getByRole("radio", { name: /Comfortable Adds room/ }).check({ force: true });
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-text-size", "large");
-  await expect(page.locator("html")).toHaveAttribute("data-interface-scale", "comfortable");
-  expect(account.read()).toMatchObject({ textSize: "large", interfaceScale: "comfortable", theme: "dark" });
+  await expect(page.locator("html")).not.toHaveAttribute("data-interface-scale", /.*/);
+  await expect(preview).toContainText("Large · 18px text");
+  await expect(preview.getByText("Visitor overview")).toHaveCSS("font-size", "20.25px");
+  expect(account.read()).toEqual({ textSize: "large", theme: "dark" });
 
   await page.reload();
   await expect(page.getByRole("radio", { name: /Large Makes text easier/ })).toBeChecked();
   await expect(page.locator("html")).toHaveCSS("font-size", "18px");
 
   await page.getByRole("button", { name: "Reset to default" }).click();
+  await expect(page.getByRole("radio", { name: /Default TANAW's standard/ })).toBeFocused();
   await expect(page.locator("html")).toHaveCSS("font-size", "16px");
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
 

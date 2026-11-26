@@ -1,7 +1,7 @@
 import { useRef, type FormEvent } from "react";
-import { Pencil, RefreshCw, X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
-import { useDialogFocus } from "../../../ui-kit";
+import { Button, useDialogFocus } from "../../../ui-kit";
 import { PERSON_NAME_MAX_LENGTH, type PersonNameParts } from "../../../utils/form-validation";
 import type { EditableProfileField } from "../model/profile-edit";
 
@@ -154,7 +154,7 @@ export function ProfileEditModal({
                 <span className="mb-1.5 block text-sm font-semibold text-(--tanaw-text-secondary)">{label}</span>
                 {isPhone ? (
                   <div
-                    className={`flex overflow-hidden rounded-tanaw-md border bg-(--tanaw-control-bg) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out focus-within:border-(--tanaw-accent-ink) focus-within:ring-4 focus-within:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
+                    className={`flex overflow-hidden rounded-tanaw-md border bg-(--tanaw-control-bg) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out focus-within:border-(--tanaw-accent-ink) focus-within:ring-4 focus-within:ring-(--tanaw-focus-ring)/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
                   >
                     <span className="flex items-center border-r border-(--tanaw-control-border) bg-(--tanaw-surface-inset) px-3 text-sm font-semibold text-(--tanaw-text-secondary)">
                       +63
@@ -186,7 +186,7 @@ export function ProfileEditModal({
                     maxLength={field === "email" ? 254 : field === "enterpriseName" ? 120 : undefined}
                     aria-invalid={Boolean(error)}
                     onChange={(event) => onValueChange(event.target.value)}
-                    className={`w-full rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
+                    className={`w-full rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-(--tanaw-focus-ring)/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
                   />
                 )}
                 {(error || !isPhone) && (
@@ -198,22 +198,12 @@ export function ProfileEditModal({
             )}
 
             <div className="flex justify-end gap-3 pt-1">
-              <button
-                type="button"
-                onClick={onCancel}
-                disabled={isSaving}
-                className="h-10.5 rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-4.5 text-sm font-semibold text-(--tanaw-text) shadow-tanaw-resting transition-[background-color,border-color,translate,scale] duration-150 ease-tanaw-out hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex h-10.5 min-w-32 items-center justify-center gap-2 rounded-tanaw-md bg-(--tanaw-action) px-4.5 text-sm font-semibold text-(--tanaw-on-action) shadow-tanaw-resting transition-[background-color,box-shadow,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-action-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSaving && <RefreshCw size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-                {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : field === "buildingCapacity" ? "Update Capacity" : "Submit Request"}
-              </button>
+              </Button>
+              <Button type="submit" loading={isSaving} className="min-w-32">
+                {isSaving ? "Saving..." : field === "managerName" ? "Update name" : field === "buildingCapacity" ? "Update capacity" : "Send request"}
+              </Button>
             </div>
           </form>
         </div>
@@ -255,7 +245,7 @@ function ProfileNameInput({
         aria-invalid={Boolean(error)}
         aria-describedby={error || helperText ? descriptionId : undefined}
         onChange={(event) => onChange(name, event.target.value)}
-        className={`w-full min-w-0 rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
+        className={`w-full min-w-0 rounded-tanaw-md border bg-(--tanaw-control-bg) px-3.5 py-3 text-sm text-(--tanaw-text) shadow-tanaw-resting transition-[border-color,box-shadow] duration-150 ease-tanaw-out outline-none focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-(--tanaw-focus-ring)/15 ${error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border) hover:border-(--tanaw-control-border-hover)"}`}
       />
       {(error || helperText) && (
         <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-[0.8125rem] ${error ? "font-semibold text-(--tanaw-error)" : "text-(--tanaw-text-muted)"}`}>

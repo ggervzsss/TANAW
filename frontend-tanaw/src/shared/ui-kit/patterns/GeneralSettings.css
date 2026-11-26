@@ -25,14 +25,6 @@
 .dark .tanaw-settings-workspace {
   --settings-forest: #123128;
 }
-html[data-interface-scale="compact"] .tanaw-settings-workspace {
-  --settings-gutter: clamp(0.9rem, 2vw, 2rem);
-  --settings-flow-gap: 0.9rem;
-}
-html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
-  --settings-gutter: clamp(1.3rem, 2.8vw, 3rem);
-  --settings-flow-gap: 1.5rem;
-}
 
 .tanaw-settings-header {
   display: flex;
@@ -56,7 +48,7 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
 }
 
 .tanaw-settings-panel-header p,
-.tanaw-settings-group header p {
+.tanaw-settings-group-description {
   margin-top: 0.2rem;
   color: var(--tanaw-text-secondary);
   font-size: 0.875rem;
@@ -237,6 +229,127 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   margin-bottom: 0.75rem;
 }
 
+.tanaw-settings-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.tanaw-settings-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+
+/* Settings inputs: always editable, label above, guidance and errors below. */
+.tanaw-account-field {
+  display: block;
+  min-width: 0;
+}
+
+.tanaw-account-field-label {
+  display: block;
+  margin-bottom: 0.375rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.tanaw-account-field-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--tanaw-control-border);
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.tanaw-account-field-input::placeholder {
+  color: var(--tanaw-text-placeholder);
+}
+
+.tanaw-account-field-input:hover:not(:disabled, :focus) {
+  border-color: var(--tanaw-control-border-hover);
+}
+
+.tanaw-account-field-input:focus {
+  border-color: var(--tanaw-focus-ring);
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
+}
+
+.tanaw-account-field-input[aria-invalid="true"] {
+  border-color: var(--tanaw-error);
+}
+
+.tanaw-account-field-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.tanaw-account-field-input.tanaw-sensitive-input {
+  padding-inline-end: 3rem;
+}
+
+.tanaw-account-field-reveal {
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  color: var(--tanaw-text-muted);
+  translate: 0 -50%;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.tanaw-account-field-reveal:hover:not(:disabled) {
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-account-field-reveal:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
+}
+
+.tanaw-account-field-reveal:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tanaw-account-field-error,
+.tanaw-account-field-hint {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.tanaw-account-field-error {
+  color: var(--tanaw-error);
+  font-weight: 600;
+}
+
+.tanaw-account-field-hint {
+  color: var(--tanaw-text-muted);
+}
+
 .tanaw-settings-fields {
   display: grid;
   gap: 0.75rem 1rem;
@@ -263,7 +376,6 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   font-size: 0.875rem;
 }
 
-.tanaw-display-layout,
 .tanaw-ticket-layout,
 .tanaw-profile-layout {
   display: grid;
@@ -271,10 +383,248 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   gap: 0.75rem;
 }
 
+/* Appearance: text size options beside a live preview that follows the active theme. */
+.tanaw-display-layout {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+}
+
+.tanaw-display-options-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tanaw-display-legend {
+  padding: 0;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.tanaw-display-help {
+  margin-top: 0.15rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8rem;
+}
+
 .tanaw-display-options {
   display: grid;
-  gap: 0.45rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.4rem), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.tanaw-display-option {
+  position: relative;
+  display: grid;
+  grid-template-areas:
+    "label sample"
+    "description sample";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  min-height: 4.25rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--tanaw-control-border);
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.tanaw-display-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tanaw-display-option:hover {
+  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-display-option:has(input:checked) {
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-selected-bg);
+  box-shadow: inset 0 0 0 1px var(--tanaw-accent-ink);
+}
+
+.tanaw-display-option:has(input:focus-visible) {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-display-option-label {
+  display: flex;
+  grid-area: label;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.tanaw-display-option:has(input:checked) .tanaw-display-option-label {
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-display-option-description {
+  grid-area: description;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.tanaw-display-option-sample {
+  grid-area: sample;
+  color: var(--tanaw-text-muted);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tanaw-display-preview {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--settings-line);
+  border-radius: var(--radius-tanaw-lg);
+  background: var(--tanaw-surface-inset);
+}
+
+.tanaw-display-preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.tanaw-display-preview-header h4 {
+  color: var(--tanaw-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.tanaw-display-preview-header span {
+  color: var(--tanaw-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tanaw-display-preview-card {
+  margin: 0.9rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: var(--radius-tanaw-lg);
+  background: var(--tanaw-surface);
+  box-shadow: var(--shadow-tanaw-resting);
+  color: var(--tanaw-text);
+}
+
+.tanaw-display-preview-eyebrow {
+  color: var(--tanaw-gold-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tanaw-display-preview-title {
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.tanaw-display-preview-body {
+  margin-top: 0.35rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.tanaw-display-preview-metric {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-surface-inset);
+}
+
+.tanaw-display-preview-metric span {
+  color: var(--tanaw-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tanaw-display-preview-metric strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.tanaw-display-preview-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  margin-top: 0.85rem;
+  padding-inline: 1rem;
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.tanaw-display-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.tanaw-display-status svg {
+  flex: none;
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-display-status[data-tone="error"],
+.tanaw-display-status[data-tone="error"] svg {
+  color: var(--tanaw-error);
+}
+
+.tanaw-display-retry {
+  min-height: 2.75rem;
+  padding-inline: 0.4rem;
+  border-radius: var(--radius-tanaw-sm);
+  color: var(--tanaw-accent-ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tanaw-display-retry:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
 }
 
 .tanaw-settings-upload {
@@ -319,38 +669,9 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
 }
 
 .tanaw-settings-identity-email {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 0.45rem;
   margin-top: 0.15rem;
   color: var(--tanaw-text-secondary);
   font-size: 0.82rem;
-}
-
-.tanaw-settings-identity-email p {
-  min-width: 0;
-}
-
-.tanaw-settings-edit-email {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  min-height: 1.75rem;
-  padding-inline: 0.3rem;
-  border-radius: var(--radius-tanaw-sm);
-  color: var(--tanaw-accent-ink);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.tanaw-settings-edit-email:hover {
-  background: var(--tanaw-selected-bg);
-  text-decoration: underline;
-}
-
-.tanaw-settings-edit-email:focus-visible {
-  outline: 2px solid var(--tanaw-focus-ring);
 }
 
 .tanaw-settings-upload-tools {
@@ -403,19 +724,52 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   cursor: pointer;
 }
 
+/* The save bar sits in the form's flow, so it reserves its own space and never covers the
+   end of the form; sticky keeps it in view while the panel scrolls. */
+.tanaw-settings-save-slot {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: auto;
+}
+
 .tanaw-settings-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem 1rem;
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  margin-top: auto;
-  padding: 0.8rem var(--settings-gutter);
+  padding: 0.75rem var(--settings-gutter);
   border-top: 1px solid var(--settings-line);
-  background: var(--tanaw-surface-inset);
+  background: var(--tanaw-surface);
+  box-shadow: 0 -10px 24px -20px rgb(16 36 27 / 0.45);
+}
+
+.dark .tanaw-settings-actions {
+  box-shadow: 0 -12px 28px -18px rgb(0 0 0 / 0.7);
+}
+
+.tanaw-settings-actions[data-visible="true"] {
+  animation: tanaw-save-bar-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Hidden, the bar keeps only its live status so screen readers still hear when edits begin. */
+.tanaw-settings-actions[data-visible="false"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes tanaw-save-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
 }
 
 .tanaw-settings-action-status {
@@ -424,26 +778,40 @@ html[data-interface-scale="comfortable"] .tanaw-settings-workspace {
   gap: 0.45rem;
   flex: 1 1 12rem;
   color: var(--tanaw-text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .tanaw-settings-action-status svg {
   flex: none;
+  color: var(--tanaw-warning-text);
+}
+
+.tanaw-settings-action-status svg[class*="animate-spin"] {
   color: var(--tanaw-accent-ink);
 }
 
-.tanaw-settings-actions p:empty {
+/* The status line stays in the accessibility tree while empty, so its first message is announced. */
+.tanaw-settings-actions p:empty:not([role="status"]) {
   display: none;
 }
 
-/* Keep persistent connection messages clear of Settings actions. */
-body:has(.tanaw-settings-actions) .tanaw-connection-notice {
+.tanaw-settings-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+
+/* Keep persistent connection messages clear of the Settings save bar. */
+body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice {
   inset-inline: 1rem auto;
   max-width: calc(100vw - 2rem);
 }
 
 @media (width < 60rem) {
-  body:has(.tanaw-settings-actions) .tanaw-connection-notice {
+  body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice {
     bottom: 6.75rem;
   }
 }
@@ -602,10 +970,23 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
 
 @container (width >= 48rem) {
   .tanaw-display-layout {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
+    gap: 1.5rem;
   }
   .tanaw-ticket-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  }
+}
+
+@container (width < 26rem) {
+  .tanaw-display-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tanaw-settings-action-buttons {
+    flex: 1 1 100%;
+  }
+  .tanaw-settings-action-buttons > * {
+    flex: 1 1 0;
   }
 }
 
@@ -630,8 +1011,14 @@ body:has(.tanaw-settings-actions) .tanaw-connection-notice {
 
 @media (prefers-reduced-motion: reduce) {
   .tanaw-settings-link,
-  .tanaw-settings-return {
+  .tanaw-settings-return,
+  .tanaw-account-field-input,
+  .tanaw-account-field-reveal,
+  .tanaw-display-option {
     transition: none;
+  }
+  .tanaw-settings-actions[data-visible="true"] {
+    animation: none;
   }
   .tanaw-settings-return:active {
     transform: none;
