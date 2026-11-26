@@ -49,16 +49,10 @@ export function mapInteractionReducer(state: MapInteractionState, action: MapInt
         selectedBarangayName: action.barangayName,
         selectedEnterpriseId: action.enterpriseId,
       };
-    case "clear-barangay": {
-      if (action.reason !== "map-background") {
-        return { ...initialMapInteractionState, cameraTarget: { type: "citywide", fit: true } };
-      }
-      if (state.selectedBarangayName === null && state.selectedEnterpriseId === null && state.cameraTarget.type === "citywide") {
-        return state;
-      }
-
-      return initialMapInteractionState;
-    }
+    // However the barangay is left (All barangays, Back, a click outside San Pedro), the map returns
+    // to the whole-city view it opened with.
+    case "clear-barangay":
+      return { ...initialMapInteractionState, cameraTarget: { type: "citywide", fit: true } };
     case "close-enterprise":
       return state.selectedEnterpriseId === action.enterpriseId ? { ...state, selectedEnterpriseId: null } : state;
   }

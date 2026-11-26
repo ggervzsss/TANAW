@@ -132,6 +132,38 @@ test("opens a barangay from its busiest pin and returns to the citywide camera f
   await expect(page.locator('#admin-enterprise-map .tanaw-boundary-path[data-boundary-state="selected"]')).toHaveCount(0);
 });
 
+test("returns to the citywide camera when the map is clicked outside San Pedro after opening a barangay", async ({ page }) => {
+  test.setTimeout(60_000);
+  await configureAdminMapSession(page, { enterprises: [mapEnterprise, neighbour] });
+  const initial = await readSettledMapGeometry(page);
+  const pins = page.locator("#admin-enterprise-map .leaflet-marker-icon");
+
+  await pins.first().click();
+  await expect(page.getByRole("heading", { name: "Barangay San Antonio 2 enterprises" })).toBeVisible();
+  const drilled = await readCameraAfterChange(page, initial);
+  expect(drilled.boundary.width).toBeGreaterThan(initial.boundary.width);
+
+  // Find a spot on the map that is outside every barangay and clear of the map controls.
+  const outside = await page.locator("#admin-enterprise-map").evaluate((container) => {
+    const box = container.getBoundingClientRect();
+    for (let y = box.top + box.height * 0.15; y < box.bottom - box.height * 0.2; y += 12) {
+      for (let x = box.left + 24; x < box.right - 70; x += 12) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && container.contains(hit) && !hit.closest(".tanaw-boundary-path, .leaflet-marker-icon, .leaflet-control, .tanaw-map-alerts, .tanaw-map-control, .leaflet-tooltip")) return { x, y };
+      }
+    }
+    return null;
+  });
+  expect(outside).not.toBeNull();
+  await page.mouse.click(outside!.x, outside!.y);
+
+  await expect(page.getByRole("heading", { name: "San Pedro, Laguna" })).toBeVisible();
+  await expect(page.locator('#admin-enterprise-map .tanaw-boundary-path[data-boundary-state="selected"]')).toHaveCount(0);
+  const back = await readCameraAfterChange(page, drilled);
+  expectSameCamera(back, initial);
+  await expect(pins).toHaveCount(1);
+});
+
 test("refits the city when the window resizes", async ({ page }) => {
   await configureAdminMapSession(page);
   const map = page.locator("#admin-enterprise-map");
