@@ -23,8 +23,11 @@ from app.features.auth.schemas import (
     SystemSettingsPayload,
 )
 from app.features.auth.system_settings import (
+    changed_system_settings,
+    describe_system_settings_change,
     load_system_settings_values,
     merge_system_settings_values,
+    system_settings_patch_errors,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,13 +83,20 @@ async def update_system_settings(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="IT Personnel access required."
         )
+    errors = system_settings_patch_errors(payload.values)
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=" ".join(errors)
+        )
     record = await db.scalar(
         select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
     )
     if record is None:
         record = SystemConfiguration(id=SYSTEM_SETTINGS_ID)
         db.add(record)
-    values = merge_system_settings_values(load_system_settings_values(record), payload.values)
+    current_values = load_system_settings_values(record)
+    changes = changed_system_settings(current_values, payload.values)
+    values = merge_system_settings_values(current_values, payload.values)
     record.values_json = json.dumps(values, sort_keys=True)
     record.updated_by = account.display_name
     await db.flush()
@@ -99,8 +109,17 @@ async def update_system_settings(
         actor_role="IT Personnel",
         action="Update System Settings",
         target="TANAW Configuration",
-        summary=f"{account.display_name} saved persistent system settings.",
+        summary=describe_system_settings_change(account.display_name, changes),
         source_id=record.id,
+        it_detail=(
+            "; ".join(
+                f"{change.key}: {change.previous if change.previous is not None else 'default'}"
+                f" → {change.value}"
+                for change in changes
+            )
+            or None
+        ),
+        metadata={"changedKeys": ",".join(change.key for change in changes)},
     )
     return SystemSettingsPayload(
         values=values,

@@ -214,6 +214,8 @@
 
 .tanaw-settings-body {
   display: grid;
+  /* One column that never grows past the panel: a wide table inside scrolls in its own box. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--settings-flow-gap);
   min-width: 0;
   padding: 0 var(--settings-gutter) var(--settings-flow-gap);

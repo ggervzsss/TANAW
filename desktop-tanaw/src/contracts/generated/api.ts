@@ -87,6 +87,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/enterprises/{account_or_enterprise_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Enterprise Account */
+        get: operations["get_enterprise_account_accounts_enterprises__account_or_enterprise_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/lgu": {
         parameters: {
             query?: never;
@@ -156,6 +173,26 @@ export interface paths {
         patch: operations["resolve_verified_account_email_change_request_accounts__account_id__email_change_request_patch"];
         trace?: never;
     };
+    "/accounts/{account_id}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Account Password Reset
+         * @description Send the self-service password reset code to an account on its owner's behalf.
+         */
+        post: operations["send_account_password_reset_accounts__account_id__password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}/status": {
         parameters: {
             query?: never;
@@ -182,6 +219,23 @@ export interface paths {
         };
         /** List Activity Logs */
         get: operations["list_activity_logs_activity_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity-logs/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cleanup Status */
+        get: operations["get_cleanup_status_activity_logs_cleanup_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -886,6 +940,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/operational/enterprise-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Enterprise Health Summaries
+         * @description Every enterprise account's desktop app and cameras, invited and deactivated included.
+         */
+        get: operations["list_enterprise_health_summaries_operational_enterprise_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/enterprise-health/{enterprise_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Enterprise Health Summary */
+        get: operations["get_enterprise_health_summary_operational_enterprise_health__enterprise_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/enterprise-health/{enterprise_id}/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Enterprise Health Strip
+         * @description Each camera's day so far, hour by hour, from today's check-ins and the opening hours.
+         */
+        get: operations["get_enterprise_health_strip_operational_enterprise_health__enterprise_id__today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operational/map-enterprises": {
         parameters: {
             query?: never;
@@ -1177,6 +1288,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/operational/requests/{request_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start On Request */
+        post: operations["start_on_request_operational_requests__request_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operational/requests/{request_id}/status": {
         parameters: {
             query?: never;
@@ -1415,6 +1543,29 @@ export interface components {
              */
             status: "verified";
         };
+        /**
+         * AccountInvitation
+         * @description The newest activation link sent to an account that has not been activated yet.
+         */
+        AccountInvitation: {
+            /** Expired */
+            expired: boolean;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /**
+             * Sentat
+             * Format: date-time
+             */
+            sentAt: string;
+        };
+        /** AccountPasswordResetSent */
+        AccountPasswordResetSent: {
+            /** Sentto */
+            sentTo: string;
+        };
         /** AccountPreferences */
         AccountPreferences: {
             /**
@@ -1444,6 +1595,10 @@ export interface components {
             requestId?: string | null;
             /** Requestedat */
             requestedAt?: string | null;
+            /** Requestedbyaccountid */
+            requestedByAccountId?: string | null;
+            /** Requestedbyname */
+            requestedByName?: string | null;
             /** Requestedvalue */
             requestedValue: string;
             /**
@@ -1483,6 +1638,10 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+            /** Deactivatedat */
+            deactivatedAt?: string | null;
+            /** Deactivatedbyname */
+            deactivatedByName?: string | null;
             /** Displayname */
             displayName: string;
             /** Email */
@@ -1497,6 +1656,7 @@ export interface components {
             gatewayStatus: string | null;
             /** Id */
             id: string;
+            invitation?: components["schemas"]["AccountInvitation"] | null;
             /** Isactivated */
             isActivated: boolean;
             /**
@@ -1528,6 +1688,18 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * ActivityLogCleanupStatus
+         * @description When old activity was last removed, by IT or by the scheduled cleanup.
+         */
+        ActivityLogCleanupStatus: {
+            /** Deletedcount */
+            deletedCount?: number | null;
+            /** Lastrunat */
+            lastRunAt?: string | null;
+            /** Retentiondays */
+            retentionDays: number;
+        };
         /** ActivityLogPurgeResponse */
         ActivityLogPurgeResponse: {
             /** Deletedcount */
@@ -1550,7 +1722,7 @@ export interface components {
              * Group
              * @enum {string}
              */
-            group: "Login & Security" | "Accounts" | "Reports" | "Requests" | "Monitoring" | "Settings & Maintenance";
+            group: "Login & Security" | "Accounts" | "Enterprises" | "Reports" | "Requests" | "Monitoring" | "Settings & Maintenance";
             /** Id */
             id: string;
             /** Itdetail */
@@ -1570,11 +1742,24 @@ export interface components {
             summary: string;
             /** Target */
             target: string;
+            technical?: components["schemas"]["ActivityLogTechnical"] | null;
             /**
              * Timestamp
              * Format: date-time
              */
             timestamp: string;
+        };
+        /**
+         * ActivityLogTechnical
+         * @description Where an activity came from, recorded during the HTTP request. For IT only.
+         */
+        ActivityLogTechnical: {
+            /** Ipaddress */
+            ipAddress?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Useragent */
+            userAgent?: string | null;
         };
         /** AttractionClassification */
         AttractionClassification: {
@@ -1645,6 +1830,53 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** CameraDayStrip */
+        CameraDayStrip: {
+            /** Brand */
+            brand?: string | null;
+            /** Dropcount */
+            dropCount: number;
+            /** Id */
+            id: string;
+            /** Mode */
+            mode?: ("entrance_exit" | "open_space") | null;
+            /** Name */
+            name: string;
+            /** Note */
+            note: string;
+            /** Slots */
+            slots: components["schemas"]["CameraHourSlot"][];
+        };
+        /** CameraHealth */
+        CameraHealth: {
+            /** Brand */
+            brand?: string | null;
+            /** Id */
+            id: string;
+            /** Mode */
+            mode?: ("entrance_exit" | "open_space") | null;
+            /** Name */
+            name: string;
+            /** Note */
+            note?: string | null;
+            /** Since */
+            since?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "counting" | "not_counting" | "starting" | "stopped";
+        };
+        /** CameraHourSlot */
+        CameraHourSlot: {
+            /** Hour */
+            hour: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "counting" | "gaps" | "down" | "closed" | "future";
         };
         /** ClosureCreate */
         ClosureCreate: {
@@ -1719,6 +1951,16 @@ export interface components {
             status: string;
             /** Subject */
             subject: string;
+        };
+        /**
+         * DesktopAppSummary
+         * @description Which desktop app build sent the check-in, and on which computer.
+         */
+        DesktopAppSummary: {
+            /** Computername */
+            computerName?: string | null;
+            /** Version */
+            version: string;
         };
         /** DesktopBackup */
         DesktopBackup: {
@@ -2011,12 +2253,16 @@ export interface components {
         };
         /** DesktopCameraMonitoringItem */
         DesktopCameraMonitoringItem: {
+            /** Brand */
+            brand?: string | null;
             /** Cameraid */
             cameraId: number;
             /** Cameraname */
             cameraName: string;
             /** Error */
             error?: string | null;
+            /** Mode */
+            mode?: ("entrance_exit" | "open_space") | null;
             /**
              * Running
              * @default false
@@ -2246,6 +2492,7 @@ export interface components {
         };
         /** DesktopTelemetryIngest */
         DesktopTelemetryIngest: {
+            app?: components["schemas"]["DesktopAppSummary"] | null;
             /** Capturedat */
             capturedAt?: string | null;
             /** Deviceid */
@@ -2263,6 +2510,8 @@ export interface components {
         EmailDeliverySummary: {
             /** Acceptedat */
             acceptedAt: string | null;
+            /** Accountid */
+            accountId?: string | null;
             /** Attemptcount */
             attemptCount: number;
             /** Canretry */
@@ -2294,6 +2543,10 @@ export interface components {
             purpose: string;
             /** Recipient */
             recipient: string;
+            /** Recipientname */
+            recipientName?: string | null;
+            /** Recipientrole */
+            recipientRole?: string | null;
             /** Status */
             status: string;
         };
@@ -2369,6 +2622,83 @@ export interface components {
             managerName: string;
             openingHours?: components["schemas"]["OpeningHours"] | null;
         };
+        /** EnterpriseAppHealth */
+        EnterpriseAppHealth: {
+            /** Computername */
+            computerName?: string | null;
+            /** Lastdataat */
+            lastDataAt?: string | null;
+            /** Latestversion */
+            latestVersion?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "online" | "delayed" | "offline" | "not_set_up";
+            /** Version */
+            version?: string | null;
+        };
+        /** EnterpriseCameraHealth */
+        EnterpriseCameraHealth: {
+            /** Counting */
+            counting: number;
+            /** List */
+            list?: components["schemas"]["CameraHealth"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * EnterpriseHealthSummary
+         * @description How one enterprise's desktop app and cameras are doing, for IT.
+         */
+        EnterpriseHealthSummary: {
+            /** Accountid */
+            accountId: string;
+            /**
+             * Accountstate
+             * @enum {string}
+             */
+            accountState: "active" | "invited" | "expired" | "deactivated";
+            app: components["schemas"]["EnterpriseAppHealth"];
+            /** Barangay */
+            barangay?: string | null;
+            cameras: components["schemas"]["EnterpriseCameraHealth"];
+            /** Category */
+            category: string;
+            /** Closedreason */
+            closedReason?: string | null;
+            /** Enterpriseid */
+            enterpriseId: string;
+            /** Name */
+            name: string;
+            /** Opennow */
+            openNow?: boolean | null;
+        };
+        /**
+         * EnterpriseHealthToday
+         * @description Each camera's day so far, one slot per hour of the opening window (Philippine time).
+         */
+        EnterpriseHealthToday: {
+            /** Cameras */
+            cameras: components["schemas"]["CameraDayStrip"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number[];
+            /**
+             * Openfrom
+             * @description HH:MM, or null when closed all day.
+             */
+            openFrom?: string | null;
+            /**
+             * Opento
+             * @description HH:MM, or null when closed all day.
+             */
+            openTo?: string | null;
+        };
         /** EnterpriseLocationSuggestion */
         EnterpriseLocationSuggestion: {
             /** Addressline */
@@ -2397,23 +2727,16 @@ export interface components {
             enterpriseId: string;
             /** Message */
             message: string;
-            /**
-             * Severity
-             * @default Warning
-             * @enum {string}
-             */
-            severity: "Info" | "Warning" | "Critical" | "Success";
+            /** Severity */
+            severity?: ("Info" | "Warning" | "Critical" | "Success") | null;
             /** Sourceid */
             sourceId?: string | null;
             /** Sourcetype */
             sourceType?: string | null;
             /** Title */
             title: string;
-            /**
-             * Type
-             * @default Staff Follow-up
-             */
-            type: string;
+            /** Type */
+            type?: string | null;
         };
         /** FinalReportCreate */
         FinalReportCreate: {
@@ -2949,6 +3272,9 @@ export interface components {
              * @enum {string}
              */
             group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+            /** Handledat */
+            handledAt?: string | null;
+            handledBy?: components["schemas"]["RequestHandler"] | null;
             /** Id */
             id: string;
             /** Messages */
@@ -2987,6 +3313,16 @@ export interface components {
              * @enum {string}
              */
             group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+        };
+        /**
+         * RequestHandler
+         * @description The IT person handling a request.
+         */
+        RequestHandler: {
+            /** Accountid */
+            accountId: string;
+            /** Name */
+            name: string;
         };
         /** RequestMessageCreate */
         RequestMessageCreate: {
@@ -3070,6 +3406,9 @@ export interface components {
              * @enum {string}
              */
             group: "Sign-in help" | "Desktop app or camera problem" | "Report problem" | "Account change" | "Other";
+            /** Handledat */
+            handledAt?: string | null;
+            handledBy?: components["schemas"]["RequestHandler"] | null;
             /** Id */
             id: string;
             /** Requesteremail */
@@ -3655,6 +3994,37 @@ export interface operations {
             };
         };
     };
+    get_enterprise_account_accounts_enterprises__account_or_enterprise_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_or_enterprise_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_lgu_accounts_accounts_lgu_get: {
         parameters: {
             query?: never;
@@ -3809,6 +4179,37 @@ export interface operations {
             };
         };
     };
+    send_account_password_reset_accounts__account_id__password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPasswordResetSent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_account_status_accounts__account_id__status_patch: {
         parameters: {
             query?: never;
@@ -3860,6 +4261,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityLogSummary"][];
+                };
+            };
+        };
+    };
+    get_cleanup_status_activity_logs_cleanup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityLogCleanupStatus"];
                 };
             };
         };
@@ -4834,6 +5255,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                sinceDays?: number | null;
             };
             header?: never;
             path?: never;
@@ -5191,6 +5613,102 @@ export interface operations {
             };
         };
     };
+    list_enterprise_health_summaries_operational_enterprise_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnterpriseHealthSummary"][];
+                };
+            };
+        };
+    };
+    get_enterprise_health_summary_operational_enterprise_health__enterprise_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enterprise_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnterpriseHealthSummary"];
+                };
+            };
+            /** @description No enterprise has this ID. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_enterprise_health_strip_operational_enterprise_health__enterprise_id__today_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enterprise_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnterpriseHealthToday"];
+                };
+            };
+            /** @description No enterprise has this ID. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_map_enterprises_operational_map_enterprises_get: {
         parameters: {
             query?: never;
@@ -5478,7 +5996,10 @@ export interface operations {
     };
     list_request_summaries_operational_requests_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only this enterprise's requests: its enterprise ID or account id. */
+                enterpriseId?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5492,6 +6013,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5731,6 +6261,37 @@ export interface operations {
         };
     };
     reopen_operational_requests__request_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_on_request_operational_requests__request_id__start_post: {
         parameters: {
             query?: never;
             header?: never;

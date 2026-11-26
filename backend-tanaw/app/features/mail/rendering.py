@@ -128,6 +128,7 @@ async def _render_password_reset(
         _recipient_from_payload(payload),
         derive_password_reset_code(challenge.id),
         _required(payload, "expiresLabel"),
+        issued_by_name=payload.get("issuedByName") or None,
     )
 
 

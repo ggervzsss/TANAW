@@ -2,8 +2,10 @@ import { ipcMain, type WebContents } from "electron";
 import { cameraCredentialScopeForCurrentSession, clearAuthSession, loadAuthSession, saveAuthSession } from "../stores/auth-session-store";
 import { loadCameraCredentials, removeCameraCredential, saveCameraCredential } from "../stores/camera-credential-store";
 import { ML_REPORT_LIVE_EVENT_CHANNELS } from "../../src/types/ml-report-live-events";
+import { DESKTOP_APP_INFO_CHANNEL, type DesktopAppInfo } from "../../src/types/desktop-app-info";
 
 type IpcHandlerDependencies = {
+  getAppInfo: () => DesktopAppInfo | null;
   getMlServiceStatus: () => unknown | Promise<unknown>;
   isMainRenderer: (sender: WebContents) => boolean;
   markRendererReady: () => void;
@@ -22,6 +24,10 @@ export function registerIpcHandlers(dependencies: IpcHandlerDependencies) {
     }
   };
 
+  ipcMain.handle(DESKTOP_APP_INFO_CHANNEL, (event) => {
+    requireMainRenderer(event.sender);
+    return dependencies.getAppInfo();
+  });
   ipcMain.handle("ml-service:get-status", (event) => {
     requireMainRenderer(event.sender);
     return dependencies.getMlServiceStatus();

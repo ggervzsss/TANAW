@@ -18,6 +18,7 @@ import { publishSessionEvent } from "@/shared/utils/sessionSync";
 import { TopbarAccount } from "@/shared/ui-kit/patterns/TopbarAccount";
 import type { ResolvedTheme } from "@/shared/utils/theme";
 import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
+import { useNavigationBadges } from "./hooks/useNavigationBadges";
 import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";
 
 type PortalTopbarProps = {
@@ -137,6 +138,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
 
   const navigation = useMemo(() => getPortalNavigation(role, showDevLog), [role, showDevLog]);
   const topbarItems = useMemo(() => getTopbarEntries(role, navigation), [navigation, role]);
+  const navigationBadges = useNavigationBadges(role);
 
   const isDarkTopbar = resolvedTheme === "dark";
   const topbarThemeClasses = getPortalTopbarThemeClasses(resolvedTheme);
@@ -181,7 +183,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
           <div ref={navMenuRef} className="hidden xl:block">
-            <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} />
+            <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} badges={navigationBadges} />
           </div>
 
           <button
@@ -194,8 +196,8 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
           </button>
 
           <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
-            {(role === "admin" || role === "it") && (
-              <AlertsButton dashboardPath={role === "admin" ? routes.admin.dashboard : null} className={"tanaw-topbar-compact-control " + topbarIconButton} />
+            {role === "admin" && (
+              <AlertsButton dashboardPath={routes.admin.dashboard} className={"tanaw-topbar-compact-control " + topbarIconButton} />
             )}
             {role !== "admin" && (
             <div ref={notificationMenuRef} className="sm:relative">
@@ -235,7 +237,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
       </div>
 
       <AnimatePresence>
-        {showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} onNavigate={() => setShowMobileNav(false)} />}
+        {showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} badges={navigationBadges} onNavigate={() => setShowMobileNav(false)} />}
       </AnimatePresence>
     </div>
   );

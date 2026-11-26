@@ -6,12 +6,12 @@ import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/date
 
 /*
  * Activity: a record of everything every user did, and everything TANAW did by itself, once
- * per event. The Admin and IT read the same records, in six groups, newest first. The Admin
+ * per event. The Admin and IT read the same records, in seven groups, newest first. The Admin
  * reads the plain summary; IT also gets the technical details (`itDetail`) the backend sends
  * only to IT. Nothing is pinned: open problems are on the Requests page and in Alerts.
  */
 
-export type ActivityKind = "security" | "accounts" | "reports" | "requests" | "monitoring" | "settings";
+export type ActivityKind = "security" | "accounts" | "enterprises" | "reports" | "requests" | "monitoring" | "settings";
 export type ActivityTypeFilter = "all" | ActivityKind;
 
 export const ACTIVITY_PAGE_SIZE = 8;
@@ -22,6 +22,7 @@ export const ACTIVITY_PARAM = "activity";
 const KIND_BY_GROUP: Record<ActivityGroup, ActivityKind> = {
   "Login & Security": "security",
   Accounts: "accounts",
+  Enterprises: "enterprises",
   Reports: "reports",
   Requests: "requests",
   Monitoring: "monitoring",
@@ -32,6 +33,7 @@ export const activityTypeOptions: readonly { value: ActivityTypeFilter; label: s
   { value: "all", label: "All Activity" },
   { value: "security", label: "Login & Security" },
   { value: "accounts", label: "Accounts" },
+  { value: "enterprises", label: "Enterprises", meta: "Registrations, details, opening hours, closures" },
   { value: "reports", label: "Reports" },
   { value: "requests", label: "Requests" },
   { value: "monitoring", label: "Monitoring", meta: "Cameras, busy places, offline desktop apps" },
@@ -42,6 +44,7 @@ export const activityTypeOptions: readonly { value: ActivityTypeFilter; label: s
 export const activityKindChipLabels: Record<ActivityKind, string> = {
   security: "Login & security",
   accounts: "Accounts",
+  enterprises: "Enterprises",
   reports: "Reports",
   requests: "Requests",
   monitoring: "Monitoring",
@@ -76,6 +79,7 @@ const ACTION_TITLES: Record<string, string> = {
   "Update LGU Account": "LGU Account Updated",
   "Update Account Status": "Account Status Changed",
   "Resend Account Activation": "Invitation Resent",
+  "Send Password Reset": "Password Reset Email Sent",
   "Account Activated": "Invitation Accepted",
   "Verify Proposed Account Email": "New Email Verified",
   "Update Profile": "Profile Updated",
@@ -97,6 +101,7 @@ const ACTION_TITLES: Record<string, string> = {
   "Cancel Account Change": "Account Change Cancelled",
   "Reply to Request": "Reply Sent",
   "Add Note for IT": "Note Added for IT",
+  "Start Request": "Request Started",
   "Request In Progress": "Request In Progress",
   "Request Resolved": "Request Resolved",
   "Reopen Request": "Request Reopened",
@@ -267,6 +272,9 @@ export function reportMonthParams(period: string | null) {
   return month ? { month, year: match[2] } : null;
 }
 
+/** The IT screens IT's activity links to. Literal paths, so they do not depend on route names. */
+const IT_PATHS = { overview: "/it/dashboard", requests: "/it/requests", enterprises: "/it/enterprises" } as const;
+
 export type ActivityField = { label: string; value: string; tone?: RecordStatusTone };
 export type ActivityLink = { label: string; to: string };
 
@@ -299,8 +307,8 @@ function change(previous: string | number | null, next: string | number | null) 
   return `${previous ?? "Not set"} → ${next ?? "Not set"}`;
 }
 
-function accountFields(log: SystemLog): ActivityField[] {
-  const fields: ActivityField[] = [{ label: "Account", value: log.target || log.actor }];
+function accountFields(log: SystemLog, label = "Account"): ActivityField[] {
+  const fields: ActivityField[] = [{ label, value: log.target || log.actor }];
   const value = change(metaString(log, "previousValue"), metaString(log, "requestedValue"));
   if (value) fields.push({ label: "Change", value });
   const email = change(metaString(log, "previousEmail"), metaString(log, "requestedEmail"));
@@ -338,6 +346,7 @@ export function activityDetailFields(log: SystemLog): ActivityField[] {
   const kind = activityKind(log);
   if (kind === "reports") return reportFields(log);
   if (kind === "accounts") return accountFields(log);
+  if (kind === "enterprises") return accountFields(log, "Enterprise");
   if (kind === "requests") return requestFields(log);
   return otherFields(log);
 }
@@ -351,10 +360,10 @@ export function activityLinks(log: SystemLog, portal: "admin" | "it" = "admin"):
     links.push(
       portal === "admin"
         ? { label: "Open the request", to: `${routes.admin.requests}?request=${encodeURIComponent(requestId)}` }
-        : { label: "Open the request", to: `${routes.it.workCenter}?view=requests&request=${encodeURIComponent(requestId)}` },
+        : { label: "Open the request", to: `${IT_PATHS.requests}?request=${encodeURIComponent(requestId)}` },
     );
   }
-  if (kind === "monitoring") links.push({ label: "Open the Dashboard", to: portal === "admin" ? routes.admin.dashboard : routes.it.dashboard });
+  if (kind === "monitoring") links.push(portal === "admin" ? { label: "Open the Dashboard", to: routes.admin.dashboard } : { label: "Open the Overview", to: IT_PATHS.overview });
   if (portal === "admin" && kind === "reports") {
     const params = new URLSearchParams();
     const month = reportMonthParams(metaString(log, "period"));
@@ -368,6 +377,6 @@ export function activityLinks(log: SystemLog, portal: "admin" | "it" = "admin"):
     links.push({ label: "Open Enterprise Reports", to: query ? `${routes.admin.reports}?${query}` : routes.admin.reports });
   }
   const enterpriseId = metaString(log, "enterpriseId");
-  if (portal === "admin" && enterpriseId) links.push({ label: "Open enterprise details", to: adminEnterpriseDetailsPath(enterpriseId) });
+  if (enterpriseId) links.push({ label: "Open enterprise details", to: portal === "admin" ? adminEnterpriseDetailsPath(enterpriseId) : `${IT_PATHS.enterprises}/${encodeURIComponent(enterpriseId)}` });
   return links;
 }

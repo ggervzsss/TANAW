@@ -1,4 +1,4 @@
-import type { Camera } from "../../../types/enterprise";
+import type { AnalysisMode, Camera, CameraBrand } from "../../../types/enterprise";
 import type { MlCameraLiveState, MlCameraStates, MlServiceStatus } from "../../camera/services/ml-service";
 
 export const CAMERA_FRAME_STALE_AFTER_MS = 5_000;
@@ -9,6 +9,10 @@ export type CameraRuntimeStatus = "stopped" | "starting" | "running" | "error";
 export type CameraMonitoringItem = {
   cameraId: number;
   cameraName: string;
+  /** How the camera counts; null when its stored profile names a mode this app does not know. */
+  mode: AnalysisMode | null;
+  /** The camera maker chosen in setup; null when the profile does not say. */
+  brand: CameraBrand | null;
   status: CameraRuntimeStatus;
   running: boolean;
   error: string | null;
@@ -112,10 +116,25 @@ function cameraSummary(
   return {
     cameraId: camera.id,
     cameraName: camera.name,
+    mode: cameraMode(camera.analysisMode),
+    brand: cameraBrand(camera.cameraBrand),
     status,
     running,
     error,
   };
+}
+
+const ANALYSIS_MODES: ReadonlySet<unknown> = new Set<AnalysisMode>(["entrance_exit", "open_space"]);
+const CAMERA_BRANDS: ReadonlySet<unknown> = new Set<CameraBrand>(["tapo", "tenda", "dahua", "custom"]);
+
+/** A profile without a mode counts entries and exits, as the local service treats it. */
+function cameraMode(mode: unknown): AnalysisMode | null {
+  if (mode === undefined || mode === null) return "entrance_exit";
+  return ANALYSIS_MODES.has(mode) ? (mode as AnalysisMode) : null;
+}
+
+function cameraBrand(brand: unknown): CameraBrand | null {
+  return CAMERA_BRANDS.has(brand) ? (brand as CameraBrand) : null;
 }
 
 function isStartingStatus(status: string) {

@@ -1,5 +1,7 @@
 import { apiClient } from "@/shared/lib/apiClient";
 
+export const emailDeliveriesQueryKey = ["email-deliveries"] as const;
+
 export type EmailDelivery = {
   id: string;
   purpose: string;
@@ -17,10 +19,15 @@ export type EmailDelivery = {
   canRetry: boolean;
   createdAt: string;
   acceptedAt: string | null;
+  /** The account the email went to, with its name and role, when TANAW knows it. */
+  accountId?: string | null;
+  recipientName?: string | null;
+  recipientRole?: string | null;
 };
 
-export async function listEmailDeliveries() {
-  const response = await apiClient.get<EmailDelivery[]>("/mail/deliveries");
+/** Emails TANAW sent in the last `sinceDays` days, newest first. */
+export async function listRecentEmailDeliveries(sinceDays: number) {
+  const response = await apiClient.get<EmailDelivery[]>("/mail/deliveries", { params: { sinceDays } });
   return response.data;
 }
 

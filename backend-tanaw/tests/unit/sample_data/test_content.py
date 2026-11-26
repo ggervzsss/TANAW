@@ -1,11 +1,12 @@
 import json
 import random
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
 
+from app.core.date_time import PHILIPPINE_TIME_ZONE
 from app.core.password_policy import validate_password_policy
 from app.features.accounts.models import (
     Account,
@@ -14,12 +15,13 @@ from app.features.accounts.models import (
     EnterpriseProfile,
 )
 from app.features.mail.models import EmailOutbox
+from app.features.monitoring.alerts import CAMERA_WAIT_MINUTES
 from app.features.monitoring.models import OperationalAlert
 from app.features.notifications.models import UserNotification
 from app.features.notifications.service import STAFF_REPORT_SUBMITTED_NOTIFICATION
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.schemas import DesktopReportSubmissionIngest
-from app.features.requests.models import Request
+from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import prepared_counts
 from app.features.sample_data.definitions import (
@@ -41,7 +43,13 @@ from app.features.sample_data.report_workflow import (
     create_staff_report_notifications,
     prepare_staff_notification_reports,
 )
-from app.features.sample_data.visitors import create_admin_visitor_history
+from app.features.sample_data.visitors import (
+    PARTIAL_CAMERA_ENTERPRISE_INDEX,
+    PARTIAL_CAMERA_OUTAGE,
+    create_admin_visitor_history,
+    participating_enterprises,
+    sample_camera_monitoring,
+)
 
 
 def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
@@ -437,19 +445,21 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
         _account("admin-account", AccountRole.ADMIN),
         _account("it-account", AccountRole.IT),
     ]
+    target = _enterprise_account("target-account", "Target Enterprise")
     enterprises = [
         _enterprise_account(f"enterprise-{index}", f"Enterprise {index}") for index in range(1, 4)
     ]
     db = MagicMock()
     db.flush = AsyncMock()
+    range_end = datetime(2026, 7, 21, 12, tzinfo=UTC)
 
     counts = await create_portal_workflow_data(
         db,
         lgu_accounts,
         enterprises,
-        datetime(2026, 7, 21, 12, tzinfo=UTC),
+        range_end,
         AdminVisitorScenario(
-            enterprise=enterprises[0],
+            enterprise=target,
             current_visitors=84,
             typical_visitors=40,
             captured_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
@@ -466,11 +476,38 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
     requests = [item for item in batches if isinstance(item, Request)]
     notifications = [item for item in batches if isinstance(item, UserNotification)]
     assert busy.status == camera.status == "Active"
-    assert busy.source_id == "visitor-activity:enterprise-1"
+    assert busy.source_id == "visitor-activity:target-account"
     assert "84 visitors" in busy.summary
     assert "usual 40" in busy.summary
+    # The camera alert names the place and camera the sample check-ins show not counting: the
+    # place at PARTIAL_CAMERA_ENTERPRISE_INDEX with the target first, and its first camera.
+    camera_enterprise = participating_enterprises(target, enterprises)[
+        PARTIAL_CAMERA_ENTERPRISE_INDEX
+    ]
+    assert camera_enterprise.id == "enterprise-3"
+    outage_since = range_end - PARTIAL_CAMERA_OUTAGE
+    monitoring = sample_camera_monitoring(
+        PARTIAL_CAMERA_ENTERPRISE_INDEX,
+        range_end.astimezone(PHILIPPINE_TIME_ZONE),
+        outage_since.astimezone(PHILIPPINE_TIME_ZONE),
+    )
+    failing = next(item for item in monitoring["cameras"] if item["status"] == "error")
     assert camera.alert_code == "ALT-SAMPLE-002"
-    assert camera.camera == "Entrance"
+    assert camera.enterprise_profile_id == camera_enterprise.id
+    assert camera.enterprise == "Enterprise 3"
+    assert camera.camera == failing["cameraName"] == "Main Entrance"
+    assert camera.source_id == f"camera:enterprise-3:{failing['cameraId']}"
+    assert camera.summary == (
+        "The Main Entrance camera at Enterprise 3 is not counting. 2 of 3 cameras are counting."
+    )
+    assert camera.detail == "Camera: Main Entrance · Error: No visitor counts since 7:10 PM."
+    assert camera.started_at == outage_since
+    assert camera.active_at == outage_since + timedelta(minutes=CAMERA_WAIT_MINUTES)
+    camera_request = next(
+        request for request in requests if request.request_group == "Desktop app or camera problem"
+    )
+    assert camera_request.enterprise_profile_id == camera_enterprise.id
+    assert camera_request.camera == "Main Entrance"
     assert failed_email.status == "terminal_failed"
     assert [(request.request_group, request.status) for request in requests] == [
         ("Desktop app or camera problem", "In Progress"),
@@ -478,11 +515,22 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
         ("Account change", "In Progress"),
         ("Sign-in help", "In Progress"),
     ]
+    # IT has picked up the camera problem; the other three are not picked up yet.
+    assert [request.handled_by_account_id for request in requests] == [
+        "it-account",
+        None,
+        None,
+        None,
+    ]
+    messages = [item for item in batches if isinstance(item, RequestMessage)]
+    assert "it-account started on it." in {message.message for message in messages}
     change = next(request for request in requests if request.change_field)
     assert (
-        json.loads(enterprises[2].preferences_json or "{}")["pendingContactNumberChange"]["phone"]
+        json.loads(enterprises[1].preferences_json or "{}")["pendingContactNumberChange"]["phone"]
         == change.change_value
     )
+    # Each open request comes from a different place.
+    assert len({request.enterprise_profile_id for request in requests[:3]}) == 3
     # The Admin has no notification bell; only IT gets notifications.
     assert {notification.recipient_role for notification in notifications} == {AccountRole.IT.value}
     assert {notification.source_type for notification in notifications} == {
@@ -494,7 +542,7 @@ async def test_sample_operations_cover_admin_and_it_workflows() -> None:
         "operationalAlerts": 2,
         "requests": 4,
         "emailProblems": 1,
-        "activityLogs": 7,
+        "activityLogs": 8,
     }
     assert db.flush.await_count == 2
 

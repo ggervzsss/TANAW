@@ -274,3 +274,82 @@ async def test_listing_account_changes_reads_the_current_value_without_lazy_load
     async with postgres_runtime.sessions() as db:
         await db.execute(delete(Account).where(Account.id == viewer.id))
         await db.commit()
+
+
+async def _create_it_account(runtime: PostgresRuntime) -> Account:
+    account = Account(
+        id=str(uuid4()),
+        email=f"tanaw-support-attachment-pg-it-{uuid4().hex[:12]}@example.com",
+        password_hash="unused-test-password-hash",
+        role=AccountRole.IT,
+        display_name="IT Handler",
+        title="IT Personnel",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+        password_changed_at=datetime.now(UTC),
+    )
+    async with runtime.sessions() as db:
+        db.add(account)
+        await db.commit()
+    return account
+
+
+@pytest.mark.asyncio
+async def test_it_starts_on_a_request_once_and_lists_requests_by_enterprise(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    enterprise = await _create_enterprise(postgres_runtime, label="handled")
+    other = await _create_enterprise(postgres_runtime, label="elsewhere")
+    it_account = await _create_it_account(postgres_runtime)
+    slug = enterprise.enterprise_profile.enterprise_id  # type: ignore[union-attr]
+    application = _create_test_app(postgres_runtime)
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/operational/requests",
+            headers=_authorization(enterprise),
+            json={
+                "group": "Other",
+                "title": "Who handles this",
+                "description": "A request that IT picks up with Start on it.",
+            },
+        )
+        assert created.status_code == 201
+        request_id = created.json()["id"]
+        assert created.json()["handledBy"] is None
+
+        started = await client.post(
+            f"/operational/requests/{request_id}/start", headers=_authorization(it_account)
+        )
+        assert started.status_code == 200
+        body = started.json()
+        assert body["handledBy"] == {"accountId": it_account.id, "name": "IT Handler"}
+        assert body["handledAt"] is not None
+        assert body["messages"][-1]["message"] == "IT Handler started on it."
+
+        again = await client.post(
+            f"/operational/requests/{request_id}/start", headers=_authorization(it_account)
+        )
+        assert again.status_code == 409
+
+        by_enterprise = await client.post(
+            f"/operational/requests/{request_id}/start", headers=_authorization(enterprise)
+        )
+        assert by_enterprise.status_code == 403
+
+        for value in (slug, enterprise.id):
+            listed = await client.get(
+                "/operational/requests",
+                params={"enterpriseId": value},
+                headers=_authorization(it_account),
+            )
+            assert listed.status_code == 200
+            assert [item["id"] for item in listed.json()] == [request_id]
+        elsewhere = await client.get(
+            "/operational/requests",
+            params={"enterpriseId": other.enterprise_profile.enterprise_id},  # type: ignore[union-attr]
+            headers=_authorization(it_account),
+        )
+        assert elsewhere.json() == []
+    # The module's cleanup removes the request, then the IT account (its email matches).

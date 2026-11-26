@@ -61,10 +61,13 @@ async def enqueue_email(
     return outbox
 
 
-async def list_email_outbox(db: AsyncSession, *, limit: int = 250) -> list[EmailOutbox]:
-    result = await db.scalars(
-        select(EmailOutbox).order_by(EmailOutbox.created_at.desc()).limit(limit)
-    )
+async def list_email_outbox(
+    db: AsyncSession, *, limit: int = 250, created_since: datetime | None = None
+) -> list[EmailOutbox]:
+    statement = select(EmailOutbox)
+    if created_since is not None:
+        statement = statement.where(EmailOutbox.created_at >= created_since)
+    result = await db.scalars(statement.order_by(EmailOutbox.created_at.desc()).limit(limit))
     return list(result)
 
 

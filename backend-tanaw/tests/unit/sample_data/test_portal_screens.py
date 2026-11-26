@@ -154,9 +154,19 @@ async def test_request_history_gives_resolved_open_and_approved_requests() -> No
     assert {log.activity_group for log in logs} == {
         "Requests",
         "Accounts",
+        "Enterprises",
         "Monitoring",
         "Login & Security",
     }
+    assert {log.action for log in logs if log.activity_group == "Enterprises"} == {
+        "Create Enterprise Account",
+        "Update Enterprise Account",
+    }
+    sign_ins = [log for log in logs if log.action == "Login"]
+    assert all(log.ip_address and log.user_agent and log.session_id for log in sign_ins)
+    # Closed requests name the IT person who handled them; the open one is not picked up.
+    handlers = {request.status: request.handled_by_account_id for request in requests}
+    assert handlers == {"Resolved": "it-account", "Approved": "it-account", "In Progress": None}
     assert all(log.timestamp <= GENERATED_AT for log in logs)
     logins = [log for log in logs if log.action == "Login"]
     assert {log.source_id for log in logins} == {account.id for account in lgu}

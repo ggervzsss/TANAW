@@ -83,6 +83,8 @@ class Account(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deactivated_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     enterprise_profile: Mapped[EnterpriseProfile | None] = relationship(
         back_populates="account",
         cascade="all, delete-orphan",

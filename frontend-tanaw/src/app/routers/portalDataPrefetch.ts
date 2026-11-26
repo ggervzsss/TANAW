@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { emailDeliveriesQueryKey } from "@/features/email-deliveries/model/emailDeliveryPresentation";
-import { listEmailDeliveries } from "@/features/email-deliveries/services/emailDeliveryService";
+import { listRecentEmailDeliveries } from "@/features/email-deliveries/services/emailDeliveryService";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts/services/enterpriseAccountService";
 import { lguAccountsQueryKey, listLguAccounts } from "@/features/lgu-accounts/services/lguAccountService";
 import { activityLogsQueryKey } from "@/features/system-logs/hooks/useActivityLogs";
@@ -11,10 +10,10 @@ import {
   operationalMapEnterprisesQueryKey,
   operationalNotificationsQueryKey,
   operationalReportsQueryKey,
-  operationalSummaryQueryKey,
 } from "@/app/hooks/useOperationalSync";
 import { listLiveAlerts } from "@/shared/services/alerts";
-import { getOperationalSummary, listFinalReports, listIntakeReports, listOperationalMapEnterprises, listUserNotifications } from "@/shared/services/operationalSync";
+import { listFinalReports, listIntakeReports, listOperationalMapEnterprises, listUserNotifications } from "@/shared/services/operationalSync";
+import { enterpriseHealthQueryKey, listEnterpriseHealth } from "@/shared/services/enterpriseHealth";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import { listRequests, requestsQueryKey } from "@/shared/services/requests";
 import { getSystemSettings, systemSettingsQueryKey } from "@/shared/services/systemSettingsService";
@@ -27,8 +26,8 @@ const activityLogs: Prefetch = { queryKey: activityLogsQueryKey, queryFn: listAc
 const enterpriseAccounts: Prefetch = { queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts };
 const lguAccounts: Prefetch = { queryKey: lguAccountsQueryKey, queryFn: listLguAccounts };
 const requests: Prefetch = { queryKey: requestsQueryKey, queryFn: listRequests };
-const emailDeliveries: Prefetch = { queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries };
-const operationalSummary: Prefetch = { queryKey: operationalSummaryQueryKey, queryFn: getOperationalSummary };
+const recentEmails: Prefetch = { queryKey: ["email-deliveries", "recent", 7], queryFn: () => listRecentEmailDeliveries(7) };
+const enterpriseHealth: Prefetch = { queryKey: enterpriseHealthQueryKey, queryFn: listEnterpriseHealth };
 const operationalReports: Prefetch = { queryKey: operationalReportsQueryKey, queryFn: listIntakeReports };
 const operationalFinalReports: Prefetch = { queryKey: operationalFinalReportsQueryKey, queryFn: listFinalReports };
 const operationalMap: Prefetch = { queryKey: operationalMapEnterprisesQueryKey, queryFn: listOperationalMapEnterprises };
@@ -42,13 +41,12 @@ const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
   [routes.admin.reports]: [operationalReports, reportEnterprises, enterpriseAccounts, operationalMap, activityLogs, operationalFinalReports],
   [routes.admin.activity]: [activityLogs],
   [routes.admin.requests]: [requests],
-  [routes.it.dashboard]: [alerts, operationalSummary, lguAccounts, enterpriseAccounts, requests, emailDeliveries],
-  [routes.it.enterpriseAccounts]: [enterpriseAccounts],
-  [routes.it.lguAccounts]: [lguAccounts],
+  [routes.it.dashboard]: [requests, enterpriseHealth, lguAccounts, enterpriseAccounts, recentEmails],
+  [routes.it.requests]: [requests, enterpriseHealth],
+  [routes.it.enterprises]: [enterpriseAccounts, enterpriseHealth],
+  [routes.it.personnel]: [lguAccounts],
   [routes.it.notifications]: [operationalNotifications],
-  [routes.it.systemLogs]: [activityLogs],
-  [routes.it.systemSettings]: [systemSettings],
-  [routes.it.workCenter]: [alerts, enterpriseAccounts, requests, emailDeliveries],
+  [routes.it.system]: [activityLogs, recentEmails, systemSettings],
   [routes.staff.reports]: [operationalReports, reportEnterprises],
   [routes.staff.consolidatedReports]: [operationalFinalReports],
   [routes.staff.notifications]: [operationalNotifications],

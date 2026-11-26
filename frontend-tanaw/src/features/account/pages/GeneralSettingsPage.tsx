@@ -4,14 +4,13 @@ import type { usePortalThemePreference } from "@/app/layouts/portal/hooks/usePor
 import { GeneralSettings, ThemeSelector, type SettingsSection } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { DisplayPreferencesPage } from "@/features/display-preferences";
 import { SupportTicketsPage } from "@/features/support-tickets";
-import { ITSystemSettingsPage } from "@/features/system-settings";
 import { AccountProfilePage } from "./AccountProfilePage";
 import { AccountSecurityPage } from "./AccountSecurityPage";
 
 const accountSections = ["profile", "security", "appearance"] as const;
 const sectionsByRole = {
   admin: [...accountSections, "support"],
-  it: [...accountSections, "support", "system"],
+  it: accountSections,
   staff: accountSections,
 } as const satisfies Record<string, readonly SettingsSection[]>;
 
@@ -20,7 +19,6 @@ const descriptions = {
   security: "Update the password you use to sign in to TANAW.",
   appearance: "Choose a theme and adjust the readability of your workspace.",
   support: "Requests people sent to IT, with their conversations and status.",
-  system: "Manage account safety, activity history, Philippine time display, and technical issue notifications.",
 };
 
 export function GeneralSettingsPage({ role }: { role: keyof typeof sectionsByRole }) {
@@ -54,11 +52,6 @@ export function GeneralSettingsPage({ role }: { role: keyof typeof sectionsByRol
       {active === "support" && role !== "staff" && (
         <div className="tanaw-settings-body">
           <SupportTicketsPage mode={role} embedded inSettings />
-        </div>
-      )}
-      {active === "system" && role === "it" && (
-        <div className="tanaw-settings-body">
-          <ITSystemSettingsPage />
         </div>
       )}
     </GeneralSettings>

@@ -23,7 +23,7 @@ const telemetrySummary = {
 
 const pages: Record<Role, string[]> = {
   admin: ["dashboard", "enterprises", "reports", "activity", "requests", "notifications", "profile"],
-  it: ["dashboard", "work-center", "lgu-accounts", "enterprise-accounts", "system-settings", "system-logs", "security", "display-preferences", "help"],
+  it: ["dashboard", "requests", "enterprises", "personnel", "system", "system?tab=email", "system?tab=settings", "security", "display-preferences", "help"],
   staff: ["reports", "consolidated-reports"],
 };
 
@@ -54,7 +54,7 @@ async function mockPortal(page: Page, role: Role, theme: Theme) {
   const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   await page.addInitScript((value) => window.localStorage.setItem("tanaw-web-theme", value), theme);
   // Registered first so the specific routes below take precedence.
-  await page.route(/\/(operational|accounts|activity-logs|reports|system|notifications|help)(\/|\?|$)/, (route) => route.fulfill(json([])));
+  await page.route(/\/(operational|accounts|activity-logs|mail|reports|system|notifications|help)(\/|\?|$)/, (route) => route.fulfill(json([])));
   await page.route("**/auth/session", (route) => route.fulfill(json({ token: `${role}-design-token`, user })));
   await page.route("**/auth/me", (route) => route.fulfill(json(user)));
   await page.route("**/auth/preferences", (route) => route.fulfill(json(route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme })));
@@ -88,7 +88,7 @@ for (const role of Object.keys(pages) as Role[]) {
         await page.goto(`/${role}/${name}`);
         await page.waitForLoadState("networkidle").catch(() => undefined);
         await page.waitForTimeout(600);
-        await page.screenshot({ path: `${folder}/web-${role}-${name}-${theme}.png`, fullPage: true });
+        await page.screenshot({ path: `${folder}/web-${role}-${name.replace(/[^a-z0-9]+/gi, "-")}-${theme}.png`, fullPage: true });
       }
     }
   });

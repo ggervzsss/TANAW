@@ -12,6 +12,9 @@ export type AccountProfileChangeRequest = {
   isVerified: boolean;
   canApprove: boolean;
   expiresAt: string | null;
+  /** Who asked for the change, when TANAW knows. */
+  requestedByName?: string | null;
+  requestedByAccountId?: string | null;
 };
 
 export type AccountSummary = {
@@ -44,4 +47,8 @@ export type AccountSummary = {
   profileChangeRequests: AccountProfileChangeRequest[];
   createdAt: string;
   lastLoginAt: string | null;
+  /** The newest sign-in invitation while the account is not activated; null once it is. */
+  invitation?: { sentAt: string; expiresAt: string; expired: boolean } | null;
+  deactivatedAt?: string | null;
+  deactivatedByName?: string | null;
 };

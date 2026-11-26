@@ -115,6 +115,8 @@ export type SystemLog = {
   summary: string;
   /** Technical details for IT, such as the camera or the error. Never sent to the Admin. */
   itDetail?: string | null;
+  /** Where the action came from (IP address, browser, short session ID). IT only. */
+  technical?: { ipAddress?: string | null; userAgent?: string | null; sessionId?: string | null } | null;
   sourceId?: string | null;
   metadata?: Record<string, string | number | boolean | null>;
 };

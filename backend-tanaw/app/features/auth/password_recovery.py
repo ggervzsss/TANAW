@@ -72,7 +72,13 @@ async def request_password_reset(
     email: str,
     *,
     client_ip: str = "unavailable",
+    issued_by: Account | None = None,
 ) -> PasswordResetRequestResult:
+    """Send a password reset code, or reuse the latest one while the resend cooldown runs.
+
+    ``issued_by`` is the IT Personnel account sending the code for the owner. The owner's next
+    request on the sign-in screen then picks up that challenge, so the code IT sent works.
+    """
     settings = get_settings()
     normalized_email = email.strip().lower()
     now = _now()
@@ -116,6 +122,26 @@ async def request_password_reset(
         .limit(1)
     )
     cooldown_seconds = settings.password_reset_resend_cooldown_seconds
+    if (
+        issued_by is None
+        and recent_challenge is not None
+        and recent_challenge.issued_by_name is not None
+        and recent_challenge.claimed_at is None
+    ):
+        recent_challenge.claimed_at = now
+        _add_request_security_log(
+            db,
+            rate_context,
+            outcome="it_issued_code_claimed",
+            metadata={"resendAvailableInSeconds": cooldown_seconds},
+        )
+        await db.commit()
+        return _request_result(
+            recent_challenge,
+            now=now,
+            resend_available_in_seconds=cooldown_seconds,
+            reused_challenge=True,
+        )
     if recent_challenge is not None and recent_challenge.created_at is not None:
         cooldown_ends_at = _as_utc(recent_challenge.created_at) + timedelta(
             seconds=cooldown_seconds
@@ -164,6 +190,7 @@ async def request_password_reset(
         verified=False,
         code_consumed=False,
         used=False,
+        issued_by_name=issued_by.display_name if issued_by is not None else None,
     )
     db.add(challenge)
 
@@ -186,6 +213,7 @@ async def request_password_reset(
                     else ""
                 ),
                 "expiresLabel": expires_label,
+                **({"issuedByName": issued_by.display_name} if issued_by is not None else {}),
             },
             idempotency_key=email_idempotency_key("password-reset", challenge.id),
             tags={"category": "password_reset"},
@@ -194,7 +222,7 @@ async def request_password_reset(
     _add_request_security_log(
         db,
         rate_context,
-        outcome="challenge_created",
+        outcome="it_issued_challenge_created" if issued_by is not None else "challenge_created",
         metadata={"resendAvailableInSeconds": cooldown_seconds},
     )
     await db.commit()

@@ -11,7 +11,6 @@ import {
   Moon,
   Settings,
   Shield,
-  SlidersHorizontal,
   Sun,
   Upload,
   User,
@@ -34,7 +33,6 @@ const settingsSections = {
   appearance: { label: "Appearance", icon: Monitor },
   support: { label: "Requests", icon: LifeBuoy },
   developer: { label: "Developer Settings", icon: CodeXml },
-  system: { label: "System Settings", icon: SlidersHorizontal },
 };
 
 export type SettingsSection = keyof typeof settingsSections;

@@ -11,11 +11,9 @@ import {
   validatePersonName,
   validatePhilippineContactNumber,
 } from "@/shared/utils/accountValidation";
-import { lguRoleLabel } from "../utils";
 
 export type LguEditState = { firstName: string; middleInitial: string; lastName: string; email: string; phoneLocal: string; role: UpdateLguAccountPayload["role"] };
 export type LguEditErrors = Partial<Record<keyof LguEditState, string>>;
-export type PendingLguSave = { payload: UpdateLguAccountPayload; changes: string[] };
 
 const allowedLguRoles = ["staff", "it", "admin"] satisfies UpdateLguAccountPayload["role"][];
 const fieldOrder: readonly (keyof LguEditState)[] = ["firstName", "middleInitial", "lastName", "email", "phoneLocal", "role"];
@@ -54,14 +52,4 @@ export function createLguUpdatePayload(form: LguEditState): UpdateLguAccountPayl
   const apiName = composeApiPersonName(form);
   const phone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
   return { firstName: apiName.firstName, lastName: apiName.lastName, email: normalizeEmail(form.email), phone: phone || undefined, role: form.role };
-}
-
-export function getLguChanges(account: AccountSummary, payload: UpdateLguAccountPayload) {
-  const changes: string[] = [];
-  if ((account.firstName ?? "") !== payload.firstName) changes.push(`First name: ${account.firstName ?? "Not provided"} -> ${payload.firstName}`);
-  if ((account.lastName ?? "") !== payload.lastName) changes.push(`Last name: ${account.lastName ?? "Not provided"} -> ${payload.lastName}`);
-  if (account.email !== payload.email) changes.push(`Email: ${account.email} -> ${payload.email}`);
-  if ((account.phone ?? "") !== (payload.phone ?? "")) changes.push(`Contact number: ${account.phone ?? "Not provided"} -> ${payload.phone ?? "Not provided"}`);
-  if (account.role !== payload.role) changes.push(`Account type: ${lguRoleLabel[account.role] ?? account.role} -> ${lguRoleLabel[payload.role]}`);
-  return changes;
 }

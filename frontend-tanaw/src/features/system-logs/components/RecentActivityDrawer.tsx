@@ -25,7 +25,6 @@ export function RecentActivityDrawer({
   log,
   position,
   total,
-  portal = "admin",
   timeFormat,
   onClose,
   onPrevious,
@@ -35,8 +34,6 @@ export function RecentActivityDrawer({
   /** 0-based index in the filtered list, or -1 when the activity is outside it. */
   position: number;
   total: number;
-  /** Which portal's pages the links open. */
-  portal?: "admin" | "it";
   timeFormat: SystemTimeFormat;
   onClose: () => void;
   onPrevious: () => void;
@@ -47,7 +44,7 @@ export function RecentActivityDrawer({
   const whenId = useId();
   useDialogFocus(panelRef, onClose);
   const fields = activityDetailFields(log);
-  const links = activityLinks(log, portal);
+  const links = activityLinks(log);
   const time = formatActivityTime(log.timestamp, timeFormat);
 
   return (

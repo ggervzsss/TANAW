@@ -8,7 +8,7 @@ from app.features.accounts.dependencies import require_roles
 from app.features.accounts.enterprise import enterprise_name
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.schemas import ActivityLogCreate
-from app.features.activity_logs.service import create_activity_log
+from app.features.activity_logs.service import create_activity_log, get_actor_role_label
 from app.features.notifications.schemas import (
     EnterpriseNotificationCreate,
     NotificationReadUpdate,
@@ -26,7 +26,9 @@ router = APIRouter(prefix="/operational", tags=["notifications"])
 OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
 ]
-StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
+NoticeSenderAccount = Annotated[Account, Depends(require_roles({"admin", "staff", "it"}))]
+IT_NOTICE_TYPE = "IT Notice"
+STAFF_FOLLOW_UP_TYPE = "Staff Follow-up"
 
 
 @router.get("/notifications", response_model=list[UserNotificationSummary])
@@ -57,7 +59,7 @@ async def update_notification_read_status(
 )
 async def create_enterprise_notification(
     payload: EnterpriseNotificationCreate,
-    actor: StaffWorkflowAccount,
+    actor: NoticeSenderAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserNotificationSummary:
     recipient = await get_enterprise_notification_recipient(db, payload.enterpriseId)
@@ -70,13 +72,14 @@ async def create_enterprise_notification(
             status_code=status.HTTP_404_NOT_FOUND, detail="Active enterprise account not found."
         )
 
+    from_it = actor.role == AccountRole.IT
     notification = await create_user_notification(
         db,
         recipient=recipient,
         title=payload.title,
         message=payload.message,
-        notification_type=payload.type,
-        severity=payload.severity,
+        notification_type=payload.type or (IT_NOTICE_TYPE if from_it else STAFF_FOLLOW_UP_TYPE),
+        severity=payload.severity or ("Info" if from_it else "Warning"),
         actor=actor,
         source_type=payload.sourceType,
         source_id=payload.sourceId,
@@ -84,10 +87,11 @@ async def create_enterprise_notification(
     await create_activity_log(
         db,
         ActivityLogCreate(
-            group="Reports",
+            # IT notices are about the enterprise's account; staff follow-ups are about reports.
+            group="Enterprises" if from_it else "Reports",
             severity="Success",
             actor=actor.display_name,
-            actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
+            actorRole=get_actor_role_label(actor),
             action="Notify Enterprise",
             target=enterprise_name(recipient),
             summary=(

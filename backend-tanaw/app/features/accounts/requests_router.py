@@ -13,9 +13,10 @@ from app.features.accounts.api_helpers import (
     sync_pending_account_activation,
 )
 from app.features.accounts.dependencies import require_roles
-from app.features.accounts.models import Account, AccountStatus
+from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
+    AccountPasswordResetSent,
     AccountStatusUpdate,
     AccountSummary,
 )
@@ -24,10 +25,13 @@ from app.features.accounts.service import (
     is_protected_startup_account,
     to_account_summary_with_requests,
 )
+from app.features.activity_logs.schemas import ActivityGroup
 from app.features.activity_logs.service import record_activity_log as record_account_log
 from app.features.auth.account_activation import AccountActivationError, issue_account_activation
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.auth.email_change import invalidate_account_email_change_requests
+from app.features.auth.password_recovery import request_password_reset
+from app.features.auth.recovery_rate_limit import PasswordResetRateLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,7 @@ async def resend_activation(
     await db.refresh(account)
     await record_account_log(
         db,
-        group="Accounts",
+        group="Enterprises" if account.role == AccountRole.ENTERPRISE else "Accounts",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
@@ -83,7 +87,7 @@ async def resend_activation(
         summary=(f"{actor.display_name} resent the activation email to {account.display_name}."),
         source_id=account.id,
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)
 
 
 @router.patch("/{account_id}/status", response_model=AccountSummary)
@@ -98,6 +102,11 @@ async def update_account_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
 
     next_status = AccountStatus(payload.status)
+    if account.id == actor.id and next_status == AccountStatus.INACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own account.",
+        )
     ensure_account_can_deactivate(account, next_status)
     if is_protected_startup_account(account) and next_status != account.status:
         raise HTTPException(
@@ -111,6 +120,12 @@ async def update_account_status(
     if previous_status != account.status:
         access_changed_at = datetime.now(UTC)
         account.token_invalid_before = access_changed_at
+        if account.status == AccountStatus.INACTIVE:
+            account.deactivated_at = access_changed_at
+            account.deactivated_by_name = actor.display_name
+        else:
+            account.deactivated_at = None
+            account.deactivated_by_name = None
         await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
         if account.status == AccountStatus.INACTIVE:
             await invalidate_account_email_change_requests(
@@ -129,7 +144,7 @@ async def update_account_status(
     await db.refresh(account)
     await record_account_log(
         db,
-        group="Accounts",
+        group="Enterprises" if account.role == AccountRole.ENTERPRISE else "Accounts",
         severity="Success" if account.status == AccountStatus.ACTIVE else "Warning",
         actor=actor.display_name,
         actor_role="IT Personnel",
@@ -139,4 +154,76 @@ async def update_account_status(
         source_id=account.id,
         metadata={"status": account.status.value},
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)
+
+
+@router.post(
+    "/{account_id}/password-reset",
+    response_model=AccountPasswordResetSent,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def send_account_password_reset(
+    account_id: str,
+    actor: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountPasswordResetSent:
+    """Send the self-service password reset code to an account on its owner's behalf."""
+    account = await get_account_by_id(db, account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
+    if account.activated_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has not been activated yet. Send the invitation again instead.",
+        )
+    if account.status != AccountStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Activate this account before sending a password reset email.",
+        )
+
+    sent_to = account.email
+    try:
+        result = await request_password_reset(
+            db,
+            sent_to,
+            client_ip=f"it-personnel:{actor.id}",
+            issued_by=actor,
+        )
+    except PasswordResetRateLimitExceeded as exc:
+        raise _password_reset_too_soon(
+            "Too many password reset emails were sent. Please wait before trying again.",
+            exc.retry_after_seconds,
+        ) from exc
+    if result.reused_challenge:
+        raise _password_reset_too_soon(
+            "A password reset code was sent to this account moments ago. "
+            "Please wait before sending another.",
+            result.resend_available_in_seconds,
+        )
+
+    is_enterprise = account.role == AccountRole.ENTERPRISE
+    group: ActivityGroup = "Enterprises" if is_enterprise else "Accounts"
+    await record_account_log(
+        db,
+        group=group,
+        severity="Info",
+        actor=actor.display_name,
+        actor_role="IT Personnel",
+        action="Send Password Reset",
+        target=account.display_name,
+        summary=f"{actor.display_name} sent a password reset email to {account.display_name}.",
+        source_id=account.id,
+        it_detail=f"Sent to {sent_to}. The code expires in {result.expires_in_minutes} minutes.",
+        metadata={"sentTo": sent_to, "expiresInMinutes": result.expires_in_minutes},
+    )
+    return AccountPasswordResetSent(sentTo=sent_to)
+
+
+def _password_reset_too_soon(message: str, retry_after_seconds: int) -> HTTPException:
+    retry_after = max(1, retry_after_seconds)
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={"message": message, "retryAfterSeconds": retry_after},
+        headers={"Retry-After": str(retry_after)},
+    )

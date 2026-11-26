@@ -1,7 +1,9 @@
 import "./main-logging-bootstrap";
 import { app, net, protocol } from "electron";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import os from "node:os";
 import path from "node:path";
+import { readDesktopAppInfo } from "./app-info";
 import { createApplicationTray } from "./application-tray";
 import { createApplicationWindows } from "./application-windows";
 import { registerIpcHandlers } from "./ipc/register-ipc-handlers";
@@ -92,6 +94,7 @@ function registerApplicationProtocols() {
 
 function registerApplicationIpc() {
   registerIpcHandlers({
+    getAppInfo: () => readDesktopAppInfo({ getVersion: () => app.getVersion(), hostname: () => os.hostname() }),
     getMlServiceStatus: getMlServiceStatusPayload,
     isMainRenderer: windows.isMainRenderer,
     markRendererReady: windows.markRendererReady,

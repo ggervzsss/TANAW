@@ -122,6 +122,13 @@ class AccountChangeSummary(BaseModel):
     canApprove: bool
 
 
+class RequestHandler(BaseModel):
+    """The IT person handling a request."""
+
+    accountId: str
+    name: str
+
+
 class RequestSummary(BaseModel):
     id: str
     code: str
@@ -140,6 +147,9 @@ class RequestSummary(BaseModel):
     createdAt: datetime
     updatedAt: datetime
     closedAt: datetime | None = None
+    handledBy: RequestHandler | None = None
+    """Who in IT is handling it. An open request with no one handling it is not picked up."""
+    handledAt: datetime | None = None
     unread: bool = False
     """The reader has never opened this request."""
     updated: bool = False

@@ -1,1 +1,1 @@
-export { AdminRequestsPage, ITWorkCenterPage } from "./pages";
+export { AdminRequestsPage } from "./pages";

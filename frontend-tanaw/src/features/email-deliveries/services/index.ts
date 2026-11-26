@@ -1,2 +1,2 @@
-export { listEmailDeliveries, retryEmailDelivery } from "./emailDeliveryService";
+export { emailDeliveriesQueryKey, listRecentEmailDeliveries, retryEmailDelivery } from "./emailDeliveryService";
 export type { EmailDelivery } from "./emailDeliveryService";

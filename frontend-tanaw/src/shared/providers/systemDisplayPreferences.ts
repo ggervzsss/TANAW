@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { SystemTimeFormat } from "../utils/dateTime";
+import type { SystemDateFormat, SystemTimeFormat } from "../utils/dateTime";
 
 export type TextSizePreference = "small" | "default" | "large" | "extra-large";
 export type DisplayPreferences = {
@@ -36,6 +36,7 @@ export function textSizeRootValue(textSize: TextSizePreference) {
 
 export type SystemDisplayPreferences = {
   timeFormat: SystemTimeFormat;
+  dateFormat: SystemDateFormat;
   displayPreferences: DisplayPreferences;
   saveStatus: PreferenceSaveStatus;
   updateDisplayPreferences: (patch: Partial<DisplayPreferences>) => void;
@@ -47,6 +48,7 @@ export { systemSettingsQueryKey } from "../services/systemSettingsService";
 
 export const SystemDisplayPreferencesContext = createContext<SystemDisplayPreferences>({
   timeFormat: "12-hour",
+  dateFormat: "MMM d, yyyy",
   displayPreferences: defaultDisplayPreferences,
   saveStatus: "idle",
   updateDisplayPreferences: () => undefined,

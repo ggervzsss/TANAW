@@ -3,10 +3,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# The six groups Activity is filtered by, shared by the Admin and IT views.
+# The groups Activity is filtered by, shared by the Admin and IT views.
 ActivityGroup = Literal[
     "Login & Security",
     "Accounts",
+    "Enterprises",
     "Reports",
     "Requests",
     "Monitoring",
@@ -14,6 +15,15 @@ ActivityGroup = Literal[
 ]
 ActivityLogSeverity = Literal["Info", "Warning", "Critical", "Success"]
 ActivityLogActorRole = Literal["Admin", "IT Personnel", "LGU Staff", "Enterprise Account", "System"]
+
+
+class ActivityLogTechnical(BaseModel):
+    """Where an activity came from, recorded during the HTTP request. For IT only."""
+
+    ipAddress: str | None = None
+    userAgent: str | None = None
+    sessionId: str | None = None
+    """A short hash that tells sessions apart. Never the sign-in token itself."""
 
 
 class ActivityLogSummary(BaseModel):
@@ -31,6 +41,8 @@ class ActivityLogSummary(BaseModel):
     """Technical details for IT, such as the camera or the error. Left out for the Admin."""
     sourceId: str | None = None
     metadata: dict[str, str | int | float | bool | None] | None = None
+    technical: ActivityLogTechnical | None = None
+    """The IP address, browser and session of the request. Left out for the Admin."""
 
 
 class ActivityLogCreate(BaseModel):
@@ -48,4 +60,12 @@ class ActivityLogCreate(BaseModel):
 
 class ActivityLogPurgeResponse(BaseModel):
     deletedCount: int
+    retentionDays: int
+
+
+class ActivityLogCleanupStatus(BaseModel):
+    """When old activity was last removed, by IT or by the scheduled cleanup."""
+
+    lastRunAt: datetime | None = None
+    deletedCount: int | None = None
     retentionDays: int

@@ -20,6 +20,7 @@ from app.features.accounts.models import (
 )
 from app.features.accounts.opening_hours import parse_opening_hours
 from app.features.accounts.schemas import (
+    AccountInvitation,
     AccountProfileChangeRequest,
     AccountSummary,
     AuthUser,
@@ -31,6 +32,7 @@ from app.features.auth.challenge_service import invalidate_password_reset_challe
 from app.features.auth.email_change import (
     ACTIVE_EMAIL_CHANGE_STATUSES,
 )
+from app.features.auth.models import AccountActivationToken
 from app.features.mail.dev_log import DevDeliveryEvent
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
@@ -136,10 +138,38 @@ def to_auth_user(account: Account) -> AuthUser:
     )
 
 
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def to_account_invitation(
+    account: Account,
+    activation_token: AccountActivationToken | None,
+    *,
+    now: datetime | None = None,
+) -> AccountInvitation | None:
+    """Describe the newest activation link while the account is still waiting to be activated."""
+    if account.activated_at is not None or activation_token is None:
+        return None
+    current = now or datetime.now(UTC)
+    expires_at = _as_utc(activation_token.expires_at)
+    return AccountInvitation(
+        sentAt=_as_utc(activation_token.created_at),
+        expiresAt=expires_at,
+        expired=(
+            expires_at <= current
+            or activation_token.invalidated_at is not None
+            or activation_token.consumed_at is not None
+        ),
+    )
+
+
 def to_account_summary(
     account: Account,
     *,
     email_change_request: AccountEmailChangeRequest | None = None,
+    activation_token: AccountActivationToken | None = None,
+    viewer: Account | None = None,
 ) -> AccountSummary:
     profile = account.enterprise_profile
     return AccountSummary(
@@ -170,19 +200,35 @@ def to_account_summary(
         status=account.status.value,
         isActivated=account.activated_at is not None,
         isProtectedDefault=is_protected_startup_account(account),
+        invitation=to_account_invitation(account, activation_token),
+        deactivatedAt=account.deactivated_at,
+        deactivatedByName=account.deactivated_by_name,
         profileChangeRequests=get_profile_change_requests(
             account,
             email_change_request=email_change_request,
+            viewer=viewer,
         ),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
     )
 
 
+def can_viewer_approve_email_change(
+    account: Account,
+    email_change_request: AccountEmailChangeRequest,
+    viewer: Account | None,
+) -> bool:
+    """A different IT account than the requester or the account owner approves an email change."""
+    if viewer is None:
+        return True
+    return viewer.id not in {email_change_request.requested_by_account_id, account.id}
+
+
 def get_profile_change_requests(
     account: Account,
     *,
     email_change_request: AccountEmailChangeRequest | None = None,
+    viewer: Account | None = None,
 ) -> list[AccountProfileChangeRequest]:
     requests: list[AccountProfileChangeRequest] = []
     if email_change_request is not None:
@@ -210,8 +256,11 @@ def get_profile_change_requests(
                     )
                 ),
                 isVerified=is_verified,
-                canApprove=is_verified,
+                canApprove=is_verified
+                and can_viewer_approve_email_change(account, email_change_request, viewer),
                 expiresAt=email_change_request.expires_at,
+                requestedByName=email_change_request.requested_by_name,
+                requestedByAccountId=email_change_request.requested_by_account_id,
             )
         )
     if account.role != AccountRole.ENTERPRISE:
@@ -243,6 +292,8 @@ def get_profile_change_requests(
 async def to_account_summaries_with_requests(
     db: AsyncSession,
     accounts: list[Account],
+    *,
+    viewer: Account | None = None,
 ) -> list[AccountSummary]:
     account_ids = [account.id for account in accounts]
     email_requests = (
@@ -258,20 +309,47 @@ async def to_account_summaries_with_requests(
         else []
     )
     requests_by_account = {request.account_id: request for request in email_requests}
+    tokens_by_account = await _latest_activation_tokens(
+        db, [account.id for account in accounts if account.activated_at is None]
+    )
     return [
         to_account_summary(
             account,
             email_change_request=requests_by_account.get(account.id),
+            activation_token=tokens_by_account.get(account.id),
+            viewer=viewer,
         )
         for account in accounts
     ]
 
 
+async def _latest_activation_tokens(
+    db: AsyncSession, account_ids: list[str]
+) -> dict[str, AccountActivationToken]:
+    if not account_ids:
+        return {}
+    tokens = await db.scalars(
+        select(AccountActivationToken)
+        .where(AccountActivationToken.account_id.in_(account_ids))
+        .order_by(
+            AccountActivationToken.created_at.desc(),
+            AccountActivationToken.expires_at.desc(),
+        )
+        .execution_options(populate_existing=True)
+    )
+    latest: dict[str, AccountActivationToken] = {}
+    for token in tokens:
+        latest.setdefault(token.account_id, token)
+    return latest
+
+
 async def to_account_summary_with_requests(
     db: AsyncSession,
     account: Account,
+    *,
+    viewer: Account | None = None,
 ) -> AccountSummary:
-    return (await to_account_summaries_with_requests(db, [account]))[0]
+    return (await to_account_summaries_with_requests(db, [account], viewer=viewer))[0]
 
 
 def to_delivery_summary(delivery: DevDeliveryEvent) -> DeliverySummary:
@@ -320,6 +398,19 @@ async def get_account_by_id(
     statement = select(Account).where(Account.id == account_id)
     if for_update:
         statement = statement.with_for_update().execution_options(populate_existing=True)
+    return cast(Account | None, await db.scalar(statement))
+
+
+async def get_enterprise_account_by_reference(db: AsyncSession, reference: str) -> Account | None:
+    """Find an enterprise account by its account id or its enterprise sign-in id."""
+    value = reference.strip()
+    if not value:
+        return None
+    statement = select(Account).where(
+        Account.role == AccountRole.ENTERPRISE,
+        (Account.id == value)
+        | Account.enterprise_profile.has(EnterpriseProfile.enterprise_id == value.lower()),
+    )
     return cast(Account | None, await db.scalar(statement))
 
 

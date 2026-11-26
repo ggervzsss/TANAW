@@ -1,2 +1,1 @@
-export { ActivityPage, ActivityPage as AdminRecentActivityPage } from "./ActivityPage";
-export { ITSystemLogsPage } from "./ITSystemLogsPage";
+export { ActivityPage as AdminRecentActivityPage } from "./ActivityPage";

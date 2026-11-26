@@ -10,6 +10,7 @@ from app.features.accounts.models import (
     AccountEmailChangeRequest,
     AccountEmailChangeStatus,
 )
+from app.features.activity_logs.service import run_scheduled_activity_cleanup
 from app.features.auth.email_change import ACTIVE_EMAIL_CHANGE_STATUSES
 from app.features.auth.models import (
     AccountActivationToken,
@@ -43,6 +44,7 @@ class RetentionCleanupCounts:
     expired_email_change_requests: int = 0
     email_change_requests: int = 0
     email_outbox_records: int = 0
+    activity_logs: int = 0
 
     @property
     def deleted_records(self) -> int:
@@ -53,6 +55,7 @@ class RetentionCleanupCounts:
             + self.password_reset_rate_buckets
             + self.email_change_requests
             + self.email_outbox_records
+            + self.activity_logs
         )
 
 
@@ -103,7 +106,16 @@ async def run_retention_cleanup(
             failed_cutoff=current - timedelta(days=settings.failed_email_outbox_retention_days),
             batch_size=batch_size,
         ),
+        activity_logs=await _delete_activity_logs(session_factory, current=current),
     )
+
+
+async def _delete_activity_logs(session_factory: SessionFactory, *, current: datetime) -> int:
+    """Remove activity older than the retention setting, and record it as TANAW."""
+    async with session_factory() as db:
+        deleted = await run_scheduled_activity_cleanup(db, current)
+        await db.commit()
+        return deleted
 
 
 async def _delete_telemetry_snapshots(

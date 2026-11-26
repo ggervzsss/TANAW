@@ -123,7 +123,7 @@ export function getInvalidEnterpriseFieldNames(errors: EnterpriseFormErrors | En
   return enterpriseFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "contactLocal" ? "contactNumber" : fieldName));
 }
 
-export function toEnterpriseAccountFields(form: EnterpriseFormState) {
+function toEnterpriseAccountFields(form: EnterpriseFormState) {
   const normalizedPhone = form.contactLocal ? normalizePhilippineContactNumber(`+63${form.contactLocal}`) : "";
   return {
     enterpriseName: form.enterpriseName.trim(),

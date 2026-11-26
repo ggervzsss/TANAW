@@ -60,20 +60,6 @@ const enterprise = {
   lastLoginAt: null,
 };
 
-const activity = {
-  id: "ACTIVITY-REFINEMENT-1",
-  timestamp: "2026-07-21T13:42:00Z",
-  category: "IT Activity",
-  severity: "Success",
-  actor: "IT Refinement Tester",
-  actorRole: "IT Personnel",
-  action: "Retry Email Delivery",
-  target: "enterprise@example.test",
-  summary: "IT Personnel queued a retry for account activation email delivery while preserving the complete audit context.",
-  sourceId: "delivery-1",
-  metadata: {},
-};
-
 async function restoreItSession(page: Page) {
   await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
   await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "it-refinement-token", user: itUser }) }));
@@ -83,118 +69,92 @@ async function restoreItSession(page: Page) {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route("**/accounts/enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([enterprise]) }));
-  await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/activity-logs", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([activity]) }));
+  for (const endpoint of ["**/accounts/lgu", "**/operational/notifications", "**/operational/requests", "**/operational/enterprise-health"]) {
+    await page.route(endpoint, (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  }
 }
 
-test("reveals the first invalid custom select inside the Register Enterprise modal", async ({ page }, testInfo) => {
+test("reveals the first invalid custom select inside the Register enterprise sheet", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await restoreItSession(page);
-  await page.goto("/it/enterprise-accounts");
+  await page.goto("/it/enterprises");
 
-  // Account changes are approved from Work Center Requests now, not from this page.
-  await expect(page.locator(".tanaw-request-queue")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Register Enterprise" }).click();
-  const dialog = page.getByRole("dialog", { name: "Register Enterprise" });
-  const modalBody = dialog.locator("[data-dialog-body]");
-  await dialog.getByLabel("Enterprise Name").fill("New Refinement Enterprise");
-  await dialog.getByLabel("Contact First Name").fill("David");
-  await dialog.getByLabel("Contact Last Name").fill("Vallejera");
-  await dialog.getByLabel("Contact Email").fill("new-enterprise@example.test");
-  await dialog.getByLabel("Block / Lot / Street").fill("Block 1 Mahogany Street");
-  const barangay = dialog.getByRole("combobox", { name: "Barangay" });
-  await barangay.click();
+  const register = page.getByRole("button", { name: "Register enterprise" });
+  await register.click();
+  await expect(page).toHaveURL(/register=1/);
+  const sheet = page.getByRole("dialog", { name: "Register enterprise" });
+  const sheetBody = sheet.locator("[data-modal-scroll-container]");
+  await sheet.getByLabel("Enterprise name").fill("New Refinement Enterprise");
+  await sheet.getByLabel("Block, lot and street").fill("Block 1 Mahogany Street");
+  await sheet.getByRole("combobox", { name: "Barangay" }).click();
   await page.getByRole("option", { name: "San Antonio" }).click();
+  await sheet.getByLabel("First name").fill("David");
+  await sheet.getByLabel("Last name").fill("Vallejera");
+  await sheet.getByLabel("Owner email").fill("new-enterprise@example.test");
 
-  await modalBody.evaluate((element) => {
+  await sheetBody.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  const scrollTopBefore = await modalBody.evaluate((element) => element.scrollTop);
+  const scrollTopBefore = await sheetBody.evaluate((element) => element.scrollTop);
   expect(scrollTopBefore).toBeGreaterThan(0);
   const windowScrollBefore = await page.evaluate(() => window.scrollY);
-  await dialog.getByRole("button", { name: "Register Enterprise" }).click();
+  await sheet.getByRole("button", { name: "Register and send invitation" }).click();
 
-  const category = dialog.getByRole("combobox", { name: "DOT attraction category" });
+  // The attraction type is the first missing field: the sheet scrolls back up to it and focuses it.
+  const category = sheet.getByRole("combobox", { name: "Attraction type" });
   await expect(category).toBeFocused();
   await expect(category).toBeInViewport();
   await expect(category).toHaveAttribute("aria-invalid", "true");
-  await expect(category).toHaveAttribute("aria-describedby", "attractionCode-description");
-  await expect(dialog.getByText("Choose a DOT attraction category.")).toBeVisible();
+  await expect(sheet.getByText("Choose a DOT attraction category.")).toBeVisible();
   await expect(page.getByText("Please complete the highlighted required field.")).toHaveCount(1);
-  await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
-  await expect(dialog.getByLabel("Contact Email")).toHaveValue("new-enterprise@example.test");
-  await expect.poll(() => modalBody.evaluate((element) => element.scrollTop)).toBeLessThan(scrollTopBefore);
+  await expect(sheet.getByLabel("Enterprise name")).toHaveValue("New Refinement Enterprise");
+  await expect(sheet.getByLabel("Owner email")).toHaveValue("new-enterprise@example.test");
+  await expect.poll(() => sheetBody.evaluate((element) => element.scrollTop)).toBeLessThan(scrollTopBefore);
   expect(await page.evaluate(() => window.scrollY)).toBe(windowScrollBefore);
 
   await category.press("Enter");
-  await page.getByPlaceholder("Search category, type, or code").fill("TD404");
-  await page.getByRole("option", { name: /Golf/ }).click();
+  await page.getByPlaceholder("Search category, type or code").fill("401");
+  await page.getByRole("option", { name: /^Golf/ }).click();
   await expect(category).toContainText("Golf");
-  await expect(category).toContainText("401");
-  await expect(dialog.getByText("NTDP portfolio", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("enterprise-dot-classification-dark.png"), animations: "disabled" });
   await expect(category).toBeFocused();
 
-  await dialog.getByRole("button", { name: "Register Enterprise" }).click();
-  await expect(dialog.getByRole("button", { name: "Full Map View" })).toBeFocused();
-  await expect(dialog.getByRole("alert").filter({ hasText: "Choose a map location inside San Pedro before saving." })).toBeVisible();
-  await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
+  // With every field filled, the missing map pin is next.
+  await sheet.getByRole("button", { name: "Register and send invitation" }).click();
+  await expect(sheet.getByText("Place the pin on the map inside San Pedro before registering.")).toBeVisible();
+  await expect(sheet.getByLabel("Enterprise name")).toHaveValue("New Refinement Enterprise");
 
+  // Escape closes the open list first, then the sheet, and focus returns to the button that opened it.
   await category.press("Enter");
-  await expect(page.getByRole("searchbox", { name: "Search category, type, or code" })).toBeFocused();
+  await expect(page.getByPlaceholder("Search category, type or code")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(category).toHaveAttribute("aria-expanded", "false");
   await expect(category).toBeFocused();
-  await expect(dialog.getByLabel("Enterprise Name")).toHaveValue("New Refinement Enterprise");
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel("Enterprise name")).toHaveValue("New Refinement Enterprise");
 
   await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeFocused();
+  await expect(sheet).toBeHidden();
+  await expect(page).not.toHaveURL(/register=1/);
+  await expect(register).toBeFocused();
 });
 
-test("applies pending-account actions, optional LGU contact copy, and readable dark warnings", async ({ page }) => {
+// Resending an invitation and deactivating an enterprise are covered on Manage an enterprise in it-enterprises.spec.ts.
+test("marks the LGU phone number optional with its +63 prefix in the invite sheet, in dark mode", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await restoreItSession(page);
-  await page.route("**/accounts/lgu", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.goto("/it/lgu-accounts");
+  await page.goto("/it/personnel");
+  await expect(page.locator("html")).toHaveClass(/dark/);
 
-  await page.getByRole("button", { name: "Create LGU Account" }).click();
-  const createDialog = page.getByRole("dialog", { name: "Create LGU Account" });
-  await expect(createDialog.getByText("Contact Number (Optional)", { exact: true })).toBeVisible();
-  await expect(createDialog.getByText("+63", { exact: true })).toBeVisible();
-  await createDialog.getByRole("button", { name: "Close modal" }).click();
+  const invite = page.getByRole("button", { name: "Invite personnel" });
+  await invite.click();
+  const sheet = page.getByRole("dialog", { name: "Invite personnel" });
+  await expect(sheet.getByText("Phone (optional)", { exact: true })).toBeVisible();
+  await expect(sheet.getByText("+63", { exact: true })).toBeVisible();
+  await expect(sheet.getByText("A mobile number after +63: 10 digits starting with 9.")).toBeVisible();
+  await expect(sheet).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
 
-  await page.route("**/accounts/enterprises", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([{ ...enterprise, isActivated: false, profileChangeRequests: [] }]),
-    }),
-  );
-  await page.goto("/it/enterprise-accounts");
-  await page.getByText(enterprise.enterpriseName, { exact: true }).first().click();
-  let detailsDialog = page.getByRole("dialog", { name: "Enterprise Details" });
-  await expect(detailsDialog.getByRole("button", { name: "Resend activation email" })).toBeVisible();
-  await expect(detailsDialog.getByRole("button", { name: "Deactivate enterprise" })).toHaveCount(0);
-  await detailsDialog.getByRole("button", { name: "Close modal" }).click();
-
-  await page.route("**/accounts/enterprises", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([{ ...enterprise, profileChangeRequests: [] }]),
-    }),
-  );
-  await page.reload();
-  await page.getByText(enterprise.enterpriseName, { exact: true }).first().click();
-  detailsDialog = page.getByRole("dialog", { name: "Enterprise Details" });
-  await detailsDialog.getByRole("button", { name: "Deactivate enterprise" }).click();
-  const warningDialog = page.getByRole("dialog", { name: "Deactivate Enterprise" });
-  const warningPanel = warningDialog.locator(".tanaw-warning-panel");
-  await expect(warningPanel).toBeVisible();
-  await expect(warningPanel.getByText("This enterprise account will lose TANAW access.", { exact: true })).toHaveCSS("color", "rgb(252, 211, 77)");
-  await expect(warningPanel.getByText(/will not be able to sign in/)).not.toHaveCSS("color", "rgb(120, 53, 15)");
-  await expect(warningPanel).not.toHaveCSS("background-color", "rgb(254, 243, 199)");
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect(invite).toBeFocused();
 });
-

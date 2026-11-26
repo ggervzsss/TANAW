@@ -69,6 +69,27 @@ describe("buildCameraMonitoringSummary", () => {
     });
   });
 
+  it("reports each camera's counting mode and brand from its local profile", () => {
+    const entrance: Camera = { ...camera(1), analysisMode: "entrance_exit", openSpace: null, cameraBrand: "dahua" };
+    const plaza: Camera = { ...camera(2), analysisMode: "open_space", openSpace: null, cameraBrand: "custom" };
+    const unset = camera(3);
+    const result = buildCameraMonitoringSummary([entrance, plaza, unset], cameraStates([]), serviceStatus);
+
+    expect(result.cameras.map(({ cameraId, mode, brand }) => ({ cameraId, mode, brand }))).toEqual([
+      { cameraId: 1, mode: "entrance_exit", brand: "dahua" },
+      { cameraId: 2, mode: "open_space", brand: "custom" },
+      // A profile without a mode counts entries and exits; one without a brand does not say.
+      { cameraId: 3, mode: "entrance_exit", brand: null },
+    ]);
+  });
+
+  it("sends null for a mode or brand this app does not know", () => {
+    const odd = { ...camera(1), analysisMode: "heatmap", cameraBrand: "acme" } as unknown as Camera;
+    const [item] = buildCameraMonitoringSummary([odd], cameraStates([]), serviceStatus).cameras;
+
+    expect(item).toMatchObject({ cameraId: 1, mode: null, brand: null });
+  });
+
   it("prefers a recovered live runtime over a stale stored error status", () => {
     const recoveredCamera = { ...camera(1), status: "error" as const };
     const result = buildCameraMonitoringSummary([recoveredCamera], cameraStates([runtime(1)]), serviceStatus);

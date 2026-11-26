@@ -31,6 +31,7 @@ from app.features.sample_data.dataset import (
     sample_dataset_marker_email,
 )
 from app.features.sample_data.definitions import TEST_ACCOUNT_PASSWORD
+from app.features.sample_data.health import create_enterprise_health_today
 from app.features.sample_data.helpers import (
     affected_row_count,
     reporting_range,
@@ -42,7 +43,10 @@ from app.features.sample_data.report_workflow import (
     create_operational_history,
     create_staff_report_notifications,
 )
-from app.features.sample_data.visitors import create_admin_visitor_history
+from app.features.sample_data.visitors import (
+    create_admin_visitor_history,
+    participating_enterprises,
+)
 
 
 async def sample_dataset_present(db: AsyncSession) -> bool:
@@ -89,15 +93,14 @@ async def generate_sample_data(
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
     accounts = await create_accounts(db, account_password, registered_before=range_start)
-    enterprises = list(
-        {enterprise.id: enterprise for enterprise in [target, *accounts["enterprises"]]}.values()
-    )
+    enterprises = participating_enterprises(target, accounts["enterprises"])
     reports = await create_operational_history(
         db, range_start, range_end, scenario, rng, enterprises, target
     )
     visitor_scenario = await create_admin_visitor_history(
         db, range_end, scenario, rng, enterprises, target
     )
+    health_scenario = await create_enterprise_health_today(db, range_end, enterprises, target)
     operations = await create_portal_workflow_data(
         db,
         accounts["lgu"],
@@ -118,7 +121,9 @@ async def generate_sample_data(
         "lguAccounts": len(accounts["lgu"]),
         "generatedEnterpriseAccounts": len(accounts["enterprises"]),
         "participatingEnterprises": len(enterprises),
-        "telemetrySnapshots": len(reports["telemetry"]) + len(visitor_scenario.telemetry),
+        "telemetrySnapshots": len(reports["telemetry"])
+        + len(visitor_scenario.telemetry)
+        + len(health_scenario.telemetry),
         "intakeReports": len(reports["reports"]),
         "finalReports": len(final_reports),
         "staffNotifications": notifications,

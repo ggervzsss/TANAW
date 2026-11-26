@@ -2,7 +2,7 @@ import base64
 import binascii
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ from app.features.requests.service import (
     reopen_request,
     require_request_detail,
     set_request_status,
+    start_request,
     update_request_fields,
 )
 
@@ -148,8 +149,20 @@ async def _notify_it(
 
 
 @router.get("/requests", response_model=list[RequestSummary])
-async def list_request_summaries(account: ReaderAccount, db: Db) -> list[RequestSummary]:
-    return await list_requests(db, account)
+async def list_request_summaries(
+    account: ReaderAccount,
+    db: Db,
+    enterprise_id: Annotated[
+        str | None,
+        Query(
+            alias="enterpriseId",
+            min_length=1,
+            max_length=120,
+            description="Only this enterprise's requests: its enterprise ID or account id.",
+        ),
+    ] = None,
+) -> list[RequestSummary]:
+    return await list_requests(db, account, enterprise_id=enterprise_id)
 
 
 @router.get("/requests/{request_id}", response_model=RequestDetail)
@@ -263,6 +276,24 @@ async def reply_to_request(
         account,
         action="Reply to Request",
         summary=f"{account.display_name} replied to {_place(request)}'s request: {request.title}.",
+    )
+    return await require_request_detail(db, account, request.id)
+
+
+@router.post("/requests/{request_id}/start", response_model=RequestDetail)
+async def start_on_request(request_id: str, account: ITAccount, db: Db) -> RequestDetail:
+    request = await _load(db, account, request_id)
+    try:
+        await start_request(db, request, account)
+    except RequestConflictError as exc:
+        raise _conflict(exc) from exc
+    await _log(
+        db,
+        request,
+        account,
+        action="Start Request",
+        summary=f"{account.display_name} started on {_place(request)}'s request: {request.title}.",
+        it_detail=f"{request.request_code} · {request.request_group}",
     )
     return await require_request_detail(db, account, request.id)
 

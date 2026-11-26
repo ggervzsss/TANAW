@@ -37,6 +37,30 @@ def test_telemetry_payload_rejects_oversized_arbitrary_data() -> None:
         DesktopTelemetryIngest.model_validate(payload)
 
 
+def test_telemetry_payload_names_the_app_and_each_camera_mode_and_brand() -> None:
+    payload = _telemetry_payload(
+        cameras=[{**_camera(1), "mode": "open_space", "brand": "dahua"}, _camera(2)]
+    )
+    payload["app"] = {"version": "0.1.3", "computerName": "FRONT-DESK-PC"}
+
+    parsed = DesktopTelemetryIngest.model_validate(payload)
+
+    assert parsed.app is not None
+    assert (parsed.app.version, parsed.app.computerName) == ("0.1.3", "FRONT-DESK-PC")
+    assert [(camera.mode, camera.brand) for camera in parsed.monitoring.cameras] == [
+        ("open_space", "dahua"),
+        (None, None),
+    ]
+    assert DesktopTelemetryIngest.model_validate(_telemetry_payload()).app is None
+
+
+def test_telemetry_payload_rejects_an_unknown_camera_mode() -> None:
+    payload = _telemetry_payload(cameras=[{**_camera(1), "mode": "doorway"}])
+
+    with pytest.raises(ValidationError):
+        DesktopTelemetryIngest.model_validate(payload)
+
+
 def _telemetry_payload(*, cameras: list[dict[str, object]] | None = None) -> dict[str, object]:
     return {
         "deviceId": "desktop-1",

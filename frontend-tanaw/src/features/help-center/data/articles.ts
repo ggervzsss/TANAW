@@ -92,45 +92,186 @@ export const helpArticles: HelpArticle[] = [
     relatedArticleIds: ["staff-submit-reports"],
   },
   {
-    id: "it-work-center",
-    title: "Monitor technical issues in Work Center",
-    summary: "Use current alerts and technical status to prioritize operational troubleshooting.",
+    id: "it-overview",
+    title: "Start the day from Overview",
+    summary: "See what needs IT right now: requests nobody has picked up, places and cameras that stopped sending data, accounts waiting, and emails that did not arrive.",
     roles: ["it"],
-    category: "Operations",
-    keywords: ["work center", "alerts", "camera problem", "sync delay", "monitoring"],
+    category: "Overview",
+    keywords: ["overview", "dashboard", "not picked up", "not sending data", "cameras not counting", "accounts waiting"],
     recommended: true,
     sections: [
-      { heading: "Start with the current signal", steps: ["Open Work Center.", "Review the issue type, source, and current status.", "Open the related operational record before changing account or system configuration."] },
-      { heading: "What to check", paragraphs: ["Camera problems, desktop application problems, visitor data delays, and locked accounts can each be enabled or disabled under Technical Issue Notifications in System Settings."] },
+      {
+        heading: "Read the four figures",
+        paragraphs: ["Overview opens when you sign in. The figures count the requests not picked up, the places not sending data, the cameras not counting, and the accounts waiting on an invitation or an email change approval."],
+      },
+      {
+        heading: "Act from each list",
+        steps: [
+          "Under Requests waiting for IT, select Start on it to take a request. It is then yours, and the sender sees who is handling it.",
+          "Under Connection problems, select Check to open that enterprise's Connection tab.",
+          "Under Accounts waiting, select Send again, Send a new link or Review.",
+          "Under Emails that did not arrive, select Try again.",
+          "Each list links to its full screen when you need more than the list shows.",
+        ],
+      },
+    ],
+    relatedArticleIds: ["it-requests", "it-enterprises"],
+  },
+  {
+    id: "it-requests",
+    title: "Handle a request in Requests",
+    summary: "Pick up a request with Start on it, reply to the sender, approve or decline an account change, and resolve, reopen or move a request.",
+    roles: ["it"],
+    category: "Requests",
+    keywords: ["request", "start on it", "not picked up", "account change", "reply", "resolve", "reopen", "move"],
+    commonIssue: true,
+    sections: [
+      {
+        heading: "Find the request",
+        steps: [
+          "Open Requests in the top bar. The amber count beside it is the number of open requests nobody has picked up.",
+          "Search, or filter by Type, Status and Handled by. Status shows Open requests first; choose Not picked up to see the ones waiting for IT.",
+          "Select a request to see its details, the conversation and its updates beside the list.",
+        ],
+      },
+      {
+        heading: "Take and answer it",
+        steps: [
+          "Select Start on it. Replying, resolving or moving a request nobody has picked up also makes it yours.",
+          "Write a reply or choose a quick reply, then select Send reply, or Send and mark resolved when the problem is fixed.",
+          "Select Mark resolved, Reopen or Move to another type when the request needs it.",
+        ],
+      },
+      {
+        heading: "Decide an account change",
+        paragraphs: ["An account change shows what the value is now and what was asked for. Select Approve change to apply it, or Decline to keep the old value; write the reason in the reply first. A new email address must be verified before you can approve it."],
+      },
+    ],
+    relatedArticleIds: ["it-overview", "it-enterprises"],
+  },
+  {
+    id: "it-enterprises",
+    title: "Register and manage an enterprise",
+    summary: "Register an enterprise, send its owner's invitation again, and check its desktop app, cameras, details and opening hours.",
+    roles: ["it"],
+    category: "Enterprises",
+    keywords: ["enterprise", "register", "invitation", "desktop app", "cameras", "manage", "opening hours", "password reset", "deactivate"],
+    sections: [
+      {
+        heading: "Register an enterprise",
+        steps: [
+          "Open Enterprises and select Register enterprise.",
+          "Enter the name, attraction type, address and map pin, barangay, owner, contact number, capacity, email and opening hours.",
+          "Select Register and send invitation. The owner gets an email to set a password and install the desktop app.",
+        ],
+      },
+      {
+        heading: "Find an enterprise",
+        paragraphs: ["Use the Show chips (All, Needs attention, Invitation pending, Sending data) or search. Select Send again or Send a new link when an owner has not accepted the invitation."],
+      },
+      {
+        heading: "Manage an enterprise",
+        steps: [
+          "Select Manage beside the enterprise.",
+          "Connection shows the desktop app, today's camera strip and the requests from this place. Use Send a notice to message the enterprise.",
+          "Details and account edits the details (Save details), sends a password reset email, and deactivates or activates the enterprise after you confirm.",
+          "Opening hours saves the weekly hours (Save hours) and adds or removes closed days.",
+        ],
+      },
+    ],
+    relatedArticleIds: ["it-overview", "it-account-troubleshooting"],
+  },
+  {
+    id: "it-personnel",
+    title: "Invite and manage LGU Personnel",
+    summary: "Invite Admin, Staff and IT accounts, approve a new sign-in email, change a role, and turn access off when someone leaves.",
+    roles: ["it"],
+    category: "LGU Personnel",
+    keywords: ["lgu personnel", "invite", "account", "role", "email change", "deactivate", "activate"],
+    sections: [
+      {
+        heading: "Invite someone",
+        steps: ["Open LGU Personnel and select Invite personnel.", "Enter the name and work email, add a phone number if you have one, and choose a role.", "Select Send invitation. The person gets a link to set a password."],
+      },
+      {
+        heading: "Look after an account",
+        steps: [
+          "Search, filter by role, or select Show deactivated accounts.",
+          "Use Edit, Send invitation again, Deactivate or Activate on the person's row. Deactivating asks you to confirm.",
+          "When someone asks for a new sign-in email, select Approve or Decline in the callout. Another IT account has to approve a change you asked for or one on your own account.",
+        ],
+      },
+    ],
+    relatedArticleIds: ["it-account-troubleshooting"],
+  },
+  {
+    id: "it-system-settings",
+    title: "Change system settings",
+    summary: "Set the sign-in lockout, the camera wait, how long activity is kept, and the date and time format in System, then save them together.",
+    roles: ["it"],
+    category: "System",
+    keywords: ["system settings", "settings", "lockout", "camera", "retention", "date format", "time format"],
+    commonIssue: true,
+    sections: [
+      {
+        heading: "Change settings",
+        steps: [
+          "Open System and choose the Settings tab.",
+          "Change Sign-in lockout, Camera not counting, Keep activity for, or Date and time. The date format and time format apply to every account and to exported reports.",
+          "Select Save settings to save every change at once, or Discard to undo them. A sign-in lockout change asks you to confirm because it affects every account.",
+        ],
+      },
+      {
+        heading: "Remove older activity",
+        paragraphs: ["Under Keep activity for, select Remove older activity now to permanently delete activity older than the period you keep. TANAW asks you to confirm, and the line above the button says when the last cleanup ran and how many entries it removed."],
+      },
+    ],
+    relatedArticleIds: ["it-system-activity"],
+  },
+  {
+    id: "it-system-activity",
+    title: "Trace an event in Activity and the Email log",
+    summary: "Find who did what and when in System, with the technical detail IT needs, and send an email that did not arrive again.",
+    roles: ["it"],
+    category: "System",
+    keywords: ["activity", "email log", "technical detail", "ip address", "browser", "session", "try again", "delivery"],
+    sections: [
+      {
+        heading: "Activity",
+        steps: [
+          "Open System. The Activity tab lists every event, newest first.",
+          "Choose a type: All, Sign-in and security, Requests, Accounts, Enterprises or System.",
+          "Expand a row to see its technical detail, such as the IP address, browser and session.",
+        ],
+      },
+      {
+        heading: "Email log",
+        steps: ["Choose the Email log tab. The count beside it is the number of emails that did not arrive.", "Switch between All emails and Problems only to see the last 7 days.", "Select Try again on an email that failed."],
+      },
     ],
     relatedArticleIds: ["it-system-settings", "it-account-troubleshooting"],
   },
   {
-    id: "it-system-settings",
-    title: "Change System Settings safely",
-    summary: "Understand immediate notification switches, section-level settings, and destructive activity cleanup.",
-    roles: ["it"],
-    category: "System Settings",
-    keywords: ["settings", "retention", "time format", "notifications", "lockout"],
-    commonIssue: true,
-    sections: [
-      { heading: "Immediate settings", paragraphs: ["Time Display and Technical Issue Notifications save as soon as you change them. A failed change returns to its last confirmed value and offers Retry."] },
-      { heading: "Grouped settings", paragraphs: ["Sign-in protection and activity retention use Apply section so related values are reviewed together. Sign-in protection requires confirmation because it affects all accounts."] },
-      { heading: "Permanent cleanup", paragraphs: ["Delete Old Activity permanently removes expired activity records and always requires confirmation."] },
-    ],
-    relatedArticleIds: ["it-work-center"],
-  },
-  {
     id: "it-account-troubleshooting",
     title: "Troubleshoot an account access issue",
-    summary: "Check account state, activation, and lockout signals without bypassing TANAW authorization.",
+    summary: "Check account state, invitations and lockouts without bypassing TANAW authorization.",
     roles: ["it"],
     category: "Account & Access",
-    keywords: ["account", "activation", "locked", "inactive", "email"],
+    keywords: ["account", "invitation", "activation", "locked", "inactive", "email", "password reset"],
     sections: [
-      { heading: "What to check", steps: ["Open the appropriate account management page.", "Confirm the account status and professional email.", "Check Work Center or System Activity for a related lockout or delivery event."] },
-      { heading: "Steps to resolve", paragraphs: ["Use the account actions TANAW provides for that state. Do not share passwords or bypass role access."] },
+      {
+        heading: "What to check",
+        steps: [
+          "Open LGU Personnel for an Admin, Staff or IT account, or Enterprises for an enterprise account.",
+          "Confirm the account's access and email, and whether its invitation is still waiting or has expired.",
+          "In System, check Activity under Sign-in and security for a lockout, and the Email log for an invitation or reset email that did not arrive.",
+        ],
+      },
+      {
+        heading: "Steps to resolve",
+        paragraphs: ["Use the actions TANAW offers for that state: Send invitation again, Send a new link, or Send a password reset email for an enterprise. Do not share passwords or bypass role access."],
+      },
     ],
-    relatedArticleIds: ["account-session-help", "it-work-center"],
+    relatedArticleIds: ["account-session-help", "it-personnel", "it-system-activity"],
   },
 ];

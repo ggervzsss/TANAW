@@ -11,7 +11,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,12 @@ from app.features.requests.models import (
     Request,
     RequestMessage,
     RequestRead,
+)
+from app.features.requests.ownership import (
+    OPEN_STATUSES,
+    claim_if_not_picked_up,
+    request_handler,
+    take_request,
 )
 from app.features.requests.schemas import (
     AccountChangeField,
@@ -44,7 +50,6 @@ from app.features.requests.schemas import (
     SignInHelpCreate,
 )
 
-OPEN_STATUSES = frozenset({"In Progress"})
 CLOSED_STATUSES = frozenset({"Resolved", "Approved"})
 ACCOUNT_CHANGE_LABELS: dict[str, str] = {
     "businessEmail": "Business email",
@@ -191,6 +196,8 @@ def to_request_summary(
         createdAt=request.created_at,
         updatedAt=request.updated_at,
         closedAt=request.closed_at,
+        handledBy=request_handler(request),
+        handledAt=request.handled_at,
         unread=read_at is None,
         updated=read_at is not None and read_at < updated_at,
     )
@@ -275,13 +282,28 @@ async def summarize_requests(
 
 
 async def list_requests(
-    db: AsyncSession, account: Account, limit: int = 200
+    db: AsyncSession, account: Account, limit: int = 200, *, enterprise_id: str | None = None
 ) -> list[RequestSummary]:
+    """The requests an account reads; Admin and IT may narrow them to one enterprise.
+
+    `enterprise_id` is the enterprise's slug (such as ENT-001) or its account id.
+    """
     if account.role not in REQUEST_READER_ROLES:
         return []
     statement = select(Request).order_by(Request.created_at.desc(), Request.id.desc()).limit(limit)
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Request.enterprise_profile_id == account.id)
+    elif enterprise_id:
+        statement = statement.where(
+            or_(
+                Request.enterprise_profile_id == enterprise_id,
+                Request.enterprise_profile_id.in_(
+                    select(EnterpriseProfile.account_id).where(
+                        EnterpriseProfile.enterprise_id == enterprise_id
+                    )
+                ),
+            )
+        )
     requests = (await db.scalars(statement)).unique().all()
     return await summarize_requests(db, account, requests)
 
@@ -442,6 +464,8 @@ async def add_request_message(
         raise RequestConflictError(
             "This request is closed. Reopen it to continue the conversation."
         )
+    if kind == "message":
+        claim_if_not_picked_up(request, author)
     record = RequestMessage(
         request_id=request.id,
         author_account_id=author.id,
@@ -470,6 +494,7 @@ async def set_request_status(
 ) -> str:
     """Move a request to a new status and log it on the timeline. Returns the old status."""
     previous = request.status
+    claim_if_not_picked_up(request, actor)
     if status == previous:
         return previous
     if status not in allowed_statuses(request):
@@ -498,7 +523,12 @@ async def set_request_status(
 async def reopen_request(db: AsyncSession, request: Request, actor: Account) -> str:
     if request.status != "Resolved":
         raise RequestConflictError("Only a resolved request can be reopened.")
-    return await set_request_status(db, request, actor, "In Progress")
+    previous = await set_request_status(db, request, actor, "In Progress")
+    # IT reopening it takes it on; an enterprise reopening it keeps whoever handled it.
+    if actor.role == AccountRole.IT:
+        take_request(request, actor)
+        await db.flush()
+    return previous
 
 
 async def update_request_fields(
@@ -512,7 +542,35 @@ async def update_request_fields(
         if (group == "Account change") != (request.change_field is not None):
             raise RequestConflictError("Only account changes belong in the Account change group.")
         request.request_group = group
+    claim_if_not_picked_up(request, actor)
     request.updated_at = _now()
+    await db.flush()
+    await mark_requests_read(db, actor, [request.id])
+
+
+# Who handles a request
+
+
+async def start_request(db: AsyncSession, request: Request, actor: Account) -> None:
+    """An IT person picks up an open request, which shows on its timeline."""
+    if request.status not in OPEN_STATUSES:
+        raise RequestConflictError("Only an open request can be started.")
+    handler = request_handler(request)
+    if handler is not None:
+        who = "You are" if handler.accountId == actor.id else f"{handler.name} is"
+        raise RequestConflictError(f"{who} already handling this request.")
+    take_request(request, actor)
+    request.updated_at = _now()
+    db.add(
+        RequestMessage(
+            request_id=request.id,
+            author_account_id=actor.id,
+            author_name=actor.display_name,
+            author_role=actor.role.value,
+            kind="status",
+            message=f"{actor.display_name} started on it.",
+        )
+    )
     await db.flush()
     await mark_requests_read(db, actor, [request.id])
 

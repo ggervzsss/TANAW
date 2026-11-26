@@ -25,8 +25,10 @@ class EnterpriseNotificationCreate(BaseModel):
     enterpriseId: str = Field(min_length=1, max_length=120)
     title: str = Field(min_length=1, max_length=160)
     message: str = Field(min_length=1, max_length=2000)
-    type: str = Field(default="Staff Follow-up", min_length=1, max_length=60)
-    severity: NotificationSeverity = "Warning"
+    type: str | None = Field(default=None, min_length=1, max_length=60)
+    """Defaults to "IT Notice" when IT sends it, and "Staff Follow-up" otherwise."""
+    severity: NotificationSeverity | None = None
+    """Defaults to Info when IT sends it, and Warning otherwise."""
     sourceType: str | None = Field(default=None, max_length=80)
     sourceId: str | None = Field(default=None, max_length=120)
 

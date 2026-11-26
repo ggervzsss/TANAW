@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getAccountPreferences, updateAccountPreferences } from "../services/accountService";
 import { getSystemSettings } from "../services/systemSettingsService";
-import { resolveSystemTimeFormat } from "../utils/dateTime";
+import { resolveSystemDateFormat, resolveSystemTimeFormat } from "../utils/dateTime";
 import {
   defaultDisplayPreferences,
   normalizeDisplayPreferences,
@@ -30,6 +30,7 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
   const activeAccountIdRef = useRef(accountId);
   const interactionVersionRef = useRef(0);
   const timeFormat = resolveSystemTimeFormat(settingsQuery.data?.values["display.timeFormat"]);
+  const dateFormat = resolveSystemDateFormat(settingsQuery.data?.values["display.dateFormat"]);
   const activeLocalState = localState?.accountId === accountId ? localState : null;
   const displayPreferences = activeLocalState?.preferences ?? defaultDisplayPreferences;
   const saveStatus = activeLocalState?.status ?? "idle";
@@ -117,7 +118,7 @@ export function SystemDisplayPreferencesProvider({ authenticated, accountId, chi
 
   return (
     <SystemDisplayPreferencesContext.Provider
-      value={{ timeFormat, displayPreferences, saveStatus, updateDisplayPreferences, resetDisplayPreferences, retryDisplayPreferencesSave }}
+      value={{ timeFormat, dateFormat, displayPreferences, saveStatus, updateDisplayPreferences, resetDisplayPreferences, retryDisplayPreferencesSave }}
     >
       {children}
     </SystemDisplayPreferencesContext.Provider>

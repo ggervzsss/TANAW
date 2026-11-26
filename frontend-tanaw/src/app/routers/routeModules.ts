@@ -8,10 +8,12 @@ const modules = {
   adminEnterprises: () => import("@/features/admin-enterprises"),
   adminReports: () => import("@/features/admin-reports"),
   alerts: () => import("@/features/alerts-monitor"),
-  dashboard: () => import("@/features/dashboard"),
   devLog: () => import("@/features/dev-log"),
-  enterpriseAccounts: () => import("@/features/enterprise-accounts"),
-  lguAccounts: () => import("@/features/lgu-accounts"),
+  itEnterprises: () => import("@/features/it-enterprises"),
+  itOverview: () => import("@/features/it-overview"),
+  itPersonnel: () => import("@/features/it-personnel"),
+  itRequests: () => import("@/features/it-requests"),
+  itSystem: () => import("@/features/it-system"),
   login: () => import("@/features/login"),
   notifications: () => import("@/features/notifications"),
   reports: () => import("@/features/reports"),
@@ -26,11 +28,13 @@ export const EnterpriseDetailsPage = lazy(() => modules.adminEnterprises().then(
 export const AdminEnterpriseReportsPage = lazy(() => modules.adminReports().then((module) => ({ default: module.AdminEnterpriseReportsPage })));
 export const AdminRecentActivityPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminRecentActivityPage })));
 export const AdminRequestsPage = lazy(() => modules.alerts().then((module) => ({ default: module.AdminRequestsPage })));
-export const ITWorkCenterPage = lazy(() => modules.alerts().then((module) => ({ default: module.ITWorkCenterPage })));
-export const ITDashboardPage = lazy(() => modules.dashboard().then((module) => ({ default: module.ITDashboardPage })));
+export const ITOverviewPage = lazy(() => modules.itOverview().then((module) => ({ default: module.ITOverviewPage })));
+export const ITRequestsPage = lazy(() => modules.itRequests().then((module) => ({ default: module.ITRequestsPage })));
+export const ITEnterprisesPage = lazy(() => modules.itEnterprises().then((module) => ({ default: module.ITEnterprisesPage })));
+export const ITEnterpriseManagePage = lazy(() => modules.itEnterprises().then((module) => ({ default: module.ITEnterpriseManagePage })));
+export const ITPersonnelPage = lazy(() => modules.itPersonnel().then((module) => ({ default: module.ITPersonnelPage })));
+export const ITSystemPage = lazy(() => modules.itSystem().then((module) => ({ default: module.ITSystemPage })));
 export const ITDevLogPage = import.meta.env.DEV ? lazy(() => modules.devLog().then((module) => ({ default: module.ITDevLogPage }))) : null;
-export const ITEnterpriseAccountsPage = lazy(() => modules.enterpriseAccounts().then((module) => ({ default: module.ITEnterpriseAccountsPage })));
-export const ITLguAccountsPage = lazy(() => modules.lguAccounts().then((module) => ({ default: module.ITLguAccountsPage })));
 export const ActivateAccountPage = lazy(() => modules.login().then((module) => ({ default: module.ActivateAccountPage })));
 export const EnterpriseAccessPage = lazy(() => modules.login().then((module) => ({ default: module.EnterpriseAccessPage })));
 export const LoginPage = lazy(() => modules.login().then((module) => ({ default: module.LoginPage })));
@@ -39,7 +43,6 @@ export const NotificationsPage = lazy(() => modules.notifications().then((module
 export const StaffReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffReportsPage })));
 export const StaffConsolidatedReportsPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffConsolidatedReportsPage })));
 export const HelpCenterPage = lazy(() => modules.helpCenter().then((module) => ({ default: module.HelpCenterPage })));
-export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.ITSystemLogsPage })));
 
 const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.admin.dashboard]: modules.adminDashboard,
@@ -48,14 +51,13 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.admin.activity]: modules.systemLogs,
   [routes.admin.requests]: modules.alerts,
   [routes.admin.generalSettings]: modules.settings,
-  [routes.it.dashboard]: modules.dashboard,
-  [routes.it.enterpriseAccounts]: modules.enterpriseAccounts,
-  [routes.it.lguAccounts]: modules.lguAccounts,
+  [routes.it.dashboard]: modules.itOverview,
+  [routes.it.requests]: modules.itRequests,
+  [routes.it.enterprises]: modules.itEnterprises,
+  [routes.it.personnel]: modules.itPersonnel,
+  [routes.it.system]: modules.itSystem,
   [routes.it.notifications]: modules.notifications,
   [routes.it.generalSettings]: modules.settings,
-  [routes.it.systemLogs]: modules.systemLogs,
-  [routes.it.systemSettings]: modules.settings,
-  [routes.it.workCenter]: modules.alerts,
   [routes.staff.reports]: modules.reports,
   [routes.staff.consolidatedReports]: modules.reports,
   [routes.staff.notifications]: modules.notifications,
@@ -66,7 +68,7 @@ if (import.meta.env.DEV) portalModuleByPath[routes.it.devLog] = modules.devLog;
 
 const authorizedPaths: Partial<Record<UserRole, string[]>> = {
   admin: Object.values(routes.admin).filter((path) => !path.includes(":")),
-  it: Object.values(routes.it).filter((path) => import.meta.env.DEV || path !== routes.it.devLog),
+  it: Object.values(routes.it).filter((path) => !path.includes(":") && (import.meta.env.DEV || path !== routes.it.devLog)),
   staff: Object.values(routes.staff),
 };
 

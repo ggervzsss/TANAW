@@ -46,13 +46,13 @@ router = APIRouter(prefix="/accounts", tags=["LGU accounts"])
 
 @router.get("/lgu", response_model=list[AccountSummary])
 async def list_lgu_accounts(
-    _: ITAccount,
+    actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[AccountSummary]:
     accounts = await list_accounts_by_roles(
         db, [AccountRole.IT, AccountRole.ADMIN, AccountRole.STAFF]
     )
-    return await to_account_summaries_with_requests(db, accounts)
+    return await to_account_summaries_with_requests(db, accounts, viewer=actor)
 
 
 @router.post("/lgu", response_model=AccountSummary, status_code=status.HTTP_201_CREATED)
@@ -98,7 +98,7 @@ async def create_lgu_account(
         ),
         source_id=account.id,
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)
 
 
 @router.patch("/lgu/{account_id}", response_model=AccountSummary)
@@ -192,4 +192,4 @@ async def update_lgu_account(
             "requestedEmail": requested_email if email_change_requested else None,
         },
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)

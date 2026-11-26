@@ -16,6 +16,10 @@ from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.helpers import sample_uuid
 from app.features.sample_data.portal_workflow import sample_log
 
+_SAMPLE_BROWSER = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 _ACTOR_ROLE = {
     AccountRole.ADMIN: "Admin",
     AccountRole.IT: "IT Personnel",
@@ -55,6 +59,9 @@ async def create_request_and_user_activity(
         requester_name=_manager(camera_enterprise),
         affected_area="Main entrance",
         camera="Main Entrance",
+        handled_by_account_id=it_account.id,
+        handled_by_name=it_account.display_name,
+        handled_at=camera_opened + timedelta(hours=4, minutes=40),
         created_at=camera_opened,
         updated_at=camera_opened + timedelta(hours=5),
         closed_at=camera_opened + timedelta(hours=5),
@@ -90,6 +97,9 @@ async def create_request_and_user_activity(
         requester_name=_manager(renamed),
         change_field="enterpriseName",
         change_value=_name(renamed),
+        handled_by_account_id=it_account.id,
+        handled_by_name=it_account.display_name,
+        handled_at=rename_opened + timedelta(hours=3),
         created_at=rename_opened,
         updated_at=rename_opened + timedelta(hours=3),
         closed_at=rename_opened + timedelta(hours=3),
@@ -274,7 +284,7 @@ async def create_request_and_user_activity(
             sample_log(
                 ("history-enterprise-created", enterprise.id),
                 enterprise.created_at,
-                group="Accounts",
+                group="Enterprises",
                 severity="Success",
                 actor=it_account.display_name,
                 actor_role="IT Personnel",
@@ -293,7 +303,7 @@ async def create_request_and_user_activity(
         sample_log(
             ("history-enterprise-updated", updated_enterprise.id),
             range_end - timedelta(days=4, hours=2),
-            group="Accounts",
+            group="Enterprises",
             severity="Success",
             actor=it_account.display_name,
             actor_role="IT Personnel",
@@ -348,7 +358,7 @@ def _status(request: Request, actor: Account, status: str, at: datetime) -> Requ
 
 
 def _auth_log(account: Account, action: str, summary: str, at: datetime) -> ActivityLog:
-    return sample_log(
+    log = sample_log(
         ("history-auth", account.id, action, at.isoformat()),
         at,
         group="Login & Security",
@@ -360,3 +370,11 @@ def _auth_log(account: Account, action: str, summary: str, at: datetime) -> Acti
         summary=summary,
         source_id=account.id,
     )
+    # What the live request context records: the caller's address, browser and session hash.
+    # The addresses come from the documentation range, so they belong to no real computer.
+    log.ip_address = f"192.0.2.{10 + list(_ACTOR_ROLE).index(account.role)}"
+    log.user_agent = _SAMPLE_BROWSER
+    log.session_id = sample_uuid("history-session", account.id, at.date().isoformat()).replace(
+        "-", ""
+    )[:16]
+    return log

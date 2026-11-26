@@ -158,10 +158,10 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
   // The Admin has no bell any more; these links only matter for notifications already stored.
   if (role === "admin") return notification.sourceType === "request" ? requestPath(routes.admin.requests, notification.sourceId) : routes.admin.dashboard;
   if (role === "it") {
-    if (notification.sourceType === "email.delivery") return itWorkCenterPath("email");
-    if (notification.sourceType === "request" || text.includes("enterprise.profile") || text.includes("profile change request")) return itWorkCenterPath("requests", notification.sourceType === "request" ? notification.sourceId : null);
+    if (notification.sourceType === "email.delivery") return `${routes.it.system}?tab=email`;
+    if (notification.sourceType === "request" || text.includes("enterprise.profile") || text.includes("profile change request")) return requestPath(routes.it.requests, notification.sourceType === "request" ? notification.sourceId : null);
     if (notification.sourceType === "enterprise.offline") return routes.it.dashboard;
-    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : itWorkCenterPath("requests");
+    return text.includes("security") || text.includes("password") || text.includes("startup") ? `${routes.it.system}?tab=activity` : routes.it.requests;
   }
   if (role === "staff") {
     if (text.includes("consolidated") || text.includes("final report")) return routes.staff.consolidatedReports;
@@ -177,11 +177,6 @@ function requestPath(base: string, requestId?: string | null) {
   return requestId ? `${base}?${new URLSearchParams({ request: requestId }).toString()}` : base;
 }
 
-function itWorkCenterPath(view: "requests" | "alerts" | "email", requestId?: string | null) {
-  const params = new URLSearchParams({ view });
-  if (requestId) params.set("request", requestId);
-  return `${routes.it.workCenter}?${params.toString()}`;
-}
 
 function toSortTime(value: string) {
   const timestamp = Date.parse(value);

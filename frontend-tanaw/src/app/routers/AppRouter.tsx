@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 import { useAuthStore } from "../store/authStore";
@@ -15,12 +15,13 @@ import {
   AdminRequestsPage,
   EnterpriseAccessPage,
   EnterpriseDetailsPage,
-  ITDashboardPage,
   ITDevLogPage,
-  ITEnterpriseAccountsPage,
-  ITLguAccountsPage,
-  ITSystemLogsPage,
-  ITWorkCenterPage,
+  ITEnterpriseManagePage,
+  ITEnterprisesPage,
+  ITOverviewPage,
+  ITPersonnelPage,
+  ITRequestsPage,
+  ITSystemPage,
   LoginPage,
   NotificationsPage,
   RegisteredEnterprisesPage,
@@ -59,18 +60,21 @@ export function AppRouter() {
           }
         >
           <Route index element={<Navigate to={routes.it.dashboard} replace />} />
-          <Route path="dashboard" element={<ITDashboardPage />} />
-          <Route path="work-center" element={<ITWorkCenterPage />} />
-          <Route path="lgu-accounts" element={<ITLguAccountsPage />} />
-          <Route path="enterprise-accounts" element={<ITEnterpriseAccountsPage />} />
+          <Route path="dashboard" element={<ITOverviewPage />} />
+          <Route path="requests" element={<ITRequestsPage />} />
+          <Route path="enterprises" element={<ITEnterprisesPage />} />
+          <Route path="enterprises/:enterpriseId" element={<ITEnterpriseManagePage />} />
+          <Route path="personnel" element={<ITPersonnelPage />} />
+          <Route path="system" element={<ITSystemPage />} />
           <Route path="notifications" element={<NotificationsPage role="it" />} />
-          <Route path="system-logs" element={<ITSystemLogsPage />} />
+          {legacyPortalRedirects.it.map(([path, target]) => (
+            <Route key={path} path={path} element={<LegacyRedirect to={target} />} />
+          ))}
           {import.meta.env.DEV && ITDevLogPage ? <Route path="dev-log" element={<ITDevLogPage />} /> : null}
           <Route path="settings/:section?" element={<GeneralSettingsPage role="it" />} />
           <Route path="profile" element={<Navigate to={routes.it.profile} replace />} />
           <Route path="security" element={<Navigate to={routes.it.security} replace />} />
           <Route path="display-preferences" element={<Navigate to={routes.it.displayPreferences} replace />} />
-          <Route path="system-settings" element={<Navigate to={routes.it.systemSettings} replace />} />
           <Route path="help" element={<HelpCenterPage role="it" />} />
           <Route path="help/:articleId" element={<HelpCenterPage role="it" />} />
         </Route>
@@ -128,6 +132,24 @@ export function AppRouter() {
       </Routes>
     </Suspense>
   );
+}
+
+/**
+ * Sends an old IT address to its new screen and keeps its query, so links such as
+ * `/it/work-center?request=REQ-1` still open the right request. The old Work Center email view
+ * now lives under System, and its alerts view on the Overview.
+ */
+function LegacyRedirect({ to }: { to: string }) {
+  const { search } = useLocation();
+  const [path, targetQuery = ""] = to.split("?");
+  const params = new URLSearchParams(search);
+  const view = params.get("view");
+  params.delete("view");
+  if (view === "email") return <Navigate to="/it/system?tab=email" replace />;
+  if (view === "alerts") return <Navigate to={routes.it.dashboard} replace />;
+  for (const [key, value] of new URLSearchParams(targetQuery)) params.set(key, value);
+  const query = params.toString();
+  return <Navigate to={query ? `${path}?${query}` : path} replace />;
 }
 
 function RouteLoadingFallback() {

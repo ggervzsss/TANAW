@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { DESKTOP_APP_INFO_CHANNEL } from "../src/types/desktop-app-info";
 import { ML_REPORT_LIVE_EVENT_CHANNELS, type MlReportLiveEvent } from "../src/types/ml-report-live-events";
 
 let startupRevealed = false;
@@ -23,6 +24,12 @@ ipcRenderer.on("startup:revealed", () => {
   startupRevealed = true;
   for (const listener of startupRevealListeners) listener();
   startupRevealListeners.clear();
+});
+
+contextBridge.exposeInMainWorld("tanawAppInfo", {
+  get() {
+    return ipcRenderer.invoke(DESKTOP_APP_INFO_CHANNEL);
+  },
 });
 
 contextBridge.exposeInMainWorld("tanawMlService", {

@@ -7,10 +7,32 @@ import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
 import { TopbarNavigation } from "@/shared/ui-kit/patterns/TopbarNavigation";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
-import type { NavigationItem } from "./navigation";
+import type { NavigationBadge, NavigationItem } from "./navigation";
 import type { TopbarEntry } from "./portalNavigationModel";
 
-type DesktopProps = { entries: TopbarEntry[]; isDark: boolean; openMenuId: string | null; pathname: string; role: UserRole; onMenuChange: (id: string | null) => void };
+type DesktopProps = {
+  entries: TopbarEntry[];
+  isDark: boolean;
+  openMenuId: string | null;
+  pathname: string;
+  role: UserRole;
+  onMenuChange: (id: string | null) => void;
+  /** Counts beside link labels, by navigation item id. */
+  badges?: Partial<Record<string, NavigationBadge>>;
+};
+
+/** An amber count beside a navigation label; screen readers hear its own label instead of the digits. */
+function NavBadge({ badge }: { badge?: NavigationBadge }) {
+  if (!badge || badge.count < 1) return null;
+  return (
+    <>
+      <span aria-hidden="true" data-topbar-badge className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[11px] font-extrabold text-amber-950 tabular-nums">
+        {badge.count > 99 ? "99+" : badge.count}
+      </span>
+      <span className="sr-only">, {badge.label}</span>
+    </>
+  );
+}
 
 function matchesRoute(path: string, pathname: string) {
   return !!matchPath({ path, end: false }, pathname);
@@ -25,7 +47,7 @@ function navLinkActive(item: NavigationItem, pathname: string) {
   return ({ isActive }: { isActive: boolean }) => isActive || matchesItem(item, pathname);
 }
 
-export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname, role, onMenuChange }: DesktopProps) {
+export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname, role, onMenuChange, badges = {} }: DesktopProps) {
   const queryClient = useQueryClient();
   const selected = entries.find((entry) => (entry.type === "link" ? matchesItem(entry.item, pathname) : entry.children.some((child) => matchesItem(child, pathname))));
   const activeId = selected?.type === "link" ? selected.item.id : selected?.id ?? null;
@@ -56,6 +78,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
               <span className="relative z-10 flex items-center gap-2">
                 <Icon size={16} className="shrink-0" />
                 <span data-topbar-label>{entry.item.label}</span>
+                <NavBadge badge={badges[entry.item.id]} />
               </span>
             </NavLink>
           );
@@ -115,7 +138,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
   );
 }
 
-export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavigate }: Pick<DesktopProps, "entries" | "isDark" | "pathname" | "role"> & { onNavigate: () => void }) {
+export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavigate, badges = {} }: Pick<DesktopProps, "entries" | "isDark" | "pathname" | "role" | "badges"> & { onNavigate: () => void }) {
   const queryClient = useQueryClient();
   const selected = entries.flatMap((entry) => (entry.type === "link" ? [entry.item] : entry.children)).find((item) => matchesItem(item, pathname));
   const linkClass = (item: NavigationItem) => (state: { isActive: boolean }) =>
@@ -133,6 +156,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
             <NavLink key={entry.item.id} to={entry.item.path} data-topbar-navigation={entry.item.id} onClick={onNavigate} {...routeIntentHandlers(queryClient, entry.item.path)} className={linkClass(entry.item)}>
               {<entry.item.icon size={16} />}
               <span data-topbar-label>{entry.item.label}</span>
+              <NavBadge badge={badges[entry.item.id]} />
             </NavLink>
           ) : (
             <div key={entry.id} className="space-y-2">

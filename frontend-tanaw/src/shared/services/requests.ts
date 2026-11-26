@@ -47,6 +47,12 @@ export async function listRequests() {
   return response.data;
 }
 
+/** Requests from one place (enterprise ID or account ID), newest first; for Admin and IT. */
+export async function listEnterpriseRequests(enterpriseId: string) {
+  const response = await apiClient.get<Request[]>(apiPaths.requests, { params: { enterpriseId } });
+  return response.data;
+}
+
 export async function getRequest(requestId: string) {
   const response = await apiClient.get<RequestDetail>(`/operational/requests/${requestId}`);
   return response.data;
@@ -64,6 +70,12 @@ export async function addNoteForIt(requestId: string, message: string) {
 
 export async function updateRequestStatus(requestId: string, status: RequestStatus) {
   const response = await apiClient.patch<RequestDetail>(`/operational/requests/${requestId}/status`, { status });
+  return response.data;
+}
+
+/** IT picks up a request nobody is handling yet; the sender sees that IT is on it. */
+export async function startRequest(requestId: string) {
+  const response = await apiClient.post<RequestDetail>(`/operational/requests/${requestId}/start`);
   return response.data;
 }
 

@@ -35,6 +35,7 @@ from app.features.accounts.service import (
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
+    get_enterprise_account_by_reference,
     list_accounts_by_roles,
     to_account_summaries_with_requests,
     to_account_summary_with_requests,
@@ -83,11 +84,25 @@ async def search_enterprise_locations(
 
 @router.get("/enterprises", response_model=list[AccountSummary])
 async def list_enterprise_accounts(
-    _: EnterpriseReadAccount,
+    actor: EnterpriseReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[AccountSummary]:
     accounts = await list_accounts_by_roles(db, [AccountRole.ENTERPRISE])
-    return await to_account_summaries_with_requests(db, accounts)
+    return await to_account_summaries_with_requests(db, accounts, viewer=actor)
+
+
+@router.get("/enterprises/{account_or_enterprise_id}", response_model=AccountSummary)
+async def get_enterprise_account(
+    account_or_enterprise_id: str,
+    actor: EnterpriseReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountSummary:
+    account = await get_enterprise_account_by_reference(db, account_or_enterprise_id)
+    if account is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
+        )
+    return await to_account_summary_with_requests(db, account, viewer=actor)
 
 
 @router.post("/enterprises", response_model=AccountSummary, status_code=status.HTTP_201_CREATED)
@@ -144,7 +159,7 @@ async def create_enterprise_account(
         raise RuntimeError("Enterprise account was created without a profile.")
     await record_account_log(
         db,
-        group="Accounts",
+        group="Enterprises",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
@@ -161,7 +176,7 @@ async def create_enterprise_account(
             "buildingCapacity": profile.building_capacity,
         },
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)
 
 
 @router.patch("/enterprises/{account_id}", response_model=AccountSummary)
@@ -263,7 +278,7 @@ async def update_enterprise_account(
 
     await record_account_log(
         db,
-        group="Accounts",
+        group="Enterprises",
         severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
@@ -284,4 +299,4 @@ async def update_enterprise_account(
             "requestedEmail": requested_email if email_change_requested else None,
         },
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)

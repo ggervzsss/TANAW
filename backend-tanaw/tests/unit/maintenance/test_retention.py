@@ -21,6 +21,7 @@ async def test_retention_cleanup_uses_configured_telemetry_boundary_and_batch(
         "_expire_email_change_requests",
         "_delete_email_change_requests",
         "_delete_email_outbox_records",
+        "_delete_activity_logs",
     ):
         monkeypatch.setattr(retention, helper_name, AsyncMock(return_value=0))
 

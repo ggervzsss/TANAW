@@ -12,8 +12,10 @@ from app.features.activity_logs.models import ActivityLog
 from app.features.activity_logs.schemas import (
     ActivityGroup,
     ActivityLogActorRole,
+    ActivityLogCleanupStatus,
     ActivityLogCreate,
     ActivityLogSummary,
+    ActivityLogTechnical,
 )
 
 ROLE_LABELS: dict[AccountRole, ActivityLogActorRole] = {
@@ -28,6 +30,11 @@ SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
+CLEANUP_ACTION = "Delete Old Activity"
+CLEANUP_SOURCE_ID = "activity-log-purge"
+SYSTEM_ACTOR = "TANAW"
+# The scheduled cleanup runs every hour; it records a run that removed nothing once a day.
+SCHEDULED_CLEANUP_QUIET_RECORD_INTERVAL = timedelta(days=1)
 ACTIVITY_READER_ROLES = frozenset({AccountRole.ADMIN, AccountRole.IT})
 
 
@@ -134,6 +141,107 @@ async def purge_expired_activity_logs(
     return result.rowcount or 0
 
 
+async def _latest_cleanup_log(db: AsyncSession) -> ActivityLog | None:
+    return cast(
+        ActivityLog | None,
+        await db.scalar(
+            select(ActivityLog)
+            .where(ActivityLog.action == CLEANUP_ACTION)
+            .order_by(ActivityLog.timestamp.desc(), ActivityLog.id.desc())
+            .limit(1)
+        ),
+    )
+
+
+async def _record_cleanup(
+    db: AsyncSession,
+    *,
+    actor: str,
+    actor_role: ActivityLogActorRole,
+    deleted_count: int,
+    retention_days: int,
+) -> None:
+    await create_activity_log(
+        db,
+        ActivityLogCreate(
+            group="Settings & Maintenance",
+            severity="Warning" if deleted_count else "Info",
+            actor=actor,
+            actorRole=actor_role,
+            action=CLEANUP_ACTION,
+            target="System Activity",
+            summary=(
+                f"{actor} deleted {deleted_count} activity records older than "
+                f"{retention_days} days."
+            ),
+            sourceId=CLEANUP_SOURCE_ID,
+            metadata={"deletedCount": deleted_count, "retentionDays": retention_days},
+        ),
+    )
+
+
+async def purge_old_activity(db: AsyncSession, actor: Account) -> tuple[int, int]:
+    """IT removes activity older than the retention period now. Returns (deleted, days)."""
+    retention_days = await get_activity_log_retention_days(db)
+    deleted_count = await purge_expired_activity_logs(db, retention_days)
+    await _record_cleanup(
+        db,
+        actor=actor.display_name,
+        actor_role=get_actor_role_label(actor),
+        deleted_count=deleted_count,
+        retention_days=retention_days,
+    )
+    return deleted_count, retention_days
+
+
+async def run_scheduled_activity_cleanup(db: AsyncSession, now: datetime | None = None) -> int:
+    """The scheduled retention cleanup's share: remove old activity and record the run.
+
+    A run that removed nothing is recorded at most once a day, so the hourly schedule does not
+    fill Activity with empty cleanups while the last-cleanup time stays current.
+    """
+    current = now or datetime.now(UTC)
+    retention_days = await get_activity_log_retention_days(db)
+    deleted_count = await purge_expired_activity_logs(db, retention_days, current)
+    if deleted_count == 0:
+        latest = await _latest_cleanup_log(db)
+        if latest is not None and _as_utc(latest.timestamp) > (
+            current - SCHEDULED_CLEANUP_QUIET_RECORD_INTERVAL
+        ):
+            return 0
+    await _record_cleanup(
+        db,
+        actor=SYSTEM_ACTOR,
+        actor_role="System",
+        deleted_count=deleted_count,
+        retention_days=retention_days,
+    )
+    return deleted_count
+
+
+async def get_activity_cleanup_status(db: AsyncSession) -> ActivityLogCleanupStatus:
+    retention_days = await get_activity_log_retention_days(db)
+    latest = await _latest_cleanup_log(db)
+    if latest is None:
+        return ActivityLogCleanupStatus(retentionDays=retention_days)
+    deleted_count: int | None = None
+    try:
+        metadata = json.loads(latest.metadata_json) if latest.metadata_json else None
+    except json.JSONDecodeError:
+        metadata = None
+    if isinstance(metadata, dict):
+        value = metadata.get("deletedCount")
+        if isinstance(value, int) and not isinstance(value, bool):
+            deleted_count = value
+    return ActivityLogCleanupStatus(
+        lastRunAt=latest.timestamp, deletedCount=deleted_count, retentionDays=retention_days
+    )
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
 def resolve_activity_log_retention_days(values: Mapping[str, object] | None) -> int:
     values = values or {}
     stable_value = values.get(LOG_RETENTION_DAYS_SETTING_KEY)
@@ -178,4 +286,13 @@ def to_activity_log_summary(log: ActivityLog, *, include_it_detail: bool) -> Act
         itDetail=log.it_detail if include_it_detail else None,
         sourceId=log.source_id,
         metadata=json.loads(log.metadata_json) if log.metadata_json else None,
+        technical=to_activity_log_technical(log) if include_it_detail else None,
+    )
+
+
+def to_activity_log_technical(log: ActivityLog) -> ActivityLogTechnical | None:
+    if log.ip_address is None and log.user_agent is None and log.session_id is None:
+        return None
+    return ActivityLogTechnical(
+        ipAddress=log.ip_address, userAgent=log.user_agent, sessionId=log.session_id
     )

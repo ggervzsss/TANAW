@@ -1,6 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { apiPaths, type ApiNotification, type ApiSchemas, type ApiVisitorRanking } from "@/contracts/api";
-import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, VisitorInsightRange, VisitorInsights } from "../types";
+import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, ReportStatus, VisitorInsightRange, VisitorInsights } from "../types";
 
 export type BackendNotificationSeverity = ApiNotification["severity"];
 export type BackendNotification = ApiNotification;
@@ -20,11 +20,6 @@ export type UpdateReportStatusPayload = Omit<ApiSchemas["ReportStatusUpdate"], "
 export type FinalReportCreatePayload = ApiSchemas["FinalReportCreate"];
 
 export type FinalReportStatusPayload = Omit<ApiSchemas["FinalReportStatusUpdate"], "status"> & { status: FinalReportStatus };
-
-export async function getOperationalSummary() {
-  const response = await apiClient.get<OperationalSummary>(apiPaths.telemetrySummary);
-  return response.data;
-}
 
 export async function listIntakeReports() {
   const response = await apiClient.get<IntakeReport[]>(apiPaths.intakeReports);

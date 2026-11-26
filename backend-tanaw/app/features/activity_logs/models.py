@@ -1,9 +1,11 @@
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, String, Text, event, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.request_context import current_request_context
 from app.db.session import Base
 
 
@@ -24,3 +26,15 @@ class ActivityLog(Base):
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     it_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+@event.listens_for(ActivityLog, "init")
+def _capture_request_context(target: ActivityLog, args: Any, kwargs: dict[str, Any]) -> None:
+    """Fill in who made the HTTP request this activity was recorded during, when not given."""
+    context = current_request_context()
+    kwargs.setdefault("ip_address", context.ip_address)
+    kwargs.setdefault("user_agent", context.user_agent)
+    kwargs.setdefault("session_id", context.session_id)

@@ -477,6 +477,8 @@ async def test_deactivation_invalidates_pending_email_change(
         )
         await db.commit()
         assert response.status == AccountStatus.INACTIVE.value
+        assert response.deactivatedByName == actor.display_name
+        assert response.deactivatedAt is not None
         assert response.profileChangeRequests == []
 
     async with postgres_runtime.sessions() as db:

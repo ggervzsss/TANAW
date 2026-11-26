@@ -38,6 +38,12 @@ from app.features.monitoring.backups import (
     get_desktop_backup,
     save_desktop_backup,
 )
+from app.features.monitoring.health import (
+    find_enterprise,
+    get_enterprise_health,
+    get_enterprise_health_today,
+    list_enterprise_health,
+)
 from app.features.monitoring.live_status import load_current_closures, place_status
 from app.features.monitoring.schemas import (
     DesktopBackup,
@@ -46,6 +52,8 @@ from app.features.monitoring.schemas import (
     DesktopConnectionGap,
     DesktopEvent,
     DesktopTelemetryIngest,
+    EnterpriseHealthSummary,
+    EnterpriseHealthToday,
     MapEnterpriseAlert,
     MapEnterpriseSummary,
     OperationalAlertSummary,
@@ -311,6 +319,51 @@ async def list_map_enterprises(
             )
         )
     return enterprises
+
+
+@router.get("/enterprise-health", response_model=list[EnterpriseHealthSummary])
+async def list_enterprise_health_summaries(
+    _: AlertReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[EnterpriseHealthSummary]:
+    """Every enterprise account's desktop app and cameras, invited and deactivated included."""
+    return await list_enterprise_health(db, utc_now())
+
+
+async def _health_enterprise(db: AsyncSession, enterprise_id: str) -> Account:
+    account = await find_enterprise(db, enterprise_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise not found.")
+    return account
+
+
+@router.get(
+    "/enterprise-health/{enterprise_id}",
+    response_model=EnterpriseHealthSummary,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "No enterprise has this ID."}},
+)
+async def get_enterprise_health_summary(
+    enterprise_id: str,
+    _: AlertReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EnterpriseHealthSummary:
+    account = await _health_enterprise(db, enterprise_id)
+    return await get_enterprise_health(db, account, utc_now())
+
+
+@router.get(
+    "/enterprise-health/{enterprise_id}/today",
+    response_model=EnterpriseHealthToday,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "No enterprise has this ID."}},
+)
+async def get_enterprise_health_strip(
+    enterprise_id: str,
+    _: AlertReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EnterpriseHealthToday:
+    """Each camera's day so far, hour by hour, from today's check-ins and the opening hours."""
+    account = await _health_enterprise(db, enterprise_id)
+    return await get_enterprise_health_today(db, account, utc_now())
 
 
 @router.get("/alerts", response_model=list[OperationalAlertSummary])

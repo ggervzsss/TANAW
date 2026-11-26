@@ -46,6 +46,10 @@ class PasswordResetChallenge(Base):
     invalidated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True, nullable=True
     )
+    # Set when IT Personnel sent the code. The owner's next recovery request on the sign-in
+    # screen picks up this challenge (claimed_at) instead of replacing the code IT sent.
+    issued_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -1,5 +1,7 @@
+import builtins
 import re
 from datetime import date, datetime
+from datetime import date as datetime_date
 from ipaddress import IPv4Address
 from typing import Any, Literal
 from urllib.parse import parse_qsl, urlsplit
@@ -50,6 +52,7 @@ class DesktopHealthSummary(BaseModel):
 
 CameraMonitoringState = Literal["not_configured", "stopped", "partial", "running", "error"]
 CameraRuntimeState = Literal["stopped", "starting", "running", "error"]
+CameraAnalysisMode = Literal["entrance_exit", "open_space"]
 
 
 class DesktopCameraMonitoringItem(BaseModel):
@@ -58,6 +61,8 @@ class DesktopCameraMonitoringItem(BaseModel):
     status: CameraRuntimeState
     running: bool = False
     error: str | None = Field(default=None, max_length=1000)
+    mode: CameraAnalysisMode | None = None
+    brand: str | None = Field(default=None, max_length=40)
 
 
 class DesktopCameraMonitoringSummary(BaseModel):
@@ -73,9 +78,17 @@ class DesktopCameraMonitoringSummary(BaseModel):
     )
 
 
+class DesktopAppSummary(BaseModel):
+    """Which desktop app build sent the check-in, and on which computer."""
+
+    version: str = Field(min_length=1, max_length=40)
+    computerName: str | None = Field(default=None, max_length=120)
+
+
 class DesktopTelemetryIngest(BaseModel):
     deviceId: str | None = Field(default=None, max_length=120)
     capturedAt: datetime | None = None
+    app: DesktopAppSummary | None = None
     metrics: DesktopMetricsSummary
     session: DesktopSessionSummary = Field(default_factory=DesktopSessionSummary)
     health: DesktopHealthSummary = Field(default_factory=DesktopHealthSummary)
@@ -260,6 +273,80 @@ class MapEnterpriseSummary(BaseModel):
     offlineSince: datetime | None = None
     closedReason: str | None = None
     alerts: list[MapEnterpriseAlert] = Field(default_factory=list)
+
+
+EnterpriseAccountState = Literal["active", "invited", "expired", "deactivated"]
+DesktopAppStatus = Literal["online", "delayed", "offline", "not_set_up"]
+CameraHealthStatus = Literal["counting", "not_counting", "starting", "stopped"]
+CameraHourState = Literal["counting", "gaps", "down", "closed", "future"]
+
+
+class EnterpriseAppHealth(BaseModel):
+    status: DesktopAppStatus
+    """online under 2 minutes, delayed up to 10, offline after that or on a desktop error.
+
+    A place that is closed, or whose account is not active, is never delayed or offline.
+    """
+    lastDataAt: datetime | None = None
+    version: str | None = None
+    latestVersion: str | None = None
+    computerName: str | None = None
+
+
+class CameraHealth(BaseModel):
+    id: str
+    name: str
+    mode: CameraAnalysisMode | None = None
+    brand: str | None = None
+    status: CameraHealthStatus
+    since: datetime | None = None
+    note: str | None = None
+
+
+class EnterpriseCameraHealth(BaseModel):
+    total: int = Field(ge=0)
+    counting: int = Field(ge=0)
+    list: builtins.list[CameraHealth] = Field(default_factory=builtins.list)
+
+
+class EnterpriseHealthSummary(BaseModel):
+    """How one enterprise's desktop app and cameras are doing, for IT."""
+
+    accountId: str
+    enterpriseId: str
+    name: str
+    barangay: str | None = None
+    category: str
+    accountState: EnterpriseAccountState
+    app: EnterpriseAppHealth
+    openNow: bool | None = None
+    closedReason: str | None = None
+    cameras: EnterpriseCameraHealth
+
+
+class CameraHourSlot(BaseModel):
+    hour: int = Field(ge=0, le=23)
+    state: CameraHourState
+
+
+class CameraDayStrip(BaseModel):
+    id: str
+    name: str
+    mode: CameraAnalysisMode | None = None
+    brand: str | None = None
+    slots: builtins.list[CameraHourSlot]
+    dropCount: int = Field(ge=0)
+    note: str
+
+
+class EnterpriseHealthToday(BaseModel):
+    """Each camera's day so far, one slot per hour of the opening window (Philippine time)."""
+
+    date: datetime_date
+    openFrom: str | None = Field(default=None, description="HH:MM, or null when closed all day.")
+    openTo: str | None = Field(default=None, description="HH:MM, or null when closed all day.")
+    hours: builtins.list[int]
+    cameras: builtins.list[CameraDayStrip]
 
 
 class DesktopConnectionGap(BaseModel):

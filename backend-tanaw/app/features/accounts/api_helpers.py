@@ -247,7 +247,7 @@ async def resolve_verified_email_change_request(
     await mark_it_account_request_complete(
         db, source_type="enterprise.profile.email", account_id=account.id
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)
 
 
 async def mark_it_account_request_complete(
@@ -357,4 +357,4 @@ async def resolve_enterprise_profile_change(
     await mark_it_account_request_complete(
         db, source_type=PROFILE_CHANGE_SOURCE_TYPES[request_type], account_id=account.id
     )
-    return await to_account_summary_with_requests(db, account)
+    return await to_account_summary_with_requests(db, account, viewer=actor)

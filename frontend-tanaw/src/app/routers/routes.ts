@@ -8,13 +8,13 @@ export const routes = {
     root: "/it",
     generalSettings: "/it/settings",
     dashboard: "/it/dashboard",
-    workCenter: "/it/work-center",
-    lguAccounts: "/it/lgu-accounts",
-    enterpriseAccounts: "/it/enterprise-accounts",
+    requests: "/it/requests",
+    enterprises: "/it/enterprises",
+    enterpriseManage: "/it/enterprises/:enterpriseId",
+    personnel: "/it/personnel",
+    system: "/it/system",
     notifications: "/it/notifications",
-    systemLogs: "/it/system-logs",
     devLog: "/it/dev-log",
-    systemSettings: "/it/settings/system",
     profile: "/it/settings/profile",
     security: "/it/settings/security",
     displayPreferences: "/it/settings/appearance",
@@ -52,8 +52,27 @@ export function adminEnterpriseDetailsPath(enterpriseId: string) {
   return `${routes.admin.enterprises}/${encodeURIComponent(enterpriseId)}`;
 }
 
+/** The IT Manage an enterprise page for one enterprise, optionally on one tab. */
+export function itEnterprisePath(enterpriseId: string, tab?: "connection" | "details" | "hours") {
+  const path = `${routes.it.enterprises}/${encodeURIComponent(enterpriseId)}`;
+  return tab ? `${path}?tab=${tab}` : path;
+}
+
+/** An IT System tab: activity, email log or settings. */
+export function itSystemPath(tab: "activity" | "email" | "settings") {
+  return `${routes.it.system}?tab=${tab}`;
+}
+
 /** Old portal addresses kept as redirects, so bookmarks and notification links still land on the new screens. */
 export const legacyPortalRedirects = {
+  it: [
+    ["work-center", routes.it.requests],
+    ["enterprise-accounts", routes.it.enterprises],
+    ["lgu-accounts", routes.it.personnel],
+    ["system-logs", "/it/system?tab=activity"],
+    ["system-settings", "/it/system?tab=settings"],
+    ["settings/system", "/it/system?tab=settings"],
+  ],
   admin: [
     ["mapview", routes.admin.dashboard],
     ["visitor-insights", routes.admin.dashboard],

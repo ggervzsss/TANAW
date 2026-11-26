@@ -193,13 +193,28 @@ def _portal_layout(
 
 
 def password_reset_code_email(
-    account: Account | EmailRecipient, code: str, expires_label: str
+    account: Account | EmailRecipient,
+    code: str,
+    expires_label: str,
+    *,
+    issued_by_name: str | None = None,
 ) -> EmailContent:
-    introduction = "Enter this verification code on the TANAW password reset screen to choose a new password for your account."
-    security_reminder = (
-        "Keep this code private. If you didn’t request a password reset, ignore this email "
-        "or use Contact Support on the TANAW sign-in page."
-    )
+    if issued_by_name:
+        introduction = (
+            f"{issued_by_name} from TANAW IT sent you this code so you can choose a new password. "
+            "On the TANAW sign-in page, choose Forgot password, enter this email address, "
+            "then enter this code."
+        )
+        security_reminder = (
+            "Keep this code private. If you didn’t ask TANAW IT for a password reset, ignore "
+            "this email or use Contact Support on the TANAW sign-in page."
+        )
+    else:
+        introduction = "Enter this verification code on the TANAW password reset screen to choose a new password for your account."
+        security_reminder = (
+            "Keep this code private. If you didn’t request a password reset, ignore this email "
+            "or use Contact Support on the TANAW sign-in page."
+        )
     text = (
         f"Hello {account.display_name},\n\n"
         f"{introduction}\n\n"

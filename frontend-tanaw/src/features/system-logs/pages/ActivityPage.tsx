@@ -22,25 +22,13 @@ import {
 
 const linkButton = "font-semibold text-(--tanaw-accent-ink) underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)";
 
-const PORTAL_COPY = {
-  admin: {
-    title: "Recent Activity",
-    description: "Everything that happened in TANAW, newest first. Select an activity to see all its details.",
-    back: { to: routes.admin.dashboard, label: "Dashboard" },
-  },
-  it: {
-    title: "System Activity",
-    description: "Everything that happened in TANAW, newest first, with the technical details IT needs.",
-    back: undefined,
-  },
-} as const;
+const PAGE_TITLE = "Recent Activity";
 
 /**
- * Activity: every record, newest first, in six groups. The Admin and IT read the same records;
- * IT's records also carry technical details. Selecting a row opens its details in a drawer.
+ * Admin Recent Activity: every record, newest first, in six groups. Selecting a row opens its
+ * details in a drawer. IT reads the same records on the System screen.
  */
-export function ActivityPage({ portal = "admin" }: { portal?: "admin" | "it" }) {
-  const copy = PORTAL_COPY[portal];
+export function ActivityPage() {
   const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading, isError, refetch } = useActivityLogs();
   const [now] = useState(() => new Date());
@@ -119,7 +107,11 @@ export function ActivityPage({ portal = "admin" }: { portal?: "admin" | "it" }) 
 
   return (
     <div className="tanaw-recent-activity pb-14">
-      <PortalPageHeader back={copy.back} title={copy.title} description={copy.description} />
+      <PortalPageHeader
+        back={{ to: routes.admin.dashboard, label: "Dashboard" }}
+        title={PAGE_TITLE}
+        description="Everything that happened in TANAW, newest first. Select an activity to see all its details."
+      />
 
       <div role="search" aria-label="Filter activity" className="mt-4.5 grid grid-cols-[minmax(0,1fr)_14rem_14rem] items-center gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
         <SearchField value={query} onChange={changeQuery} placeholder="Search activity, person, or enterprise" className="max-lg:col-span-2 max-sm:col-span-1 [&_input]:h-11" />
@@ -130,7 +122,7 @@ export function ActivityPage({ portal = "admin" }: { portal?: "admin" | "it" }) 
           options={activityTypeOptions.map((option) => ({ value: option.value, label: option.label, meta: option.meta }))}
           className="[&_.tanaw-select-trigger]:min-h-11"
         />
-        <DateRangePicker value={range} onChange={changeRange} variant="field" ariaLabel={`Choose a date range for ${copy.title}`} today={now} />
+        <DateRangePicker value={range} onChange={changeRange} variant="field" ariaLabel={`Choose a date range for ${PAGE_TITLE}`} today={now} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[0.84375rem] text-(--tanaw-text-secondary)">
@@ -148,7 +140,7 @@ export function ActivityPage({ portal = "admin" }: { portal?: "admin" | "it" }) 
         <Alert
           tone="danger"
           className="mt-4"
-          title={`${copy.title} could not be loaded.`}
+          title={`${PAGE_TITLE} could not be loaded.`}
           action={
             <button type="button" onClick={() => void refetch()} className={linkButton}>
               Try again
@@ -182,7 +174,6 @@ export function ActivityPage({ portal = "admin" }: { portal?: "admin" | "it" }) 
           log={selected}
           position={selectedIndex}
           total={activities.length}
-          portal={portal}
           timeFormat={timeFormat}
           onClose={closeDrawer}
           onPrevious={() => moveSelection(-1)}

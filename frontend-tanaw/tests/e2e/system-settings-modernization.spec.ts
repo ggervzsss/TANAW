@@ -1,89 +1,67 @@
+// IT system settings: the old System Settings addresses open System > Settings, and a failed save
+// keeps the edits so they can be saved again. The full Settings form is covered in it-system.spec.ts.
 import { expect, test } from "@playwright/test";
+import { json, mockEmptyCollections, mockPortalSession, portalUser } from "./support/session";
 
-const user = {
-  id: "it-settings-user",
-  email: "settings@example.test",
-  displayName: "Settings User",
-  role: "it",
-  title: "IT Personnel",
-  phone: null,
-  firstName: "Settings",
-  lastName: "User",
-  enterpriseId: null,
-  enterpriseName: null,
-  category: null,
-  managerName: null,
-  barangay: null,
-  address: null,
-  buildingCapacity: 100,
-  displayImageDataUrl: null,
-};
+type SettingValues = Record<string, string | number | boolean>;
 
-test("persists independent settings, rolls back failures, and confirms security changes", async ({ page }) => {
-  let values: Record<string, string | boolean | number> = {
-    "security.loginAttemptLimit": 3,
-    "security.loginLockMinutes": 5,
+const itUser = portalUser("it", { id: "it-settings-user", displayName: "Settings User", firstName: "Settings", lastName: "User" });
+
+test("opens Settings from the old addresses and keeps the edits when a save fails", async ({ page }) => {
+  let values: SettingValues = {
+    "security.loginAttemptLimit": 5,
+    "security.loginLockMinutes": 15,
     "logs.retentionDays": 180,
+    "display.dateFormat": "MMM d, yyyy",
     "display.timeFormat": "12-hour",
     "monitoring.cameraWaitMinutes": 15,
   };
-  const patches: Array<Record<string, string | boolean | number>> = [];
-  let failNextPatch = false;
+  const patches: SettingValues[] = [];
+  let failNextPatch = true;
 
-  await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "settings-token", user }) }));
-  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
-  await page.route("**/auth/preferences", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light", textSize: "default" }) }),
-  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockPortalSession(page, itUser);
+  await mockEmptyCollections(page, ["**/operational/notifications", "**/operational/alerts", "**/operational/requests", "**/operational/enterprise-health", "**/accounts/enterprises", "**/accounts/lgu"]);
+  await page.route(/\/activity-logs(\?.*)?$/, (route) => route.fulfill(json([])));
+  await page.route(/\/activity-logs\/cleanup$/, (route) => route.fulfill(json({ lastRunAt: null, deletedCount: null, retentionDays: 180 })));
+  await page.route(/\/mail\/deliveries(\?.*)?$/, (route) => route.fulfill(json([])));
   await page.route("**/auth/system-settings", async (route) => {
     if (route.request().method() === "PATCH") {
-      const patch = (await route.request().postDataJSON()).values;
+      const patch = (await route.request().postDataJSON()).values as SettingValues;
       patches.push(patch);
       if (failNextPatch) {
         failNextPatch = false;
-        return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Unavailable" }) });
+        return route.fulfill(json({ detail: "The settings service is unavailable." }, 503));
       }
       values = { ...values, ...patch };
     }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ values, updatedBy: user.displayName, updatedAt: "2026-09-09T10:00:00Z" }) });
+    return route.fulfill(json({ values, updatedBy: itUser.displayName, updatedAt: "2026-09-09T10:00:00Z" }));
   });
-  await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
 
-  await page.goto("/it/system-settings");
-  await expect(page.getByRole("heading", { name: "System Settings" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save Changes" })).toHaveCount(0);
+  for (const oldPath of ["/it/system-settings", "/it/settings/system"]) {
+    await page.goto(oldPath);
+    await expect(page).toHaveURL(/\/it\/system\?tab=settings$/);
+    await expect(page.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
+  }
+  await expect(page.getByRole("button", { name: "Save settings" })).toHaveCount(0);
 
-  // The camera wait time saves right away.
-  const cameraWait = page.getByRole("combobox", { name: "Camera Wait Time" });
-  await expect(cameraWait).toContainText("15 minutes");
+  const time = page.getByRole("combobox", { name: "Time", exact: true });
+  await time.click();
+  await page.getByRole("option", { name: /24-hour/ }).click();
+  const cameraWait = page.getByRole("combobox", { name: "Minutes without data before a camera is flagged" });
   await cameraWait.click();
-  await page.getByRole("option", { name: "30 minutes" }).click();
-  await expect.poll(() => values["monitoring.cameraWaitMinutes"]).toBe(30);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("switch")).toHaveCount(0);
+  await page.getByRole("option", { name: "30", exact: true }).click();
 
-  // A failed save rolls back, and a later successful one keeps the retry.
-  failNextPatch = true;
-  const timeDisplay = page.getByRole("combobox", { name: "Time Display" });
-  await timeDisplay.click();
-  await page.getByRole("option", { name: "24-hour" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Failed" })).toBeVisible();
-  await expect(timeDisplay).toContainText("12-hour");
-  await cameraWait.click();
-  await page.getByRole("option", { name: "60 minutes" }).click();
-  await expect.poll(() => values["monitoring.cameraWaitMinutes"]).toBe(60);
-  await page.getByRole("button", { name: "Retry" }).click();
-  await expect.poll(() => values["display.timeFormat"]).toBe("24-hour");
+  // The first save fails: the edits stay, ready to save again.
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("The settings service is unavailable.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save settings" })).toBeVisible();
+  await expect(time).toContainText("24-hour");
+  await expect(cameraWait).toContainText("30");
 
-  const securitySection = page.getByRole("heading", { name: "Account & Security Settings" }).locator("xpath=../../..");
-  await page.getByRole("combobox", { name: "Failed Login Threshold" }).click();
-  await page.getByRole("option", { name: "5 attempts" }).click();
-  await expect(securitySection.getByText("Unsaved section changes")).toBeVisible();
-  const patchCountBeforeApply = patches.length;
-  await securitySection.getByRole("button", { name: "Apply section" }).click();
-  await expect(page.getByRole("dialog", { name: "Apply Sign-in Protection" })).toBeVisible();
-  expect(patches).toHaveLength(patchCountBeforeApply);
-  await page.getByRole("button", { name: "Apply to all accounts" }).click();
-  await expect.poll(() => values["security.loginAttemptLimit"]).toBe(5);
+  await page.getByRole("button", { name: "Save settings" }).click();
+  const expected = { "display.timeFormat": "24-hour", "monitoring.cameraWaitMinutes": 30 };
+  await expect.poll(() => patches).toEqual([expected, expected]);
+  await expect(page.getByRole("button", { name: "Save settings" })).toHaveCount(0);
+  await expect(time).toContainText("24-hour");
 });

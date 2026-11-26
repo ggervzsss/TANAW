@@ -89,6 +89,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deactivated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deactivated_by_name", sa.String(length=120), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_accounts_email"), "accounts", ["email"], unique=True)
@@ -108,6 +110,9 @@ def upgrade() -> None:
         sa.Column("source_id", sa.String(length=120), nullable=True),
         sa.Column("it_detail", sa.Text(), nullable=True),
         sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("ip_address", sa.String(length=64), nullable=True),
+        sa.Column("user_agent", sa.String(length=400), nullable=True),
+        sa.Column("session_id", sa.String(length=64), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -577,6 +582,8 @@ def upgrade() -> None:
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("invalidated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("issued_by_name", sa.String(length=120), nullable=True),
+        sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -962,6 +969,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("handled_by_account_id", sa.String(length=36), nullable=True),
+        sa.Column("handled_by_name", sa.String(length=120), nullable=True),
+        sa.Column("handled_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["enterprise_profile_id"],
             ["enterprise_profiles.account_id"],
@@ -972,6 +982,12 @@ def upgrade() -> None:
             ["email_change_request_id"],
             ["account_email_change_requests.id"],
             name="fk_requests_email_change_request_id",
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["handled_by_account_id"],
+            ["accounts.id"],
+            name="fk_requests_handled_by_account_id",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id"),

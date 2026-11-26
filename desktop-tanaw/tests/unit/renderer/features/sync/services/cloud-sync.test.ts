@@ -207,14 +207,7 @@ describe("establishment telemetry", () => {
       ...(mixed ? [{ id: 1, name: "Entrance", status: "stopped", analysisMode: "entrance_exit" }] : []),
       { id: 2, name: "Plaza", status: "running", analysisMode: "open_space" },
     ] as Awaited<ReturnType<typeof listLocalCameras>>);
-    vi.mocked(getEstablishmentSummary).mockResolvedValue({
-      enterprise_id: "test", entries: mixed ? 6 : 0, exits: mixed ? 2 : 0, peak_occupancy: 10, unique_count: 11,
-      confirmed_unique_count: 11, qualified_observations: 12, identification_state: "available", reconciliation_state: "estimated",
-      movement_state: mixed ? "available" : "unavailable", repeat_entry_count: 0, unresolved_observations: 0,
-      from_at: "2026-11-11T16:00:00Z", to_at: "2026-11-12T16:00:00Z", timezone: "Asia/Manila", covered_ms: 60_000, coverage_ratio: 0.001,
-      counting_basis: "sum_of_daily_establishment_unique_visitors", policy_version: 1, snapshot_version: "test", days: [],
-      days_available: 1, days_requested: 1, source_breakdown: [],
-    });
+    vi.mocked(getEstablishmentSummary).mockResolvedValue(establishmentSummary(mixed));
 
     const payload = await syncDesktopTelemetry();
 
@@ -222,9 +215,55 @@ describe("establishment telemetry", () => {
     expect(payload.metrics).toMatchObject({ entries: mixed ? 6 : null, exits: mixed ? 2 : null, currentOccupancy: 8, peakOccupancy: 10, uniqueCount: 11 });
     expect(payload.monitoring).toMatchObject({
       configuredCameraCount: mixed ? 2 : 1, healthyCameraCount: 1, status: mixed ? "partial" : "running",
-      cameras: expect.arrayContaining([expect.objectContaining({ cameraId: 2, cameraName: "Plaza", status: "running" })]),
+      cameras: expect.arrayContaining([expect.objectContaining({ cameraId: 2, cameraName: "Plaza", status: "running", mode: "open_space" })]),
     });
     expect(markLocalEventsSynced).toHaveBeenCalledOnce();
+  });
+
+  it("names the app build, the computer, and each camera's mode and brand", async () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      localStorage: { getItem: () => "test-device", setItem: vi.fn() },
+      tanawAppInfo: { get: vi.fn().mockResolvedValue({ version: "0.1.3", computerName: "FRONT-DESK-PC" }) },
+    });
+    vi.mocked(listLocalCameras).mockResolvedValue([
+      { id: 1, name: "Entrance", status: "stopped", analysisMode: "entrance_exit", cameraBrand: "tapo" },
+      { id: 2, name: "Plaza", status: "running", analysisMode: "open_space", cameraBrand: "tenda" },
+      { id: 3, name: "Side gate", status: "stopped" },
+    ] as Awaited<ReturnType<typeof listLocalCameras>>);
+    vi.mocked(getEstablishmentSummary).mockResolvedValue(establishmentSummary());
+
+    const payload = await syncDesktopTelemetry();
+
+    expect(payload.app).toEqual({ version: "0.1.3", computerName: "FRONT-DESK-PC" });
+    expect(payload.monitoring?.cameras?.map(({ cameraId, mode, brand }) => ({ cameraId, mode, brand }))).toEqual([
+      { cameraId: 1, mode: "entrance_exit", brand: "tapo" },
+      { cameraId: 2, mode: "open_space", brand: "tenda" },
+      { cameraId: 3, mode: "entrance_exit", brand: null },
+    ]);
+    expect(staffApi.post).toHaveBeenCalledWith("/operational/desktop/telemetry", expect.objectContaining({ app: { version: "0.1.3", computerName: "FRONT-DESK-PC" } }));
+  });
+
+  it("still checks in when the app info is unavailable", async () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      localStorage: { getItem: () => "test-device", setItem: vi.fn() },
+      tanawAppInfo: { get: vi.fn().mockRejectedValue(new Error("IPC request rejected")) },
+    });
+    vi.mocked(listLocalCameras).mockResolvedValue([{ id: 2, name: "Plaza", status: "running", analysisMode: "open_space" }] as Awaited<ReturnType<typeof listLocalCameras>>);
+    vi.mocked(getEstablishmentSummary).mockResolvedValue(establishmentSummary());
+
+    const payload = await syncDesktopTelemetry();
+
+    expect(payload.app).toBeNull();
+    expect(staffApi.post).toHaveBeenCalledOnce();
+  });
+
+  it("sends no app info from the browser preview", async () => {
+    vi.mocked(listLocalCameras).mockResolvedValue([] as Awaited<ReturnType<typeof listLocalCameras>>);
+    vi.mocked(getEstablishmentSummary).mockResolvedValue(establishmentSummary());
+
+    await expect(syncDesktopTelemetry()).resolves.toMatchObject({ app: null });
   });
 
   it("does not touch the local ledger when the backend has no sample dataset", async () => {
@@ -278,3 +317,14 @@ describe("establishment telemetry", () => {
     }
   });
 });
+
+function establishmentSummary(mixed = false): Awaited<ReturnType<typeof getEstablishmentSummary>> {
+  return {
+    enterprise_id: "test", entries: mixed ? 6 : 0, exits: mixed ? 2 : 0, peak_occupancy: 10, unique_count: 11,
+    confirmed_unique_count: 11, qualified_observations: 12, identification_state: "available", reconciliation_state: "estimated",
+    movement_state: mixed ? "available" : "unavailable", repeat_entry_count: 0, unresolved_observations: 0,
+    from_at: "2026-11-11T16:00:00Z", to_at: "2026-11-12T16:00:00Z", timezone: "Asia/Manila", covered_ms: 60_000, coverage_ratio: 0.001,
+    counting_basis: "sum_of_daily_establishment_unique_visitors", policy_version: 1, snapshot_version: "test", days: [],
+    days_available: 1, days_requested: 1, source_breakdown: [],
+  };
+}

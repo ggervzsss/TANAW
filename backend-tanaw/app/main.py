@@ -10,6 +10,7 @@ from app.api.router import api_router
 from app.api.system_router import router as system_router
 from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
+from app.core.request_context import RequestContextMiddleware
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.location_search_runtime import (
@@ -82,6 +83,7 @@ def create_app(
         allow_methods=list(CORS_ALLOWED_METHODS),
         allow_headers=list(CORS_ALLOWED_HEADERS),
     )
+    application.add_middleware(RequestContextMiddleware)
 
     @application.middleware("http")
     async def security_headers_middleware(

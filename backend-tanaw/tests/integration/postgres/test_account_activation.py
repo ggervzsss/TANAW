@@ -311,7 +311,7 @@ async def test_pending_email_correction_rotates_delivery_and_deactivation_is_rej
     async with postgres_runtime.sessions() as db:
         stored_actor = await db.get(Account, actor.id)
         assert stored_actor is not None
-        await update_lgu_account(
+        corrected = await update_lgu_account(
             account.id,
             LguAccountUpdate(
                 firstName="Activation",
@@ -328,6 +328,9 @@ async def test_pending_email_correction_rotates_delivery_and_deactivation_is_rej
     second = await _current_token(postgres_runtime, account.id)
     second_raw = derive_account_activation_token(second.id)
     assert second.id != first.id
+    assert corrected.invitation is not None
+    assert corrected.invitation.expired is False
+    assert corrected.invitation.expiresAt == second.expires_at
     async with postgres_runtime.sessions() as db:
         stored = await db.get(Account, account.id)
         first_stored = await db.get(AccountActivationToken, first.id)

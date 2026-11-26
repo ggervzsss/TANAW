@@ -11,6 +11,10 @@ type MlServiceStatus = {
 type MlReportLiveEvent = import("./ml-report-live-events").MlReportLiveEvent;
 
 interface Window {
+  /** Read-only facts about the running app; absent in the browser preview. */
+  tanawAppInfo?: {
+    get: () => Promise<unknown>;
+  };
   tanawStartup?: {
     onRevealed?: (listener: () => void) => () => void;
     ready: () => void;

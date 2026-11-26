@@ -19,6 +19,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.features.accounts import requests_router
 from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.models import ActivityLog
@@ -773,3 +774,61 @@ async def test_password_reset_serializes_before_old_password_login(
     assert verify_password(new_password, stored_account.password_hash)
     assert not verify_password(account.password, stored_account.password_hash)
     assert stored_account.failed_login_attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_it_sent_reset_code_is_picked_up_by_the_owners_recovery_request(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    owner = await _create_account(postgres_runtime, label="it-sent-owner")
+    it_actor = await _create_account(postgres_runtime, label="it-sent-actor")
+    async with postgres_runtime.sessions() as db:
+        actor_account = await db.get(Account, it_actor.id)
+        assert actor_account is not None
+        actor_account.role = AccountRole.IT
+        await db.commit()
+
+    async with postgres_runtime.sessions() as db:
+        actor_account = await db.get(Account, it_actor.id)
+        assert actor_account is not None
+        sent = await requests_router.send_account_password_reset(owner.id, actor_account, db)
+        await db.commit()
+    assert sent.sentTo == owner.email
+
+    async with postgres_runtime.sessions() as db:
+        issued = await db.scalar(
+            select(PasswordResetChallenge).where(PasswordResetChallenge.email == owner.email)
+        )
+        actor_account = await db.get(Account, it_actor.id)
+        assert actor_account is not None
+        with pytest.raises(HTTPException) as too_soon:
+            await requests_router.send_account_password_reset(owner.id, actor_account, db)
+    assert issued is not None
+    assert issued.issued_by_name == "Recovery PostgreSQL Test it-sent-actor"
+    assert issued.claimed_at is None
+    assert too_soon.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    owner_request = await _request_reset_api(
+        postgres_runtime, owner.email, client_ip="203.0.113.200"
+    )
+    assert owner_request.challengeId == issued.id
+
+    async with postgres_runtime.sessions() as db:
+        reset_token = await password_recovery.verify_password_reset_code(
+            db, issued.id, derive_password_reset_code(issued.id)
+        )
+        outbox_count = await db.scalar(
+            select(func.count())
+            .select_from(EmailOutbox)
+            .where(EmailOutbox.recipient == owner.email)
+        )
+        send_log = await db.scalar(
+            select(ActivityLog).where(
+                ActivityLog.source_id == owner.id,
+                ActivityLog.action == "Send Password Reset",
+            )
+        )
+    assert reset_token
+    assert outbox_count == 1
+    assert send_log is not None
+    assert send_log.activity_group == "Accounts"

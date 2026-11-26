@@ -32,6 +32,8 @@ class AccountProfileChangeRequest(BaseModel):
     isVerified: bool
     canApprove: bool
     expiresAt: datetime | None = None
+    requestedByName: str | None = None
+    requestedByAccountId: str | None = None
 
 
 def normalize_email_value(value: str) -> str:
@@ -201,6 +203,14 @@ class EnterpriseLocationSuggestion(BaseModel):
     barangay: str | None = None
 
 
+class AccountInvitation(BaseModel):
+    """The newest activation link sent to an account that has not been activated yet."""
+
+    sentAt: datetime
+    expiresAt: datetime
+    expired: bool
+
+
 class AccountSummary(BaseModel):
     id: str
     email: str
@@ -227,6 +237,9 @@ class AccountSummary(BaseModel):
     status: str
     isActivated: bool
     isProtectedDefault: bool = False
+    invitation: AccountInvitation | None = None
+    deactivatedAt: datetime | None = None
+    deactivatedByName: str | None = None
     profileChangeRequests: list[AccountProfileChangeRequest] = Field(default_factory=list)
     createdAt: datetime
     lastLoginAt: datetime | None
@@ -242,6 +255,10 @@ class AccountEmailChangeRequestResolution(BaseModel):
 
 class AccountStatusUpdate(BaseModel):
     status: Literal["active", "inactive"]
+
+
+class AccountPasswordResetSent(BaseModel):
+    sentTo: str
 
 
 class LguAccountUpdate(BaseModel):

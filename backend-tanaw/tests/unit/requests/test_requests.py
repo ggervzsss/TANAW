@@ -17,7 +17,8 @@ from app.features.auth.schemas import SupportRequest
 from app.features.auth.support_router import create_support_request
 from app.features.notifications.service import list_user_notifications
 from app.features.requests.models import Request
-from app.features.requests.router import reply_to_request
+from app.features.requests.ownership import is_picked_up
+from app.features.requests.router import reply_to_request, start_on_request
 from app.features.requests.schemas import (
     MAX_REQUEST_ATTACHMENT_BYTES,
     RequestAttachmentCreate,
@@ -31,6 +32,7 @@ from app.features.requests.service import (
     list_requests,
     reopen_request,
     set_request_status,
+    start_request,
     to_request_summary,
     update_request_fields,
 )
@@ -395,3 +397,174 @@ async def test_the_sign_in_page_sends_a_sign_in_help_request(
     assert created_call.kwargs["matched_account"] is None
     assert notify_call.kwargs["recipient_roles"] == [AccountRole.IT]
     assert log_call.kwargs["group"] == "Requests"
+
+
+def handled_by_it(**overrides: object) -> Request:
+    it_account = account(AccountRole.IT)
+    return request(
+        handled_by_account_id=it_account.id,
+        handled_by_name=it_account.display_name,
+        handled_at=NOW - timedelta(minutes=5),
+        **overrides,
+    )
+
+
+def other_it() -> Account:
+    record = account(AccountRole.IT)
+    record.id = "second-it-account"
+    record.display_name = "Second It User"
+    return record
+
+
+def test_a_summary_names_who_handles_the_request() -> None:
+    reader = account(AccountRole.IT)
+
+    waiting = to_request_summary(request(), viewer=reader, now=NOW)
+    handled = to_request_summary(handled_by_it(), viewer=reader, now=NOW)
+
+    assert (waiting.handledBy, waiting.handledAt) == (None, None)
+    assert handled.handledBy is not None
+    assert handled.handledBy.model_dump() == {"accountId": "it-account", "name": "It User"}
+    assert handled.handledAt == NOW - timedelta(minutes=5)
+    assert is_picked_up(request()) is False
+    assert is_picked_up(handled_by_it()) is True
+    assert is_picked_up(request(status="Resolved")) is True
+
+
+@pytest.mark.asyncio
+async def test_starting_a_request_makes_it_yours_and_shows_on_the_timeline() -> None:
+    db = fake_db()
+    item = request()
+    it_account = account(AccountRole.IT)
+
+    await start_request(db, item, it_account)
+
+    assert (item.handled_by_account_id, item.handled_by_name) == ("it-account", "It User")
+    assert item.handled_at is not None
+    assert item.status == "In Progress"
+    timeline_entry = db.add.call_args.args[0]
+    assert (timeline_entry.kind, timeline_entry.message) == ("status", "It User started on it.")
+
+
+@pytest.mark.asyncio
+async def test_a_request_already_handled_or_closed_cannot_be_started() -> None:
+    with pytest.raises(RequestConflictError, match="It User is already handling"):
+        await start_request(fake_db(), handled_by_it(), other_it())
+    with pytest.raises(RequestConflictError, match="You are already handling"):
+        await start_request(fake_db(), handled_by_it(), account(AccountRole.IT))
+    with pytest.raises(RequestConflictError, match="Only an open request"):
+        await start_request(fake_db(), request(status="Resolved"), account(AccountRole.IT))
+
+
+@pytest.mark.asyncio
+async def test_an_it_reply_picks_up_a_waiting_request_but_an_enterprise_reply_does_not() -> None:
+    by_enterprise = request()
+    await add_request_message(
+        fake_db(), by_enterprise, account(AccountRole.ENTERPRISE), "Any news on this?"
+    )
+    by_it = request()
+    await add_request_message(fake_db(), by_it, account(AccountRole.IT), "Checking it now.")
+    note = request()
+    await add_request_message(
+        fake_db(), note, account(AccountRole.ADMIN), "Please update me.", kind="note"
+    )
+
+    assert by_enterprise.handled_by_account_id is None
+    assert note.handled_by_account_id is None
+    assert by_it.handled_by_account_id == "it-account"
+
+
+@pytest.mark.asyncio
+async def test_resolving_or_moving_a_waiting_request_picks_it_up_first() -> None:
+    resolved = request()
+    await set_request_status(fake_db(), resolved, account(AccountRole.IT), "Resolved")
+    moved = request()
+    await update_request_fields(fake_db(), moved, account(AccountRole.IT), group="Other")
+
+    assert resolved.handled_by_account_id == "it-account"
+    assert resolved.status == "Resolved"
+    assert moved.handled_by_account_id == "it-account"
+
+
+@pytest.mark.asyncio
+async def test_acting_on_a_request_someone_else_handles_keeps_its_owner() -> None:
+    item = handled_by_it()
+
+    await add_request_message(fake_db(), item, other_it(), "Taking a look as well.")
+    await set_request_status(fake_db(), item, other_it(), "Resolved")
+
+    assert item.handled_by_account_id == "it-account"
+
+
+@pytest.mark.asyncio
+async def test_it_reopening_takes_the_request_and_the_enterprise_keeps_its_owner() -> None:
+    by_enterprise = handled_by_it(status="Resolved", closed_at=NOW)
+    await reopen_request(fake_db(), by_enterprise, account(AccountRole.ENTERPRISE))
+    by_it = handled_by_it(status="Resolved", closed_at=NOW)
+    await reopen_request(fake_db(), by_it, other_it())
+
+    assert by_enterprise.handled_by_account_id == "it-account"
+    assert by_it.handled_by_account_id == "second-it-account"
+    assert by_it.handled_by_name == "Second It User"
+
+
+@pytest.mark.asyncio
+async def test_admin_and_it_can_narrow_requests_to_one_enterprise() -> None:
+    db = MagicMock()
+    result = MagicMock()
+    result.unique.return_value.all.return_value = []
+    db.scalars = AsyncMock(return_value=result)
+
+    await list_requests(db, account(AccountRole.IT), enterprise_id="ENT-001")
+
+    sql = str(db.scalars.await_args.args[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "requests.enterprise_profile_id = 'ENT-001'" in sql
+    assert "enterprise_profiles.enterprise_id = 'ENT-001'" in sql
+
+
+@pytest.mark.asyncio
+async def test_an_enterprise_cannot_read_another_enterprise_through_the_filter() -> None:
+    db = MagicMock()
+    result = MagicMock()
+    result.unique.return_value.all.return_value = []
+    db.scalars = AsyncMock(return_value=result)
+
+    await list_requests(db, account(AccountRole.ENTERPRISE), enterprise_id="ENT-999")
+
+    sql = str(db.scalars.await_args.args[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "requests.enterprise_profile_id = 'enterprise-account'" in sql
+    assert "ENT-999" not in sql
+
+
+@pytest.mark.asyncio
+async def test_the_start_endpoint_records_start_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = request()
+    log = AsyncMock()
+    monkeypatch.setattr(
+        "app.features.requests.router.get_request_for_account", AsyncMock(return_value=item)
+    )
+    monkeypatch.setattr("app.features.requests.router.record_activity_log", log)
+    detail = AsyncMock(return_value=MagicMock())
+    monkeypatch.setattr("app.features.requests.router.require_request_detail", detail)
+
+    await start_on_request(item.id, account(AccountRole.IT), fake_db())
+
+    assert item.handled_by_account_id == "it-account"
+    log_call = log.await_args
+    assert log_call is not None
+    assert (log_call.kwargs["group"], log_call.kwargs["action"]) == ("Requests", "Start Request")
+
+
+@pytest.mark.asyncio
+async def test_starting_a_handled_request_is_a_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = handled_by_it()
+    monkeypatch.setattr(
+        "app.features.requests.router.get_request_for_account", AsyncMock(return_value=item)
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        await start_on_request(item.id, other_it(), fake_db())
+
+    assert raised.value.status_code == 409

@@ -3,7 +3,6 @@ import { useAuthStore } from "@/app/store/authStore";
 import {
   getVisitorInsights,
   getVisitorRanking,
-  getOperationalSummary,
   listFinalReports,
   listIntakeReports,
   listOperationalMapEnterprises,
@@ -11,18 +10,12 @@ import {
   type VisitorInsightParams,
 } from "@/shared/services/operationalSync";
 
-export const operationalSummaryQueryKey = ["operational", "summary"];
 export const operationalReportsQueryKey = ["operational", "reports", "intake"];
 export const operationalFinalReportsQueryKey = ["operational", "reports", "final"];
 export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
 export const operationalNotificationsQueryKey = ["operational", "notifications"];
 export const visitorInsightsQueryKey = ["operational", "visitor-insights"];
 export const visitorRankingQueryKey = ["operational", "visitor-ranking"];
-
-export function useOperationalSummary() {
-  const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalSummaryQueryKey, queryFn: getOperationalSummary, enabled: Boolean(token) });
-}
 
 export function useOperationalReports() {
   const token = useAuthStore((state) => state.token);

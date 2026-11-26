@@ -2,7 +2,8 @@
 
 Live alerts: one place busier than usual and one camera that is not counting. Requests: one in
 each way a request starts (from the desktop app, from the sign-in page, and an account change
-that needs IT's approval). Every record matches what the live workflow would have written.
+that needs IT's approval). IT has picked up the camera problem; the others are not picked up
+yet. Every record matches what the live workflow would have written.
 """
 
 import json
@@ -10,17 +11,25 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.date_time import PHILIPPINE_TIME_ZONE
 from app.features.accounts.models import Account, AccountRole
 from app.features.accounts.service import PENDING_CONTACT_NUMBER_CHANGE_KEY
 from app.features.activity_logs.models import ActivityLog
 from app.features.auth.profile_helpers import set_pending_account_change
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
+from app.features.monitoring.alerts import CAMERA_WAIT_MINUTES
 from app.features.monitoring.models import OperationalAlert
 from app.features.notifications.models import UserNotification
 from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.dataset import SAMPLE_SOURCE_PREFIX
 from app.features.sample_data.definitions import AdminVisitorScenario
 from app.features.sample_data.helpers import sample_uuid
+from app.features.sample_data.visitors import (
+    PARTIAL_CAMERA_ENTERPRISE_INDEX,
+    PARTIAL_CAMERA_OUTAGE,
+    participating_enterprises,
+    sample_camera_monitoring,
+)
 
 
 def _name(account: Account) -> str:
@@ -77,7 +86,14 @@ async def create_portal_workflow_data(
         raise SystemExit("At least three generated enterprises are required for operations data.")
 
     busy_enterprise = visitor_scenario.enterprise
-    camera_enterprise, report_enterprise, change_enterprise = enterprises[:3]
+    # The camera alert is about the place whose camera the sample check-ins show not counting.
+    participating = participating_enterprises(busy_enterprise, enterprises)
+    if len(participating) <= PARTIAL_CAMERA_ENTERPRISE_INDEX:
+        raise SystemExit("Too few sample enterprises for the camera that is not counting.")
+    camera_enterprise = participating[PARTIAL_CAMERA_ENTERPRISE_INDEX]
+    report_enterprise, change_enterprise = [
+        enterprise for enterprise in enterprises if enterprise.id != camera_enterprise.id
+    ][:2]
     logs: list[ActivityLog] = []
 
     # Live alert: busier than usual.
@@ -107,8 +123,17 @@ async def create_portal_workflow_data(
         updated_at=busy_at,
     )
 
-    # Live alert: a camera that is not counting.
-    camera_at = range_end - timedelta(minutes=12)
+    # Live alert: the camera the sample check-ins show not counting. It started when the camera
+    # stopped and turned Active once the default camera wait time had passed.
+    outage_since = range_end - PARTIAL_CAMERA_OUTAGE
+    monitoring = sample_camera_monitoring(
+        PARTIAL_CAMERA_ENTERPRISE_INDEX,
+        range_end.astimezone(PHILIPPINE_TIME_ZONE),
+        outage_since.astimezone(PHILIPPINE_TIME_ZONE),
+    )
+    failing = next(camera for camera in monitoring["cameras"] if camera["status"] == "error")
+    camera_name = failing["cameraName"]
+    camera_at = outage_since + timedelta(minutes=CAMERA_WAIT_MINUTES)
     camera_alert = OperationalAlert(
         id=sample_uuid("operations-alert", camera_enterprise.id, "camera"),
         alert_code="ALT-SAMPLE-002",
@@ -116,17 +141,18 @@ async def create_portal_workflow_data(
         severity="Critical",
         enterprise_profile_id=camera_enterprise.id,
         enterprise=_name(camera_enterprise),
-        camera="Entrance",
+        camera=camera_name,
         summary=(
-            f"The Entrance camera at {_name(camera_enterprise)} is not counting. "
-            "2 of 3 cameras are counting."
+            f"The {camera_name} camera at {_name(camera_enterprise)} is not counting. "
+            f"{monitoring['healthyCameraCount']} of {monitoring['configuredCameraCount']} "
+            "cameras are counting."
         ),
-        detail="Camera: Entrance · Error: the connection was refused · Last count: 2:40 PM",
+        detail=f"Camera: {camera_name} · Error: {failing['error']}",
         status="Active",
-        source_id=f"camera:{camera_enterprise.id}:3",
-        started_at=camera_at - timedelta(minutes=15),
+        source_id=f"camera:{camera_enterprise.id}:{failing['cameraId']}",
+        started_at=outage_since,
         active_at=camera_at,
-        created_at=camera_at - timedelta(minutes=15),
+        created_at=outage_since,
         updated_at=camera_at,
     )
     db.add_all([busy_alert, camera_alert])
@@ -153,25 +179,29 @@ async def create_portal_workflow_data(
 
     # A camera problem the enterprise asked IT about. IT is on it, and the Admin left a note.
     camera_sent = range_end - timedelta(hours=2)
+    camera_started = camera_sent + timedelta(minutes=30)
     camera_request = Request(
         id=sample_uuid("operations-request", camera_enterprise.id, "camera"),
         request_code="REQ-SAMPLE-001",
         request_group="Desktop app or camera problem",
-        title="Entrance camera keeps disconnecting",
+        title=f"{camera_name} camera keeps disconnecting",
         description=(
-            "The entrance camera drops off every few minutes. While it is disconnected, one of "
-            "our cameras is not counting."
+            f"The {camera_name.lower()} camera drops off every few minutes. While it is "
+            "disconnected, one of our cameras is not counting."
         ),
         status="In Progress",
         enterprise_profile_id=camera_enterprise.id,
         enterprise_name=_name(camera_enterprise),
         requester_name=_manager(camera_enterprise),
-        affected_area="Main entrance",
-        camera="Entrance",
+        affected_area=camera_name,
+        camera=camera_name,
+        handled_by_account_id=it_account.id,
+        handled_by_name=it_account.display_name,
+        handled_at=camera_started,
         created_at=camera_sent,
         updated_at=range_end - timedelta(minutes=40),
     )
-    # A report problem IT has not replied to yet.
+    # A report problem no one in IT has picked up yet.
     report_sent = range_end - timedelta(hours=5)
     report_request = Request(
         id=sample_uuid("operations-request", report_enterprise.id, "report"),
@@ -229,6 +259,16 @@ async def create_portal_workflow_data(
     db.add_all(
         [
             RequestMessage(
+                id=sample_uuid("operations-request-message", camera_request.id, "start"),
+                request_id=camera_request.id,
+                author_account_id=it_account.id,
+                author_name=it_account.display_name,
+                author_role=it_account.role.value,
+                kind="status",
+                message=f"{it_account.display_name} started on it.",
+                created_at=camera_started,
+            ),
+            RequestMessage(
                 id=sample_uuid("operations-request-message", camera_request.id, "reply"),
                 request_id=camera_request.id,
                 author_account_id=it_account.id,
@@ -274,6 +314,25 @@ async def create_portal_workflow_data(
                 metadata={"requestCode": request.request_code},
             )
         )
+    logs.append(
+        sample_log(
+            ("activity-request-start", camera_request.id),
+            camera_started,
+            group="Requests",
+            severity="Info",
+            actor=it_account.display_name,
+            actor_role="IT Personnel",
+            action="Start Request",
+            target=camera_request.request_code,
+            summary=(
+                f"{it_account.display_name} started on {_name(camera_enterprise)}'s request: "
+                f"{camera_request.title}."
+            ),
+            source_id=camera_request.id,
+            it_detail=f"{camera_request.request_code} · {camera_request.request_group}",
+            metadata={"requestCode": camera_request.request_code},
+        )
+    )
     logs.append(
         sample_log(
             ("activity-request-note", camera_request.id),

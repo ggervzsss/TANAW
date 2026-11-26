@@ -7,6 +7,11 @@ class EmailDeliverySummary(BaseModel):
     id: str
     purpose: str
     recipient: str
+    accountId: str | None = None
+    recipientName: str | None = None
+    """The account's display name, or the enterprise name for an enterprise account."""
+    recipientRole: str | None = None
+    """Admin, IT Personnel, LGU Staff or Enterprise Account."""
     provider: str
     status: str
     attemptCount: int

@@ -33,11 +33,13 @@ async function mockPortal(page: Page, role: Parameters<typeof userFor>[0]) {
   await page.route("**/auth/system-settings", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ values: {} }) }));
   await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("**/operational/tickets", (route) => route.fulfill({ json: [] }));
+  for (const endpoint of ["**/operational/requests", "**/operational/enterprise-health", "**/accounts/enterprises", "**/accounts/lgu", /\/mail\/deliveries(\?.*)?$/]) {
+    await page.route(endpoint, (route) => route.fulfill({ json: [] }));
+  }
 }
 
 for (const { role, path, previousTitle } of [
-  { role: "it", path: "/it/work-center", previousTitle: "Work Center" },
+  { role: "it", path: "/it/requests", previousTitle: "Requests" },
   { role: "admin", path: "/admin/requests", previousTitle: "Requests" },
   { role: "staff", path: "/staff/consolidated-reports", previousTitle: "Consolidated Reports" },
 ] as const) {
@@ -68,8 +70,9 @@ for (const { role, path, previousTitle } of [
     await expect(profile.getByLabel("First Name", { exact: true })).toBeEditable();
     await expect(main.getByRole("button", { name: "Save changes" })).toHaveCount(0);
     await expect(main.getByRole("button", { name: "Discard" })).toHaveCount(0);
-    await expect(main.getByRole("button", { name: "Requests", exact: true })).toHaveCount(role === "staff" ? 0 : 1);
-    await expect(main.getByRole("button", { name: "System Settings" })).toHaveCount(role === "it" ? 1 : 0);
+    // Only the Admin keeps a Requests section; IT handles requests and system settings on their own screens.
+    await expect(main.getByRole("button", { name: "Requests", exact: true })).toHaveCount(role === "admin" ? 1 : 0);
+    await expect(main.getByRole("button", { name: "System Settings" })).toHaveCount(0);
     await expect(main.getByRole("button", { name: "Developer Settings" })).toHaveCount(0);
     await expect(workspace).toBeFocused();
     await page.keyboard.press("Tab");
@@ -133,7 +136,9 @@ test("integrates IT settings and help routes with browser history at enlarged te
   await expect(page).toHaveURL(/\/it\/settings\/profile$/);
   await expect(page.getByRole("heading", { name: "Profile Information" })).toBeVisible();
   await expect.poll(() => page.locator(".tanaw-settings-panel").evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1)).toBe(true);
-  await expect(page.getByRole("button", { name: "System Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Appearance" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "System Settings" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Requests", exact: true })).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(/\/it\/dashboard$/);
   await page.goForward();

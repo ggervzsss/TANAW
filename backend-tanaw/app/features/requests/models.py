@@ -81,6 +81,18 @@ class Request(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The IT person handling the request. An open request with no one here is not picked up.
+    handled_by_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_requests_handled_by_account_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    handled_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     enterprise_profile: Mapped[EnterpriseProfile | None] = relationship(lazy="joined")
 
 

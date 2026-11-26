@@ -1,3 +1,4 @@
+// The unified metrics header (now on the Admin Requests settings section) and the flat IT topbar.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 type PortalRole = "admin" | "it" | "staff";
@@ -52,14 +53,15 @@ async function mockPortal(page: Page, role: PortalRole, theme: Theme) {
   for (const endpoint of [
     "**/operational/alerts",
     "**/operational/notifications",
-    "**/operational/tickets",
+    "**/operational/requests",
+    "**/operational/enterprise-health",
     "**/operational/reports/enterprises",
     "**/operational/reports/intake",
     "**/operational/reports/final",
     "**/accounts/enterprises",
     "**/accounts/lgu",
-    "**/accounts/email-deliveries",
     "**/activity-logs",
+    /\/mail\/deliveries(\?.*)?$/,
   ]) {
     await page.route(endpoint, (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   }
@@ -94,13 +96,13 @@ async function expectUnderlineUnder(indicator: Locator, tab: Locator) {
     .toBeLessThan(2);
 }
 
-const itDashboardMetrics = ["Live Alerts", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"];
+const requestMetrics = ["Open Requests", "Help Requests", "Account Changes", "Resolved"];
 
-async function openItPage(page: Page, path: string) {
+async function openRequestSettings(page: Page) {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await mockPortal(page, "it", "dark");
-  await page.goto(path);
+  await mockPortal(page, "admin", "dark");
+  await page.goto("/admin/settings/support");
   return page.locator("[data-unified-metrics-header]");
 }
 
@@ -144,82 +146,56 @@ async function expectMetricsReachableAtZoom(page: Page, header: Locator, zoom: s
   expect(layout.lastWidth, context).toBeGreaterThan(0);
   expect(layout.lastLeft, context).toBeGreaterThanOrEqual(layout.visibleLeft - 1);
   expect(layout.lastRight, context).toBeLessThanOrEqual(layout.visibleRight + 1);
-  await expect(header.getByText(itDashboardMetrics.at(-1)!, { exact: true })).toBeInViewport();
+  await expect(header.getByText(requestMetrics.at(-1)!, { exact: true })).toBeInViewport();
 }
 
-test("presents the IT dashboard metrics and status cards in dark mode", async ({ page }) => {
-  const dashboardHeader = await openItPage(page, "/it/dashboard");
-  await expectUnifiedHeader(dashboardHeader, itDashboardMetrics);
-  await expect(dashboardHeader).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(dashboardHeader.locator(".tanaw-unified-metrics__icon").first()).toHaveCSS("transform", "none");
-  await expect(page.getByRole("heading", { name: "Current Work" })).toBeVisible();
-  for (const category of ["Live Alerts", "Requests", "Account Changes", "Email Problems"]) {
-    await expect(page.getByRole("link", { name: new RegExp(category) })).toBeVisible();
-  }
-  await expect(page.getByRole("heading", { name: "Desktop Application Status" })).toBeVisible();
-  await expect(page.getByText("2 online, 1 delayed, and 4 offline.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Online", { exact: true })).toBeVisible();
-  await expect(page.getByText("Delayed", { exact: true })).toBeVisible();
-  await expect(page.getByText("Offline", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account Directory" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Accounts" })).toBeVisible();
-  await expect(page.locator(".tanaw-it-health-card")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-});
-
-for (const zoom of ["90%", "100%", "110%"]) {
-  test(`keeps the IT dashboard within the viewport with every metric reachable at ${zoom} zoom`, async ({ page }) => {
-    const dashboardHeader = await openItPage(page, "/it/dashboard");
-    await expect(dashboardHeader.locator("[data-metric-segment]")).toHaveCount(itDashboardMetrics.length);
-    await expectMetricsReachableAtZoom(page, dashboardHeader, zoom);
-  });
-}
-
-test("unifies the IT Work Center request metrics", async ({ page }) => {
-  const header = await openItPage(page, "/it/work-center");
-  await expectUnifiedHeader(header, ["Open Requests", "Help Requests", "Account Changes", "Resolved"]);
+test("unifies the Admin request metrics in General Settings, in dark mode", async ({ page }) => {
+  const header = await openRequestSettings(page);
+  await expectUnifiedHeader(header, requestMetrics);
+  await expect(header).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(header.locator(".tanaw-unified-metrics__icon").first()).toHaveCSS("transform", "none");
   await expect(page.getByPlaceholder("Search reference, place, person, request or group")).toBeVisible();
 });
 
-test("unifies the IT account directory metrics", async ({ page }) => {
-  const header = await openItPage(page, "/it/lgu-accounts");
-  await expectUnifiedHeader(header, ["Active Accounts", "Admin Accounts", "IT Accounts", "Staff Accounts"]);
-  await expect(page.getByRole("button", { name: "Create LGU Account" })).toBeVisible();
+for (const zoom of ["90%", "100%", "110%"]) {
+  test(`keeps the request metrics within the viewport with every metric reachable at ${zoom} zoom`, async ({ page }) => {
+    const header = await openRequestSettings(page);
+    await expect(header.locator("[data-metric-segment]")).toHaveCount(requestMetrics.length);
+    await expectMetricsReachableAtZoom(page, header, zoom);
+  });
+}
 
-  await page.goto("/it/enterprise-accounts");
-  await expectUnifiedHeader(header, ["Enterprise Accounts", "Active Enterprises", "Inactive Enterprises", "Barangays Covered"]);
-  await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeVisible();
-});
-
-test("keeps IT dropdown navigation keyboard-accessible and reduced-motion safe", async ({ page }) => {
+test("keeps the flat IT navigation keyboard-accessible and reduced-motion safe", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockPortal(page, "it", "dark");
   await page.goto("/it/dashboard");
 
-  const overview = page.getByRole("link", { name: "Overview" });
-  const workCenter = page.getByRole("link", { name: "Work Center" });
-  const accounts = page.getByRole("button", { name: "Accounts" });
-  const underline = page.locator("[data-topbar-underline]");
+  const navigation = page.locator("nav[data-topbar-underline-navigation]:visible");
+  await expect(navigation.getByRole("link")).toHaveText(["Overview", "Requests", "Enterprises", "LGU Personnel", "System"]);
+  // One level of links: no Accounts or System menus, and no live-alerts button for IT.
+  await expect(navigation.getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Alerts/ })).toHaveCount(0);
+
+  const overview = navigation.getByRole("link", { name: "Overview" });
+  const requests = navigation.getByRole("link", { name: "Requests" });
+  const enterprises = navigation.getByRole("link", { name: "Enterprises" });
+  const personnel = navigation.getByRole("link", { name: "LGU Personnel" });
+  const underline = navigation.locator("[data-topbar-underline]");
   await expectUnderlineUnder(underline, overview);
   await expect(underline).toHaveCSS("transition-property", "none");
 
-  await workCenter.focus();
-  await expect(workCenter).toHaveCSS("outline-style", "solid");
+  await requests.focus();
+  await expect(requests).toHaveCSS("outline-style", "solid");
   await page.keyboard.press("Tab");
-  await expect(accounts).toBeFocused();
-  await accounts.press("Enter");
-  await expect(accounts).toHaveAttribute("aria-expanded", "true");
-  const personnel = page.getByRole("link", { name: "LGU Personnel" });
-  await expect(personnel).toBeVisible();
-  await expect(page.getByRole("link", { name: "Enterprises", exact: true })).toBeVisible();
-  await expectUnderlineUnder(underline, overview);
-
+  await expect(enterprises).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(personnel).toBeFocused();
+  await expectUnderlineUnder(underline, overview);
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/it\/lgu-accounts$/);
-  await expect(accounts).toHaveAttribute("aria-current", "true");
-  await expectUnderlineUnder(underline, accounts);
+  await expect(page).toHaveURL(/\/it\/personnel$/);
+  await expect(personnel).toHaveAttribute("aria-current", "page");
+  await expectUnderlineUnder(underline, personnel);
 });
 
 test("keeps the IT underline selection through hover, history, reload and mobile navigation", async ({ page }) => {
@@ -229,20 +205,18 @@ test("keeps the IT underline selection through hover, history, reload and mobile
 
   const navigation = page.locator("nav[data-topbar-underline-navigation]:visible");
   const overview = navigation.getByRole("link", { name: "Overview" });
-  const workCenter = navigation.getByRole("link", { name: "Work Center" });
-  const system = navigation.getByRole("button", { name: "System", exact: true });
+  const requests = navigation.getByRole("link", { name: "Requests" });
+  const system = navigation.getByRole("link", { name: "System", exact: true });
   const underline = navigation.locator("[data-topbar-underline]");
   await expectUnderlineUnder(underline, overview);
-  await workCenter.hover();
-  await expect(workCenter).toHaveCSS("color", "rgb(158, 241, 200)");
+  await requests.hover();
+  await expect(requests).toHaveCSS("color", "rgb(158, 241, 200)");
   await expectUnderlineUnder(underline, overview);
 
+  await system.hover();
   await system.click();
-  const settings = page.getByRole("link", { name: "System Settings" });
-  await settings.hover();
-  await settings.click();
-  await expect(page).toHaveURL(/\/it\/settings\/system$/);
-  await expect(system).toHaveAttribute("aria-current", "true");
+  await expect(page).toHaveURL(/\/it\/system(\?tab=activity)?$/);
+  await expect(system).toHaveAttribute("aria-current", "page");
   await expectUnderlineUnder(underline, system);
 
   await page.goBack();
@@ -254,6 +228,6 @@ test("keeps the IT underline selection through hover, history, reload and mobile
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await expect(settings).toHaveAttribute("aria-current", "page");
-  await expectUnderlineUnder(underline, settings);
+  await expect(system).toHaveAttribute("aria-current", "page");
+  await expectUnderlineUnder(underline, system);
 });

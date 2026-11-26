@@ -1,0 +1,76 @@
+/*
+ * IT Overview layout: four figures in one ruled row (two by two on narrow screens, one column on
+ * phones) and the four work sections in two columns. Colours come from the portal tokens.
+ */
+
+.it-overview__figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--tanaw-border-soft);
+}
+
+.it-overview__figure {
+  min-width: 0;
+  padding: 1.125rem 1.5rem;
+}
+
+.it-overview__figure:first-child {
+  padding-left: 0;
+}
+
+.it-overview__figure:last-child {
+  padding-right: 0;
+}
+
+.it-overview__figure + .it-overview__figure {
+  border-left: 1px solid var(--tanaw-border-soft);
+}
+
+.it-overview__sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 3rem;
+  align-items: start;
+  margin-top: 2rem;
+}
+
+@media (max-width: 1100px) {
+  .it-overview__figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .it-overview__figure:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .it-overview__figure:nth-child(even) {
+    padding-right: 0;
+  }
+
+  .it-overview__figure:nth-child(n + 3) {
+    border-top: 1px solid var(--tanaw-border-soft);
+  }
+
+  .it-overview__sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .it-overview__figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .it-overview__figure,
+  .it-overview__figure:nth-child(even) {
+    padding-inline: 0;
+    border-left: 0;
+  }
+
+  .it-overview__figure + .it-overview__figure {
+    border-left: 0;
+    border-top: 1px solid var(--tanaw-border-soft);
+  }
+}

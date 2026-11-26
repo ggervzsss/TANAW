@@ -62,6 +62,7 @@ export function routeRealtimeEvent(queryClient: QueryClient, event: RealtimeEnve
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.enterpriseAccounts, ...active }),
       queryClient.invalidateQueries({ queryKey: ["operational", "summary"], ...active }),
+      queryClient.invalidateQueries({ queryKey: ["enterprise-health"], ...active }),
       queryClient.invalidateQueries({ queryKey: currentUserQueryKey, ...active }),
     ]);
   }
@@ -91,6 +92,7 @@ export function routeRealtimeEvent(queryClient: QueryClient, event: RealtimeEnve
       invalidateWhenVisible(queryClient, ["operational", "summary"]),
       invalidateWhenVisible(queryClient, ["operational", "map-enterprises"]),
       invalidateWhenVisible(queryClient, ["operational", "visitor-insights"]),
+      invalidateWhenVisible(queryClient, ["enterprise-health"]),
     ]);
   }
   if (eventType === "system_setting.updated") {

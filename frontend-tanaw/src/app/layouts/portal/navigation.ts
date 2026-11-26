@@ -1,4 +1,4 @@
-import { Building2, FileCheck2, FileText, Layers, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
+import { Building2, FileCheck2, FileText, Inbox, Layers, LayoutDashboard, Settings, Users } from "lucide-react";
 import type { ComponentType } from "react";
 import { routes } from "@/app/routers/routes";
 import type { UserRole } from "@/shared/types/role.types";
@@ -11,6 +11,9 @@ export type NavigationItem = {
   /** Other pages that belong to this item, so it stays highlighted on them. */
   alsoActiveOn?: readonly string[];
 };
+
+/** A count shown beside a navigation label, such as the requests nobody has picked up yet. */
+export type NavigationBadge = { count: number; label: string };
 
 export const roleNavigation: Record<UserRole, NavigationItem[]> = {
   admin: [
@@ -49,42 +52,11 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
     },
   ],
   it: [
-    {
-      id: "dashboard",
-      label: "Overview",
-      path: routes.it.dashboard,
-      icon: LayoutDashboard,
-    },
-    {
-      id: "work-center",
-      label: "Work Center",
-      path: routes.it.workCenter,
-      icon: Wrench,
-    },
-    {
-      id: "lgu-accounts",
-      label: "LGU Personnel",
-      path: routes.it.lguAccounts,
-      icon: Users,
-    },
-    {
-      id: "enterprise-accounts",
-      label: "Enterprises",
-      path: routes.it.enterpriseAccounts,
-      icon: Building2,
-    },
-    {
-      id: "system-logs",
-      label: "System Activity",
-      path: routes.it.systemLogs,
-      icon: FileText,
-    },
-    {
-      id: "system-settings",
-      label: "System Settings",
-      path: routes.it.systemSettings,
-      icon: Settings,
-    },
+    { id: "dashboard", label: "Overview", path: routes.it.dashboard, icon: LayoutDashboard },
+    { id: "requests", label: "Requests", path: routes.it.requests, icon: Inbox },
+    { id: "enterprises", label: "Enterprises", path: routes.it.enterprises, icon: Building2 },
+    { id: "personnel", label: "LGU Personnel", path: routes.it.personnel, icon: Users },
+    { id: "system", label: "System", path: routes.it.system, icon: Settings },
   ],
   enterprise: [],
 };

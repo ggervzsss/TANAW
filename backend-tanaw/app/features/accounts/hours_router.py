@@ -94,7 +94,7 @@ async def _add(
     )
     await record_activity_log(
         db,
-        group="Monitoring",
+        group="Enterprises",
         severity="Info",
         actor=actor.display_name,
         actor_role=get_actor_role_label(actor),
@@ -121,7 +121,7 @@ async def _remove(db: AsyncSession, enterprise: Account, actor: Account, closure
     place = _enterprise_name(enterprise)
     await record_activity_log(
         db,
-        group="Monitoring",
+        group="Enterprises",
         severity="Info",
         actor=actor.display_name,
         actor_role=get_actor_role_label(actor),
@@ -174,7 +174,7 @@ async def update_own_opening_hours(
     await db.refresh(enterprise)
     await record_activity_log(
         db,
-        group="Monitoring",
+        group="Enterprises",
         severity="Info",
         actor=enterprise.display_name,
         actor_role=get_actor_role_label(enterprise),

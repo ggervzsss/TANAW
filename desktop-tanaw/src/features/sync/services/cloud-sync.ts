@@ -28,6 +28,7 @@ import { getCurrentReportingPeriod } from "../../reports/model/reporting-calenda
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 import { isSameReportingMonth } from "../../reports/utils/reporting-period";
 import { buildCameraMonitoringSummary } from "./camera-monitoring";
+import { getDesktopAppInfo } from "./desktop-app-info";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 /** Sample preparation finished; open reports re-read the origins it may have confirmed. */
@@ -88,7 +89,7 @@ export async function syncDesktopTelemetry() {
   const today = philippineDayStart(capturedAt);
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const [profiles, live, summary, localMetrics, session, health, cameraStates] = await Promise.all([
+  const [profiles, live, summary, localMetrics, session, health, cameraStates, app] = await Promise.all([
     listLocalCameras(baseUrl),
     getEstablishmentLive(baseUrl),
     getEstablishmentSummary(baseUrl, { start: new Date(today).toISOString(), end: new Date(today + DAY_MS).toISOString() }),
@@ -96,6 +97,7 @@ export async function syncDesktopTelemetry() {
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
     resolveOptional(() => getMlCameraStates(baseUrl)),
+    getDesktopAppInfo(),
   ]);
   if (enterpriseId !== useAuthStore.getState().user?.enterpriseId || (enterpriseId && (live.enterprise_id !== enterpriseId || summary.enterprise_id !== enterpriseId))) {
     throw new Error("Local counts belong to a different establishment.");
@@ -107,6 +109,7 @@ export async function syncDesktopTelemetry() {
   const payload: DesktopTelemetryPayload = {
     deviceId: getDesktopDeviceId(),
     capturedAt: capturedAt.toISOString(),
+    app,
     metrics: {
       entries: hasMovement ? summary.entries : null,
       exits: hasMovement ? summary.exits : null,

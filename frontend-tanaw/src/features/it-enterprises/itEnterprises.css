@@ -1,0 +1,62 @@
+/*
+ * IT Enterprises and Manage an enterprise. Colours only these screens use: the camera strip.
+ * Everything else comes from the app tokens in src/styles/tokens.css.
+ */
+
+.it-enterprises {
+  --ite-counting: #2f8f5b;
+  --ite-gaps: #d97706;
+  --ite-down: #b91c1c;
+  --ite-closed: #cbd5e1;
+  --ite-future: var(--tanaw-surface-inset);
+  --ite-chip-on: var(--tanaw-row-selected);
+}
+
+.dark .it-enterprises {
+  --ite-counting: #4ade80;
+  --ite-gaps: #fbbf24;
+  --ite-down: #f87171;
+  --ite-closed: #3b4a5a;
+  --ite-future: var(--tanaw-surface-inset);
+}
+
+.it-enterprises .ite-slot {
+  height: 22px;
+  border-radius: 4px;
+}
+
+.it-enterprises .ite-slot[data-state="counting"] {
+  background: var(--ite-counting);
+}
+
+/* Stripes, so a drop-out does not rely on colour alone. */
+.it-enterprises .ite-slot[data-state="gaps"] {
+  background: repeating-linear-gradient(135deg, var(--ite-gaps) 0 5px, color-mix(in srgb, var(--ite-gaps) 55%, transparent) 5px 8px);
+}
+
+.it-enterprises .ite-slot[data-state="down"] {
+  background: var(--ite-down);
+}
+
+.it-enterprises .ite-slot[data-state="closed"] {
+  background: var(--ite-closed);
+}
+
+.it-enterprises .ite-slot[data-state="future"] {
+  background: var(--ite-future);
+  border: 1px dashed var(--tanaw-border);
+}
+
+.it-enterprises .ite-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.it-enterprises .ite-table tbody tr:hover {
+  background: var(--tanaw-control-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-enterprises .ite-table tbody tr {
+    transition: none;
+  }
+}

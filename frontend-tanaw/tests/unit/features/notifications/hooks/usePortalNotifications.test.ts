@@ -32,13 +32,13 @@ describe("Admin notification destinations", () => {
 });
 
 describe("IT notification destinations", () => {
-  it("opens the exact request in the Work Center", () => {
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "request", sourceId: "request-2", recipientRole: "it" }))).toBe("/it/work-center?view=requests&request=request-2");
+  it("opens the exact request on Requests", () => {
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "request", sourceId: "request-2", recipientRole: "it" }))).toBe("/it/requests?request=request-2");
   });
 
   it("opens account changes, email problems and offline places where IT handles them", () => {
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }))).toBe("/it/work-center?view=requests");
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "email.delivery", sourceId: "email-1", recipientRole: "it" }))).toBe("/it/work-center?view=email");
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }))).toBe("/it/requests");
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "email.delivery", sourceId: "email-1", recipientRole: "it" }))).toBe("/it/system?tab=email");
     expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.offline", sourceId: "e:2026-11-23", recipientRole: "it" }))).toBe("/it/dashboard");
   });
 });

@@ -1,4 +1,5 @@
-// Activity: every record newest first in six groups, filters, paging and the details drawer, for the Admin and IT.
+// Admin Recent Activity: every record newest first in six groups, filters, paging and the details drawer.
+// IT reads the same records on the System screen (it-system.spec.ts).
 import { expect, test, type Page } from "@playwright/test";
 import { json, mockEmptyCollections, mockPortalSession, portalUser, type PortalTheme } from "./support/session";
 
@@ -12,7 +13,6 @@ type Log = {
   action: string;
   target: string;
   summary: string;
-  itDetail?: string | null;
   sourceId?: string;
   metadata?: Record<string, string | number | boolean | null>;
 };
@@ -62,11 +62,11 @@ const logs: Log[] = [
   log({ id: "n1", timestamp: "2026-11-23T01:30:00Z", action: "Login", summary: "LGU Admin signed in to TANAW." }),
 ];
 
-async function openActivity(page: Page, path = "/admin/activity", theme: PortalTheme = "light", records: Log[] = logs, role: "admin" | "it" = "admin") {
+async function openActivity(page: Page, path = "/admin/activity", theme: PortalTheme = "light") {
   await page.clock.setFixedTime(new Date("2026-11-23T10:00:00+08:00"));
-  await mockPortalSession(page, portalUser(role), { theme });
+  await mockPortalSession(page, portalUser("admin"), { theme });
   await mockEmptyCollections(page, ["**/operational/notifications", "**/operational/alerts", "**/operational/requests", "**/accounts/enterprises"]);
-  await page.route("**/activity-logs", (route) => route.fulfill(json(records)));
+  await page.route("**/activity-logs", (route) => route.fulfill(json(logs)));
   await page.goto(path);
 }
 
@@ -161,15 +161,4 @@ test("opens a linked report activity with links to Enterprise Reports and the en
 
   await page.locator(".tanaw-activity-drawer__scrim").click({ position: { x: 20, y: 200 } });
   await expect(page.getByRole("dialog")).toHaveCount(0);
-});
-
-test("shows IT the same records with technical details", async ({ page }) => {
-  const withDetail = logs.map((record) => (record.id === "camera" ? { ...record, itDetail: "Camera: Gate A · Error: the connection was refused" } : record));
-  await openActivity(page, "/it/system-logs?activity=camera", "light", withDetail, "it");
-
-  await expect(page.getByRole("heading", { level: 1, name: "System Activity" })).toBeVisible();
-  const drawer = page.getByRole("dialog", { name: "Camera Stopped Counting" });
-  await expect(drawer.getByText("Technical details")).toBeVisible();
-  await expect(drawer).toContainText("Error: the connection was refused");
-  await expect(drawer.getByRole("link", { name: "Open the Dashboard" })).toHaveAttribute("href", "/it/dashboard");
 });

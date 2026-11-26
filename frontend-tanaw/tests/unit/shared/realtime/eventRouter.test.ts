@@ -56,6 +56,7 @@ describe("telemetry updates in a hidden tab", () => {
     ["operational", "summary"],
     ["operational", "map-enterprises"],
     ["operational", "visitor-insights"],
+    ["enterprise-health"],
   ];
 
   function fakeDocument(visibilityState: DocumentVisibilityState) {
@@ -83,7 +84,7 @@ describe("telemetry updates in a hidden tab", () => {
 
     await routeRealtimeEvent(queryClient, event("telemetry.updated"));
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(telemetryKeys.length);
     for (const queryKey of telemetryKeys) {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey, refetchType: "active" });
     }
@@ -106,7 +107,7 @@ describe("telemetry updates in a hidden tab", () => {
     invalidateQueries.mockClear();
     page.show();
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(telemetryKeys.length);
     for (const queryKey of telemetryKeys) {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey, refetchType: "active" }, { cancelRefetch: false });
     }

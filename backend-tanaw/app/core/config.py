@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
+    # The newest desktop app release, so IT can see which places run an older version.
+    desktop_latest_app_version: str | None = Field(default="0.1.3", max_length=40)
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", populate_by_name=True
     )
@@ -131,6 +133,7 @@ class Settings(BaseSettings):
         "development_staff_password",
         "development_it_username",
         "development_it_password",
+        "desktop_latest_app_version",
         mode="before",
     )
     @classmethod

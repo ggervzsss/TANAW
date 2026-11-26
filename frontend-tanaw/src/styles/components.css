@@ -425,7 +425,6 @@ html.dark .tanaw-data-page .tanaw-data-empty-icon {
 
 .tanaw-dashboard-panel,
 .tanaw-dashboard-inset,
-.tanaw-information-banner,
 .tanaw-activation-banner {
   transition:
     background-color 180ms ease,
@@ -633,7 +632,6 @@ html.dark .tanaw-compliance-item[data-state="pending"] {
   background: linear-gradient(145deg, rgb(83 55 16 / 0.4), rgb(16 25 35 / 0.76));
 }
 
-html.dark .tanaw-information-banner,
 html.dark .tanaw-activation-banner {
   border-color: rgb(52 211 153 / 0.26);
   background: linear-gradient(135deg, rgb(6 78 59 / 0.24), rgb(16 25 35 / 0.94));

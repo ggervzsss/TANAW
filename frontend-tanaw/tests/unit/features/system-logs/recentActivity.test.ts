@@ -30,14 +30,16 @@ function log(overrides: Partial<SystemLog> & Pick<SystemLog, "id">): SystemLog {
 const november = { start: "2026-11-01", end: "2026-11-30" };
 
 describe("Activity groups", () => {
-  it("files every record under one of the six groups the Admin and IT share", () => {
+  it("files every record under one of the seven groups the Admin and IT share", () => {
     expect(activityKind(log({ id: "1", group: "Login & Security" }))).toBe("security");
     expect(activityKind(log({ id: "2", group: "Accounts" }))).toBe("accounts");
+    expect(activityKind(log({ id: "2e", group: "Enterprises" }))).toBe("enterprises");
     expect(activityKind(log({ id: "3", group: "Reports" }))).toBe("reports");
     expect(activityKind(log({ id: "4", group: "Requests" }))).toBe("requests");
     expect(activityKind(log({ id: "5", group: "Monitoring" }))).toBe("monitoring");
     expect(activityKind(log({ id: "6", group: "Settings & Maintenance" }))).toBe("settings");
     expect(parseActivityType("monitoring")).toBe("monitoring");
+    expect(parseActivityType("enterprises")).toBe("enterprises");
     expect(parseActivityType("help")).toBe("all");
   });
 
@@ -89,7 +91,7 @@ describe("Activity details", () => {
     expect(activityRequestId(request)).toBe("request-1");
     expect(activityReference(request)).toBe("REQ-000142");
     expect(activityLinks(request, "admin")).toEqual([{ label: "Open the request", to: "/admin/requests?request=request-1" }]);
-    expect(activityLinks(request, "it")[0].to).toBe("/it/work-center?view=requests&request=request-1");
+    expect(activityLinks(request, "it")[0].to).toBe("/it/requests?request=request-1");
     expect(activityDetailFields(request)).toEqual([
       { label: "Request", value: "REQ-000142" },
       { label: "Group", value: "Desktop app or camera problem" },
@@ -100,5 +102,32 @@ describe("Activity details", () => {
     const camera = log({ id: "camera", group: "Monitoring", action: "Camera Stopped Counting", actor: "TANAW", actorRole: "System", target: "Sampaguita Gardens" });
     expect(activityDetailFields(camera)).toEqual([{ label: "Place", value: "Sampaguita Gardens" }]);
     expect(activityLinks(camera)).toEqual([{ label: "Open the Dashboard", to: "/admin/dashboard" }]);
+    expect(activityLinks(camera, "it")).toEqual([{ label: "Open the Overview", to: "/it/dashboard" }]);
+  });
+
+  it("files enterprise-account events under Enterprises and links to the enterprise in each portal", () => {
+    const update = log({
+      id: "enterprise",
+      group: "Enterprises",
+      action: "Update Enterprise Account",
+      actor: "Ana Reyes",
+      actorRole: "IT Personnel",
+      target: "Laguna Lakeside Resort",
+      metadata: { enterpriseId: "ENT-3", barangay: "Landayan" },
+    });
+    expect(activityTitle(update)).toBe("Enterprise Account Updated");
+    expect(activityDetailFields(update)).toEqual([
+      { label: "Enterprise", value: "Laguna Lakeside Resort" },
+      { label: "Barangay", value: "Landayan" },
+    ]);
+    expect(activityLinks(update, "admin")).toEqual([{ label: "Open enterprise details", to: "/admin/enterprises/ENT-3" }]);
+    expect(activityLinks(update, "it")).toEqual([{ label: "Open enterprise details", to: "/it/enterprises/ENT-3" }]);
+    expect(filterRecentActivity([update], { type: "enterprises", query: "", range: november }).map((record) => record.id)).toEqual(["enterprise"]);
+    expect(filterRecentActivity([update], { type: "accounts", query: "", range: november })).toEqual([]);
+  });
+
+  it("names the new request and password reset actions", () => {
+    expect(activityTitle(log({ id: "start", action: "Start Request" }))).toBe("Request Started");
+    expect(activityTitle(log({ id: "reset", action: "Send Password Reset" }))).toBe("Password Reset Email Sent");
   });
 });

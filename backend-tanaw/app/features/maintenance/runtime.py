@@ -157,4 +157,5 @@ def _add_counts(
         ),
         email_change_requests=current.email_change_requests + addition.email_change_requests,
         email_outbox_records=current.email_outbox_records + addition.email_outbox_records,
+        activity_logs=current.activity_logs + addition.activity_logs,
     )
