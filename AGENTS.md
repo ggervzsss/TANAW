@@ -25,17 +25,23 @@ Run the fast checks for each area the change touches:
 
 Put logic checks in unit tests (Vitest or pytest), not in Playwright.
 
-### Playwright during implementation
+### Playwright only when the user asks
 
-During implementation, run only the relevant Playwright specs when a change
-affects a screen, a user workflow, or a request or response that a spec mocks
-or asserts on. For shared UI changes, run representative specs in each affected
-app. Review visual changes on the affected screens in light and dark mode
-where supported.
+Do not run Playwright (single specs or full suites, browser or Electron)
+unless the user explicitly asks for it in that request. This includes the
+pre-pull-request suites below.
 
-Skip Playwright for changes that leave screens and tested workflows
-unaffected, such as documentation, internal service work, or stylesheet moves
-that preserve contents and load order.
+After every change that affects a screen, a user workflow, or a request or
+response that a spec mocks or asserts on, end the response with a reminder
+that Playwright has not been run for it. Name the specs or suites that cover
+the change and the commands to run them, so the user can ask for a run.
+Keep reminding in later responses while those changes stay unverified by
+Playwright. Skip the reminder for changes that leave screens and tested
+workflows unaffected, such as documentation or internal service work.
+
+When the user asks for a run, update the specs the change affects, and review
+visual changes on the affected screens in light and dark mode where
+supported.
 
 For a targeted desktop browser test, use a command such as the following.
 
@@ -45,8 +51,9 @@ npx playwright test tests/e2e/browser/unified-reporting.spec.ts
 
 ### Before filing a pull request
 
-Run the full end-to-end suites for each affected client before opening a pull
-request.
+These are the full end-to-end suites for each affected client. Before opening a
+pull request, remind the user if they have not been run on the final changes,
+and run them only when the user asks.
 
 - desktop-tanaw: `npm run test:e2e`, then `npm run test:electron`
 - frontend-tanaw: `npm run test:e2e`
@@ -56,13 +63,14 @@ Electron config directly after the browser suite reuses a renderer-only build
 and stalls at login.
 
 Run a failing spec on the base branch to see whether the failure predates the
-change. Treat flaky tests as defects to investigate and fix. Open the pull
-request once the required checks pass. Report unresolved failures to the user.
+change. Treat flaky tests as defects to investigate and fix. Report unresolved
+failures to the user.
 
 ### Pull request testing summary
 
 Summarize the checks that ran and their results in the pull request
-description. If Playwright did not apply, state why it was skipped.
+description. If Playwright was not run, say so and why (not requested, or
+not applicable).
 
 ## Commit Messages
 
