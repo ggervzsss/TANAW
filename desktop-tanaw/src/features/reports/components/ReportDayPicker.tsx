@@ -23,11 +23,28 @@ const STATUS_LABEL: Record<ReportDayStatus, string> = {
   "no-visitors": "no visitors recorded",
   upcoming: "not yet reached",
 };
+/** "November 27, 2026" → "Nov 27, 2026"; every English month abbreviates to its first three letters. */
+const abbreviateMonth = (label: string) => label.replace(/^([A-Z][a-z]{2})[a-z]+/, "$1");
 /**
- * A two-digit day in every month. Hidden copies of these hold the trigger at its widest label so it
- * keeps one width, and the calendar under it stays put, as the month changes.
+ * A two-digit day in every month, full and abbreviated. Hidden copies of these hold the trigger at
+ * its widest label so it keeps one width, and the calendar under it stays put, as the month changes.
  */
 const WIDEST_LABELS = Array.from({ length: 12 }, (_, month) => formatReportDate(`2000-${String(month + 1).padStart(2, "0")}-28`));
+const WIDEST_SHORT_LABELS = WIDEST_LABELS.map(abbreviateMonth);
+
+/** One version of the trigger label, stacked over hidden copies of the widest label of its kind. */
+function PickerLabel({ length, text, widest }: { length: "full" | "short"; text: string; widest: string[] }) {
+  return (
+    <span className="report-day-picker-label" data-length={length} aria-hidden="true">
+      <span>{text}</span>
+      {widest.map((label) => (
+        <span key={label} className="report-day-picker-sizer">
+          {label}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /**
  * Calendar of the reporting month, with the months the report can switch to. Red badges mark days
@@ -37,6 +54,7 @@ export function ReportDayPicker({ period, months, days, selectedDate, isLoading 
   const daily = selectedDate !== null && days.length > 0;
   const missing = daily && !isLoading ? missingDays(days).length : 0;
   const monthLabel = formatReportingPeriodLabel(period);
+  const triggerLabel = daily && selectedDate ? formatReportDate(selectedDate) : monthLabel;
   const index = months.findIndex((month) => isSameReportingMonth(month, period));
   const previous = index > 0 ? months[index - 1] : undefined;
   const next = index >= 0 && index < months.length - 1 ? months[index + 1] : undefined;
@@ -54,16 +72,14 @@ export function ReportDayPicker({ period, months, days, selectedDate, isLoading 
             <CalendarDays aria-hidden="true" />
             {missing > 0 && <span className="report-day-badge" aria-hidden="true" />}
           </span>
-          <span className="sr-only">{daily ? "Selected day: " : "Selected month: "}</span>
-          <span className="report-day-picker-label">
-            <span>{daily && selectedDate ? formatReportDate(selectedDate) : monthLabel}</span>
-            {WIDEST_LABELS.map((label) => (
-              <span key={label} className="report-day-picker-sizer" aria-hidden="true">
-                {label}
-              </span>
-            ))}
+          {/* Screen readers always hear the full date; the visible label shortens its month in a narrow column. */}
+          <span className="sr-only">
+            {daily ? "Selected day: " : "Selected month: "}
+            {triggerLabel}
+            {missing > 0 && `, ${missing} days with origins over the count`}
           </span>
-          {missing > 0 && <span className="sr-only">, {missing} days with origins over the count</span>}
+          <PickerLabel length="full" text={triggerLabel} widest={WIDEST_LABELS} />
+          <PickerLabel length="short" text={abbreviateMonth(triggerLabel)} widest={WIDEST_SHORT_LABELS} />
           <ChevronDown className="report-day-picker-chevron" aria-hidden="true" />
         </>
       }

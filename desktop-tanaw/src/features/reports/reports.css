@@ -331,13 +331,36 @@
   min-height: 34px;
   padding-block: 6px;
 }
-/* Stacked hidden labels size the trigger to its widest month; equal-width digits keep days and years even. */
+/*
+ * Stacked hidden labels size the trigger to its widest month; equal-width digits keep days and years
+ * even. A column too narrow for the widest full date (icon, label and chevron take about 14rem) shows
+ * the abbreviated month instead; narrower still, the label gives way with an ellipsis, never the icons.
+ */
+.report-information-fields > div {
+  container: report-field / inline-size;
+}
+.report-day-picker-label[data-length="short"] {
+  display: none;
+}
+@container report-field (width < 14rem) {
+  .report-day-picker-label[data-length="full"] {
+    display: none;
+  }
+  .report-day-picker-label[data-length="short"] {
+    display: grid;
+  }
+}
 .report-day-picker-label {
-  display: inline-grid;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  text-align: start;
   font-variant-numeric: tabular-nums;
 }
 .report-day-picker-label > span {
   grid-area: 1 / 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .report-day-picker-sizer {
   visibility: hidden;
@@ -345,6 +368,7 @@
 .report-day-picker-icon {
   position: relative;
   display: inline-flex;
+  flex: none;
 }
 .report-day-picker-icon svg {
   width: 18px;
@@ -353,6 +377,7 @@
 .report-day-picker-chevron {
   width: 16px;
   height: 16px;
+  flex: none;
   margin-left: auto;
   transition: rotate 200ms var(--reports-ease);
 }
