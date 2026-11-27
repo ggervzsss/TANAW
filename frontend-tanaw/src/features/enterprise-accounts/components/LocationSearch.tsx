@@ -1,5 +1,6 @@
 import { AlertCircle, LoaderCircle, MapPin, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { cn, controlClassName } from "@/shared/ui-kit";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { filterRelatedLocationSuggestions } from "../model";
 import { searchEnterpriseLocations } from "../services";
@@ -108,11 +109,11 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
         if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
       }}
     >
-      <label htmlFor={inputId} className="mb-1.5 block text-[11px] font-bold tracking-wide text-slate-600 uppercase dark:text-slate-300">
+      <label htmlFor={inputId} className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
         Search for a place or address
       </label>
-      <div className="relative">
-        <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
+      <div className="tanaw-field relative flex items-center">
+        <Search size={16} aria-hidden="true" className="tanaw-field-icon pointer-events-none absolute left-3.5 text-(--tanaw-text-muted)" />
         <input
           id={inputId}
           type="search"
@@ -124,7 +125,7 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
           aria-expanded={showPanel}
           aria-activedescendant={showPanel && activeSuggestion ? `${listboxId}-${activeSuggestion.placeId}` : undefined}
           placeholder="Enter a landmark, street, or address"
-          className="focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-10 text-sm text-slate-800 shadow-sm transition outline-none focus:ring-4 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100"
+          className={cn(controlClassName, "h-11 pr-10 pl-10 [&::-webkit-search-cancel-button]:appearance-none")}
           onChange={(event) => {
             const nextQuery = event.target.value;
             selectedQueryRef.current = "";
@@ -147,12 +148,12 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
           onKeyDown={handleKeyDown}
         />
         {isLoading ? (
-          <LoaderCircle size={16} className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-emerald-700" aria-label="Searching locations" />
+          <LoaderCircle size={16} className="absolute right-3.5 animate-spin text-(--tanaw-accent-ink) motion-reduce:animate-none" aria-label="Searching locations" />
         ) : query ? (
           <button
             type="button"
             aria-label="Clear location search"
-            className="absolute top-1/2 right-2.5 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+            className="tanaw-pop-in ease-tanaw-out absolute right-2 flex size-7 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) active:scale-90 motion-reduce:transition-none"
             onClick={() => {
               setQuery("");
               setSuggestions([]);
@@ -166,9 +167,9 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
           </button>
         ) : null}
       </div>
-      <p className="mt-1.5 text-right text-[10px] font-medium text-slate-400">
+      <p className="mt-1.5 text-right text-xs text-(--tanaw-text-muted)">
         Search powered by{" "}
-        <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer" className="font-bold text-emerald-700 hover:underline dark:text-emerald-300">
+        <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer" className="font-semibold text-(--tanaw-accent-ink) hover:underline">
           Geoapify
         </a>
       </p>
@@ -177,15 +178,15 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
         <div
           id={listboxId}
           role="listbox"
-          className="absolute top-full right-0 left-0 mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600 dark:bg-[#121c31]"
+          className="rounded-tanaw-md shadow-tanaw-raised absolute top-full right-0 left-0 mt-2 max-h-64 overflow-y-auto border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-1.5"
         >
           {error ? (
-            <div role="status" className="flex items-start gap-2 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            <div role="status" className="flex items-start gap-2 px-3 py-2.5 text-[13px] font-medium text-(--tanaw-warn-ink)">
               <AlertCircle size={15} className="mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           ) : isLoading && suggestions.length === 0 ? (
-            <p role="status" className="px-3 py-2.5 text-xs font-semibold text-slate-500">
+            <p role="status" className="px-3 py-2.5 text-[13px] text-(--tanaw-text-secondary)">
               Searching within San Pedro…
             </p>
           ) : suggestions.length > 0 ? (
@@ -196,20 +197,20 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
                 type="button"
                 role="option"
                 aria-selected={index === activeIndex}
-                className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-100" : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60"}`}
+                className={`rounded-tanaw-sm flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors duration-150 ${index === activeIndex ? "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)"}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectSuggestion(suggestion)}
               >
-                <MapPin size={16} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                <MapPin size={16} className="mt-0.5 shrink-0 text-(--tanaw-accent-ink)" />
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-bold">{suggestion.name}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{suggestion.formattedAddress}</span>
+                  <span className="block truncate text-sm font-semibold">{suggestion.name}</span>
+                  <span className="mt-0.5 block text-[13px] leading-relaxed text-(--tanaw-text-secondary)">{suggestion.formattedAddress}</span>
                 </span>
               </button>
             ))
           ) : (
-            <p role="status" className="px-3 py-2.5 text-xs font-semibold text-slate-500">
+            <p role="status" className="px-3 py-2.5 text-[13px] text-(--tanaw-text-secondary)">
               No matching locations were found inside San Pedro. Try a nearby street or place the marker manually.
             </p>
           )}

@@ -110,22 +110,22 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
 
   return (
     <section aria-labelledby="dashboard-map" className="min-w-0">
-      <div className="mb-3.5 flex min-h-10 flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
         {openBarangay ? (
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            <button type="button" onClick={() => clearBarangaySelection("all-barangays")} className="tanaw-dashboard-link inline-flex min-h-9 items-center gap-1.5 font-semibold">
+            <button type="button" onClick={() => clearBarangaySelection("all-barangays")} className="tanaw-dashboard-link inline-flex min-h-9 items-center gap-1.5">
               <ArrowLeft size={16} aria-hidden="true" />
               All barangays
             </button>
-            <h2 id="dashboard-map" className="m-0 flex min-w-0 items-baseline gap-2 text-[15px] font-bold text-(--tanaw-text)">
+            <h2 id="dashboard-map" className="m-0 flex min-w-0 items-baseline gap-2 text-base font-[650] text-(--tanaw-text)">
               <span className="truncate">Barangay {openBarangay}</span>{" "}
-              <span className="shrink-0 text-sm font-medium text-(--tanaw-text-muted)">
+              <span className="shrink-0 text-[13px] font-medium text-(--tanaw-text-muted)">
                 {openCount} {openCount === 1 ? "enterprise" : "enterprises"}
               </span>
             </h2>
           </div>
         ) : (
-          <h2 id="dashboard-map" className="m-0 inline-flex items-center gap-2 text-[15px] font-bold text-(--tanaw-text)">
+          <h2 id="dashboard-map" className="m-0 inline-flex items-center gap-2 text-base font-[650] text-(--tanaw-text)">
             <MapPin size={17} className="text-(--tanaw-accent-ink)" aria-hidden="true" />
             San Pedro, Laguna
           </h2>
@@ -134,7 +134,7 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
 
       <MapLegend />
 
-      <div className="tanaw-dashboard-map" onPointerDown={collapseAlerts}>
+      <div className="tanaw-dashboard-map" data-loading={isBoundaryLoading || (!isInitialCameraReady && !isBoundaryError) || undefined} onPointerDown={collapseAlerts}>
         <div id="admin-enterprise-map" role="region" aria-label="Map of San Pedro enterprises" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
         <button
           type="button"
@@ -152,7 +152,7 @@ export function DashboardMap({ enterprises, isEnterpriseError, onRetry }: Dashbo
         {mapStatus && (
           <div
             role="status"
-            className="absolute top-3 left-3 z-1000 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-3 rounded-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface) px-4 py-3 text-sm font-semibold text-(--tanaw-text)"
+            className="tanaw-dashboard-map__status"
           >
             {isBoundaryError ? "Barangay boundaries could not be loaded." : isBoundaryLoading ? "Loading the map of San Pedro…" : "Enterprise pins could not be loaded."}
             {isEnterpriseError && !isBoundaryLoading && (

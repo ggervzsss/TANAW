@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { Check, Send } from "lucide-react";
 import { useId, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { activityLogsQueryKey } from "@/features/system-logs/hooks/useActivityLogs";
@@ -72,38 +72,28 @@ export function NoteForItComposer({ request, recipients }: NoteForItComposerProp
   };
 
   return (
-    <section aria-labelledby={`${labelId}-heading`} className="mt-3.5 border-t border-(--tanaw-border-soft) pt-4.5">
-      <h3 id={`${labelId}-heading`} className="text-base font-bold">
+    <section aria-labelledby={`${labelId}-heading`} className="mt-4 border-t border-(--tanaw-border-soft) pt-5">
+      <h3 id={`${labelId}-heading`} className="text-base font-[650]">
         Add a note for IT
       </h3>
-      <p className="mt-1 text-[0.84375rem] text-(--tanaw-text-secondary)">Tell IT what you need done about this request. It goes to {recipients} and is added to Latest updates. The enterprise doesn't see it.</p>
+      <p className="mt-1 text-[13px] text-(--tanaw-text-secondary)">Tell IT what you need done about this request. It goes to {recipients} and is added to Latest updates. The enterprise doesn't see it.</p>
 
-      <p id={labelId} className="mt-3 text-xs font-semibold text-(--tanaw-text-secondary)">
+      <p id={labelId} className="mt-4 text-[13px] font-semibold text-(--tanaw-text-secondary)">
         Quick instructions
       </p>
-      <div role="group" aria-labelledby={labelId} className="mt-1.5 flex flex-wrap gap-2">
+      <div role="group" aria-labelledby={labelId} className="mt-2 flex flex-wrap gap-2">
         {instructions.map((instruction) => {
           const pressed = draft === instruction.text;
           return (
-            <button
-              key={instruction.label}
-              type="button"
-              aria-pressed={pressed}
-              onClick={() => changeDraft(instruction.text)}
-              className={cn(
-                "min-h-9 cursor-pointer rounded-full border px-3.5 text-[0.84375rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                pressed
-                  ? "border-(--tanaw-action) bg-(--tanaw-row-selected) text-(--tanaw-accent-ink)"
-                  : "border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-(--tanaw-text) hover:border-(--tanaw-accent-ink) hover:bg-(--tanaw-control-hover)",
-              )}
-            >
+            <button key={instruction.label} type="button" aria-pressed={pressed} onClick={() => changeDraft(instruction.text)} className="tanaw-requests-chip">
+              {pressed && <Check size={14} strokeWidth={2.5} aria-hidden="true" className="tanaw-requests-chip__tick -ml-0.5" />}
               {instruction.label}
             </button>
           );
         })}
       </div>
 
-      <label htmlFor={fieldId} className="mt-3.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+      <label htmlFor={fieldId} className="mt-4 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
         Your note
       </label>
       <Textarea
@@ -115,9 +105,9 @@ export function NoteForItComposer({ request, recipients }: NoteForItComposerProp
         onChange={(event) => changeDraft(event.target.value)}
         aria-describedby={error ? statusId : undefined}
         invalid={Boolean(error)}
-        className="mt-1.5 min-h-21"
+        className="mt-2 min-h-21"
       />
-      <div className="mt-2.5 flex flex-wrap items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button
           variant="primary"
           size="lg"
@@ -125,12 +115,12 @@ export function NoteForItComposer({ request, recipients }: NoteForItComposerProp
           aria-disabled={empty || undefined}
           loading={mutation.isPending}
           onClick={send}
-          className={cn("h-11 text-sm", empty && "cursor-default opacity-50 hover:bg-(--tanaw-action) active:translate-y-0")}
+          className={cn("h-11 text-sm", empty && "cursor-default opacity-50 after:hidden! enabled:hover:translate-y-0! enabled:hover:bg-(--tanaw-action)! enabled:hover:shadow-none! active:scale-100!")}
         >
           Add note
         </Button>
         {error && (
-          <p id={statusId} className="text-[0.84375rem] font-semibold text-(--tanaw-error)">
+          <p id={statusId} className="text-[13px] font-semibold text-(--tanaw-error)">
             {error}
           </p>
         )}

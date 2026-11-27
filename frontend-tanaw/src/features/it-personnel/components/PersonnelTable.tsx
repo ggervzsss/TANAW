@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Button, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import type { AccessSummary, PersonnelAccess, PersonnelAccount, PersonnelActions, PersonnelTag } from "../model";
+import "../itPersonnel.css";
 
 export type PersonnelRow = {
   account: PersonnelAccount;
@@ -38,28 +39,21 @@ const accessDot: Record<PersonnelAccess, string> = {
   deactivated: "bg-(--tanaw-text-muted)",
 };
 
-const headClass = "px-4 py-3 text-[0.6875rem] font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase";
+const headClass = "px-4 py-2.5 text-xs font-semibold tracking-label text-(--tanaw-label) uppercase";
+const termClass = "text-[13px] text-(--tanaw-text-muted)";
 
 /** The personnel list: a table on wide screens, stacked records on phones. */
 export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Props) {
-  if (isLoading) {
-    return (
-      <div className="mt-4 grid gap-2" role="status" aria-busy="true" aria-label="Loading LGU personnel">
-        {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className="h-16 w-full" />
-        ))}
-      </div>
-    );
-  }
+  if (isLoading) return <PersonnelSkeleton />;
   if (!rows.length) {
-    return <p className="rounded-tanaw-lg mt-4 border border-dashed border-(--tanaw-border) px-5 py-10 text-center text-sm text-(--tanaw-text-secondary)">{emptyText}</p>;
+    return <p className="mt-4 border-t border-(--tanaw-border-soft) px-5 py-10 text-center text-sm text-(--tanaw-text-secondary)">{emptyText}</p>;
   }
   return (
-    <>
+    <div className="it-personnel__list">
       <div className="mt-4 hidden lg:block">
-        <table className="w-full border-collapse text-left text-sm">
+        <table className="it-personnel__table w-full border-separate border-spacing-0 text-left text-sm">
           <thead>
-            <tr className="border-b border-(--tanaw-border-soft)">
+            <tr>
               <th scope="col" className={cn(headClass, "w-[30%] pl-3")}>
                 Person
               </th>
@@ -83,12 +77,12 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
                 key={row.account.id}
                 data-access={row.access.access}
                 onClick={row.actions.canEdit ? openRowFromClick : undefined}
-                className={cn("border-b border-(--tanaw-border-soft) align-top", row.actions.canEdit && "tanaw-row-link", row.access.access === "deactivated" && "opacity-70")}
+                className={cn("align-top", row.actions.canEdit && "tanaw-row-link", row.access.access === "deactivated" && "opacity-70")}
               >
                 <th scope="row" className="py-4 pr-4 pl-3 font-normal">
                   <PersonCell row={row} onEdit={handlers.onEdit} />
                 </th>
-                <td className="p-4 font-semibold text-(--tanaw-text)">{row.role}</td>
+                <td className="p-4 font-medium text-(--tanaw-text)">{row.role}</td>
                 <td className="p-4">
                   <AccessCell access={row.access} />
                 </td>
@@ -101,27 +95,23 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
           </tbody>
         </table>
       </div>
-      <ul className="mt-4 grid gap-3 lg:hidden" aria-label="LGU personnel">
+      <ul className="mt-4 border-t border-(--tanaw-border-soft) lg:hidden" aria-label="LGU personnel">
         {rows.map((row) => (
           <li
             key={row.account.id}
             data-access={row.access.access}
             onClick={row.actions.canEdit ? openRowFromClick : undefined}
-            className={cn(
-              "rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-4",
-              row.actions.canEdit && "tanaw-row-link",
-              row.access.access === "deactivated" && "opacity-70",
-            )}
+            className={cn("it-personnel__row py-4", row.actions.canEdit && "tanaw-row-link", row.access.access === "deactivated" && "opacity-70")}
           >
             <PersonCell row={row} onEdit={handlers.onEdit} />
             <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-xs font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase">Role</dt>
-              <dd className="font-semibold">{row.role}</dd>
-              <dt className="text-xs font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase">Access</dt>
+              <dt className={termClass}>Role</dt>
+              <dd className="font-medium">{row.role}</dd>
+              <dt className={termClass}>Access</dt>
               <dd>
                 <AccessCell access={row.access} />
               </dd>
-              <dt className="text-xs font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase">Last signed in</dt>
+              <dt className={termClass}>Last signed in</dt>
               <dd className="text-(--tanaw-text-secondary)">{row.lastSignIn}</dd>
             </dl>
             <div className="mt-3">
@@ -130,7 +120,31 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
           </li>
         ))}
       </ul>
-    </>
+    </div>
+  );
+}
+
+/** Table rows in the list's shape while the accounts load. */
+function PersonnelSkeleton() {
+  return (
+    <div className="mt-4" role="status" aria-busy="true" aria-label="Loading LGU personnel">
+      <Skeleton className="h-9 w-full rounded-[10px] max-lg:hidden" />
+      {[0, 1, 2, 3].map((index) => (
+        <div key={index} className="grid grid-cols-[30%_10%_22%_16%_minmax(0,1fr)] items-start gap-0 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
+          <div className="pl-3 max-lg:pl-0">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="mt-2 h-3 w-52 max-w-full" />
+          </div>
+          <Skeleton className="ml-4 h-4 w-12 max-lg:hidden" />
+          <div className="pl-4 max-lg:hidden">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-2 h-3 w-32" />
+          </div>
+          <Skeleton className="ml-4 h-4 w-24 max-lg:hidden" />
+          <Skeleton className="rounded-tanaw-md ml-auto h-10 w-28 max-lg:hidden" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -141,13 +155,13 @@ function PersonCell({ row, onEdit }: { row: PersonnelRow; onEdit: (account: Pers
     <>
       <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         {row.actions.canEdit ? (
-          <button type="button" data-row-primary aria-label={`Edit ${name}`} onClick={() => onEdit(row.account)} className="text-base font-bold text-(--tanaw-text)">
+          <button type="button" data-row-primary aria-label={`Edit ${name}`} onClick={() => onEdit(row.account)} className="text-base font-semibold text-(--tanaw-text)">
             {name}
           </button>
         ) : (
-          <span className="text-base font-bold text-(--tanaw-text)">{name}</span>
+          <span className="text-base font-semibold text-(--tanaw-text)">{name}</span>
         )}
-        {row.tag && <span className="inline-flex min-h-6 items-center rounded-full bg-(--tanaw-surface-inset) px-2.5 text-xs font-bold text-(--tanaw-text-secondary)">{row.tag}</span>}
+        {row.tag && <span className="rounded-tanaw-sm inline-flex min-h-6 items-center bg-(--tanaw-surface-inset) px-2 text-xs font-semibold text-(--tanaw-text-secondary)">{row.tag}</span>}
       </span>
       <span className="mt-0.5 block text-[0.8125rem] wrap-anywhere text-(--tanaw-text-secondary)">{row.account.email}</span>
     </>

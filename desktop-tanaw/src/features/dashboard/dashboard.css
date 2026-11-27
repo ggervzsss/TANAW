@@ -1650,128 +1650,11 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   color: var(--tanaw-text-muted);
 }
 
-/* ---------- TANAW Insights dock ---------- */
-
-/* The panel hugs the right edge under the topbar and floats over the page: opening or widening it
-   never reflows the dashboard, which simply runs underneath. Its left edge is the resize handle. */
+/* TANAW Insights floats over the page from the shell (../tanaw-assistant.css), so the dashboard
+   keeps a single column under it. */
 .overview-layout.dash {
   grid-template-columns: minmax(0, 1fr);
   column-gap: 0;
-}
-.overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  grid-column: auto;
-  grid-row: auto;
-  height: auto;
-  min-height: 0;
-  max-width: 100vw;
-  padding: 12px 14px 10px 18px;
-  overflow: hidden;
-  border: 0;
-  border-left: 1px solid var(--dash-line-strong);
-  border-radius: 0;
-  background: var(--tanaw-surface);
-  box-shadow:
-    -1px 0 0 rgb(255 255 255 / 0.6) inset,
-    -24px 0 48px -20px rgb(16 36 27 / 0.22);
-  animation: none;
-}
-html.dark .enterprise-shell .overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
-  border-left-color: var(--dash-line-strong);
-  background: var(--theme-raised);
-  box-shadow: -24px 0 48px -16px rgb(0 0 0 / 0.6);
-}
-.tanaw-assistant-dock.is-resizing {
-  user-select: none;
-}
-
-.tanaw-assistant-resize {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -5px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  cursor: col-resize;
-  touch-action: none;
-}
-.tanaw-assistant-resize::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 5px;
-  width: 2px;
-  background: var(--color-tanaw-green);
-  opacity: 0;
-  transition: opacity 160ms ease;
-  content: "";
-}
-.tanaw-assistant-resize span {
-  position: relative;
-  width: 4px;
-  height: 40px;
-  border-radius: 999px;
-  background: var(--dash-line-strong);
-  transition:
-    background-color 160ms ease,
-    height 200ms var(--dash-ease-out);
-}
-.tanaw-assistant-resize:hover::before,
-.tanaw-assistant-dock.is-resizing .tanaw-assistant-resize::before {
-  opacity: 0.55;
-}
-.tanaw-assistant-resize:hover span,
-.tanaw-assistant-dock.is-resizing .tanaw-assistant-resize span {
-  height: 56px;
-  background: var(--color-tanaw-green);
-}
-.dark .tanaw-assistant-resize:hover span,
-.dark .tanaw-assistant-dock.is-resizing .tanaw-assistant-resize span {
-  background: #6ee7b7;
-}
-.dash .tanaw-assistant-resize:focus-visible {
-  outline: none;
-}
-.tanaw-assistant-resize:focus-visible span {
-  height: 56px;
-  background: var(--color-tanaw-green);
-  box-shadow: 0 0 0 3px var(--tanaw-focus-ring);
-}
-
-@media (max-width: 640px) {
-  .overview-layout.dash .tanaw-assistant.tanaw-assistant-dock {
-    width: 100vw !important;
-  }
-  .tanaw-assistant-resize {
-    display: none;
-  }
-}
-
-/* Docked, the panel is wide enough for comfortable reading: larger type, and a line length that
-   stays readable when it is dragged wide. */
-.dash .tanaw-assistant-dock .assistant-message > div {
-  max-width: 680px;
-  font-size: 14px;
-  line-height: 1.5;
-}
-.dash .tanaw-assistant-dock .assistant-message button {
-  font-size: 13px;
-}
-.dash .tanaw-assistant-dock .assistant-question {
-  width: fit-content;
-  max-width: min(560px, calc(100% - 42px));
-  margin-left: auto;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.dash .tanaw-assistant-dock .assistant-disclosure {
-  font-size: 12px;
 }
 
 /* ---------- Fit to the window ----------
@@ -2345,7 +2228,13 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   .dash-traffic-head .dash-readout {
     align-items: flex-start;
     max-width: 100%;
+    height: auto;
     text-align: left;
+  }
+  /* Narrow rooms: entries and occupancy take a line each instead of running off the page. */
+  .dash-readout-metrics {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
   .dash-cmp {
     justify-content: flex-start;

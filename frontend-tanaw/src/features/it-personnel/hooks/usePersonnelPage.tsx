@@ -13,7 +13,7 @@ import { emailChangeCallouts, filterPersonnel, personnelRoleCounts, roleLabelOf,
 export function toastMessage(title: string, text: string): ReactElement {
   return (
     <>
-      <span className="block font-bold">{title}</span>
+      <span className="block font-semibold">{title}</span>
       <span className="mt-0.5 block text-[0.8125rem] font-normal">{text}</span>
     </>
   );

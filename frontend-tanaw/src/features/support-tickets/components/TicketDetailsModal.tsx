@@ -1,4 +1,4 @@
-import { AlertCircle, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertCircle, ShieldCheck } from "lucide-react";
 import { DetailField, EmptyState, ModalFrame } from "@/shared/components/ui";
 import { REQUEST_GROUPS, type RequestDetail, type RequestGroup, type RequestStatus } from "@/shared/services/requests";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
@@ -8,7 +8,8 @@ import { GroupBadge, TicketStatusBadge } from "./TicketBadges";
 import { TicketAttachments } from "./TicketAttachments";
 import { TicketConversation } from "./TicketConversation";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
-import { Badge } from "../../../shared/ui-kit";
+import { Badge, Button, Skeleton, controlClassName } from "../../../shared/ui-kit";
+import "../supportTickets.css";
 
 type TicketDetailsModalProps = {
   mode: "admin" | "it";
@@ -17,6 +18,9 @@ type TicketDetailsModalProps = {
   timeFormat: SystemTimeFormat;
 };
 
+/** A section heading inside the request window: Inter 650, sentence case. */
+export const ticketSectionHeading = "flex items-center gap-2 text-[0.9375rem] font-[650] text-(--tanaw-text)";
+
 export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: TicketDetailsModalProps) {
   const { detailQuery, isReplyPending, isStatusPending, reply, replyError, actionError, setReply, submitReply, updateStatus, reopen, moveToGroup } = useTicketDetails(ticketId);
   const ticket = detailQuery.data;
@@ -24,13 +28,8 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: Tick
 
   return (
     <ModalFrame title={ticket?.title ?? "Request Details"} eyebrow={ticket?.code ?? "Requests"} onClose={onClose} maxWidthClassName="max-w-6xl">
-      {!ticket && (
-        <EmptyState
-          icon={detailQuery.isLoading ? RefreshCw : AlertCircle}
-          title={detailQuery.isLoading ? "Loading request details" : "Request unavailable"}
-          description={detailQuery.isLoading ? "Fetching the request." : "This request could not be loaded."}
-        />
-      )}
+      {!ticket && detailQuery.isLoading && <TicketDetailSkeleton />}
+      {!ticket && !detailQuery.isLoading && <EmptyState icon={AlertCircle} title="Request unavailable" description="This request could not be loaded." />}
 
       {ticket && (
         <TicketDetailContent
@@ -53,6 +52,37 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: Tick
   );
 }
 
+/** The request window's shape while the request loads. */
+function TicketDetailSkeleton() {
+  return (
+    <div role="status" aria-label="Loading request details" className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+      <div>
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="mt-3 h-6 w-3/5" />
+        <Skeleton className="mt-3 h-3 w-full" />
+        <Skeleton className="mt-2 h-3 w-4/5" />
+        <div className="mt-6 grid gap-4 border-t border-(--tanaw-border-soft) pt-5 md:grid-cols-2">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index}>
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-2 h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <Skeleton className="h-4 w-32" />
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Skeleton className="rounded-tanaw-md h-9 w-full" />
+          <Skeleton className="rounded-tanaw-md h-9 w-full" />
+        </div>
+        <Skeleton className="mt-8 h-4 w-28" />
+        <Skeleton className="rounded-tanaw-md mt-4 h-20 w-full" />
+      </div>
+    </div>
+  );
+}
+
 type TicketDetailContentProps = {
   isItResponder: boolean;
   isReplyPending: boolean;
@@ -70,12 +100,12 @@ type TicketDetailContentProps = {
 };
 
 function TicketDetailContent(props: TicketDetailContentProps) {
-  const { isItResponder, isReplyPending, isStatusPending, onReplyChange, onReplySubmit, reply, replyError, ticket, timeFormat } = props;
+  const { isItResponder, isReplyPending, onReplyChange, onReplySubmit, reply, replyError, ticket, timeFormat } = props;
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-      <div className="space-y-5">
+    <div className="tanaw-enter grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="min-w-0">
         <TicketSummary ticket={ticket} />
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="support-tickets__section grid gap-4 md:grid-cols-2">
           <DetailField label="Sent by" value={ticket.requesterName} />
           <DetailField label="Place" value={ticket.enterpriseName ?? "No TANAW account"} />
           {ticket.enterpriseId ? <DetailField label="Enterprise ID" value={ticket.enterpriseId} /> : null}
@@ -85,11 +115,11 @@ function TicketDetailContent(props: TicketDetailContentProps) {
           {ticket.affectedArea ? <DetailField label="Affected Area" value={ticket.affectedArea} /> : null}
           {ticket.camera ? <DetailField label="Camera" value={ticket.camera} /> : null}
         </div>
-        {ticket.accountChange && <AccountChangePanel ticket={ticket} isItResponder={isItResponder} isPending={isStatusPending} onDecide={props.onStatusChange} />}
+        {ticket.accountChange && <AccountChangePanel ticket={ticket} isItResponder={isItResponder} isPending={props.isStatusPending} onDecide={props.onStatusChange} />}
         <TicketAttachments attachments={ticket.attachments ?? []} />
       </div>
 
-      <div className="space-y-5">
+      <div className="min-w-0 xl:border-l xl:border-(--tanaw-border-soft) xl:pl-8">
         <TicketStatusControl {...props} />
         <TicketConversation
           isItResponder={isItResponder}
@@ -108,12 +138,12 @@ function TicketDetailContent(props: TicketDetailContentProps) {
 
 function TicketSummary({ ticket }: { ticket: RequestDetail }) {
   return (
-    <div className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5 dark:border-emerald-300/20 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
+    <div className="support-tickets__section">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-xs font-bold tracking-wide text-emerald-700">{ticket.code}</p>
-          <h3 className="mt-1 text-xl font-black text-slate-950">{ticket.title}</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">{ticket.description}</p>
+        <div className="min-w-0">
+          <p className="font-mono text-[13px] font-semibold text-(--tanaw-accent-ink)">{ticket.code}</p>
+          <h3 className="mt-1 text-xl leading-snug font-[650] tracking-[-0.01em] text-(--tanaw-text)">{ticket.title}</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-(--tanaw-text-secondary)">{ticket.description}</p>
         </div>
         <TicketStatusBadge status={ticket.status} />
       </div>
@@ -121,34 +151,31 @@ function TicketSummary({ ticket }: { ticket: RequestDetail }) {
   );
 }
 
-const controlButton =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500";
-
 function AccountChangePanel({ ticket, isItResponder, isPending, onDecide }: { ticket: RequestDetail; isItResponder: boolean; isPending: boolean; onDecide: (status: RequestStatus) => void }) {
   const change = ticket.accountChange;
   if (!change) return null;
   const open = ticket.status === "In Progress";
   const waiting = change.verification === "pending_verification" ? "The new address must be verified before you can approve it." : change.verification === "expired" ? "The verification link expired. The enterprise has to ask again." : null;
   return (
-    <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-      <h4 className="text-sm font-black tracking-wide text-slate-950 uppercase">Account change</h4>
+    <section className="support-tickets__section">
+      <h4 className={ticketSectionHeading}>Account change</h4>
       <dl className="mt-3 grid gap-2 text-sm">
         <div className="flex gap-2">
-          <dt className="w-28 shrink-0 text-slate-500">{change.label}</dt>
-          <dd className="font-bold text-slate-950">
+          <dt className="w-28 shrink-0 text-(--tanaw-text-muted)">{change.label}</dt>
+          <dd className="font-semibold text-(--tanaw-text)">
             {change.currentValue ?? "Not set"} → {change.requestedValue}
           </dd>
         </div>
       </dl>
-      {waiting && <p className="mt-3 text-sm font-semibold text-amber-800 dark:text-amber-200">{waiting}</p>}
+      {waiting && <p className="mt-3 text-sm font-medium text-(--tanaw-warn-ink)">{waiting}</p>}
       {isItResponder && open && (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <button type="button" className={controlButton} disabled={!change.canApprove || isPending} onClick={() => onDecide("Approved")}>
+          <Button variant="secondary" size="sm" disabled={!change.canApprove || isPending} onClick={() => onDecide("Approved")}>
             Approve
-          </button>
-          <button type="button" className={controlButton} disabled={isPending} onClick={() => onDecide("Resolved")}>
+          </Button>
+          <Button variant="secondary" size="sm" disabled={isPending} onClick={() => onDecide("Resolved")}>
             Resolve without approving
-          </button>
+          </Button>
         </div>
       )}
     </section>
@@ -160,10 +187,10 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
   const isAccountChange = Boolean(ticket.accountChange);
   const options: RequestStatus[] = ["In Progress", "Resolved"];
   return (
-    <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
+    <section className="support-tickets__section">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
-          <ShieldCheck size={16} className="text-emerald-700" />
+        <h4 className={ticketSectionHeading}>
+          <ShieldCheck size={16} aria-hidden="true" className="text-(--tanaw-accent-ink)" />
           Request Status
         </h4>
         {!isItResponder && <Badge tone="purple">Read-only</Badge>}
@@ -171,32 +198,32 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
       {isItResponder ? (
         <>
           {isAccountChange && (
-            <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <p className="mt-4 text-sm text-(--tanaw-text-secondary)">
               {ticket.status === "In Progress" ? "Approve this change, or resolve it without approving, under Account change." : "This account change is decided."}
             </p>
           )}
           {!isAccountChange && ticket.status === "In Progress" && (
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {options.map((statusOption) => (
-                <button key={statusOption} type="button" disabled={ticket.status === statusOption || isPending} onClick={() => onStatusChange(statusOption)} className={controlButton}>
+                <Button key={statusOption} variant="secondary" size="sm" disabled={ticket.status === statusOption || isPending} onClick={() => onStatusChange(statusOption)}>
                   {toSentenceCase(ticketStatusLabel(statusOption))}
-                </button>
+                </Button>
               ))}
             </div>
           )}
           {!isAccountChange && ticket.status === "Resolved" && (
-            <button type="button" disabled={isPending} onClick={onReopen} className={`mt-4 w-full ${controlButton}`}>
+            <Button variant="secondary" size="sm" fullWidth disabled={isPending} onClick={onReopen} className="mt-4">
               Reopen request
-            </button>
+            </Button>
           )}
           {!isAccountChange && (
             <label className="mt-4 block">
-              <span className="mb-1.5 block text-[11px] font-black tracking-wide text-slate-500 uppercase">Group</span>
+              <span className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">Group</span>
               <select
                 value={ticket.group}
                 disabled={isPending}
                 onChange={(event) => onGroupChange(event.target.value as RequestGroup)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-100"
+                className={`${controlClassName} h-10 w-full px-3 text-sm`}
               >
                 {REQUEST_GROUPS.filter((group) => group !== "Account change").map((group) => (
                   <option key={group} value={group}>
@@ -206,12 +233,10 @@ function TicketStatusControl({ isItResponder, isStatusPending: isPending, onStat
               </select>
             </label>
           )}
-          {actionError && <p className="mt-2 text-xs font-bold text-red-700">{actionError}</p>}
+          {actionError && <p className="mt-2 text-[13px] font-medium text-(--tanaw-error)">{actionError}</p>}
         </>
       ) : (
-        <p className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
-          IT handles requests. You can read this request and its conversation.
-        </p>
+        <p className="rounded-tanaw-md mt-4 bg-(--tanaw-surface-inset) px-4 py-3 text-sm text-(--tanaw-text-secondary)">IT handles requests. You can read this request and its conversation.</p>
       )}
     </section>
   );

@@ -1,5 +1,6 @@
-import { MessageSquare, RefreshCw, Send } from "lucide-react";
+import { MessageSquare, Send } from "lucide-react";
 import { canReplyToRequest, type RequestDetail } from "@/shared/services/requests";
+import { Button, Textarea, cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { useTicketConversation } from "../hooks";
 import { authorRoleLabel, formatTicketTime } from "../model";
@@ -15,20 +16,31 @@ type TicketConversationProps = {
   timeFormat: SystemTimeFormat;
 };
 
+const heading = "flex items-center gap-2 text-[0.9375rem] font-[650] text-(--tanaw-text)";
+
 export function TicketConversation({ isItResponder, isReplyPending, onReplyChange, onReplySubmit, reply, replyError, ticket, timeFormat }: TicketConversationProps) {
   const { announcement, conversationRef, handleScroll, hasNewMessage, scrollToLatest } = useTicketConversation(ticket);
 
   return (
-    <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-      <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
-        <MessageSquare size={16} className="text-emerald-700" />
+    <section className="support-tickets__section">
+      <h4 className={heading}>
+        <MessageSquare size={16} aria-hidden="true" className="text-(--tanaw-accent-ink)" />
         Conversation
       </h4>
-      <div ref={conversationRef} onScroll={handleScroll} className="mt-4 max-h-80 space-y-3 overflow-y-auto overscroll-contain pr-1">
+      <div ref={conversationRef} onScroll={handleScroll} className="mt-4 max-h-80 space-y-2 overflow-y-auto overscroll-contain pr-3">
         <ConversationItem authorName={ticket.requesterName} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
-        {(ticket.messages ?? []).filter((message) => message.kind !== "status").map((message) => (
-          <ConversationItem key={message.id} authorName={message.kind === "note" ? `${message.authorName} (note for IT)` : message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
-        ))}
+        {(ticket.messages ?? [])
+          .filter((message) => message.kind !== "status")
+          .map((message) => (
+            <ConversationItem
+              key={message.id}
+              authorName={message.kind === "note" ? `${message.authorName} (note for IT)` : message.authorName}
+              authorRole={message.authorRole}
+              createdAt={message.createdAt}
+              message={message.message}
+              timeFormat={timeFormat}
+            />
+          ))}
       </div>
       <p className="sr-only" aria-live="polite">
         {announcement}
@@ -37,39 +49,27 @@ export function TicketConversation({ isItResponder, isReplyPending, onReplyChang
         <button
           type="button"
           onClick={scrollToLatest}
-          className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-200"
+          className="rounded-tanaw-md mt-3 w-full bg-(--tanaw-selected-bg) px-3 py-2 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-colors duration-150 hover:bg-(--tanaw-interactive-active-bg)"
         >
           New message
         </button>
       )}
 
       {!canReplyToRequest(ticket) ? (
-        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+        <p className="rounded-tanaw-md mt-4 bg-(--tanaw-surface-inset) px-4 py-3 text-sm text-(--tanaw-text-secondary)">
           This request is closed, so the conversation is closed too.
           {isItResponder && ticket.status === "Resolved" ? " Reopen it to continue the conversation." : ""}
-        </div>
+        </p>
       ) : isItResponder ? (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-(--tanaw-border-soft) pt-4">
           <label className="block">
-            <span className="mb-2 block text-[11px] font-black tracking-wide text-slate-500 uppercase">IT Response</span>
-            <textarea
-              value={reply}
-              onChange={(event) => onReplyChange(event.target.value)}
-              rows={4}
-              placeholder="Write a response for the requester..."
-              className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950 transition outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
-            />
+            <span className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">IT Response</span>
+            <Textarea value={reply} onChange={(event) => onReplyChange(event.target.value)} rows={4} placeholder="Write a response for the requester..." className="resize-none" />
           </label>
-          {replyError && <p className="mt-2 text-xs font-bold text-red-700">{replyError}</p>}
-          <button
-            type="button"
-            onClick={onReplySubmit}
-            disabled={isReplyPending}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-700/60"
-          >
-            {isReplyPending ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
+          {replyError && <p className="mt-2 text-[13px] font-medium text-(--tanaw-error)">{replyError}</p>}
+          <Button onClick={onReplySubmit} loading={isReplyPending} leadingIcon={<Send size={15} aria-hidden="true" />} className="mt-3">
             {isReplyPending ? "Sending..." : "Send Reply"}
-          </button>
+          </Button>
         </div>
       ) : null}
     </section>
@@ -79,16 +79,14 @@ export function TicketConversation({ isItResponder, isReplyPending, onReplyChang
 function ConversationItem({ authorName, authorRole, createdAt, message, timeFormat }: { authorName: string; authorRole: string; createdAt: string; message: string; timeFormat: SystemTimeFormat }) {
   const isRequester = authorRole === "enterprise" || authorRole === "requester";
   return (
-    <article
-      className={`rounded-2xl border p-3 ${isRequester ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}
-    >
+    <article className={cn("rounded-tanaw-md px-3.5 py-3", isRequester ? "bg-(--tanaw-selected-bg)" : "bg-(--tanaw-information-surface)")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black text-slate-950">{authorName}</p>
-        <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
+        <p className="text-[13px] font-semibold text-(--tanaw-text)">{authorName}</p>
+        <p className="text-xs text-(--tanaw-text-muted)">
           {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt, timeFormat)}
         </p>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-slate-700">{message}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-(--tanaw-text-secondary)">{message}</p>
     </article>
   );
 }

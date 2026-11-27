@@ -110,18 +110,18 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
         aria-labelledby={label ? `${labelId} ${titleId}-value` : undefined}
         onClick={() => (open ? close() : openPicker())}
         className={cn(
-          "inline-flex max-w-full items-center gap-2 border font-semibold text-(--tanaw-text) transition-colors",
+          "tanaw-picker-trigger inline-flex max-w-full items-center gap-2 border font-medium text-(--tanaw-text) outline-none transition-[border-color,background-color,box-shadow,scale] duration-200 ease-tanaw-out focus-visible:border-(--tanaw-accent-ink) focus-visible:shadow-(--tanaw-field-ring) active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
           variant === "pill"
-            ? "h-9 max-w-60 rounded-full border-(--tanaw-border-soft) bg-(--tanaw-page) px-3.5 text-[0.8125rem]"
-            : "h-11 w-full min-w-56 rounded-[10px] border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3 text-sm hover:border-(--tanaw-accent-ink)",
-          open && "border-(--tanaw-action) ring-3 ring-(--tanaw-action)/12",
+            ? "h-9 max-w-60 rounded-full border-transparent bg-(--tanaw-control-bg) px-3.5 text-[0.8125rem] hover:bg-(--tanaw-control-bg-hover)"
+            : "h-11 w-full min-w-56 rounded-tanaw-md border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3.5 text-sm hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover)",
+          open && "border-(--tanaw-accent-ink) bg-(--tanaw-control-bg-focus) shadow-(--tanaw-field-ring)",
         )}
       >
         <CalendarDays size={16} className="shrink-0 text-(--tanaw-accent-ink)" aria-hidden="true" />
         <span id={`${titleId}-value`} className="min-w-0 flex-1 truncate text-left">
           {triggerLabel ?? formatRangeLabel(value)}
         </span>
-        <ChevronDown size={15} className={cn("shrink-0 transition-transform", open && "rotate-180")} aria-hidden="true" />
+        <ChevronDown size={15} className={cn("tanaw-select-chevron shrink-0 text-(--tanaw-text-muted)", open && "rotate-180")} aria-hidden="true" />
       </button>
 
       {open && (
@@ -130,7 +130,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
           role="dialog"
           aria-label={ariaLabel}
           className={cn(
-            "absolute top-full z-1100 mt-2 w-[min(29.5rem,calc(100vw-2rem))] rounded-[14px] border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-3.5 text-(--tanaw-text) shadow-tanaw-raised",
+            "tanaw-enter absolute top-full z-1100 mt-2 w-[min(29.5rem,calc(100vw-2rem))] rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text) shadow-tanaw-dialog",
             align === "right" ? "right-0" : "left-0",
           )}
           onKeyDown={(event) => {

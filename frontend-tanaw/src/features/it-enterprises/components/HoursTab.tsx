@@ -145,9 +145,16 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
       <SectionHeading id="ite-closures">Closed days</SectionHeading>
       <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Holidays and one-off closures. Reports show these days as closed, not as zero visitors.</p>
       {closures.isLoading ? (
-        <div role="status" aria-label="Loading closed days" className="mt-3 space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+        <div role="status" aria-label="Loading closed days" className="mt-3 border-t border-(--tanaw-border-soft)">
+          {[0, 1].map((index) => (
+            <div key={index} className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-3">
+              <span className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="mt-2 h-3 w-28" />
+              </span>
+              <Skeleton className="rounded-tanaw-md h-9 w-20" />
+            </div>
+          ))}
         </div>
       ) : closures.isError ? (
         <p className="mt-3 text-sm text-(--tanaw-warn-ink)">Closed days could not be loaded.</p>
@@ -158,9 +165,9 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
           {items.map((closure) => {
             const dates = closureDates(closure, dateFormat);
             return (
-              <li key={closure.id} className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-2.5">
+              <li key={closure.id} className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-3">
                 <span className="min-w-0">
-                  <span className="block font-bold text-(--tanaw-text)">{dates}</span>
+                  <span className="block font-semibold text-(--tanaw-text)">{dates}</span>
                   <span className="block text-[13px] text-(--tanaw-text-secondary)">{closure.reason || "Closed"}</span>
                 </span>
                 <Button

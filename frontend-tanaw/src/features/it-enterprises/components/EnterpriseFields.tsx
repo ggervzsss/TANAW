@@ -78,7 +78,7 @@ export function NameField(props: FieldsProps) {
 export function AttractionFields({ form, errors, onChange, className }: FieldsProps & { className?: string }) {
   const id = useId();
   return (
-    <div className={cn("grid gap-4", className)}>
+    <div className={cn("grid gap-6", className)}>
       <div data-field-name="attractionCode">
         <FieldLabel htmlFor={id}>Attraction type</FieldLabel>
         <Select
@@ -107,7 +107,7 @@ export function AttractionFields({ form, errors, onChange, className }: FieldsPr
 export function AddressFields({ form, errors, onChange }: FieldsProps) {
   const barangayId = useId();
   return (
-    <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
+    <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-x-4 gap-y-6 max-sm:grid-cols-1">
       <TextInput form={form} errors={errors} onChange={onChange} field="address" label="Block, lot and street" placeholder="For example: Lakeside Road" maxLength={200} />
       <div data-field-name="barangay">
         <FieldLabel htmlFor={barangayId}>Barangay</FieldLabel>
@@ -134,8 +134,8 @@ export function AddressFields({ form, errors, onChange }: FieldsProps) {
 export function ManagerFields(props: FieldsProps) {
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-1.5 text-xs font-semibold text-(--tanaw-text-secondary)">Owner or manager</legend>
-      <div className="grid grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
+      <legend className="mb-1.5 text-[13px] font-medium text-(--tanaw-text-secondary)">Owner or manager</legend>
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] gap-x-4 gap-y-6 max-sm:grid-cols-1">
         <TextInput {...props} field="managerFirstName" label="First name" autoComplete="given-name" maxLength={PERSON_NAME_MAX_LENGTH} />
         <TextInput {...props} field="managerMiddleInitial" label="M.I." optional autoComplete="additional-name" maxLength={1} normalize={normalizeMiddleInitial} />
         <TextInput {...props} field="managerLastName" label="Last name" autoComplete="family-name" maxLength={PERSON_NAME_MAX_LENGTH} />
@@ -167,13 +167,17 @@ export function ContactNumberInput({ form, errors, onChange }: FieldsProps) {
       <div
         className={cn(
           controlClassName,
-          "flex h-10 items-stretch overflow-hidden p-0 focus-within:border-(--tanaw-accent-ink) focus-within:ring-4 focus-within:ring-emerald-600/15",
-          error && "border-(--tanaw-error)",
+          "tanaw-field group flex h-11 items-stretch overflow-hidden p-0 focus-within:border-(--tanaw-accent-ink) focus-within:bg-(--tanaw-control-bg-focus) focus-within:shadow-(--tanaw-field-ring)",
+          error && "border-(--tanaw-error) hover:border-(--tanaw-error)",
         )}
       >
-        <span aria-hidden="true" className="flex items-center border-r border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 text-sm font-semibold text-(--tanaw-text-secondary)">
+        <span
+          aria-hidden="true"
+          className="ease-tanaw-out flex items-center pr-2.5 pl-3.5 text-sm font-semibold text-(--tanaw-text-secondary) tabular-nums transition-colors duration-200 group-focus-within:text-(--tanaw-accent-ink)"
+        >
           +63
         </span>
+        <span aria-hidden="true" className="my-2.5 w-px shrink-0 bg-(--tanaw-control-border-hover)" />
         <input
           id={id}
           name="contactNumber"
@@ -199,7 +203,7 @@ export function EmailField({ hint, ...props }: FieldsProps & { hint?: ReactNode 
   return (
     <div>
       <TextInput {...props} field="email" label="Owner email" type="email" inputMode="email" autoComplete="email" placeholder="The sign-in invitation goes here" maxLength={254} />
-      {hint && <p className="mt-1.5 text-xs text-(--tanaw-text-muted)">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[13px] text-(--tanaw-text-muted)">{hint}</p>}
     </div>
   );
 }

@@ -84,7 +84,7 @@ export function MoveRequestMenu({ options, disabled = false, loading = false, on
           role="menu"
           aria-label="Move to another type"
           onKeyDown={handleMenuKey}
-          className="rounded-tanaw-md shadow-tanaw-raised absolute top-[calc(100%+6px)] left-0 z-30 min-w-68 border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-1.5"
+          className="it-requests__menu rounded-tanaw-md shadow-tanaw-raised absolute top-[calc(100%+6px)] left-0 z-30 min-w-68 border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-1.5"
         >
           {options.map((option, index) => (
             <button
@@ -98,8 +98,8 @@ export function MoveRequestMenu({ options, disabled = false, loading = false, on
               tabIndex={index === active ? 0 : -1}
               onClick={() => pick(option.group, option.selected)}
               className={cn(
-                "rounded-tanaw-sm flex min-h-10 w-full cursor-pointer items-center justify-between gap-3.5 px-3 text-left text-sm whitespace-nowrap text-(--tanaw-text) hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                option.selected && "bg-(--tanaw-surface-inset) font-bold text-(--tanaw-accent-ink)",
+                "rounded-tanaw-sm flex min-h-10 w-full cursor-pointer items-center justify-between gap-3.5 px-3 text-left text-sm whitespace-nowrap text-(--tanaw-text) transition-colors duration-150 hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
+                option.selected && "bg-(--tanaw-selected-bg) font-semibold text-(--tanaw-accent-ink)",
               )}
             >
               <span>{option.group}</span>

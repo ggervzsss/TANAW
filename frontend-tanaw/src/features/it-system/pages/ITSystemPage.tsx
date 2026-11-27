@@ -24,6 +24,7 @@ import {
   type SystemTab,
 } from "../model";
 import { activityCleanupQueryKey, emailLogQueryKey, getActivityCleanup, listEmailLog, listSystemActivity, removeExpiredActivity, systemActivityQueryKey } from "../services";
+import "../itSystem.css";
 
 const TAB_PREFIX = "it-system";
 const EMPTY: never[] = [];
@@ -121,7 +122,7 @@ export function ITSystemPage() {
       item.value === "email" && failedCount > 0 ? (
         <>
           {item.label}
-          <span aria-hidden="true" className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-(--tanaw-danger) px-1.5 text-[0.6875rem] font-extrabold text-white tabular-nums">
+          <span aria-hidden="true" className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-(--tanaw-danger) px-1.5 text-xs font-bold text-(--tanaw-on-action) tabular-nums">
             {failedCount}
           </span>
           <span className="sr-only">, {failedCount} not delivered</span>
@@ -136,7 +137,7 @@ export function ITSystemPage() {
     role: "tabpanel",
     "aria-labelledby": `${TAB_PREFIX}-tab-${value}`,
     hidden: tab !== value,
-    className: "pt-5",
+    className: "it-system__panel pt-5",
   });
 
   return (

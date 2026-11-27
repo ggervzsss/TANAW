@@ -25,6 +25,26 @@ export type VisitorEntry = ApiVisitorRanking["enterprises"][number];
 
 export type RankedRow = { key: string; label: string; visitors: number; enterpriseId?: string; barangay?: string };
 
+/**
+ * The ranking as the screens read it. A reply without the expected lists (an empty or unexpected
+ * response) reads as a range that nothing covers, instead of breaking the page. A real ranking
+ * comes back unchanged.
+ */
+export function readVisitorRanking(value: ApiVisitorRanking | undefined): ApiVisitorRanking | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw: Partial<ApiVisitorRanking> = typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    ...raw,
+    start: typeof raw.start === "string" ? raw.start : "",
+    end: typeof raw.end === "string" ? raw.end : "",
+    includesToday: raw.includesToday === true,
+    enterprises: Array.isArray(raw.enterprises) ? raw.enterprises : [],
+    reportMonths: Array.isArray(raw.reportMonths) ? raw.reportMonths : [],
+    cameraDays: typeof raw.cameraDays === "number" ? raw.cameraDays : 0,
+    uncoveredDays: typeof raw.uncoveredDays === "number" ? raw.uncoveredDays : 0,
+  };
+}
+
 /** "from monthly reports", "from camera counts", "from monthly reports and camera counts", or null with no source. */
 export function mostVisitedSource(sources: VisitorRankingSources) {
   const reports = sources.reportMonths.length > 0;

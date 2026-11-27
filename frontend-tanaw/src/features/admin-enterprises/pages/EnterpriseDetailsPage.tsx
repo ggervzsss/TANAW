@@ -24,6 +24,7 @@ import {
   windowText,
 } from "../model/enterpriseRange";
 import { busiestDay, busiestHour, dailyTrend, formatCount, hourlyTrend, monthlyTrend, trendNote, type Trend, type TrendPeriod } from "../model/enterpriseTrend";
+import { readVisitorRanking } from "@/features/admin-dashboard/model/mostVisited";
 import { TrendChart } from "../components/TrendChart";
 import "../adminEnterprises.css";
 
@@ -53,11 +54,7 @@ export function EnterpriseDetailsPage() {
     return (
       <div className="admin-enterprises w-full">
         <PortalPageHeader back={back} title={<span className="sr-only">Loading enterprise</span>} />
-        <div role="status" aria-label="Loading enterprise" className="space-y-4">
-          <Skeleton className="h-28 w-full max-w-2xl" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
+        <DetailsSkeleton />
       </div>
     );
   }
@@ -120,6 +117,7 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
   const insights = useVisitorInsights({ start: range.start, end: range.end, enterpriseId: row.id }, history !== null);
   // Visitor totals for a past range; today's total is the live count from the map.
   const ranking = useVisitorRanking({ start: range.start, end: range.end }, !live);
+  const rankingData = useMemo(() => readVisitorRanking(ranking.data), [ranking.data]);
   const reports = useOperationalReports();
 
   const hourly = useMemo(() => (history && oneDay ? hourlyTrend(insights.data, trendTitle("hourly", range, today)) : null), [history, oneDay, insights.data, range, today]);
@@ -157,25 +155,25 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
         locations={locations}
         live={live}
         phrase={phrase}
-        total={live ? null : ranking.isPending ? "loading" : ranking.isError ? "error" : rangeVisitors(ranking.data, row.id)}
+        total={live ? null : ranking.isPending ? "loading" : ranking.isError || !rankingData ? "error" : rangeVisitors(rankingData, row.id)}
         busiest={<Busiest oneDay={oneDay} history={history} phrase={phrase} trend={oneDay ? hourly : daily} loading={history !== null && insights.isPending} failed={insights.isError} />}
       />
 
-      <div className="mt-6.5 grid grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-8 max-[1100px]:grid-cols-1">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-8 max-[1100px]:grid-cols-1">
         <section aria-labelledby="trend-title" className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div>
-              <h2 id="trend-title" className="font-display text-[1.375rem] font-bold text-(--tanaw-text)">
+              <h2 id="trend-title" className="ae-heading">
                 {trend?.title ?? trendTitle(period, range, today)}
               </h2>
-              <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">{trendCaption(trend, trendSource(period, range, today))}</p>
+              <p className="mt-1 text-[13px] text-(--tanaw-text-secondary)">{trendCaption(trend, trendSource(period, range, today))}</p>
             </div>
             {periodOptions.length > 1 && <SegmentedControl ariaLabel="Trend period" className="ae-trend-period" options={periodOptions} value={period} onChange={changePeriod} />}
           </div>
           {trendLoading ? (
-            <Skeleton className="mt-4.5 h-62.5 w-full" label="Loading trend" />
+            <TrendSkeleton label="Loading trend" />
           ) : trendQuery.isError ? (
-            <p role="alert" className="mt-4.5 flex min-h-40 items-center border-b border-(--tanaw-border-soft) text-sm text-(--tanaw-text-secondary)">
+            <p role="alert" className="ae-fade mt-4.5 flex min-h-40 items-center border-b border-(--tanaw-border-soft) text-sm text-(--tanaw-text-secondary)">
               The trend could not be loaded. It will try again shortly.
             </p>
           ) : (
@@ -185,6 +183,74 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
 
         <MonitoredLocations row={row} locations={locations} live={live} />
       </div>
+    </div>
+  );
+}
+
+/** The page in its own shape while the enterprise loads: photo and title, four figures, the trend and the camera list. */
+function DetailsSkeleton() {
+  return (
+    <div role="status" aria-label="Loading enterprise">
+      <div aria-hidden="true">
+        <div className="flex items-start gap-5">
+          <Skeleton className="h-28 w-42 shrink-0 rounded-tanaw-lg max-sm:hidden" />
+          <div className="min-w-0 flex-1 pt-1">
+            <Skeleton className="h-8 w-72 max-w-full" />
+            <Skeleton shape="pill" className="mt-3 h-1 w-14" />
+            <Skeleton className="mt-3 h-4 w-96 max-w-full" />
+            <span className="mt-3 flex gap-2">
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-7 w-24" />
+            </span>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2 max-sm:grid-cols-1">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className={figureRuleClass(index)}>
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-1.5 h-3 w-32" />
+              <Skeleton className="mt-3 h-8.5 w-20" />
+              <Skeleton className="mt-2 h-3 w-28" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 grid grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-8 max-[1100px]:grid-cols-1">
+          <div>
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
+            <TrendSkeleton />
+          </div>
+          <div className="border-l border-(--tanaw-border-soft) pl-10 max-[1100px]:border-t max-[1100px]:border-l-0 max-[1100px]:pt-6 max-[1100px]:pl-0">
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="mt-2 h-3.5 w-40" />
+            {[0, 1, 2].map((index) => (
+              <span key={index} className="flex justify-between gap-3 border-b border-(--tanaw-border-soft) py-3.5">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-20" />
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Loading enterprise</span>
+    </div>
+  );
+}
+
+/** The trend chart's shape while it loads: the hairline grid with a skeleton where the line goes. */
+function TrendSkeleton({ label }: { label?: string }) {
+  return (
+    <div role={label ? "status" : undefined} aria-label={label} className="relative mt-4.5 grid h-65 grid-rows-4">
+      {[0, 1, 2, 3].map((index) => (
+        <span key={index} aria-hidden="true" className="border-t border-(--tanaw-chart-grid)" />
+      ))}
+      <Skeleton className="absolute right-2 bottom-7 left-14 h-[58%] rounded-t-tanaw-md rounded-b-none" />
+      <span aria-hidden="true" className="absolute right-2 bottom-0 left-14 flex justify-between">
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <Skeleton key={index} className="h-3 w-8" />
+        ))}
+      </span>
     </div>
   );
 }
@@ -199,30 +265,30 @@ function EnterprisePhoto({ name }: { name: string }) {
     <span
       role="img"
       aria-label={`${name}: no photo on record`}
-      className="grid h-28 w-42 shrink-0 place-items-center rounded-xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) text-center text-(--tanaw-accent-ink) max-sm:hidden"
+      className="grid h-28 w-42 shrink-0 place-items-center rounded-tanaw-lg bg-(--tanaw-surface-inset) text-center text-(--tanaw-accent-ink) max-sm:hidden"
     >
       <span>
         <span className="block font-display text-[1.625rem] font-bold">{initialsOf(name)}</span>
-        <span className="mt-0.5 block text-[11.5px] text-(--tanaw-text-muted)">Enterprise photo</span>
+        <span className="mt-0.5 block text-xs text-(--tanaw-text-muted)">Enterprise photo</span>
       </span>
     </span>
   );
 }
 
-const tagClass = "inline-flex min-h-6 items-center gap-1.5 rounded-full border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-2.5 text-[12.5px] font-semibold text-(--tanaw-text-secondary)";
+const tagClass = "inline-flex min-h-7 items-center gap-1.5 rounded-tanaw-sm bg-(--tanaw-surface-inset) px-2.5 text-[13px] font-semibold text-(--tanaw-text-secondary)";
 
 function Tags({ row, now }: { row: EnterpriseRow; now: Date }) {
   const warning = cameraWarning(row.map, now);
   const registered = row.registeredAt ? new Date(row.registeredAt) : null;
   const connection = connectionTag(row);
   return (
-    <p className="mt-2.5 flex flex-wrap gap-1.5">
+    <p className="mt-3 flex flex-wrap gap-2">
       <span className={cn(tagClass, connection.text)}>
         <span aria-hidden="true" className={cn("h-1.75 w-1.75 rounded-full", connection.dot)} />
         {connection.label}
       </span>
       {warning && (
-        <span className={cn(tagClass, "border-transparent bg-(--tanaw-st-missing-bg) text-(--tanaw-st-missing)")}>
+        <span className={cn(tagClass, "bg-(--tanaw-st-missing-bg) text-(--tanaw-st-missing)")}>
           <TriangleAlert size={13} aria-hidden="true" />
           {warning}
         </span>
@@ -340,7 +406,7 @@ function Busiest({ oneDay, history, phrase, trend, loading, failed }: { oneDay: 
 /** Rules between the four figures: one row of four, two rows of two at 1100px, one column on phones. */
 function figureRuleClass(index: number) {
   return cn(
-    "border-(--tanaw-border-soft) px-6 py-4.5 max-sm:border-l-0 max-sm:px-0",
+    "border-(--tanaw-border-soft) px-6 py-4 max-sm:border-l-0 max-sm:px-0",
     index === 0 ? "pl-0" : "border-l max-sm:border-t",
     index === 2 && "max-[1100px]:border-l-0 max-[1100px]:pl-0",
     index >= 2 && "max-[1100px]:border-t",
@@ -370,15 +436,15 @@ function Figure({
   return (
     <div className={cn("min-w-0", figureRuleClass(index))}>
       <dt>
-        <span className="flex items-center gap-2 text-sm font-bold text-(--tanaw-text)">
+        <span className="flex items-center gap-2 text-sm font-semibold text-(--tanaw-text)">
           {title}
-          {now && <span className="inline-flex min-h-5 items-center rounded-full border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-2 text-[11.5px] font-semibold text-(--tanaw-accent-ink)">Now</span>}
+          {now && <span className="inline-flex min-h-5 items-center rounded-tanaw-sm bg-(--tanaw-selected-bg) px-2 text-xs font-semibold text-(--tanaw-accent-ink)">Now</span>}
         </span>
-        <span className="block text-xs text-(--tanaw-text-muted)">{sub}</span>
+        <span className="block text-[13px] text-(--tanaw-text-muted)">{sub}</span>
       </dt>
       <dd>
-        <div className={cn("mt-2.5 font-display text-[2.125rem] leading-none font-bold text-(--tanaw-text) tabular-nums", valueClass)}>{value}</div>
-        {note && <p className={cn("mt-1.5 text-xs text-(--tanaw-text-muted)", noteClass)}>{note}</p>}
+        <div className={cn("mt-3 font-display text-[2.125rem] leading-none font-bold text-(--tanaw-text) tabular-nums", valueClass)}>{value}</div>
+        {note && <p className={cn("mt-2 text-[13px] text-(--tanaw-text-muted)", noteClass)}>{note}</p>}
       </dd>
     </div>
   );
@@ -403,10 +469,10 @@ function MonitoredLocations({ row, locations, live }: { row: EnterpriseRow; loca
           : "No camera details received yet.";
   return (
     <section aria-labelledby="locations-title" className="min-w-0 border-l border-(--tanaw-border-soft) pl-10 max-[1100px]:border-t max-[1100px]:border-l-0 max-[1100px]:pt-6 max-[1100px]:pl-0">
-      <h2 id="locations-title" className="font-display text-[1.375rem] font-bold text-(--tanaw-text)">
+      <h2 id="locations-title" className="ae-heading">
         Monitored Locations
       </h2>
-      <p className="mt-0.5 text-[13px] text-(--tanaw-text-muted)">{live ? "Cameras at this enterprise." : "Cameras at this enterprise, as they are now."}</p>
+      <p className="mt-1 text-[13px] text-(--tanaw-text-secondary)">{live ? "Cameras at this enterprise." : "Cameras at this enterprise, as they are now."}</p>
       {locations.length === 0 ? (
         <p className="mt-3 border-y border-(--tanaw-border-soft) py-3 text-sm text-(--tanaw-text-secondary)">{empty}</p>
       ) : (
@@ -420,12 +486,12 @@ function MonitoredLocations({ row, locations, live }: { row: EnterpriseRow; loca
                   {location.label}
                 </span>
               </span>
-              {location.note && location.state !== "monitoring" && <span className="mt-1 block text-[12.5px] text-(--tanaw-text-secondary)">{location.note}</span>}
+              {location.note && location.state !== "monitoring" && <span className="mt-1 block text-[13px] text-(--tanaw-text-secondary)">{location.note}</span>}
               {location.needsIt && (
                 <Link
                   to={routes.admin.requests}
                   aria-label={`Message IT about ${location.name}`}
-                  className="mt-1.5 inline-flex items-center gap-0.5 text-[13px] font-semibold text-(--tanaw-accent-ink) no-underline hover:underline"
+                  className="ae-link-arrow mt-1.5 inline-flex items-center gap-0.5 rounded-sm text-[13px] font-semibold text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
                 >
                   Message IT about this camera <ChevronRight size={14} aria-hidden="true" />
                 </Link>

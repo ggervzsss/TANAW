@@ -81,7 +81,10 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await auditDarkContrast(page, info, "dashboard", ".overview-layout");
   await page.screenshot({ path: info.outputPath("dark-dashboard.png"), fullPage: true });
   await page.getByRole("button", { name: "Open TANAW Insights" }).click();
-  await expect(page.getByRole("complementary", { name: "TANAW Insights" })).toBeVisible();
+  const assistant = page.getByRole("complementary", { name: "TANAW Insights" });
+  await expect(assistant).toBeVisible();
+  // The audit skips translucent text, so wait for the panel's fade-in to finish.
+  await expect(assistant).toHaveCSS("opacity", "1");
   await auditDarkContrast(page, info, "assistant", ".tanaw-assistant");
   await page.screenshot({ path: info.outputPath("dark-assistant.png"), fullPage: true });
   await page.getByRole("button", { name: "Collapse TANAW Insights" }).click();

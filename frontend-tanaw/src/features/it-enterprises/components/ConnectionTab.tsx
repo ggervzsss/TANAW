@@ -36,14 +36,14 @@ function AppFacts({ row, formats }: { row: EnterpriseRow; formats: DisplayFormat
   const status = appCell(row, formats);
   const version = app ? appVersion(app) : { version: "Not reported", note: null };
   const cell = "min-w-0 px-5 py-4 first:pl-0 max-lg:px-0 max-lg:py-3";
-  const term = "text-[12.5px] text-(--tanaw-text-muted)";
-  const value = "mt-1 font-bold text-(--tanaw-text)";
+  const term = "text-[13px] text-(--tanaw-text-muted)";
+  const value = "mt-1 font-semibold text-(--tanaw-text)";
   return (
     <dl className="grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-sm:grid-cols-1 lg:[&>div+div]:border-l lg:[&>div+div]:border-(--tanaw-border-soft)">
       <div className={cell}>
         <dt className={term}>Desktop app status</dt>
         <dd className="mt-1">
-          <StateText tone={status.tone} dot className="font-bold">
+          <StateText tone={status.tone} dot className="font-semibold">
             {status.label}
           </StateText>
           {status.label === "Closed" && status.sub && <span className="mt-0.5 block text-[13px] text-(--tanaw-text-muted)">{status.sub}</span>}
@@ -80,11 +80,11 @@ function CamerasToday({ row, formats }: { row: EnterpriseRow; formats: DisplayFo
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <SectionHeading id="ite-cameras-today">Cameras today</SectionHeading>
-          <p className="mt-1 text-sm text-(--tanaw-text-secondary)">{today.data ? stripIntro(today.data, formats.timeFormat) : "Each block is one hour of today."}</p>
+          <p className="mt-1 text-[13px] text-(--tanaw-text-secondary)">{today.data ? stripIntro(today.data, formats.timeFormat) : "Each block is one hour of today."}</p>
         </div>
         <ul aria-label="Legend" className="flex flex-wrap gap-x-3.5 gap-y-1.5">
           {STRIP_LEGEND.map((item) => (
-            <li key={item.state} className="inline-flex items-center gap-1.5 text-[12.5px] text-(--tanaw-text-secondary)">
+            <li key={item.state} className="inline-flex items-center gap-1.5 text-[13px] text-(--tanaw-text-secondary)">
               <span aria-hidden="true" data-state={item.state} className="ite-slot h-3! w-3 rounded-[3px]!" />
               {item.label}
             </li>
@@ -93,9 +93,19 @@ function CamerasToday({ row, formats }: { row: EnterpriseRow; formats: DisplayFo
       </div>
       <div className="mt-2 border-t border-(--tanaw-border-soft)">
         {today.isLoading ? (
-          <div role="status" aria-label="Loading cameras" className="space-y-3 py-4">
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
+          <div role="status" aria-label="Loading cameras">
+            {[0, 1].map((index) => (
+              <div key={index} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2.2fr)] items-center gap-x-7 gap-y-2.5 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
+                <div>
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="mt-2 h-3 w-24" />
+                </div>
+                <div>
+                  <Skeleton className="h-5.5 w-full" />
+                  <Skeleton className="mt-2.5 h-3 w-2/3" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : today.isError ? (
           <Alert
@@ -126,9 +136,9 @@ function CameraRow({ camera, live, hours, formats }: { camera: CameraDayStrip; l
   return (
     <div className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2.2fr)] items-center gap-x-7 gap-y-2.5 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
       <div className="min-w-0">
-        <p className="font-bold text-(--tanaw-text)">{camera.name}</p>
+        <p className="font-semibold text-(--tanaw-text)">{camera.name}</p>
         {kind && <p className="mt-0.5 text-[13px] text-(--tanaw-text-secondary)">{kind}</p>}
-        <StateText tone={state.tone} dot className="mt-1.5 text-[13.5px]">
+        <StateText tone={state.tone} dot className="mt-1.5 text-sm">
           {state.text}
         </StateText>
       </div>
@@ -138,7 +148,7 @@ function CameraRow({ camera, live, hours, formats }: { camera: CameraDayStrip; l
             <span key={hour} data-state={slots.get(hour) ?? "future"} className="ite-slot" />
           ))}
         </div>
-        <div aria-hidden="true" className="relative mt-1 h-4 text-[11.5px] text-(--tanaw-text-muted)">
+        <div aria-hidden="true" className="relative mt-1 h-4 text-xs text-(--tanaw-text-muted)">
           {ticks.map((tick, index) => (
             <span
               key={tick.hour}
@@ -149,7 +159,7 @@ function CameraRow({ camera, live, hours, formats }: { camera: CameraDayStrip; l
             </span>
           ))}
         </div>
-        <p className="mt-1.5 text-[13.5px] text-(--tanaw-text-secondary)">{camera.note}</p>
+        <p className="mt-1.5 text-sm text-(--tanaw-text-secondary)">{camera.note}</p>
       </div>
     </div>
   );
@@ -165,9 +175,14 @@ function RequestsFromPlace({ row, formats }: { row: EnterpriseRow; formats: Disp
     <section aria-labelledby="ite-requests">
       <SectionHeading id="ite-requests">Requests from this place</SectionHeading>
       {requests.isLoading ? (
-        <div role="status" aria-label="Loading requests" className="mt-3 space-y-3">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <div role="status" aria-label="Loading requests" className="mt-2.5 border-t border-(--tanaw-border-soft)">
+          {[0, 1].map((index) => (
+            <div key={index} className="border-b border-(--tanaw-border-soft) py-3.5">
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="mt-2.5 h-4 w-3/4" />
+              <Skeleton className="mt-2 h-3 w-24" />
+            </div>
+          ))}
         </div>
       ) : requests.isError ? (
         <p className="mt-3 text-sm text-(--tanaw-warn-ink)">Requests could not be loaded.</p>
@@ -179,16 +194,16 @@ function RequestsFromPlace({ row, formats }: { row: EnterpriseRow; formats: Disp
             const status = requestStatus(request);
             return (
               <li key={request.id} className="border-b border-(--tanaw-border-soft) py-3.5">
-                <span className="flex justify-between gap-3 text-[12.5px] text-(--tanaw-text-secondary)">
+                <span className="flex justify-between gap-3 text-[13px] text-(--tanaw-text-secondary)">
                   <span>
                     {request.group} · {requestWhen(request.createdAt, formats.now, formats.dateFormat, formats.timeFormat)}
                   </span>
                   <span className="text-(--tanaw-text-muted) tabular-nums">{request.code}</span>
                 </span>
-                <Link to={requestPath(request.id)} className="mt-1 block font-bold text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline">
+                <Link to={requestPath(request.id)} className="mt-1 block font-semibold text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline">
                   {request.title}
                 </Link>
-                <span className={cn("mt-0.5 block text-[13.5px] font-semibold", toneText[status.tone])}>{status.text}</span>
+                <span className={cn("mt-0.5 block text-sm font-semibold", toneText[status.tone])}>{status.text}</span>
               </li>
             );
           })}

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { routes } from "@/app/routers/routes";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { Alert, Button, PortalPageHeader, SearchField, Select, Spinner } from "@/shared/ui-kit";
+import { Alert, Button, PortalPageHeader, SearchField, Select, Skeleton } from "@/shared/ui-kit";
 import { RequestDetail, RequestList } from "../components";
 import type { Request } from "@/shared/services/requests";
 import { useAdminRequests, useRequestDetail, useRequestReadMarks } from "../hooks";
@@ -70,7 +70,7 @@ export function AdminRequestsPage() {
         description="What people asked IT for: help, and account changes that need IT's approval. IT handles them; you can add a note for IT."
         actions={
           <div className="flex items-center gap-4">
-            <p role="status" className="text-sm font-bold text-(--tanaw-text)">
+            <p role="status" className="text-sm font-semibold text-(--tanaw-text)">
               {isLoading ? "Checking requests" : unreadLabel(unread)}
             </p>
             <Button variant="link" size="sm" className="text-sm font-semibold" disabled={unread === 0} onClick={markAllRead}>
@@ -82,25 +82,25 @@ export function AdminRequestsPage() {
 
       <div className="grid grid-cols-[minmax(0,1fr)_15rem_13rem] items-end gap-3 max-[980px]:grid-cols-1">
         <div>
-          <label htmlFor="requests-search" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+          <label htmlFor="requests-search" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
             Search
           </label>
           <SearchField id="requests-search" label="Search" value={filters.query} onChange={(query) => updateFilters({ query })} placeholder="Place, request or reference number" />
         </div>
         <div>
-          <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+          <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
             Type
           </span>
           <Select ariaLabel="Type" value={filters.group} options={groupFilterOptions} onChange={(group) => updateFilters({ group: group as RequestFilters["group"] })} />
         </div>
         <div>
-          <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+          <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
             Status
           </span>
           <Select ariaLabel="Status" value={filters.status} options={statusOptions} onChange={(status) => updateFilters({ status: status as RequestFilters["status"] })} />
         </div>
       </div>
-      <p className="mt-2.5 text-sm text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : summary}</p>
+      <p className="mt-3 text-[13px] text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : summary}</p>
 
       {isError && (
         <Alert
@@ -115,7 +115,7 @@ export function AdminRequestsPage() {
         />
       )}
 
-      <div className="mt-3.5 grid grid-cols-[26rem_minmax(0,1fr)] items-start gap-x-9 gap-y-6 border-t border-(--tanaw-border-soft) pt-3.5 max-[980px]:grid-cols-1">
+      <div className="mt-4 grid grid-cols-[26rem_minmax(0,1fr)] items-start gap-x-10 gap-y-6 border-t border-(--tanaw-border-soft) pt-4 max-[980px]:grid-cols-1">
         <RequestList
           groups={groups}
           selectedId={selected?.id ?? null}
@@ -128,9 +128,9 @@ export function AdminRequestsPage() {
             <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />
           )}
           {selected ? (
-            <RequestDetail request={selected} detail={detailQuery.data ?? null} detailLoading={detailQuery.isLoading} timeFormat={timeFormat} now={now} />
+            <RequestDetail key={selected.id} request={selected} detail={detailQuery.data ?? null} detailLoading={detailQuery.isLoading} timeFormat={timeFormat} now={now} />
           ) : (
-            !isLoading && <p className="py-1.5 text-sm text-(--tanaw-text-secondary)">Select a request to see its details.</p>
+            isLoading ? <DetailSkeleton /> : <p className="py-1.5 text-sm text-(--tanaw-text-secondary)">Select a request to see its details.</p>
           )}
         </div>
       </div>
@@ -141,9 +141,24 @@ export function AdminRequestsPage() {
 function ListEmptyState({ isLoading, filtered, onClear }: { isLoading: boolean; filtered: boolean; onClear: () => void }) {
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-4 py-6 text-sm text-(--tanaw-text-secondary)">
-        <Spinner size={16} label="" />
-        Loading requests
+      <div role="status" aria-label="Loading requests">
+        <div aria-hidden="true">
+          <span className="block border-b border-(--tanaw-border-soft) px-4 pt-3 pb-2">
+            <Skeleton className="h-3.5 w-16" />
+          </span>
+          {[0, 1, 2, 3].map((index) => (
+            <span key={index} className="block border-b border-(--tanaw-border-soft) px-4 py-4">
+              <span className="flex justify-between gap-3">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-12" />
+              </span>
+              <Skeleton className="mt-2.5 h-4 w-4/5" />
+              <Skeleton className="mt-2 h-3.5 w-36" />
+              <Skeleton className="mt-3 h-3 w-20" />
+            </span>
+          ))}
+        </div>
+        <span className="sr-only">Loading requests</span>
       </div>
     );
   }
@@ -174,4 +189,27 @@ function useMinuteClock() {
     return () => window.clearInterval(timer);
   }, []);
   return now;
+}
+
+/** The details pane in its own shape while the requests load: status, title, the story and the details grid. */
+function DetailSkeleton() {
+  return (
+    <div aria-hidden="true" className="py-1.5">
+      <Skeleton className="h-3.5 w-24" />
+      <Skeleton className="mt-3 h-8 w-3/4" />
+      <Skeleton className="mt-3 h-4 w-64 max-w-full" />
+      <Skeleton className="mt-7 h-4 w-32" />
+      <Skeleton className="mt-3 h-3.5 w-full max-w-[68ch]" />
+      <Skeleton className="mt-2 h-3.5 w-5/6 max-w-[60ch]" />
+      <Skeleton className="mt-7 h-4 w-20" />
+      <div className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
+        {[0, 1, 2, 3].map((index) => (
+          <span key={index} className="block border-b border-(--tanaw-border-soft) py-3 pr-4">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="mt-2 h-4 w-36" />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }

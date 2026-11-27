@@ -105,13 +105,13 @@ function DetailsForm({ account, onAccountUpdated }: { account: EnterpriseAccount
     <section aria-labelledby="ite-details">
       <SectionHeading id="ite-details">Details</SectionHeading>
       <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Changes show on the Admin map and on reports sent after today.</p>
-      <form noValidate onSubmit={submit} className="mt-4 grid gap-4">
+      <form noValidate onSubmit={submit} className="mt-5 grid gap-6">
         <NameField {...fieldProps} />
         <AttractionFields {...fieldProps} />
         <LocationField draft={draft} mapId={`it-enterprise-map-${account.id}`} hint="No map pin yet. Search above, or click the map to pin the entrance." />
         <AddressFields {...fieldProps} />
         <ManagerFields {...fieldProps} />
-        <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-1">
           <ContactNumberInput {...fieldProps} />
           <CapacityField {...fieldProps} />
         </div>
@@ -154,32 +154,33 @@ function SignInAccount({ row, formats }: { row: EnterpriseRow; formats: DisplayF
   const canReset = row.accountState === "active";
   const canDeactivate = canDeactivateAccount(account);
   const emailRequest = account.profileChangeRequests?.find((request) => request.type === "businessEmail" && request.status !== "expired");
-  const term = "text-[12.5px] text-(--tanaw-text-muted)";
+  const term = "text-[13px] text-(--tanaw-text-muted)";
 
   return (
-    <section aria-labelledby="ite-account">
+    // Stays in view beside the longer details form, so the account and its actions are always one glance away.
+    <section aria-labelledby="ite-account" className="lg:sticky lg:top-6">
       <SectionHeading id="ite-account">Sign-in account</SectionHeading>
       <dl className="mt-3 border-t border-(--tanaw-border-soft)">
         <div className="border-b border-(--tanaw-border-soft) py-3">
           <dt className={term}>Owner email</dt>
-          <dd className="mt-0.5 font-bold break-all text-(--tanaw-text)">{account.email}</dd>
+          <dd className="mt-0.5 font-semibold break-all text-(--tanaw-text)">{account.email}</dd>
         </div>
         <div className="border-b border-(--tanaw-border-soft) py-3">
           <dt className={term}>Access</dt>
           <dd className="mt-0.5">
-            <StateText tone={access.tone} className="font-bold">
+            <StateText tone={access.tone} className="font-semibold">
               {access.text}
             </StateText>
           </dd>
         </div>
         <div className="border-b border-(--tanaw-border-soft) py-3">
           <dt className={term}>Last signed in</dt>
-          <dd className="mt-0.5 font-bold text-(--tanaw-text)">{account.lastLoginAt ? formatPhilippineDateAndTime(account.lastLoginAt, formats.dateFormat, formats.timeFormat) : "Never"}</dd>
+          <dd className="mt-0.5 font-semibold text-(--tanaw-text)">{account.lastLoginAt ? formatPhilippineDateAndTime(account.lastLoginAt, formats.dateFormat, formats.timeFormat) : "Never"}</dd>
         </div>
       </dl>
-      <p className="mt-3.5 text-[13.5px] text-(--tanaw-text-secondary)">To change the owner email, the enterprise sends an account change request from the desktop app. You approve it in Requests.</p>
+      <p className="mt-3.5 text-sm text-(--tanaw-text-secondary)">To change the owner email, the enterprise sends an account change request from the desktop app. You approve it in Requests.</p>
       {emailRequest && (
-        <p className="mt-2 text-[13.5px] font-semibold text-(--tanaw-warn-ink)">
+        <p className="mt-2 text-sm font-semibold text-(--tanaw-warn-ink)">
           An email change to {emailRequest.requestedValue} is waiting {emailRequest.status === "pending_verification" ? "for the owner to verify it" : "for approval in Requests"}.
         </p>
       )}

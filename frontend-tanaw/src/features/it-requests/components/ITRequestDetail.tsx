@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { requestPlace } from "@/features/alerts-monitor/model";
 import { RequestPhotos } from "@/features/alerts-monitor/components";
 import type { Request, RequestDetail } from "@/shared/services/requests";
-import { Button, cn } from "@/shared/ui-kit";
+import { Button, Skeleton, cn } from "@/shared/ui-kit";
 import { useEnterpriseAppHealth, useRequestActions, type RequestAction } from "../hooks";
 import {
   appToneClass,
@@ -85,12 +85,12 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
   const hasActions = actions.canStart || actions.canDecide || actions.canResolve || actions.canReopen || actions.canMove;
 
   return (
-    <article aria-labelledby="it-request-title" className="min-w-0 py-1.5">
-      <p className="flex items-center gap-2.5 text-[0.8125rem] font-bold">
+    <article aria-labelledby="it-request-title" className="it-requests__detail min-w-0 py-1.5">
+      <p className="flex items-center gap-2.5 text-[0.8125rem] font-semibold">
         <span className={stateTextClass[state]}>{stateLabels[state]}</span>
         <span className="font-semibold text-(--tanaw-text-muted) tabular-nums">{request.code}</span>
       </p>
-      <h2 id="it-request-title" className="font-display mt-2 text-[1.875rem] leading-[1.15] font-bold text-(--tanaw-text) max-sm:text-2xl">
+      <h2 id="it-request-title" className="mt-2 text-[1.375rem] leading-tight font-[650] tracking-[-0.015em] text-(--tanaw-text) max-sm:text-xl">
         {request.title}
       </h2>
       <p role="status" className="mt-2.5 flex items-center gap-2 text-[0.90625rem] text-(--tanaw-text-secondary)">
@@ -157,28 +157,29 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
         </p>
       )}
 
-      <h3 className="mt-6.5 text-base font-bold">What happened</h3>
+      <h3 className="mt-7 text-base font-[650]">What happened</h3>
       <p className="mt-1.5 max-w-[68ch] leading-relaxed whitespace-pre-line text-(--tanaw-text-secondary)">{request.description}</p>
 
       {change && (
-        <div className="mt-4 max-w-184">
-          <p className="mb-2 text-[0.78125rem] font-semibold text-(--tanaw-text-secondary)">{change.label}</p>
-          <div className="rounded-tanaw-md grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border border-(--tanaw-border-soft) bg-(--tanaw-surface) px-4 py-3.5">
+        <div className="mt-5 max-w-184">
+          <p className="mb-1 text-[13px] font-medium text-(--tanaw-text-secondary)">{change.label}</p>
+          {/* Open, not boxed: the current and the asked-for value read across one ruled line. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-5 gap-y-3 border-y border-(--tanaw-border-soft) py-3.5">
             <div className="min-w-0">
-              <span className="block text-xs text-(--tanaw-text-muted)">Now</span>
+              <span className="block text-[13px] text-(--tanaw-text-muted)">Now</span>
               <span className="mt-0.5 block font-semibold wrap-anywhere">{change.currentValue || "Not set"}</span>
             </div>
             <ArrowRight size={18} aria-hidden="true" className="text-(--tanaw-text-muted)" />
             <span className="sr-only">changes to</span>
             <div className="min-w-0">
-              <span className="block text-xs text-(--tanaw-text-muted)">Asked for</span>
-              <span className="mt-0.5 block font-bold wrap-anywhere text-(--tanaw-accent-ink)">{change.requestedValue}</span>
+              <span className="block text-[13px] text-(--tanaw-text-muted)">Asked for</span>
+              <span className="mt-0.5 block font-semibold wrap-anywhere text-(--tanaw-accent-ink)">{change.requestedValue}</span>
             </div>
           </div>
         </div>
       )}
 
-      <h3 className="mt-5.5 text-base font-bold">Details</h3>
+      <h3 className="mt-6 text-base font-[650]">Details</h3>
       <dl className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
         <DetailItem label="Place">
           {request.enterpriseId ? (
@@ -203,13 +204,13 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
 
       <RequestPhotos attachments={request.attachments ?? []} />
 
-      <h3 className="mt-5.5 text-base font-bold">Conversation and updates</h3>
+      <h3 className="mt-6 text-base font-[650]">Conversation and updates</h3>
       <ol aria-busy={detailLoading || undefined} className="mt-2.5 list-none pl-2">
         {timeline.map((entry, index) => (
           <li key={entry.id} className="relative border-l-2 border-(--tanaw-border-soft) pb-3.5 pl-5.5 last:border-transparent last:pb-1">
             <span aria-hidden="true" className={cn("absolute top-0.5 -left-1.75 size-3 rounded-full border-2", dotBorder[entry.kind], index === 0 ? dotFill[entry.kind] : "bg-(--tanaw-page)")} />
-            <div className={cn(entry.kind === "note" && "rounded-tanaw-md border border-(--tanaw-warning-line) bg-(--tanaw-warning-surface) px-3 py-2")}>
-              <p className="font-bold text-(--tanaw-text)">
+            <div className={cn(entry.kind === "note" && "rounded-tanaw-md bg-(--tanaw-warning-surface) px-3 py-2")}>
+              <p className="font-semibold text-(--tanaw-text)">
                 {entry.title} {entry.at && <span className="text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{formatWhen(entry.at)}</span>}
               </p>
               <p className="mt-0.75 text-sm wrap-break-word whitespace-pre-line text-(--tanaw-text-secondary)">{entry.detail}</p>
@@ -217,7 +218,12 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
           </li>
         ))}
       </ol>
-      {detailLoading && <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">Loading the conversation.</p>}
+      {detailLoading && (
+        <div role="status" aria-label="Loading the conversation." className="mt-1 grid gap-2 pl-7.5">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-3 w-3/4 max-w-120" />
+        </div>
+      )}
 
       <ReplyComposer request={request} draft={draft} onDraftChange={setDraft} pending={pending} onSend={(resolve) => run({ kind: "reply", message: draft.trim(), resolve })} />
     </article>
@@ -235,8 +241,8 @@ function AppStatus({ enterpriseId, query, now, formatWhen }: { enterpriseId: str
 function DetailItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:pr-0">
-      <dt className="text-[0.78125rem] text-(--tanaw-text-muted)">{label}</dt>
-      <dd className="mt-0.75 font-bold wrap-break-word text-(--tanaw-text)">{children}</dd>
+      <dt className="text-[13px] text-(--tanaw-text-muted)">{label}</dt>
+      <dd className="mt-0.75 font-semibold wrap-break-word text-(--tanaw-text)">{children}</dd>
     </div>
   );
 }

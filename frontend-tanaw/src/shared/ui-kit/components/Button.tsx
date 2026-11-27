@@ -2,12 +2,12 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { Spinner } from "./Spinner";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "link";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "destructive" | "ghost" | "link";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   children: ReactNode;
-  /** primary: the one Civic Green action; secondary: outlined; danger: destructive; ghost: quiet; link: inline text. */
+  /** primary: the one Civic Green action; secondary: a quiet tint; danger: a red tint for destructive actions; destructive: solid red, for the confirm button of a destructive confirmation; ghost: no fill until hovered; link: inline text. */
   variant?: ButtonVariant;
   /** sm 34px, md 42px (default), lg 48px. */
   size?: ButtonSize;
@@ -21,24 +21,40 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "childre
 };
 
 const base =
-  "tanaw-button inline-flex shrink-0 items-center justify-center gap-2 rounded-tanaw-md font-bold whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-150 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-px disabled:active:translate-y-0";
+  "tanaw-button relative isolate inline-flex shrink-0 items-center justify-center gap-2 rounded-tanaw-md font-semibold tracking-[-0.006em] whitespace-nowrap transition-[background-color,border-color,color,box-shadow,translate,scale,opacity] duration-200 ease-tanaw-out select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.97] active:duration-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100";
+
+/* Hover lifts a button by a pixel and pressing settles it back; the kit stylesheet (Controls.css) adds the
+   light sweep across the primary button and the icon nudges. */
+const lift = "enabled:hover:-translate-y-px enabled:active:translate-y-0 motion-reduce:enabled:hover:translate-y-0";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-(--tanaw-action) text-(--tanaw-on-action) shadow-tanaw-resting hover:bg-(--tanaw-action-hover) disabled:hover:bg-(--tanaw-action)",
-  secondary:
-    "border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-(--tanaw-text) shadow-tanaw-resting hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-hover) disabled:hover:bg-(--tanaw-control-bg)",
-  danger: "border border-(--tanaw-danger-line) bg-(--tanaw-control-bg) text-(--tanaw-danger) shadow-tanaw-resting hover:bg-(--tanaw-danger-surface) disabled:hover:bg-(--tanaw-control-bg)",
-  ghost: "text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text)",
-  link: "h-auto! px-0! text-(--tanaw-accent-ink) underline-offset-4 hover:underline active:translate-y-0",
+  primary: cn(
+    "bg-(--tanaw-action) text-(--tanaw-on-action) shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_1px_2px_rgb(5_91_37/0.18)] enabled:hover:bg-(--tanaw-action-hover) enabled:hover:shadow-(--tanaw-button-lift)",
+    lift,
+  ),
+  secondary: cn(
+    "border border-transparent bg-(--tanaw-control-bg) text-(--tanaw-text) enabled:hover:border-(--tanaw-control-border) enabled:hover:bg-(--tanaw-control-bg-hover)",
+    lift,
+  ),
+  danger: cn("border border-transparent bg-(--tanaw-tonal-danger) text-(--tanaw-danger) enabled:hover:bg-(--tanaw-tonal-danger-hover)", lift),
+  destructive: cn(
+    "bg-(--tanaw-danger-action) text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(127_29_29/0.2)] enabled:hover:bg-(--tanaw-danger-action-hover) enabled:hover:shadow-[0_8px_20px_-6px_rgb(180_35_24/0.45)]",
+    lift,
+  ),
+  ghost: "text-(--tanaw-text-secondary) enabled:hover:bg-(--tanaw-control-bg) enabled:hover:text-(--tanaw-text)",
+  link: "h-auto! px-0! text-(--tanaw-accent-ink) underline-offset-4 hover:underline active:scale-100",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-8.5 px-3 text-xs",
-  md: "h-10.5 px-4 text-sm",
-  lg: "h-12 px-5 text-base",
+  sm: "h-8.5 px-3.5 text-[0.8125rem]",
+  md: "h-10.5 px-4.5 text-sm",
+  lg: "h-12 px-6 text-[0.9375rem]",
 };
 
-/** The one TANAW button: 12px corners, sentence case, Civic Green only for the primary action. */
+/**
+ * The one TANAW button: 12px corners, sentence case, Civic Green only for the primary action. Secondary,
+ * danger and ghost buttons are tonal (a soft tint, never a white box), so they sit on the page like the fields.
+ */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { children, variant = "primary", size = "md", loading = false, leadingIcon, trailingIcon, fullWidth = false, className, disabled, type = "button", ...props },
   ref,

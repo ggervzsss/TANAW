@@ -94,9 +94,9 @@ export function RegisteredEnterprisesPage() {
             </p>
           )}
 
-          <form role="search" aria-label="Filter enterprises" className="mt-5.5 grid grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))] gap-3 max-xl:grid-cols-3 max-md:grid-cols-1" onSubmit={(event) => event.preventDefault()}>
+          <form role="search" aria-label="Filter enterprises" className="mt-6 grid grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))] gap-3 max-xl:grid-cols-3 max-md:grid-cols-1" onSubmit={(event) => event.preventDefault()}>
             <div className="min-w-0 max-xl:col-span-3 max-md:col-span-1">
-              <label htmlFor="enterprise-search" className="mb-2 block text-xs font-bold tracking-label text-(--tanaw-label) uppercase">
+              <label htmlFor="enterprise-search" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
                 Search
               </label>
               <SearchField id="enterprise-search" value={filters.search} onChange={(search) => update({ search }, { page: 1 })} placeholder="Enterprise, category or barangay" label="Search enterprises" />
@@ -127,13 +127,13 @@ export function RegisteredEnterprisesPage() {
                 type="button"
                 aria-label="Remove filter: Needs attention"
                 onClick={() => update({ attention: false }, { page: 1 })}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-(--ae-chip) px-3 text-[13px] font-semibold text-(--tanaw-text) transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+                className="ae-chip inline-flex min-h-8 items-center gap-1.5 rounded-full bg-(--ae-chip) px-3 text-[13px] font-semibold text-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
               >
                 Needs attention <X size={14} aria-hidden="true" />
               </button>
             )}
             {hasActiveFilters(filters) && (
-              <button type="button" onClick={() => update(DEFAULT_FILTERS, { page: 1 })} className="text-sm font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
+              <button type="button" onClick={() => update(DEFAULT_FILTERS, { page: 1 })} className="ae-text-action rounded-sm text-sm font-semibold text-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)">
                 Clear filters
               </button>
             )}
@@ -207,32 +207,32 @@ function FigureStrip({
   attention: number;
   onShowAttention: () => void;
 }) {
-  const cell = "min-w-0 px-6 py-4.5 first:pl-0 max-md:px-0 max-md:py-4";
+  const cell = "min-w-0 px-6 py-4 first:pl-0 max-md:px-0 max-md:py-4";
   const value = (content: ReactNode, className?: string) =>
     isLoading ? (
-      <Skeleton className="mt-2.5 h-9 w-16" />
+      <Skeleton className="mt-3 h-9 w-16" />
     ) : (
-      <div className={cn("mt-2.5 font-display text-4xl leading-none font-bold text-(--tanaw-text) tabular-nums", className)}>{content}</div>
+      <div className={cn("ae-fade mt-3 font-display text-4xl leading-none font-bold text-(--tanaw-text) tabular-nums", className)}>{content}</div>
     );
   const note = "mt-2 block text-[13px] text-(--tanaw-text-muted)";
   return (
     <dl className="grid grid-cols-3 border-y border-(--tanaw-border-soft) max-md:grid-cols-1 [&>div+div]:border-l [&>div+div]:border-(--tanaw-border-soft) max-md:[&>div+div]:border-t max-md:[&>div+div]:border-l-0">
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Registered enterprises</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text)">Registered enterprises</dt>
         <dd>
           {value(enterprises.toLocaleString("en-US"))}
           <span className={note}>Active enterprise accounts monitored by TANAW</span>
         </dd>
       </div>
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Listed cameras</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text)">Listed cameras</dt>
         <dd>
           {value(cameras.toLocaleString("en-US"))}
           <span className={note}>{isLoading ? " " : camerasNote}</span>
         </dd>
       </div>
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Needs attention</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text)">Needs attention</dt>
         <dd>
           {value(attention.toLocaleString("en-US"), attention > 0 ? "text-(--tanaw-danger)" : undefined)}
           <span className={note}>
@@ -240,7 +240,7 @@ function FigureStrip({
             {!isLoading && attention > 0 && (
               <>
                 {" "}
-                <button type="button" onClick={onShowAttention} className="font-semibold text-(--tanaw-accent-ink) underline underline-offset-4">
+                <button type="button" onClick={onShowAttention} className="rounded-sm font-semibold text-(--tanaw-accent-ink) underline underline-offset-4 transition-colors duration-150 ease-tanaw-out hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)">
                   Show these {attention.toLocaleString("en-US")}
                 </button>
               </>
@@ -269,16 +269,16 @@ const statusColor: Record<CameraState, string> = {
 };
 
 function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: { rows: EnterpriseRow[]; isLoading: boolean; sort: SortDirection; onSort: () => void; empty: ReactNode; listSearch: string }) {
-  const header = "px-4 py-3 text-left text-[11px] font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase first:pl-3 last:pr-3";
+  const header = "px-4 py-3 text-left text-xs font-semibold tracking-label whitespace-nowrap text-(--tanaw-label) uppercase first:pl-3 last:pr-3";
   const cell = "px-4 py-4 align-top first:pl-3 last:pr-3";
   return (
     <div className="mt-2 overflow-x-auto">
-      <table className="ae-table w-full min-w-240 border-collapse text-sm text-(--tanaw-text)">
+      <table className="ae-table w-full min-w-240 text-sm text-(--tanaw-text)">
         <caption className="sr-only">Registered enterprises with their attraction classification and camera status</caption>
         <thead>
-          <tr className="border-b border-(--tanaw-border-soft)">
+          <tr>
             <th scope="col" aria-sort={sort} className={cn(header, "w-[26%]")}>
-              <button type="button" onClick={onSort} className="inline-flex items-center gap-1 rounded-md uppercase hover:text-(--tanaw-text)">
+              <button type="button" onClick={onSort} className="ae-sort inline-flex items-center gap-1 rounded-md uppercase hover:text-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)">
                 Enterprise
                 {sort === "ascending" ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
               </button>
@@ -303,16 +303,32 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
         <tbody>
           {isLoading
             ? Array.from({ length: 5 }, (_, index) => (
-                <tr key={index} className="border-b border-(--tanaw-border-soft)">
-                  <td colSpan={6} className="py-4">
-                    <Skeleton className="h-10 w-full" label={index === 0 ? "Loading enterprises" : undefined} />
+                <tr key={index}>
+                  <td className={cell}>
+                    <Skeleton className="h-4 w-44" label={index === 0 ? "Loading enterprises" : undefined} />
+                    <Skeleton className="mt-2 h-3 w-60 max-w-full" />
                   </td>
+                  <td className={cell}>
+                    <Skeleton className="h-3.5 w-20" />
+                  </td>
+                  <td className={cell}>
+                    <Skeleton className="h-3.5 w-14" />
+                  </td>
+                  <td className={cell}>
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="mt-2 h-3 w-20" />
+                  </td>
+                  <td className={cell}>
+                    <Skeleton className="h-3.5 w-20" />
+                    <Skeleton className="mt-2 h-3 w-28" />
+                  </td>
+                  <td className={cell} />
                 </tr>
               ))
             : rows.map((row) => (
-                <tr key={row.id} onClick={openRowFromClick} className="tanaw-row-link border-b border-(--tanaw-border-soft)">
+                <tr key={row.id} onClick={openRowFromClick} className="tanaw-row-link">
                   <th scope="row" className={cn(cell, "text-left font-normal")}>
-                    <Link data-row-primary to={adminEnterpriseDetailsPath(row.id)} state={{ listSearch }} className="block text-base font-bold">
+                    <Link data-row-primary to={adminEnterpriseDetailsPath(row.id)} state={{ listSearch }} className="block text-base font-semibold">
                       {row.name}
                     </Link>
                     <span className="mt-0.5 line-clamp-2 block text-[13px] text-(--tanaw-text-secondary)">{[row.portfolio, row.address].filter(Boolean).join(". ") || "No address on record"}</span>
@@ -337,7 +353,7 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
               ))}
         </tbody>
       </table>
-      {!isLoading && rows.length === 0 && <div className="border-b border-(--tanaw-border-soft)">{empty}</div>}
+      {!isLoading && rows.length === 0 && <div className="ae-fade border-b border-(--tanaw-border-soft)">{empty}</div>}
     </div>
   );
 }

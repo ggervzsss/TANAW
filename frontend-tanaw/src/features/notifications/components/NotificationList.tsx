@@ -1,7 +1,8 @@
-import { Clock3, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import type { PortalNotification } from "../hooks/usePortalNotifications";
 import { notificationToneClasses } from "../model";
 import { NotificationIcon } from "./NotificationIcon";
+import { Skeleton, cn } from "@/shared/ui-kit";
 import { toSentenceCase } from "@/shared/utils/sentenceCase";
 
 type NotificationListProps = {
@@ -11,60 +12,92 @@ type NotificationListProps = {
 };
 
 export function NotificationList({ isLoading, notifications, onOpen }: NotificationListProps) {
-  if (notifications.length === 0) return <NotificationEmptyState isLoading={isLoading} />;
+  if (notifications.length === 0) return isLoading ? <NotificationSkeleton /> : <NotificationEmptyState />;
 
   return (
-    <div className="divide-y divide-slate-100 dark:divide-slate-700">
+    <ul className="m-0 list-none p-0">
       {notifications.map((notification) => (
-        <NotificationRow key={notification.id} notification={notification} onOpen={onOpen} />
+        <li key={notification.id} className="border-b border-(--tanaw-border-soft) py-0.5 last:border-b-0">
+          <NotificationRow notification={notification} onOpen={onOpen} />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
-function NotificationRow({ notification, onOpen }: { notification: PortalNotification; onOpen: (notification: PortalNotification) => void }) {
+/**
+ * One notification as a quiet row: a tone disc, the title (bold with a dot while unread), the
+ * message, and its source, time and status as a 13px caption. Shared by the page and the topbar menu.
+ */
+export function NotificationRow({ notification, onOpen, compact = false }: { notification: PortalNotification; onOpen: (notification: PortalNotification) => void; compact?: boolean }) {
   const classes = notificationToneClasses[notification.tone];
 
   return (
     <button
       type="button"
       onClick={() => onOpen(notification)}
-      className={`group flex w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-emerald-50/70 dark:hover:bg-emerald-500/10 ${notification.read ? "opacity-75" : "bg-emerald-50/35 dark:bg-emerald-500/5"}`}
+      className={cn(
+        "group flex w-full gap-3 rounded-tanaw-md text-left transition-colors duration-200 ease-tanaw-out hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:bg-(--tanaw-selected-bg)",
+        compact ? "px-3 py-3" : "px-4 py-4",
+      )}
     >
-      <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${classes.icon}`}>
+      <span className={cn("mt-0.5 flex shrink-0 items-center justify-center rounded-full transition-transform duration-200 ease-tanaw-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100", compact ? "h-9 w-9" : "h-10 w-10", classes.icon)}>
         <NotificationIcon tone={notification.tone} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-start gap-2">
           <span
-            className={`line-clamp-2 text-sm leading-relaxed group-hover:text-emerald-800 dark:group-hover:text-emerald-200 ${notification.read ? "font-semibold text-slate-700 dark:text-slate-200" : "font-black text-slate-950 dark:text-white"}`}
+            className={cn(
+              "text-sm leading-snug transition-colors duration-200 ease-tanaw-out group-hover:text-(--tanaw-accent-ink)",
+              compact ? "truncate" : "line-clamp-2",
+              notification.read ? "font-medium text-(--tanaw-text-secondary)" : "font-[650] text-(--tanaw-text)",
+            )}
           >
             {notification.title}
           </span>
-          {!notification.read && <span className={`mt-2 h-2.5 w-2.5 shrink-0 rounded-full shadow-sm ${classes.dot}`} />}
+          {!notification.read && <span aria-hidden="true" className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", classes.dot)} />}
         </span>
-        <span className="mt-1 line-clamp-2 block text-sm leading-relaxed font-medium text-slate-600 dark:text-slate-300">{notification.message}</span>
-        <span className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black tracking-wide text-slate-400 uppercase">
+        <span className="mt-1 line-clamp-2 block text-[13px] leading-relaxed text-(--tanaw-text-secondary)">{notification.message}</span>
+        <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-(--tanaw-text-muted)">
           <span>{notification.source}</span>
-          <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-          <span>{notification.time}</span>
-          {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ${classes.badge}`}>{toSentenceCase(notification.statusLabel)}</span>}
+          <span aria-hidden="true" className="h-1 w-1 rounded-full bg-(--tanaw-border)" />
+          <span className="tabular-nums">{notification.time}</span>
+          {notification.statusLabel && <span className={cn("rounded-tanaw-sm px-2 py-0.5 font-semibold", classes.badge)}>{toSentenceCase(notification.statusLabel)}</span>}
         </span>
       </span>
     </button>
   );
 }
 
-function NotificationEmptyState({ isLoading }: { isLoading: boolean }) {
+/** Rows in the shape of notifications while they load. */
+export function NotificationSkeleton({ rows = 4, label = "Loading notifications" }: { rows?: number; label?: string }) {
   return (
-    <div className="flex min-h-80 flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-300/20">
-        {isLoading ? <Clock3 size={22} /> : <Inbox size={22} />}
+    <div role="status" aria-label={label}>
+      <div aria-hidden="true">
+        {Array.from({ length: rows }, (_, index) => (
+          <span key={index} className="flex gap-3 border-b border-(--tanaw-border-soft) px-4 py-4 last:border-b-0">
+            <Skeleton shape="circle" className="h-10 w-10 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="mt-2 h-3.5 w-11/12" />
+              <Skeleton className="mt-2.5 h-3 w-32" />
+            </span>
+          </span>
+        ))}
       </div>
-      <p className="mt-4 text-sm font-black text-slate-900 dark:text-slate-100">{isLoading ? "Loading notifications" : "No notifications"}</p>
-      <p className="mt-1 max-w-88 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
-        {isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}
-      </p>
+      <span className="sr-only">{label}. Checking TANAW activity sources.</span>
+    </div>
+  );
+}
+
+export function NotificationEmptyState({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={cn("flex flex-col items-center justify-center px-6 text-center", compact ? "min-h-52 py-10" : "min-h-80 py-14")}>
+      <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-full bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)">
+        <Inbox size={20} />
+      </span>
+      <p className="mt-4 text-sm font-[650] text-(--tanaw-text)">No notifications</p>
+      <p className="mt-1 max-w-80 text-[13px] leading-relaxed text-(--tanaw-text-secondary)">New activity relevant to your account will appear here.</p>
     </div>
   );
 }

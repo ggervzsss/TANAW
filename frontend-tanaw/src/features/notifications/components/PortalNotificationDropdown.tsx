@@ -1,9 +1,7 @@
-import { Bell, CheckCheck, Clock3, Inbox } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { Bell, CheckCheck } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { PortalNotification } from "../hooks/usePortalNotifications";
-import { notificationToneClasses } from "../model";
-import { NotificationIcon } from "./NotificationIcon";
-import { toSentenceCase } from "@/shared/utils/sentenceCase";
+import { NotificationEmptyState, NotificationRow, NotificationSkeleton } from "./NotificationList";
 
 type PortalNotificationDropdownProps = {
   isOpen: boolean;
@@ -31,6 +29,7 @@ export function PortalNotificationDropdown({
   triggerClassName = "border-emerald-100/28 bg-white/8 text-white hover:bg-white/15",
 }: PortalNotificationDropdownProps) {
   const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+  const reduceMotion = useReducedMotion();
 
   return (
     <>
@@ -43,7 +42,7 @@ export function PortalNotificationDropdown({
       >
         <Bell size={18} />
         {unreadCount > 0 && (
-          <span className="bg-tanaw-red border-tanaw-green absolute -top-1 -right-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 px-1 text-[10px] leading-none font-black text-white shadow-sm">
+          <span className="bg-tanaw-red border-tanaw-green absolute -top-1 -right-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 px-1 text-xs leading-none font-bold text-white shadow-sm">
             {countLabel}
           </span>
         )}
@@ -52,82 +51,54 @@ export function PortalNotificationDropdown({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            initial={{ opacity: 0, y: 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white text-slate-800 shadow-[0_24px_68px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:shadow-[0_24px_68px_rgba(0,0,0,0.48)] dark:ring-white/8"
+            exit={{ opacity: 0, y: 6, scale: 0.98 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] origin-top-right flex-col overflow-hidden rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-raised"
           >
-            <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/80 px-5 py-4 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-black text-slate-950">Notifications</p>
-                  <p className="mt-1 text-xs font-medium text-slate-500">{unreadCount > 0 ? `${unreadCount} unread item${unreadCount === 1 ? "" : "s"}` : "All caught up"}</p>
-                </div>
-                <button
-                  type="button"
-                  disabled={notifications.length === 0 || unreadCount === 0}
-                  onClick={onMarkAllRead}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3 text-xs font-bold text-(--tanaw-accent-ink) shadow-sm transition hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <CheckCheck size={13} />
-                  Mark all read
-                </button>
+            <div className="flex items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-4 py-3.5">
+              <div>
+                <p className="text-base font-[650] text-(--tanaw-text)">Notifications</p>
+                <p className="mt-0.5 text-[13px] text-(--tanaw-text-secondary)">{unreadCount > 0 ? `${unreadCount} unread item${unreadCount === 1 ? "" : "s"}` : "All caught up"}</p>
               </div>
+              <button
+                type="button"
+                disabled={notifications.length === 0 || unreadCount === 0}
+                onClick={onMarkAllRead}
+                className="group inline-flex min-h-8 items-center gap-1.5 rounded-tanaw-sm px-2.5 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
+              >
+                <CheckCheck size={14} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-enabled:group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
+                Mark all read
+              </button>
             </div>
 
-            <div className="max-h-112 overflow-y-auto bg-white dark:bg-[#121c31]">
-              {notifications.map((notification) => (
-                <button
-                  key={notification.id}
-                  type="button"
-                  onClick={() => onSelectNotification(notification)}
-                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${notificationToneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 dark:border-slate-700 dark:to-[#121c31] dark:hover:bg-emerald-500/10 ${
-                    notification.read ? "opacity-75" : ""
-                  }`}
-                >
-                  <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ring-1 ${notificationToneClasses[notification.tone].icon}`}>
-                    <NotificationIcon tone={notification.tone} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`truncate text-sm leading-snug group-hover:text-emerald-800 dark:group-hover:text-emerald-200 ${notification.read ? "font-semibold text-slate-700 dark:text-slate-200" : "font-black text-slate-950 dark:text-white"}`}
-                      >
-                        {notification.title}
-                      </span>
-                      {!notification.read && <span className={`h-2 w-2 shrink-0 rounded-full ${notificationToneClasses[notification.tone].dot}`} />}
-                    </span>
-                    <span className="mt-1 line-clamp-2 block text-xs leading-relaxed font-medium text-slate-600">{notification.message}</span>
-                    <span className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black tracking-wide text-slate-400 uppercase">
-                      <span>{notification.source}</span>
-                      <span className="h-1 w-1 rounded-full bg-slate-300" />
-                      <span>{notification.time}</span>
-                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ${notificationToneClasses[notification.tone].badge}`}>{toSentenceCase(notification.statusLabel)}</span>}
-                    </span>
-                  </span>
-                </button>
-              ))}
-
-              {notifications.length === 0 && (
-                <div className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                    {isLoading ? <Clock3 size={20} /> : <Inbox size={20} />}
-                  </div>
-                  <p className="mt-4 text-sm font-black text-slate-900">{isLoading ? "Loading notifications" : "No notifications"}</p>
-                  <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">{isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}</p>
-                </div>
+            <div className="max-h-112 overflow-y-auto p-1.5">
+              {notifications.length === 0 ? (
+                isLoading ? (
+                  <NotificationSkeleton rows={3} />
+                ) : (
+                  <NotificationEmptyState compact />
+                )
+              ) : (
+                <ul className="m-0 list-none p-0">
+                  {notifications.map((notification) => (
+                    <li key={notification.id} className="border-b border-(--tanaw-border-soft) py-0.5 last:border-b-0">
+                      <NotificationRow notification={notification} onOpen={onSelectNotification} compact />
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-center dark:border-slate-700 dark:bg-[#0f172a]">
+            <div className="border-t border-(--tanaw-border-soft) px-4 py-2 text-center">
               <button
                 type="button"
                 disabled={!viewAllPath}
                 onClick={onViewAll}
-                className="text-xs font-bold text-slate-500 transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex min-h-9 items-center rounded-tanaw-sm px-3 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
               >
-                VIEW ALL NOTIFICATIONS
+                View all notifications
               </button>
             </div>
           </motion.div>

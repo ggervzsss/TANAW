@@ -1,8 +1,8 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { SystemLog } from "@/shared/types";
-import { ModalPortal, StatusPill, cn, initialsOf, useDialogFocus } from "@/shared/ui-kit";
+import { Button, ModalPortal, StatusPill, cn, initialsOf, useDialogFocus } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import {
   activityDetailFields,
@@ -16,9 +16,7 @@ import {
 } from "../model/recentActivity";
 import { ACTIVITY_DRAWER_ID, ActivityTypeChip } from "./RecentActivityList";
 
-const sectionLabel = "text-[0.8125rem] font-bold tracking-[0.08em] text-(--tanaw-text-secondary) uppercase";
-const navButton =
-  "inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-(--tanaw-control-border) bg-(--tanaw-surface) px-3.5 text-sm font-semibold text-(--tanaw-text) transition-colors hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-(--tanaw-surface)";
+const sectionLabel = "text-[15px] font-[650] text-(--tanaw-text)";
 
 /** The activity details drawer, docked right. Escape, the scrim and the close button close it. */
 export function RecentActivityDrawer({
@@ -42,6 +40,8 @@ export function RecentActivityDrawer({
   const panelRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const whenId = useId();
+  // The header draws its hairline only once the details have scrolled under it, as in dialogs.
+  const [scrolled, setScrolled] = useState(false);
   useDialogFocus(panelRef, onClose);
   const fields = activityDetailFields(log);
   const links = activityLinks(log);
@@ -50,7 +50,7 @@ export function RecentActivityDrawer({
   return (
     <ModalPortal lockScroll>
       <div className="tanaw-activity-drawer fixed inset-0 z-1200">
-        <div aria-hidden="true" className="tanaw-activity-drawer__scrim absolute inset-0 bg-(--ra-scrim)" onClick={onClose} />
+        <div aria-hidden="true" className="tanaw-activity-drawer__scrim tanaw-dialog-backdrop absolute inset-0" onClick={onClose} />
         <aside
           ref={panelRef}
           id={ACTIVITY_DRAWER_ID}
@@ -60,9 +60,12 @@ export function RecentActivityDrawer({
           aria-describedby={whenId}
           tabIndex={-1}
           data-activity-kind={activityKind(log)}
-          className="tanaw-activity-drawer__panel absolute inset-y-0 right-0 flex w-[min(540px,100%)] flex-col border-l border-(--tanaw-border-soft) bg-(--tanaw-surface) text-base text-(--tanaw-text) shadow-[-24px_0_56px_rgb(4_20_12/0.22)] outline-none"
+          className="tanaw-activity-drawer__panel absolute inset-y-0 right-0 flex w-[min(540px,100%)] flex-col border-l border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-base text-(--tanaw-text) shadow-tanaw-dialog outline-none"
         >
-          <header className="border-b border-(--tanaw-border-soft) px-6.5 pt-5.5 pb-4.5">
+          <header
+            data-scrolled={scrolled || undefined}
+            className="border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-sm:px-5"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <ActivityTypeChip log={log} />
@@ -71,21 +74,25 @@ export function RecentActivityDrawer({
                 type="button"
                 aria-label="Close activity details"
                 onClick={onClose}
-                className="-mt-1 -mr-2 inline-flex size-11 shrink-0 items-center justify-center rounded-[10px] text-(--tanaw-text-secondary) transition-colors hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+                className="-mt-1 -mr-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
               >
-                <X size={20} aria-hidden="true" />
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <h2 id={titleId} className="font-display mt-2 text-[1.75rem] leading-[1.15] font-bold wrap-break-word">
+            <h2 id={titleId} className="mt-2.5 font-display text-2xl leading-tight font-bold tracking-[-0.015em] wrap-break-word">
               {activityTitle(log)}
             </h2>
-            <p id={whenId} className="mt-2 text-[0.9375rem] text-(--tanaw-text-secondary) tabular-nums">
+            <p id={whenId} className="mt-2 text-sm text-(--tanaw-text-secondary) tabular-nums">
               {formatActivityDate(log.timestamp)}
               {time && ` at ${time}`} · {activityReference(log)}
             </p>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6.5 py-5.5">
+          <div
+            key={log.id}
+            onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
+            className="tanaw-activity-drawer__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5"
+          >
             <section aria-labelledby={`${titleId}-who`}>
               <h3 id={`${titleId}-who`} className={sectionLabel}>
                 Performed by
@@ -95,7 +102,7 @@ export function RecentActivityDrawer({
                   {initialsOf(log.actor) || "?"}
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-bold wrap-break-word">{log.actor}</span>
+                  <span className="block font-semibold wrap-break-word">{log.actor}</span>
                   <span className="block text-sm text-(--tanaw-text-secondary)">{actorRoleLabel(log.actorRole)}</span>
                 </span>
               </div>
@@ -113,7 +120,7 @@ export function RecentActivityDrawer({
                 <h3 id={`${titleId}-it`} className={sectionLabel}>
                   Technical details
                 </h3>
-                <p className="mt-2 rounded-xl bg-(--tanaw-surface-inset) px-4 py-3 text-[0.9375rem] leading-relaxed wrap-break-word">{log.itDetail}</p>
+                <p className="mt-2 border-l-2 border-(--tanaw-border) py-0.5 pl-4 text-[0.9375rem] leading-relaxed wrap-break-word text-(--tanaw-text-secondary)">{log.itDetail}</p>
               </section>
             )}
 
@@ -134,31 +141,29 @@ export function RecentActivityDrawer({
             )}
 
             {links.length > 0 && (
-              <nav aria-label="Related pages" className="mt-6 flex flex-col gap-2">
+              <nav aria-label="Related pages" className="mt-5 -mx-3 flex flex-col">
                 {links.map((link) => (
                   <Link
                     key={`${link.label}-${link.to}`}
                     to={link.to}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-(--tanaw-border-soft) px-4 text-[0.9375rem] font-semibold text-(--tanaw-accent-ink) no-underline transition-colors hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+                    className="tanaw-activity-link group mt-0.5 flex min-h-12 items-center justify-between gap-3 rounded-tanaw-md px-3 text-[0.9375rem] font-semibold text-(--tanaw-accent-ink) no-underline hover:bg-(--tanaw-control-bg-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
                   >
                     {link.label}
-                    <ChevronRight size={16} aria-hidden="true" />
+                    <ChevronRight size={16} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
                   </Link>
                 ))}
               </nav>
             )}
           </div>
 
-          <footer className="flex items-center justify-between gap-3 border-t border-(--tanaw-border-soft) px-6.5 py-3.5">
+          <footer className="flex items-center justify-between gap-3 border-t border-(--tanaw-border-soft) px-7 py-4 max-sm:px-5">
             <div className="flex gap-2">
-              <button type="button" aria-label="Previous activity" disabled={position <= 0} onClick={onPrevious} className={navButton}>
-                <ChevronLeft size={14} aria-hidden="true" />
+              <Button variant="secondary" aria-label="Previous activity" disabled={position <= 0} onClick={onPrevious} leadingIcon={<ChevronLeft size={15} aria-hidden="true" />}>
                 Previous
-              </button>
-              <button type="button" aria-label="Next activity" disabled={position < 0 || position >= total - 1} onClick={onNext} className={navButton}>
+              </Button>
+              <Button variant="secondary" aria-label="Next activity" disabled={position < 0 || position >= total - 1} onClick={onNext} trailingIcon={<ChevronRight size={15} aria-hidden="true" />}>
                 Next
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
+              </Button>
             </div>
             <p className={cn("text-sm text-(--tanaw-text-secondary) tabular-nums")} aria-live="polite">
               {position >= 0 ? `${position + 1} of ${total}` : "Not in the current list"}

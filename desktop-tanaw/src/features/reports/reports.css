@@ -167,8 +167,7 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.report-information-fields svg,
-.report-information-fields > div:last-child svg {
+.report-information-fields dd > svg {
   box-sizing: border-box;
   width: 34px;
   height: 34px;
@@ -287,16 +286,8 @@
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.report-visitor-heading > div {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 2px;
-  min-height: 38px;
-}
 .report-visitor-heading p {
-  margin: 0;
+  margin: 2px 0 0;
   font-size: var(--text-sm);
   line-height: 20px;
   color: var(--reports-muted);
@@ -330,6 +321,15 @@
 .report-day-picker > button:focus-visible {
   outline: 2px solid var(--reports-focus);
   outline-offset: 2px;
+}
+/* Under Tourism Period the pill stands as that field's value, as tall as the icon tiles beside it. */
+.report-information-fields .report-day-picker {
+  min-width: 0;
+}
+.report-information-fields .report-day-picker > button {
+  max-width: 100%;
+  min-height: 34px;
+  padding-block: 6px;
 }
 .report-day-picker-icon {
   position: relative;
@@ -1905,9 +1905,6 @@
   }
   .report-next-steps {
     padding-left: 24px;
-  }
-  .report-visitor-heading > div {
-    flex-wrap: wrap;
   }
   .report-next-steps li {
     gap: 12px;

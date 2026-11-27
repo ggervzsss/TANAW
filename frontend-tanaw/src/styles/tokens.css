@@ -51,31 +51,66 @@
   --color-tanaw-green-dark: #044a1e; /* = tanaw-civic-deep */
 
   /* Shape */
-  --radius-tanaw-sm: 6px; /* compact selects */
-  --radius-tanaw-md: 12px; /* buttons, inputs, list items */
-  --radius-tanaw-lg: 16px; /* cards, metric strip */
-  --radius-tanaw-xl: 18px; /* camera list panel */
+  /* Soft edges, as on the desktop app (DESIGN.md, Default UI style). */
+  --radius-tanaw-sm: 8px; /* chips, compact selects, menu rows */
+  --radius-tanaw-md: 12px; /* buttons, inputs, list rows, hover tints */
+  --radius-tanaw-lg: 16px; /* dialogs, previews */
+  --radius-tanaw-xl: 20px; /* large panels */
+  --radius-tanaw-2xl: 24px; /* hero surfaces */
 
   /* Depth */
   --shadow-tanaw-resting: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-tanaw-soft: 0 12px 30px rgb(15 23 42 / 0.08);
   --shadow-tanaw-raised: 0 18px 42px rgb(15 23 42 / 0.12);
   --shadow-tanaw-banner: 0 16px 40px rgb(2 20 8 / 0.34);
+  /* Dialogs and popovers, the only raised surfaces: a wide, soft lift. */
+  --shadow-tanaw-dialog: 0 24px 56px -12px rgb(15 23 42 / 0.2), 0 2px 6px rgb(15 23 42 / 0.05);
 
   /* Motion */
   --ease-tanaw: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The desktop app's motion: 150-260ms on one calm ease-out. */
+  --ease-tanaw-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-tanaw-in-out: cubic-bezier(0.45, 0, 0.25, 1);
 }
 
 /* ---- Semantic tokens: what components read. Light theme. */
 :root {
   --tanaw-page: #f4f8f5;
   --tanaw-page-gradient: linear-gradient(145deg, #eef5f0, #f6f8f6);
+  /* Civic Green wash at the top of every page, under the topbar: deepest at the edge, gone by ~22rem. */
+  --tanaw-wash-top: #c2dfcb;
+  --tanaw-wash: #e3f0e7;
+  --tanaw-top-wash: linear-gradient(180deg, var(--tanaw-wash-top) 0, var(--tanaw-wash) 9rem, rgb(227 240 231 / 0) 22rem);
+  /* The civic line: a short green, Seal Gold, green bar under a page title. */
+  --tanaw-civic-line: linear-gradient(90deg, #0b5d2a 0%, #2f8a45 30%, #d7b35a 50%, #2f8a45 70%, #0b5d2a 100%);
+  --tanaw-duration-fast: 150ms;
+  --tanaw-duration-base: 220ms;
+  --tanaw-duration-slow: 320ms;
+  /* Loading placeholders: a quiet block with one soft band of light travelling across it. */
+  --tanaw-skeleton-base: rgb(16 36 27 / 0.055);
+  --tanaw-skeleton-shine: rgb(16 36 27 / 0.1);
+  --tanaw-skeleton-radius: 10px;
+  --tanaw-skeleton-duration: 1.8s;
   --tanaw-surface: #ffffff;
   --tanaw-surface-raised: #ffffff;
   --tanaw-surface-inset: #f0f5f1;
-  --tanaw-control-bg: #ffffff;
+  /* Fields, dropdown triggers and quiet buttons sit on the page as a soft tint, never as white boxes.
+     The tint is translucent so it reads the same on the white surface and on the green wash. */
+  --tanaw-control-bg: rgb(18 52 35 / 0.055);
+  --tanaw-control-bg-hover: rgb(18 52 35 / 0.085);
+  --tanaw-control-bg-focus: #ffffff;
+  --tanaw-control-bg-solid: #ffffff;
   --tanaw-control-hover: #edf4ef;
-  --tanaw-control-disabled: #f1f5f9;
+  --tanaw-control-disabled: rgb(18 52 35 / 0.035);
+  /* Tonal fill for destructive buttons, a focus halo for fields and the lift under a hovered primary button. */
+  --tanaw-tonal-danger: rgb(164 14 14 / 0.07);
+  --tanaw-tonal-danger-hover: rgb(164 14 14 / 0.12);
+  /* The solid red of a confirmed destructive action, and the scrim behind dialogs. */
+  --tanaw-danger-action: #b42318;
+  --tanaw-danger-action-hover: #912018;
+  --tanaw-scrim: radial-gradient(120% 90% at 50% 0%, rgb(8 58 31 / 0.38), rgb(3 20 12 / 0.58));
+  --tanaw-field-ring: 0 0 0 4px rgb(15 118 110 / 0.14);
+  --tanaw-button-lift: 0 8px 20px -6px rgb(5 91 37 / 0.45), 0 2px 4px rgb(5 91 37 / 0.12);
   --tanaw-surface-muted: #f8fafc;
   --tanaw-surface-subtle: #f1f5f9;
   --tanaw-surface-strong: #e2e8f0;
@@ -97,8 +132,8 @@
 
   --tanaw-border-soft: #d6e2d9;
   --tanaw-border: #c6d6cb;
-  --tanaw-control-border: #cbd5d1;
-  --tanaw-control-border-hover: #9caea4;
+  --tanaw-control-border: rgb(18 52 35 / 0.11);
+  --tanaw-control-border-hover: rgb(18 52 35 / 0.22);
 
   --tanaw-action: #055b25;
   --tanaw-action-hover: #044a1e;
@@ -195,15 +230,31 @@
 /* ---- Dark theme: same names, deepened surfaces, lighter greens for text. */
 .dark {
   --tanaw-page: #0b141d;
+  --tanaw-wash-top: #17432f;
+  --tanaw-wash: #0f2124;
+  --tanaw-top-wash: linear-gradient(180deg, var(--tanaw-wash-top) 0, var(--tanaw-wash) 9rem, rgb(15 33 36 / 0) 22rem);
+  --tanaw-civic-line: linear-gradient(90deg, #1f7a43 0%, #4fb877 30%, #e2bd5c 50%, #4fb877 70%, #1f7a43 100%);
+  --tanaw-skeleton-base: rgb(226 232 240 / 0.055);
+  --tanaw-skeleton-shine: rgb(226 232 240 / 0.12);
   --tanaw-page-gradient:
     radial-gradient(circle at 12% 0%, rgb(31 71 60 / 0.1), transparent 35rem),
     linear-gradient(145deg, #0b141d 0%, #0e1721 54%, #101923 100%);
   --tanaw-surface: #151f2b;
   --tanaw-surface-raised: #192531;
   --tanaw-surface-inset: #101923;
-  --tanaw-control-bg: #192633;
+  --tanaw-control-bg: rgb(226 236 242 / 0.05);
+  --tanaw-control-bg-hover: rgb(226 236 242 / 0.08);
+  --tanaw-control-bg-focus: #13202b;
+  --tanaw-control-bg-solid: #192633;
   --tanaw-control-hover: #202e3c;
-  --tanaw-control-disabled: #0d1625;
+  --tanaw-control-disabled: rgb(226 236 242 / 0.025);
+  --tanaw-tonal-danger: rgb(248 113 113 / 0.1);
+  --tanaw-tonal-danger-hover: rgb(248 113 113 / 0.16);
+  --tanaw-danger-action: #c4372c;
+  --tanaw-danger-action-hover: #d64a3f;
+  --tanaw-scrim: radial-gradient(120% 90% at 50% 0%, rgb(9 52 33 / 0.5), rgb(1 7 12 / 0.72));
+  --tanaw-field-ring: 0 0 0 4px rgb(110 231 183 / 0.14);
+  --tanaw-button-lift: 0 10px 24px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(110 231 183 / 0.12);
   --tanaw-surface-muted: #111b25;
   --tanaw-surface-subtle: #1a2633;
   --tanaw-surface-strong: #1d2b38;
@@ -224,8 +275,8 @@
 
   --tanaw-border-soft: rgb(174 188 201 / 0.14);
   --tanaw-border: rgb(174 188 201 / 0.22);
-  --tanaw-control-border: rgb(174 188 201 / 0.28);
-  --tanaw-control-border-hover: rgb(174 188 201 / 0.4);
+  --tanaw-control-border: rgb(226 236 242 / 0.1);
+  --tanaw-control-border-hover: rgb(226 236 242 / 0.2);
 
   --tanaw-action: #055b25;
   --tanaw-action-hover: #0a6e33;
@@ -312,6 +363,7 @@
   --shadow-tanaw-soft: 0 14px 34px rgb(0 0 0 / 0.2);
   --shadow-tanaw-raised: 0 20px 48px rgb(0 0 0 / 0.25);
   --shadow-tanaw-banner: 0 16px 44px rgb(0 0 0 / 0.58);
+  --shadow-tanaw-dialog: 0 24px 60px -12px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.03);
 }
 
 @media (max-width: 640px) {

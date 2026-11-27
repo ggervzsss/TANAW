@@ -476,7 +476,8 @@
 .camera-preview-layout {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) clamp(240px, 22vw, 320px);
+  /* The metrics column is wide enough for two tiles side by side with their titles unbroken. */
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 26vw, 368px);
   align-content: start;
   gap: clamp(14px, 1.5vw, 24px);
   min-height: 0;
@@ -743,73 +744,116 @@
   min-height: 24px;
   margin-bottom: 14px;
 }
+/*
+ * The live counts sit in a 2 x 2 grid of soft tinted tiles: Entry and Exit on top, occupancy and
+ * visitors below. This is the one sanctioned exception to "no cards": tint only, with no border
+ * and no shadow. Each count keeps one hue, and its title and figure share that hue's ink.
+ */
+.camera-live-metrics {
+  --metric-entry-bg: #e6f4ea;
+  --metric-entry-ink: #065f46;
+  --metric-exit-bg: #fdecec;
+  --metric-exit-ink: #b42318;
+  --metric-occupancy-bg: #e8f0fb;
+  --metric-occupancy-ink: #1d4ed8;
+  --metric-visitors-bg: #fbf1d6;
+  --metric-visitors-ink: #7a5a0c;
+}
+html.dark .camera-live-metrics {
+  --metric-entry-bg: rgb(52 211 153 / 0.13);
+  --metric-entry-ink: #6ee7b7;
+  --metric-exit-bg: rgb(251 113 133 / 0.13);
+  --metric-exit-ink: #fda4af;
+  --metric-occupancy-bg: rgb(56 189 248 / 0.13);
+  --metric-occupancy-ink: #7dd3fc;
+  --metric-visitors-bg: rgb(251 191 36 / 0.12);
+  --metric-visitors-ink: #fcd34d;
+}
+/*
+ * The grid is the size container, so a figure shrinks with a narrow column instead of wrapping:
+ * about a quarter of a tile's inner width (half the grid, less the gap and tile padding).
+ * Tiles cannot be containers themselves, because containment would switch off their subgrid.
+ */
 .camera-metrics-grid {
+  --metric-figure: clamp(1.5rem, 13cqi - 8px, 2.375rem);
   display: grid;
   flex: none;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
+  container-type: inline-size;
 }
 .camera-metrics-grid[data-mode="open-space"] {
+  --metric-figure: clamp(1.5rem, 26cqi - 7px, 2.375rem);
   grid-template-columns: 1fr;
 }
+/* Each tile spans three rows of the grid (title, subtitle, figure) so figures in a row line up. */
 .camera-metric {
-  --metric-bg: color-mix(in srgb, var(--tanaw-surface-inset) 70%, transparent);
-  --metric-ink: var(--tanaw-text);
-  --metric-label: var(--tanaw-text-secondary);
+  --metric-bg: var(--metric-occupancy-bg);
+  --metric-ink: var(--metric-occupancy-ink);
   display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 4px;
   align-content: start;
-  gap: 4px;
   min-width: 0;
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 14px 14px 16px;
+  border-radius: 12px;
   background: var(--metric-bg);
-  transition: background-color 240ms ease;
+  transition: background-color 200ms var(--camera-ease);
 }
-.camera-metric[data-wide] {
-  grid-column: 1 / -1;
+.camera-metric[data-tone="entry"] {
+  --metric-bg: var(--metric-entry-bg);
+  --metric-ink: var(--metric-entry-ink);
 }
-.camera-metric[data-tone="occupancy"] {
-  --metric-bg: var(--tanaw-selected-bg);
-  --metric-ink: var(--tanaw-accent-ink);
-  --metric-label: var(--tanaw-accent-ink);
+.camera-metric[data-tone="exit"] {
+  --metric-bg: var(--metric-exit-bg);
+  --metric-ink: var(--metric-exit-ink);
 }
 .camera-metric[data-tone="visitors"] {
-  --metric-bg: color-mix(in srgb, var(--tanaw-warning-bg) 55%, transparent);
-  --metric-ink: var(--tanaw-warning-text);
-  --metric-label: var(--tanaw-warning-text);
+  --metric-bg: var(--metric-visitors-bg);
+  --metric-ink: var(--metric-visitors-ink);
 }
+/* The info button follows the last word, so a long title wraps instead of crowding it. */
 .camera-metric-label {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--metric-label);
+  grid-row: 1;
+  min-width: 0;
+  color: var(--metric-ink);
+  text-wrap: balance;
 }
 .camera-metric-label h5 {
-  font-size: 0.8125rem;
+  display: inline;
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.3;
 }
 .camera-metric-label button {
-  flex: none;
+  margin-inline-start: 6px;
   padding: 2px;
   border-radius: 6px;
+  color: color-mix(in srgb, var(--metric-ink) 72%, transparent);
+  vertical-align: -3px;
 }
 .camera-metric-label button:hover {
   background: var(--tanaw-control-hover);
+  color: var(--metric-ink);
+}
+.camera-metric p,
+.camera-metric-skeleton-detail {
+  grid-row: 2;
+}
+.camera-metric-value,
+.camera-metric-skeleton {
+  grid-row: 3;
+  margin-top: 6px;
 }
 .camera-metric-value {
   color: var(--metric-ink);
-  font-size: 1.625rem;
+  font-size: var(--metric-figure);
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.camera-metric[data-tone="occupancy"] .camera-metric-value,
-.camera-metric[data-tone="visitors"] .camera-metric-value {
-  font-size: 2rem;
+  white-space: nowrap;
 }
 .camera-metric-value[aria-hidden="true"],
 .camera-metric p,
@@ -822,9 +866,8 @@
   line-height: 1.45;
 }
 .camera-metric-skeleton {
-  width: 56%;
-  height: 30px;
-  margin-block: 4px 2px;
+  width: 60%;
+  height: var(--metric-figure);
   border-radius: 8px;
 }
 .camera-metric-skeleton-detail {
@@ -832,11 +875,13 @@
   height: 12px;
   border-radius: 6px;
 }
-.camera-metric--placeholder {
-  gap: 10px;
-}
 .camera-metric--placeholder .tanaw-skeleton-text {
   width: 60%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .camera-metric {
+    transition: none;
+  }
 }
 .camera-metrics-note {
   display: flex;

@@ -27,9 +27,16 @@ export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = "Ca
     <Dialog
       size="sm"
       title={
-        <span className="flex items-center gap-2">
-          <span aria-hidden="true" className={tone === "danger" ? "text-(--tanaw-danger)" : "text-(--tanaw-accent-ink)"}>
-            {icon ?? <AlertTriangle size={20} />}
+        <span className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className={
+              tone === "danger"
+                ? "flex size-10 shrink-0 items-center justify-center rounded-full bg-(--tanaw-tonal-danger) text-(--tanaw-danger)"
+                : "flex size-10 shrink-0 items-center justify-center rounded-full bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)"
+            }
+          >
+            {icon ?? <AlertTriangle size={19} />}
           </span>
           {title}
         </span>
@@ -43,13 +50,13 @@ export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = "Ca
           <Button variant="secondary" onClick={close} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm} loading={busy}>
+          <Button variant={tone === "danger" ? "destructive" : "primary"} onClick={onConfirm} loading={busy}>
             {confirmLabel}
           </Button>
         </>
       }
     >
-      <div className="text-sm leading-relaxed text-(--tanaw-text-secondary)">{children}</div>
+      <div className="text-[0.9375rem] leading-relaxed text-(--tanaw-text-secondary)">{children}</div>
     </Dialog>
   );
 }

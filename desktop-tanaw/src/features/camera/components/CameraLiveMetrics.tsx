@@ -47,15 +47,15 @@ export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, ar
         </>
       ) : (
         <>
-          <div className="camera-metrics-grid">
-            <Metric loading={loading} icon={Users} label="Establishment Occupancy" value={occupancy} detail="People inside"
-              tone="occupancy" wide tooltip="People inside, counted across all Entry / Exit cameras. The Dashboard also adds people in Open Space areas." />
-            <Metric loading={loading} icon={LogIn} label="Entry" value={entry} tone="neutral"
+          <div className="camera-metrics-grid" data-mode="entrance-exit">
+            <Metric loading={loading} icon={LogIn} label="Entry" value={entry} tone="entry"
               tooltip="Visitors counted after crossing this camera’s configured entry line." />
-            <Metric loading={loading} icon={LogOut} label="Exit" value={exit} tone="neutral"
+            <Metric loading={loading} icon={LogOut} label="Exit" value={exit} tone="exit"
               tooltip="Visitors counted after crossing this camera’s configured exit line." />
+            <Metric loading={loading} icon={Users} label="Establishment Occupancy" value={occupancy} detail="People inside"
+              tone="occupancy" tooltip="People inside, counted across all Entry / Exit cameras. The Dashboard also adds people in Open Space areas." />
             <Metric loading={loading} icon={Users} label="Estimated Visitors" value={visitors}
-              tone="visitors" wide tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded." />
+              tone="visitors" tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded." />
           </div>
           {pendingUniqueEntries > 0 && (
             <p className="camera-metrics-note">
@@ -100,23 +100,26 @@ function isMetricNumber(value: MetricValue): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Each count keeps one hue: Entry green, Exit rose, occupancy blue and visitors Seal Gold. */
+type MetricTone = "entry" | "exit" | "occupancy" | "visitors";
+
 type MetricProps = {
   detail?: string;
   icon: LucideIcon;
   label: string;
   loading?: boolean;
-  tone: "neutral" | "occupancy" | "visitors";
+  tone: MetricTone;
   tooltip: string;
   unavailable?: string;
   value: MetricValue;
-  wide?: boolean;
 };
 
-function Metric({ detail, icon: Icon, label, loading = false, tone, tooltip, unavailable = "Unavailable", value, wide }: MetricProps) {
+/** One tinted tile: the name, what it counts (or why it is unavailable), then the figure. */
+function Metric({ detail, icon: Icon, label, loading = false, tone, tooltip, unavailable = "Unavailable", value }: MetricProps) {
   const available = isMetricNumber(value);
   const placeholder = loading && !available;
   return (
-    <div className="camera-metric" data-tone={tone} data-wide={wide || undefined}>
+    <div className="camera-metric" data-tone={tone}>
       <div className="camera-metric-label">
         <h5>{label}</h5>
         <Tooltip ariaLabel={`About ${label.toLowerCase()}`} content={tooltip}>
@@ -125,13 +128,13 @@ function Metric({ detail, icon: Icon, label, loading = false, tone, tooltip, una
       </div>
       {placeholder ? (
         <>
-          <Skeleton className="camera-metric-skeleton" />
           {detail && <Skeleton className="camera-metric-skeleton-detail" />}
+          <Skeleton className="camera-metric-skeleton" />
         </>
       ) : (
         <>
-          <div className="camera-metric-value" aria-hidden={!available}>{available ? value.toLocaleString("en-PH") : "—"}</div>
           {(detail || !available) && <p>{available ? detail : unavailable}</p>}
+          <div className="camera-metric-value" aria-hidden={!available}>{available ? value.toLocaleString("en-PH") : "—"}</div>
         </>
       )}
     </div>

@@ -272,20 +272,21 @@ export function LocationPicker({
   }, [location]);
 
   return (
-    <div className="h-fit self-start overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white dark:border-emerald-300/20 dark:bg-slate-900 dark:ring-white/8">
-      <div className="border-b border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-[#121c31]">
-        <LocationSearch
-          inputId={`${mapId}-search`}
-          onSelect={(suggestion) => {
-            if (selectLocation(suggestion.latitude, suggestion.longitude)) onSearchResultSelect?.(suggestion);
-          }}
-        />
+    // Open, not boxed: the search field, then the map as a soft-edged preview, then a line on how to pin.
+    <div className="grid h-fit gap-3 self-start">
+      <LocationSearch
+        inputId={`${mapId}-search`}
+        onSelect={(suggestion) => {
+          if (selectLocation(suggestion.latitude, suggestion.longitude)) onSearchResultSelect?.(suggestion);
+        }}
+      />
+      <div className="rounded-tanaw-lg overflow-hidden border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)">
+        <div id={mapId} className={`${mapHeightClassName} w-full`} />
       </div>
-      <div id={mapId} className={`${mapHeightClassName} w-full`} />
-      <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 dark:border-slate-700 dark:bg-[#121c31] dark:text-slate-300">
-        <MapPin size={14} className="text-tanaw-ledger shrink-0" />
+      <p className="flex items-center gap-2 text-[13px] text-(--tanaw-text-secondary)">
+        <MapPin size={14} aria-hidden="true" className="shrink-0 text-(--tanaw-accent-ink)" />
         <span className="truncate">{getFooterText(isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
-      </div>
+      </p>
     </div>
   );
 }

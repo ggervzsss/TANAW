@@ -5,7 +5,7 @@ import { visitorInsightsQueryKey } from "@/app/hooks/useOperationalSync";
 import { useAuthStore } from "@/app/store/authStore";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getVisitorInsights } from "@/shared/services/operationalSync";
-import type { DateRange } from "@/shared/ui-kit";
+import { Skeleton, type DateRange } from "@/shared/ui-kit";
 import { highestPoint, niceAxisMax, peakLabel, peakPoints, peakSubtitle, peakWhen, peakWindowFor } from "../model/peakOccupancy";
 import type { PlaceOption } from "../model/places";
 import { PlacePicker } from "./PlacePicker";
@@ -17,9 +17,28 @@ type PeakOccupancyProps = {
   monitoredCount: number;
 };
 
+const axisTick = { fontSize: 12, fill: "var(--tanaw-chart-axis)" };
+
+/** The chart's shape while camera counts load: its hairline grid and a skeleton where the line goes. */
+function ChartSkeleton() {
+  return (
+    <div role="status" aria-label="Loading camera counts…" className="mt-3">
+      <Skeleton className="mb-1 h-3.5 w-36" />
+      <div aria-hidden="true" className="tanaw-dashboard-chart-skeleton">
+        <span className="tanaw-dashboard-chart-skeleton__rule" />
+        <span className="tanaw-dashboard-chart-skeleton__rule" />
+        <span className="tanaw-dashboard-chart-skeleton__rule" />
+        <Skeleton className="absolute right-2 bottom-0 left-10 h-[62%] rounded-t-tanaw-md rounded-b-none" />
+      </div>
+      <span className="sr-only">Loading camera counts…</span>
+    </div>
+  );
+}
+
 /** The highest number of people inside, through the day (today) or day by day (longer ranges). */
 export function PeakOccupancy({ range, today, places, monitoredCount }: PeakOccupancyProps) {
   const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
+  const [pointed, setPointed] = useState<number | null>(null);
   const token = useAuthStore((state) => state.token);
   const { timeFormat } = useSystemDisplayPreferences();
   const gradientId = useId().replace(/:/g, "");
@@ -34,23 +53,22 @@ export function PeakOccupancy({ range, today, places, monitoredCount }: PeakOccu
   const peak = highestPoint(points);
   const yMax = niceAxisMax(peak?.value ?? 0);
   const placeName = places.find((place) => place.enterpriseId === enterpriseId)?.name ?? "All of San Pedro";
+  const reading = pointed === null ? null : (points[pointed] ?? null);
 
   return (
-    <section aria-labelledby="peak-occupancy-title" aria-busy={insightsQuery.isLoading} className="mt-auto min-w-0 border-t border-(--dash-rule) pt-4.5">
+    <section aria-labelledby="peak-occupancy-title" aria-busy={insightsQuery.isLoading} className="flex min-w-0 flex-1 flex-col border-t border-(--dash-rule) pt-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="peak-occupancy-title" className="font-display m-0 text-[22px] leading-tight font-bold text-(--tanaw-text)">
+          <h2 id="peak-occupancy-title" className="tanaw-dashboard-heading">
             Peak Occupancy
           </h2>
-          <p className="mt-1 text-sm text-(--tanaw-text-secondary)">{peakSubtitle(peakWindow)}</p>
+          <p className="tanaw-dashboard-caption">{peakSubtitle(peakWindow)}</p>
         </div>
         <PlacePicker places={places} value={enterpriseId} onChange={setEnterpriseId} monitoredCount={monitoredCount} />
       </div>
 
       {peakWindow === null ? null : insightsQuery.isLoading ? (
-        <p role="status" className="mt-4 text-sm text-(--tanaw-text-secondary)">
-          Loading camera counts…
-        </p>
+        <ChartSkeleton />
       ) : insightsQuery.isError ? (
         <p role="status" className="mt-4 flex flex-wrap items-center gap-2 text-sm text-(--tanaw-text-secondary)">
           Camera counts could not be loaded.
@@ -59,38 +77,58 @@ export function PeakOccupancy({ range, today, places, monitoredCount }: PeakOccu
           </button>
         </p>
       ) : points.length === 0 || !peak ? (
-        <p className="mt-4 text-sm text-(--tanaw-text-secondary)">No camera counts for {placeName} in this range yet.</p>
+        // The chart's empty hairline grid with the message on it, so the section keeps its shape.
+        <div className="tanaw-dashboard-fade tanaw-dashboard-chart-empty mt-3">
+          <span aria-hidden="true" className="tanaw-dashboard-chart-skeleton__rule" />
+          <span aria-hidden="true" className="tanaw-dashboard-chart-skeleton__rule" />
+          <span aria-hidden="true" className="tanaw-dashboard-chart-skeleton__rule" />
+          <p className="text-sm text-(--tanaw-text-secondary)">No camera counts for {placeName} in this range yet.</p>
+        </div>
       ) : points.length === 1 ? (
-        <p className="mt-4 text-sm text-(--tanaw-text)">
+        <p className="tanaw-dashboard-fade mt-4 text-sm text-(--tanaw-text)">
           <strong className="font-display text-2xl font-bold tabular-nums">{peak.value.toLocaleString("en-US")}</strong>{" "}
           <span className="text-(--tanaw-text-secondary)">most people inside {peakWhen(peak, peakWindow)}</span>
         </p>
       ) : (
-        <figure className="m-0 mt-3">
-          <p className="mb-1 text-xs text-(--tanaw-text-secondary)">
-            <strong className="font-bold text-(--tanaw-text)">Peak {peak.value.toLocaleString("en-US")}</strong> {peakWhen(peak, peakWindow)}
-          </p>
-          <div className="h-36 w-full" role="img" aria-label={`Peak occupancy chart for ${placeName}. ${peakLabel(peak, peakWindow)}.`}>
+        <figure key={`${enterpriseId ?? "all"}-${peakWindow.window}`} className="tanaw-dashboard-fade m-0 mt-3 flex flex-1 flex-col">
+          {reading ? (
+            <p className="tanaw-dashboard-readout">
+              <span aria-hidden="true" className="tanaw-dashboard-key" />
+              Most people inside <strong>{reading.value.toLocaleString("en-US")}</strong> {peakWhen(reading, peakWindow)}
+            </p>
+          ) : (
+            <p className="tanaw-dashboard-readout">
+              <span aria-hidden="true" className="tanaw-dashboard-key" />
+              <span>
+                <strong>Peak {peak.value.toLocaleString("en-US")}</strong> {peakWhen(peak, peakWindow)}
+              </span>
+            </p>
+          )}
+          <div className="h-36 min-h-36 w-full min-[1101px]:flex-1" role="img" aria-label={`Peak occupancy chart for ${placeName}. ${peakLabel(peak, peakWindow)}.`}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <AreaChart
+                data={points}
+                margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                onMouseMove={(state) => {
+                  const index = Number(state.activeTooltipIndex);
+                  setPointed(state.activeTooltipIndex != null && Number.isInteger(index) ? index : null);
+                }}
+                onMouseLeave={() => setPointed(null)}
+              >
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--dash-peak)" stopOpacity={0.38} />
-                    <stop offset="100%" stopColor="var(--dash-peak)" stopOpacity={0.04} />
+                    <stop offset="0%" stopColor="var(--dash-peak)" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="var(--dash-peak)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="var(--dash-rule)" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={18} tick={{ fontSize: 11.5, fill: "var(--tanaw-text-muted)" }} />
-                <YAxis width={36} domain={[0, yMax]} ticks={[0, yMax / 2, yMax]} tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: "var(--tanaw-text-muted)" }} />
-                <Tooltip
-                  cursor={{ stroke: "var(--tanaw-text-muted)", strokeDasharray: "3 3" }}
-                  formatter={(value) => [Number(value).toLocaleString("en-US"), "Most people inside"]}
-                  contentStyle={{ borderRadius: 10, border: "1px solid var(--dash-rule)", background: "var(--tanaw-surface)", color: "var(--tanaw-text)", fontSize: 12 }}
-                  labelStyle={{ color: "var(--tanaw-text-secondary)" }}
-                />
-                <Area type="monotone" dataKey="value" stroke="var(--dash-peak)" strokeWidth={2.5} fill={`url(#${gradientId})`} isAnimationActive={false} />
-                <ReferenceLine x={peak.label} stroke="var(--tanaw-text)" strokeDasharray="3 3" ifOverflow="extendDomain" />
-                <ReferenceDot x={peak.label} y={peak.value} r={5.5} fill="var(--tanaw-text)" stroke="var(--tanaw-page)" strokeWidth={2.5} />
+                <CartesianGrid vertical={false} stroke="var(--tanaw-chart-grid)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={18} tick={axisTick} />
+                <YAxis width={36} domain={[0, yMax]} ticks={[0, yMax / 2, yMax]} tickLine={false} axisLine={false} tick={axisTick} />
+                {/* Pointing at a period names it in the readout above; no tooltip box. */}
+                <Tooltip cursor={{ stroke: "var(--tanaw-chart-connector)", strokeDasharray: "3 3" }} content={() => null} />
+                <Area type="monotone" dataKey="value" stroke="var(--dash-peak)" strokeWidth={2.25} fill={`url(#${gradientId})`} isAnimationActive={false} activeDot={{ r: 4.5, fill: "var(--dash-peak)", stroke: "var(--tanaw-page)", strokeWidth: 2 }} />
+                <ReferenceLine x={peak.label} stroke="var(--tanaw-chart-connector)" strokeDasharray="3 3" ifOverflow="extendDomain" />
+                <ReferenceDot x={peak.label} y={peak.value} r={5} fill="var(--tanaw-text)" stroke="var(--tanaw-page)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

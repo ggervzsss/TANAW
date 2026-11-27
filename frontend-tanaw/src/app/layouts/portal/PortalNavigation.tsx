@@ -5,6 +5,7 @@ import { matchPath, NavLink } from "react-router-dom";
 import { preloadPortalRoute } from "@/app/routers/routeModules";
 import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
 import { TopbarNavigation } from "@/shared/ui-kit/patterns/TopbarNavigation";
+import { easeOut } from "@/shared/ui-kit/lib/motion";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import type { NavigationBadge, NavigationItem } from "./navigation";
@@ -26,7 +27,7 @@ function NavBadge({ badge }: { badge?: NavigationBadge }) {
   if (!badge || badge.count < 1) return null;
   return (
     <>
-      <span aria-hidden="true" data-topbar-badge className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[11px] font-extrabold text-amber-950 tabular-nums">
+      <span aria-hidden="true" data-topbar-badge className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-xs leading-none font-bold text-amber-950 tabular-nums">
         {badge.count > 99 ? "99+" : badge.count}
       </span>
       <span className="sr-only">, {badge.label}</span>
@@ -108,8 +109,9 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
                 <motion.div
                   initial={{ opacity: 0, y: 6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                  className="absolute top-full left-0 z-1001 mt-4 w-64 overflow-hidden rounded-2xl border border-white/80 bg-white p-2.5 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)]"
+                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: easeOut }}
+                  className="absolute top-full left-0 z-1001 mt-4 w-64 origin-top-left overflow-hidden rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-2 text-(--tanaw-text) shadow-tanaw-dialog"
                 >
                   {entry.children.map((child) => {
                     const ChildIcon = child.icon;
@@ -120,7 +122,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
                         onClick={() => onMenuChange(null)}
                         {...routeIntentHandlers(queryClient, child.path)}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-semibold transition ${isActive ? "bg-tanaw-green/10 text-tanaw-green" : "hover:text-tanaw-green text-slate-700 hover:bg-slate-50"}`
+                          `flex min-h-10 items-center gap-3 rounded-tanaw-md px-3.5 py-2 text-sm font-semibold transition-colors duration-150 ${isActive ? "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)" : "text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text)"}`
                         }
                       >
                         <ChildIcon size={15} />
@@ -148,6 +150,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: "auto" }}
       exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.2, ease: easeOut }}
       className={`border-t px-6 pb-4 max-sm:px-4 ${isDark ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
     >
       <TopbarNavigation activeId={selected?.id ?? null} className="relative isolate grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
@@ -160,7 +163,7 @@ export function MobilePortalNavigation({ entries, isDark, pathname, role, onNavi
             </NavLink>
           ) : (
             <div key={entry.id} className="space-y-2">
-              <div className="flex items-center gap-2 px-3 text-[11px] font-semibold tracking-[0.2em] text-white/60 uppercase">
+              <div className="flex items-center gap-2 px-3 text-[0.8125rem] font-semibold text-white/64">
                 <entry.icon size={14} />
                 {entry.label}
               </div>

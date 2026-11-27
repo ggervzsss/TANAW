@@ -1,3 +1,12 @@
+/*
+ * General Settings. One open page, no cards: a soft green wash carries the title and the civic
+ * line, a quiet rail lists the sections, and each section is a run of groups split by hairlines.
+ *
+ * Colour follows 60-30-10: the page surface carries most of the screen, ink and hairlines the
+ * structure, and Civic Green only marks what is current, chosen or the one action to take.
+ * Selection highlights (the rail, the theme ring) glide between options instead of jumping.
+ */
+
 .tanaw-settings-page {
   display: flex;
   flex: 1;
@@ -8,11 +17,11 @@
 }
 
 .tanaw-settings-workspace {
-  --settings-gutter: clamp(1.15rem, 2.5vw, 2.75rem);
+  --settings-gutter: clamp(1.25rem, 3vw, 3rem);
   --settings-line: var(--tanaw-border-soft);
-  --settings-flow-gap: 1.2rem;
-  --settings-forest: #113f32;
-  --settings-mint: #b7efda;
+  --settings-flow: 1.75rem;
+  --settings-ease: var(--ease-tanaw-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+  --settings-radius: var(--radius-tanaw-md, 12px);
   display: flex;
   flex: 1 0 auto;
   flex-direction: column;
@@ -22,55 +31,25 @@
   color: var(--tanaw-text);
 }
 
-.dark .tanaw-settings-workspace {
-  --settings-forest: #123128;
-}
+/* ---------- Header: green wash, title, civic line ---------- */
 
 .tanaw-settings-header {
+  position: relative;
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: flex-start;
-  flex: 0 0 auto;
-  gap: 0.15rem;
-  padding: 0.25rem var(--settings-gutter) 0.68rem;
-  border-bottom: 1px solid #8ee0bf55;
-  background:
-    radial-gradient(ellipse at 88% 0%, #387f6655, transparent 54%),
-    linear-gradient(103deg, var(--settings-forest), #153830 62%, #205044);
-  color: #fff;
+  padding: 0.75rem var(--settings-gutter) 1.6rem;
+  background: linear-gradient(180deg, var(--tanaw-wash-top) 0%, var(--tanaw-wash) 58%, var(--tanaw-surface) 100%);
 }
-
-.tanaw-settings-title {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  min-width: 0;
-}
-
-.tanaw-settings-panel-header p,
-.tanaw-settings-group-description {
-  margin-top: 0.2rem;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.875rem;
-}
-
-.tanaw-settings-title p {
-  margin-top: 0.3rem;
-  color: #d5ebdf;
-  font-size: 0.9rem;
-}
-
-.tanaw-settings-emblem,
-.tanaw-settings-category-icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 3.1rem;
-  height: 3.1rem;
-  border: 1px solid #9adebc55;
-  border-radius: 0.9rem;
-  background: #d4f5e516;
-  color: var(--settings-mint);
+.tanaw-settings-header::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--settings-line);
+  content: "";
 }
 
 .tanaw-settings-return {
@@ -78,28 +57,71 @@
   align-items: center;
   gap: 0.4rem;
   min-height: 2.25rem;
-  margin-inline-start: -0.45rem;
-  padding-inline: 0.45rem 0.6rem;
-  border-radius: var(--radius-tanaw-sm);
-  color: var(--settings-mint);
-  font-size: 0.85rem;
-  font-weight: 650;
+  margin-inline-start: -0.6rem;
+  padding-inline: 0.6rem 0.75rem;
+  border-radius: 999px;
+  color: var(--tanaw-accent-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    transform 140ms ease;
+    background-color var(--tanaw-duration-fast) var(--settings-ease),
+    translate var(--tanaw-duration-fast) var(--settings-ease);
+}
+.tanaw-settings-return > svg {
+  transition: translate var(--tanaw-duration-base) var(--settings-ease);
 }
 .tanaw-settings-return:hover {
-  background: #f0fff426;
-  color: #fff;
+  background: color-mix(in srgb, var(--tanaw-surface) 62%, transparent);
 }
-.tanaw-settings-return:focus-visible {
-  outline: 2px solid var(--settings-mint);
-  outline-offset: 2px;
+.tanaw-settings-return:hover > svg {
+  translate: -2px 0;
 }
 .tanaw-settings-return:active {
-  transform: translateX(-2px);
+  translate: -2px 0;
 }
+.tanaw-settings-return:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-settings-heading {
+  margin-top: 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+/* Green, Seal Gold, green: the civic line that signs every page title. */
+.tanaw-settings-heading::after {
+  display: block;
+  width: 56px;
+  height: 4px;
+  margin-top: 0.6rem;
+  border-radius: 999px;
+  background: var(--tanaw-civic-line);
+  transform-origin: left center;
+  animation: settings-line-draw 700ms var(--settings-ease) 120ms both;
+  content: "";
+}
+@keyframes settings-line-draw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.tanaw-settings-lede {
+  margin-top: 0.6rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* ---------- Rail ---------- */
 
 .tanaw-settings-grid {
   display: grid;
@@ -110,78 +132,73 @@
 .tanaw-settings-rail {
   display: grid;
   align-content: start;
-  gap: 0.35rem;
-  padding: 0.9rem;
+  gap: 0.25rem;
+  padding: 1rem var(--settings-gutter);
   border-bottom: 1px solid var(--settings-line);
-  background: linear-gradient(
-    155deg,
-    color-mix(
-      in srgb,
-      var(--tanaw-selected-bg) 35%,
-      var(--tanaw-surface-inset)
-    ),
-    var(--tanaw-surface-inset) 15rem
-  );
 }
 
 .tanaw-settings-link {
   position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-height: 2.85rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-tanaw-md);
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--settings-radius);
   text-align: left;
   color: var(--tanaw-text-secondary);
   font-size: 0.875rem;
-  font-weight: 650;
+  font-weight: 550;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--tanaw-duration-fast) var(--settings-ease),
+    color var(--tanaw-duration-fast) var(--settings-ease);
 }
-
-.tanaw-settings-link > :last-child {
-  visibility: hidden;
+/* Icon and label sit above every highlight, including one gliding past from another row. */
+.tanaw-settings-link > :not(.tanaw-settings-link-highlight) {
+  position: relative;
+  z-index: 1;
 }
-
-.tanaw-settings-link:hover {
+.tanaw-settings-link > svg {
+  flex: none;
+  transition: translate var(--tanaw-duration-fast) var(--settings-ease);
+}
+.tanaw-settings-link:hover:not([aria-current]) {
   background: var(--tanaw-control-hover);
   color: var(--tanaw-text);
 }
-
+.tanaw-settings-link:hover > svg {
+  translate: 1px 0;
+}
+.tanaw-settings-link:active:not([aria-current]) {
+  background: var(--tanaw-interactive-pressed-bg);
+}
 .tanaw-settings-link[aria-current] {
-  border-color: color-mix(
-    in srgb,
-    var(--tanaw-accent-ink) 32%,
-    var(--settings-line)
-  );
-  background: var(--tanaw-selected-bg);
   color: var(--tanaw-accent-ink);
-  font-weight: 750;
+  font-weight: 650;
 }
-
-.tanaw-settings-link[aria-current] > :last-child {
-  visibility: visible;
-}
-
-.tanaw-settings-link[aria-current]::before {
-  position: absolute;
-  inset: 23% auto 23% -1px;
-  width: 3px;
-  border-radius: 3px;
-  background: currentColor;
-  content: "";
-}
-
-.tanaw-settings-link:focus-visible,
-.tanaw-theme-option:has(input:focus-visible),
-.tanaw-settings-upload-control:has(input:focus-visible) {
+.tanaw-settings-link:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: 2px;
 }
+
+/* The current-section tint and its green bar glide to whichever section is chosen. */
+.tanaw-settings-link-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-selected-bg);
+}
+.tanaw-settings-link-highlight::before {
+  position: absolute;
+  inset: 0.7rem auto 0.7rem 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tanaw-accent-ink);
+  content: "";
+}
+
+/* ---------- Section panel ---------- */
 
 .tanaw-settings-panel {
   display: flex;
@@ -191,63 +208,105 @@
   color: var(--tanaw-text);
 }
 
-.tanaw-settings-panel > form {
+.tanaw-settings-panel-header {
+  padding: 1.9rem var(--settings-gutter) 0.4rem;
+}
+.tanaw-settings-panel-header h2 {
+  font-family: var(--font-sans);
+  font-size: 1.375rem;
+  font-weight: 650;
+  line-height: 1.75rem;
+  letter-spacing: -0.01em;
+}
+.tanaw-settings-panel-header p {
+  max-width: 68ch;
+  margin-top: 0.3rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.tanaw-settings-panel-body {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.tanaw-settings-panel-body > form {
   display: flex;
   flex: 1 0 auto;
   flex-direction: column;
   min-width: 0;
 }
 
-.tanaw-settings-panel-header {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 1.55rem var(--settings-gutter) 1.2rem;
-}
-
-.tanaw-settings-category-icon {
-  width: 2.45rem;
-  height: 2.45rem;
-  background: var(--tanaw-selected-bg);
-  color: var(--tanaw-accent-ink);
-}
-
 .tanaw-settings-body {
   display: grid;
   /* One column that never grows past the panel: a wide table inside scrolls in its own box. */
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--settings-flow-gap);
+  align-content: start;
   min-width: 0;
-  padding: 0 var(--settings-gutter) var(--settings-flow-gap);
+  margin: 0;
+  padding: 0.6rem var(--settings-gutter) var(--settings-flow);
+  border: 0;
 }
 
+/* Groups are separated by a hairline and air, never by a box. */
 .tanaw-settings-group {
   min-width: 0;
+  padding-block: var(--settings-flow);
   border-top: 1px solid var(--settings-line);
-  padding-block: 0.85rem 0.3rem;
 }
-
+.tanaw-settings-body > .tanaw-settings-group:first-child,
+.tanaw-settings-body > :first-child .tanaw-settings-group:first-child {
+  border-top: 0;
+}
 .tanaw-settings-group > header {
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
-
+.tanaw-settings-group > header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--tanaw-text);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.tanaw-settings-group > header h3 svg {
+  flex: none;
+  color: var(--tanaw-accent-ink);
+}
+.tanaw-settings-group > header p {
+  max-width: 68ch;
+  margin-top: 0.25rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+/* A group whose status and actions (save state, Reset) sit level with its title. */
 .tanaw-settings-group-header {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
+  gap: 0.75rem 1.5rem;
 }
-
 .tanaw-settings-group-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem 0.75rem;
+  min-height: 2rem;
 }
 
-/* Settings inputs: always editable, label above, guidance and errors below. */
+/* ---------- Fields: label over control, guidance and errors below ---------- */
+
+.tanaw-settings-fields {
+  display: grid;
+  gap: 1.1rem 1.5rem;
+}
+
 .tanaw-account-field {
   display: block;
   min-width: 0;
@@ -255,51 +314,58 @@
 
 .tanaw-account-field-label {
   display: block;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.4rem;
   color: var(--tanaw-text-secondary);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 550;
 }
 
-.tanaw-account-field-input {
+/* One control style for every input in Settings: a soft tint (never a white box), 12px corners, a green edge and halo on focus. */
+.tanaw-account-field-input,
+.tanaw-settings-control {
   width: 100%;
   min-width: 0;
   min-height: 2.75rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.6rem 0.8rem;
   border: 1px solid var(--tanaw-control-border);
-  border-radius: var(--radius-tanaw-md);
+  border-radius: var(--settings-radius);
   background: var(--tanaw-control-bg);
   color: var(--tanaw-text);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 500;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
   transition:
-    border-color 140ms ease,
-    background-color 140ms ease;
+    border-color var(--tanaw-duration-fast) var(--settings-ease),
+    box-shadow var(--tanaw-duration-fast) var(--settings-ease),
+    background-color var(--tanaw-duration-fast) var(--settings-ease);
 }
-
-.tanaw-account-field-input::placeholder {
+.tanaw-account-field-input::placeholder,
+.tanaw-settings-control::placeholder {
   color: var(--tanaw-text-placeholder);
 }
-
-.tanaw-account-field-input:hover:not(:disabled, :focus) {
+.tanaw-account-field-input:hover:not(:disabled, :focus),
+.tanaw-settings-control:hover:not(:disabled, :focus) {
   border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-bg-hover);
 }
-
-.tanaw-account-field-input:focus {
-  border-color: var(--tanaw-focus-ring);
-  outline: 2px solid var(--tanaw-focus-ring);
-  outline-offset: 1px;
+.tanaw-account-field-input:focus,
+.tanaw-settings-control:focus {
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-control-bg-focus);
+  box-shadow: var(--tanaw-field-ring);
 }
-
 .tanaw-account-field-input[aria-invalid="true"] {
   border-color: var(--tanaw-error);
 }
-
-.tanaw-account-field-input:disabled {
+.tanaw-account-field-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tanaw-error) 18%, transparent);
+}
+.tanaw-account-field-input:disabled,
+.tanaw-settings-control:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
-
 .tanaw-account-field-input.tanaw-sensitive-input {
   padding-inline-end: 3rem;
 }
@@ -316,20 +382,17 @@
   color: var(--tanaw-text-muted);
   translate: 0 -50%;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--tanaw-duration-fast) var(--settings-ease),
+    color var(--tanaw-duration-fast) var(--settings-ease);
 }
-
 .tanaw-account-field-reveal:hover:not(:disabled) {
   background: var(--tanaw-selected-bg);
   color: var(--tanaw-accent-ink);
 }
-
 .tanaw-account-field-reveal:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: 1px;
 }
-
 .tanaw-account-field-reveal:disabled {
   cursor: default;
   opacity: 0.45;
@@ -338,360 +401,140 @@
 .tanaw-account-field-error,
 .tanaw-account-field-hint {
   display: block;
-  margin-top: 0.375rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  margin-top: 0.4rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
-
 .tanaw-account-field-error {
   color: var(--tanaw-error);
   font-weight: 600;
 }
-
 .tanaw-account-field-hint {
   color: var(--tanaw-text-muted);
 }
 
-.tanaw-settings-fields {
+/* Read-only facts: label over value, a hairline under each, no box. */
+.tanaw-settings-readonly {
   display: grid;
-  gap: 0.75rem 1rem;
-}
-
-.tanaw-settings-account-details {
-  display: grid;
-  gap: 0.8rem;
-  padding: 0.85rem 1rem;
-  border-inline-start: 2px solid var(--settings-line);
-  border-radius: var(--radius-tanaw-sm);
-  background: var(--tanaw-surface-inset);
-  overflow-wrap: anywhere;
-}
-
-.tanaw-settings-account-details dt {
-  color: var(--tanaw-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.tanaw-settings-account-details dd {
-  margin-top: 0.14rem;
-  font-size: 0.875rem;
-}
-
-.tanaw-ticket-layout,
-.tanaw-profile-layout {
-  display: grid;
-  align-items: start;
-  gap: 0.75rem;
-}
-
-/* Appearance: text size options beside a live preview that follows the active theme. */
-.tanaw-display-layout {
-  display: grid;
-  align-items: start;
-  gap: 1rem;
-}
-
-.tanaw-display-options-group {
-  min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
 }
-
-.tanaw-display-legend {
-  padding: 0;
-  color: var(--tanaw-text);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.tanaw-display-help {
-  margin-top: 0.15rem;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.8rem;
-}
-
-.tanaw-display-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.65rem;
-}
-
-.tanaw-display-option {
-  position: relative;
-  display: grid;
-  grid-template-areas:
-    "label sample"
-    "description sample";
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.15rem 0.75rem;
-  min-height: 4.25rem;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--tanaw-control-border);
-  border-radius: var(--radius-tanaw-md);
-  background: var(--tanaw-control-bg);
-  color: var(--tanaw-text);
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease;
-}
-
-.tanaw-display-option input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.tanaw-display-option:hover {
-  border-color: var(--tanaw-control-border-hover);
-  background: var(--tanaw-control-hover);
-}
-
-.tanaw-display-option:has(input:checked) {
-  border-color: var(--tanaw-accent-ink);
-  background: var(--tanaw-selected-bg);
-  box-shadow: inset 0 0 0 1px var(--tanaw-accent-ink);
-}
-
-.tanaw-display-option:has(input:focus-visible) {
-  outline: 2px solid var(--tanaw-focus-ring);
-  outline-offset: 2px;
-}
-
-.tanaw-display-option-label {
-  display: flex;
-  grid-area: label;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.tanaw-display-option:has(input:checked) .tanaw-display-option-label {
-  color: var(--tanaw-accent-ink);
-}
-
-.tanaw-display-option-description {
-  grid-area: description;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-
-.tanaw-display-option-sample {
-  grid-area: sample;
-  color: var(--tanaw-text-muted);
-  font-weight: 600;
-  line-height: 1;
-}
-
-.tanaw-display-preview {
+.tanaw-settings-readonly > div {
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--settings-line);
-  border-radius: var(--radius-tanaw-lg);
-  background: var(--tanaw-surface-inset);
-}
-
-.tanaw-display-preview-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 0.75rem;
-  padding: 0.6rem 0.9rem;
+  padding-block: 0.8rem;
   border-bottom: 1px solid var(--settings-line);
 }
-
-.tanaw-display-preview-header h4 {
-  color: var(--tanaw-text);
-  font-size: 0.8rem;
-  font-weight: 700;
+.tanaw-settings-readonly > div:last-child {
+  border-bottom: 0;
 }
-
-.tanaw-display-preview-header span {
-  color: var(--tanaw-text-muted);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.tanaw-display-preview-card {
-  margin: 0.9rem;
-  padding: 1rem 1.1rem 1.1rem;
-  border: 1px solid var(--tanaw-border-soft);
-  border-radius: var(--radius-tanaw-lg);
-  background: var(--tanaw-surface);
-  box-shadow: var(--shadow-tanaw-resting);
-  color: var(--tanaw-text);
-}
-
-.tanaw-display-preview-eyebrow {
-  color: var(--tanaw-gold-ink);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.tanaw-display-preview-title {
-  margin-top: 0.2rem;
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.tanaw-display-preview-body {
-  margin-top: 0.35rem;
+.tanaw-settings-readonly dt {
   color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.tanaw-settings-readonly dd {
+  margin-top: 0.15rem;
+  color: var(--tanaw-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.tanaw-settings-readonly-note {
+  margin-bottom: 0.25rem;
+}
+
+/* Notes: a thin coloured mark at the start and a soft tint, no box edge. */
+.tanaw-settings-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 0.85rem 1.15rem;
+  border-radius: var(--settings-radius);
+  background: color-mix(in srgb, var(--tanaw-warning-bg) 70%, transparent);
+  box-shadow: inset 3px 0 0 var(--tanaw-gold-line);
+  color: var(--tanaw-text);
   font-size: 0.875rem;
   line-height: 1.5;
 }
-
-.tanaw-display-preview-metric {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 0.75rem;
-  margin-top: 0.85rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-tanaw-md);
-  background: var(--tanaw-surface-inset);
-}
-
-.tanaw-display-preview-metric span {
-  color: var(--tanaw-text-muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tanaw-display-preview-metric strong {
-  font-size: 1.25rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-}
-
-.tanaw-display-preview-action {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.5rem;
-  margin-top: 0.85rem;
-  padding-inline: 1rem;
-  border-radius: var(--radius-tanaw-md);
-  background: var(--tanaw-action);
-  color: var(--tanaw-on-action);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.tanaw-display-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 2.75rem;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.8rem;
-  font-weight: 650;
-}
-
-.tanaw-display-status svg {
+.tanaw-settings-note > svg {
   flex: none;
+  margin-top: 0.15rem;
+  color: var(--tanaw-gold-ink);
+}
+.tanaw-settings-note[data-tone="success"] {
+  background: color-mix(in srgb, var(--tanaw-success-surface) 70%, transparent);
+  box-shadow: inset 3px 0 0 var(--tanaw-accent-ink);
+}
+.tanaw-settings-note[data-tone="success"] > svg {
   color: var(--tanaw-accent-ink);
 }
-
-.tanaw-display-status[data-tone="error"],
-.tanaw-display-status[data-tone="error"] svg {
-  color: var(--tanaw-error);
+.tanaw-settings-note[data-tone="danger"] {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 70%, transparent);
+  box-shadow: inset 3px 0 0 var(--tanaw-danger);
+}
+.tanaw-settings-note[data-tone="danger"] > svg {
+  color: var(--tanaw-danger);
 }
 
-.tanaw-display-retry {
-  min-height: 2.75rem;
-  padding-inline: 0.4rem;
-  border-radius: var(--radius-tanaw-sm);
-  color: var(--tanaw-accent-ink);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.tanaw-display-retry:focus-visible {
-  outline: 2px solid var(--tanaw-focus-ring);
-  outline-offset: 1px;
-}
+/* ---------- Identity: photo, name and email, with the upload action at the end ---------- */
 
 .tanaw-settings-upload {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.65rem 0.85rem;
-  padding: 0.8rem;
-  border: 1px solid var(--settings-line);
-  border-radius: 0.7rem;
-  background: var(--tanaw-surface-inset);
+  gap: 0.85rem 1.1rem;
+  padding-block: 1.25rem var(--settings-flow);
+  border-bottom: 1px solid var(--settings-line);
 }
 
 .tanaw-settings-upload-avatar {
   display: grid;
   place-items: center;
-  width: 3rem;
-  height: 3rem;
+  width: 3.5rem;
+  height: 3.5rem;
   overflow: hidden;
-  border-radius: 0.65rem;
+  border-radius: 999px;
   background: var(--tanaw-selected-bg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-selected-bg) 60%, transparent);
   color: var(--tanaw-accent-ink);
-  font-size: 1rem;
-  font-weight: 750;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 .tanaw-settings-identity {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-
 .tanaw-settings-identity h3 {
-  font-weight: 750;
-  line-height: 1.3;
-}
-
-.tanaw-settings-identity-role {
-  margin-top: 0.12rem;
-  color: var(--tanaw-accent-ink);
-  font-size: 0.75rem;
+  font-size: 1.125rem;
   font-weight: 650;
+  line-height: 1.35;
 }
-
+.tanaw-settings-identity-role {
+  margin-top: 0.1rem;
+  color: var(--tanaw-accent-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
 .tanaw-settings-identity-email {
   margin-top: 0.15rem;
   color: var(--tanaw-text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .tanaw-settings-upload-tools {
   grid-column: 1 / -1;
   min-width: 0;
 }
-
 .tanaw-settings-upload-tools p {
-  margin-top: 0.15rem;
+  margin-top: 0.3rem;
   color: var(--tanaw-text-secondary);
   font-size: 0.75rem;
 }
-
 .tanaw-settings-upload-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .tanaw-settings-upload-control {
@@ -699,36 +542,47 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 2.15rem;
-  padding: 0.25rem 0.6rem;
-  border: 1px solid var(--tanaw-control-border);
-  border-radius: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: var(--tanaw-control-bg);
   color: var(--tanaw-accent-ink);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--settings-ease),
+    border-color var(--tanaw-duration-fast) var(--settings-ease),
+    translate var(--tanaw-duration-fast) var(--settings-ease);
 }
-
 .tanaw-settings-upload-control:hover {
   background: var(--tanaw-selected-bg);
+  translate: 0 -1px;
 }
 .tanaw-settings-upload-control:has(input:disabled) {
   opacity: 0.6;
 }
-
 .tanaw-settings-upload-control input,
 .tanaw-theme-option input {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  margin: 0;
   opacity: 0;
   cursor: pointer;
 }
+.tanaw-settings-upload-control:has(input:focus-visible) {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- Save bar: frosted, sticky, only while there is something to save ---------- */
 
 /* The save bar sits in the form's flow, so it reserves its own space and never covers the
    end of the form; sticky keeps it in view while the panel scrolls. */
 .tanaw-settings-save-slot {
+  --settings-gutter-fallback: var(--settings-gutter, 1.25rem);
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -741,18 +595,15 @@
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem 1rem;
-  padding: 0.75rem var(--settings-gutter);
-  border-top: 1px solid var(--settings-line);
-  background: var(--tanaw-surface);
-  box-shadow: 0 -10px 24px -20px rgb(16 36 27 / 0.45);
-}
-
-.dark .tanaw-settings-actions {
-  box-shadow: 0 -12px 28px -18px rgb(0 0 0 / 0.7);
+  padding: 0.85rem var(--settings-gutter-fallback);
+  border-top: 1px solid var(--settings-line, var(--tanaw-border-soft));
+  background: color-mix(in srgb, var(--tanaw-surface) 86%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
 }
 
 .tanaw-settings-actions[data-visible="true"] {
-  animation: tanaw-save-bar-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: tanaw-save-bar-in var(--tanaw-duration-base) var(--ease-tanaw-out);
 }
 
 /* Hidden, the bar keeps only its live status so screen readers still hear when edits begin. */
@@ -776,26 +627,16 @@
 
 .tanaw-settings-action-status {
   display: flex;
+  flex: 1 1 12rem;
   align-items: center;
   gap: 0.45rem;
-  flex: 1 1 12rem;
   color: var(--tanaw-text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 550;
 }
-
 .tanaw-settings-action-status svg {
   flex: none;
-  color: var(--tanaw-warning-text);
-}
-
-.tanaw-settings-action-status svg[class*="animate-spin"] {
   color: var(--tanaw-accent-ink);
-}
-
-/* The status line stays in the accessibility tree while empty, so its first message is announced. */
-.tanaw-settings-actions p:empty:not([role="status"]) {
-  display: none;
 }
 
 .tanaw-settings-action-buttons {
@@ -811,80 +652,75 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
   inset-inline: 1rem auto;
   max-width: calc(100vw - 2rem);
 }
-
 @media (width < 60rem) {
   body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice {
     bottom: 6.75rem;
   }
 }
 
+/* ---------- Theme: three previews, one gliding ring ---------- */
+
 .tanaw-theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 12.5rem));
+  gap: 1.25rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .tanaw-theme-option {
   position: relative;
   display: grid;
-  gap: 0.5rem;
-  padding: 0.4rem;
-  border: 1px solid var(--tanaw-control-border);
-  border-radius: 0.64rem;
+  gap: 0.7rem;
   color: var(--tanaw-text-secondary);
-  background: var(--tanaw-surface);
+}
+/* The invisible radio covers the whole option and stays above the preview, so every press reaches it. */
+.tanaw-theme-option input {
+  z-index: 2;
 }
 
-.tanaw-theme-option:hover,
-.tanaw-theme-option:has(input:checked) {
-  border-color: var(--tanaw-accent-ink);
-  background: var(--tanaw-selected-bg);
-  color: var(--tanaw-accent-ink);
+.tanaw-theme-frame {
+  position: relative;
+  display: block;
+}
+.tanaw-theme-ring {
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--tanaw-accent-ink);
+  border-radius: 17px;
+  pointer-events: none;
 }
 
-.tanaw-theme-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.1rem 0.3rem 0.25rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
+/* The previews show each theme's own fixed colours, whatever theme is active. */
 .tanaw-theme-preview {
   --preview-page: #f0f5f1;
   --preview-card: #fff;
   --preview-accent: #317555;
   display: grid;
   grid-template-columns: 1fr 3fr 2fr;
-  gap: 0.25rem;
-  height: 3.6rem;
-  padding: 0.85rem 0.4rem 0.4rem;
-  border-radius: 0.38rem;
-  background: linear-gradient(
-    var(--preview-accent) 0.46rem,
-    var(--preview-page) 0.46rem
-  );
-  box-shadow: inset 0 0 0 1px #6e9e8a33;
+  gap: 0.3rem;
+  height: 5rem;
+  padding: 1rem 0.5rem 0.5rem;
+  border-radius: var(--settings-radius);
+  background: linear-gradient(var(--preview-accent) 0.55rem, var(--preview-page) 0.55rem);
+  box-shadow:
+    inset 0 0 0 1px var(--tanaw-border-soft),
+    0 1px 2px rgb(16 36 27 / 0.06);
+  transition:
+    translate var(--tanaw-duration-base) var(--settings-ease),
+    box-shadow var(--tanaw-duration-base) var(--settings-ease);
 }
-
 .tanaw-theme-preview > span {
-  border-radius: 0.15rem;
+  border-radius: 5px;
   background: var(--preview-card);
 }
 .tanaw-theme-preview > span:first-child {
-  background: color-mix(
-    in srgb,
-    var(--preview-accent) 22%,
-    var(--preview-card)
-  );
+  background: color-mix(in srgb, var(--preview-accent) 22%, var(--preview-card));
 }
 .tanaw-theme-preview > span:nth-child(2) {
-  background: linear-gradient(
-    var(--preview-card) 42%,
-    transparent 42% 51%,
-    var(--preview-card) 51%
-  );
+  background: linear-gradient(var(--preview-card) 42%, transparent 42% 51%, var(--preview-card) 51%);
 }
 [data-theme-option="dark"] .tanaw-theme-preview {
   --preview-page: #121e1b;
@@ -899,6 +735,364 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
 [data-theme-option="system"] .tanaw-theme-preview > span:last-child {
   background: #253a33;
 }
+.tanaw-theme-option:hover .tanaw-theme-preview {
+  translate: 0 -2px;
+  box-shadow:
+    inset 0 0 0 1px var(--tanaw-border-soft),
+    var(--shadow-tanaw-soft);
+}
+.tanaw-theme-option:has(input:focus-visible) .tanaw-theme-preview {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 7px;
+}
+
+.tanaw-theme-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-inline: 0.15rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: color var(--tanaw-duration-fast) var(--settings-ease);
+}
+.tanaw-theme-option:hover .tanaw-theme-label {
+  color: var(--tanaw-text);
+}
+.tanaw-theme-option:has(input:checked) .tanaw-theme-label {
+  color: var(--tanaw-accent-ink);
+}
+
+/* ---------- Choices: radio rows with a dot, card-free ---------- */
+
+/*
+ * A radio shown as a row with a title and a line of description (text size). Resting is open;
+ * hover tints; the chosen one gets a filled green dot and a soft green wash.
+ */
+.tanaw-choice {
+  position: relative;
+  display: block;
+  padding: 0.75rem 0.9rem 0.75rem 2.6rem;
+  border-radius: var(--settings-radius);
+  color: var(--tanaw-text);
+  cursor: pointer;
+  transition:
+    background-color var(--tanaw-duration-base) var(--settings-ease),
+    scale var(--tanaw-duration-fast) var(--settings-ease);
+}
+.tanaw-choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.tanaw-choice::before {
+  position: absolute;
+  top: 0.95rem;
+  left: 0.9rem;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid var(--tanaw-text-muted);
+  border-radius: 999px;
+  background: var(--tanaw-control-bg-solid);
+  transition:
+    border-color var(--tanaw-duration-fast) var(--settings-ease),
+    box-shadow var(--tanaw-duration-base) var(--settings-ease);
+  content: "";
+}
+.tanaw-choice:hover {
+  background: var(--tanaw-control-hover);
+}
+.tanaw-choice:active {
+  scale: 0.995;
+}
+.tanaw-choice:has(input:checked) {
+  background: var(--tanaw-selected-bg);
+}
+.tanaw-choice:has(input:checked)::before {
+  border-color: var(--tanaw-accent-ink);
+  box-shadow:
+    inset 0 0 0 3px var(--tanaw-control-bg),
+    inset 0 0 0 8px var(--tanaw-accent-ink);
+}
+.tanaw-choice:has(input:focus-visible) {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+.tanaw-choice-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.tanaw-choice:has(input:checked) .tanaw-choice-title {
+  color: var(--tanaw-accent-ink);
+}
+.tanaw-choice-description {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+/* ---------- Appearance and profile layouts ---------- */
+
+.tanaw-display-layout,
+.tanaw-ticket-layout,
+.tanaw-profile-layout {
+  display: grid;
+  align-items: start;
+  gap: 0 2.5rem;
+}
+/* The identity row above already ends in a hairline. */
+.tanaw-profile-layout > :first-child {
+  border-top: 0;
+}
+
+/*
+ * Display preferences: the text size choices and the live preview side by side, each under a
+ * title of the same style so both columns start level; they stack in a narrow panel.
+ */
+.tanaw-display-layout {
+  gap: 1.5rem 2.5rem;
+  align-items: stretch;
+}
+.tanaw-display-column {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.tanaw-display-column-title {
+  padding: 0;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.tanaw-display-help {
+  margin: 0.15rem 0 0.75rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.tanaw-display-options {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+}
+/* Each size shows an "Aa" at its own size, so the choice can be read before it is made. */
+.tanaw-display-options .tanaw-choice {
+  padding-right: 3.75rem;
+}
+.tanaw-display-sample {
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  translate: 0 -50%;
+  color: var(--tanaw-text-secondary);
+  font-weight: 600;
+  line-height: 1;
+}
+.tanaw-choice:has(input:checked) .tanaw-display-sample {
+  color: var(--tanaw-accent-ink);
+}
+
+/*
+ * The preview is ordinary TANAW content measured in rem, so it shows the chosen size exactly.
+ * Its colours are theme tokens, so it follows light and dark mode.
+ */
+.tanaw-display-preview {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: clamp(1rem, 3cqi, 1.5rem);
+  border: 1px solid var(--settings-line);
+  border-radius: var(--radius-tanaw-lg, 16px);
+  background: var(--tanaw-surface-inset);
+}
+.tanaw-display-preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+.tanaw-display-preview-header h4 {
+  color: var(--tanaw-text);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.tanaw-display-preview-header span {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.tanaw-display-preview-card {
+  min-width: 0;
+  padding: 1rem 1.15rem 1.15rem;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-surface);
+  box-shadow: var(--shadow-tanaw-resting);
+  color: var(--tanaw-text);
+  overflow-wrap: anywhere;
+}
+.tanaw-display-preview-eyebrow {
+  color: var(--tanaw-gold-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.tanaw-display-preview-title {
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.tanaw-display-preview-body {
+  margin-top: 0.35rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.tanaw-display-preview-metric {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.85rem;
+  padding-block: 0.6rem;
+  border-block: 1px solid var(--settings-line);
+}
+.tanaw-display-preview-metric span {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.tanaw-display-preview-metric strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.tanaw-display-preview-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  margin-top: 0.85rem;
+  padding-inline: 1rem;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.tanaw-display-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.tanaw-display-status svg {
+  flex: none;
+  color: var(--tanaw-accent-ink);
+}
+.tanaw-display-status[data-tone="error"],
+.tanaw-display-status[data-tone="error"] svg {
+  color: var(--tanaw-error);
+}
+.tanaw-display-retry {
+  min-height: 2.75rem;
+  padding-inline: 0.5rem;
+  border-radius: 999px;
+  color: var(--tanaw-accent-ink);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: background-color var(--tanaw-duration-fast) var(--settings-ease);
+}
+.tanaw-display-retry:hover {
+  background: var(--tanaw-selected-bg);
+}
+.tanaw-display-retry:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
+}
+
+/* ---------- Loading rows: the calm shimmer in the shape of a settings list ---------- */
+
+.tanaw-settings-rows-skeleton > div {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--settings-line);
+}
+.tanaw-settings-rows-skeleton > div:last-child {
+  border-bottom: 0;
+}
+.tanaw-settings-skeleton {
+  display: block;
+  height: 0.875rem;
+  border-radius: 10px;
+  background-color: var(--tanaw-skeleton-base);
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 34%,
+    var(--tanaw-skeleton-shine) 50%,
+    transparent 66%,
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 240% 100%;
+  animation:
+    settings-skeleton-enter 260ms var(--settings-ease) both,
+    settings-skeleton-sweep 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.tanaw-settings-skeleton--dot {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+}
+.tanaw-settings-skeleton--end {
+  width: 3.5rem;
+  margin-inline-start: auto;
+}
+@keyframes settings-skeleton-sweep {
+  0% {
+    background-position: 130% 0;
+  }
+  72%,
+  100% {
+    background-position: -130% 0;
+  }
+}
+@keyframes settings-skeleton-enter {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes settings-skeleton-breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ---------- Responsive ---------- */
 
 @media (width < 60rem) {
   .tanaw-settings-rail {
@@ -906,32 +1100,41 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
   }
 }
 @media (width < 38rem) {
-  .tanaw-settings-title h1 {
-    font-size: clamp(1.1rem, 5vw, 1.5rem);
-  }
-  .tanaw-settings-emblem {
-    width: 2.15rem;
-    height: 2.15rem;
-  }
   .tanaw-settings-link {
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.45rem;
-    padding-inline: 0.55rem;
+    gap: 0.5rem;
+    padding-inline: 0.6rem;
     overflow-wrap: anywhere;
-  }
-  .tanaw-settings-link > :last-child {
-    display: none;
   }
 }
 
 @media (width >= 60rem) {
   .tanaw-settings-grid {
-    grid-template-columns: clamp(14rem, 19%, 18.5rem) minmax(0, 1fr);
+    grid-template-columns: clamp(15rem, 19%, 18rem) minmax(0, 1fr);
   }
   .tanaw-settings-rail {
+    padding: 1.6rem 1rem 1.6rem var(--settings-gutter);
     border-right: 1px solid var(--settings-line);
     border-bottom: 0;
-    padding: 1.25rem 0.9rem;
+  }
+}
+
+/* Short windows keep the header compact so the section itself gets the room. */
+@media (height < 54rem) {
+  .tanaw-settings-header {
+    padding-bottom: 1.15rem;
+  }
+  .tanaw-settings-heading {
+    margin-top: 0.15rem;
+    font-size: 1.75rem;
+  }
+  .tanaw-settings-heading::after {
+    margin-top: 0.45rem;
+  }
+  .tanaw-settings-lede {
+    margin-top: 0.45rem;
+  }
+  .tanaw-settings-panel-header {
+    padding-top: 1.4rem;
   }
 }
 
@@ -949,7 +1152,8 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
     overscroll-behavior: contain;
   }
   .tanaw-settings-panel {
-    scroll-padding: 0.5rem 0 4rem;
+    scrollbar-gutter: stable;
+    scroll-padding: 0.5rem 0 4.5rem;
   }
 }
 
@@ -970,20 +1174,18 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
   }
 }
 
-@container (width >= 48rem) {
+@container (width >= 44rem) {
   .tanaw-display-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   }
+}
+@container (width >= 48rem) {
   .tanaw-ticket-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   }
 }
 
 @container (width < 26rem) {
-  .tanaw-display-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .tanaw-settings-action-buttons {
     flex: 1 1 100%;
   }
@@ -992,37 +1194,100 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
   }
 }
 
-@container (width < 35rem) {
+@container (width < 30rem) {
+  .tanaw-theme-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
   .tanaw-theme-option {
-    grid-template-columns: 3.15rem minmax(0, 1fr);
+    grid-template-columns: 4rem minmax(0, 1fr);
     align-items: center;
   }
   .tanaw-theme-preview {
-    height: 2.2rem;
+    height: 2.6rem;
+    padding: 0.7rem 0.35rem 0.35rem;
+    gap: 0.2rem;
+    background: linear-gradient(var(--preview-accent) 0.4rem, var(--preview-page) 0.4rem);
+  }
+  .tanaw-theme-ring {
+    inset: -4px;
+    border-radius: 15px;
   }
 }
 
 @container (width >= 57rem) {
   .tanaw-profile-layout {
-    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   }
-  .tanaw-profile-layout > :last-child .tanaw-settings-fields {
-    grid-template-columns: minmax(0, 1fr);
+  /* Side-by-side groups start level: neither carries a top hairline on the first row. */
+  .tanaw-profile-layout > :nth-child(2) {
+    border-top: 0;
+  }
+}
+
+/* Windows High Contrast: keep the current section, the chosen option and focus visible in system colours. */
+@media (forced-colors: active) {
+  .tanaw-settings-link[aria-current] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .tanaw-choice:has(input:checked)::before {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    box-shadow: inset 0 0 0 3px Canvas;
+  }
+  .tanaw-choice:has(input:checked) {
+    outline: 1px solid Highlight;
+  }
+  .tanaw-theme-ring {
+    border-color: Highlight;
+  }
+  .tanaw-account-field-input:focus,
+  .tanaw-settings-control:focus {
+    outline-color: Highlight;
+  }
+  .tanaw-settings-note {
+    border-inline-start: 3px solid CanvasText;
+  }
+  .tanaw-settings-actions {
+    border-top-color: CanvasText;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tanaw-settings-heading::after {
+    animation: none;
+  }
   .tanaw-settings-link,
+  .tanaw-settings-link > svg,
   .tanaw-settings-return,
+  .tanaw-settings-return > svg,
   .tanaw-account-field-input,
+  .tanaw-settings-control,
   .tanaw-account-field-reveal,
-  .tanaw-display-option {
+  .tanaw-settings-upload-control,
+  .tanaw-theme-preview,
+  .tanaw-theme-label,
+  .tanaw-choice,
+  .tanaw-choice::before,
+  .tanaw-display-retry {
     transition: none;
   }
   .tanaw-settings-actions[data-visible="true"] {
     animation: none;
   }
-  .tanaw-settings-return:active {
-    transform: none;
+  .tanaw-settings-return:active,
+  .tanaw-settings-return:hover > svg,
+  .tanaw-settings-link:hover > svg,
+  .tanaw-theme-option:hover .tanaw-theme-preview,
+  .tanaw-choice:active {
+    translate: none;
+    scale: none;
+  }
+  .tanaw-settings-skeleton {
+    background-image: none;
+    background-color: var(--tanaw-skeleton-shine);
+    animation: settings-skeleton-breathe 2.4s ease-in-out infinite;
   }
 }

@@ -6,6 +6,7 @@ import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
 import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
+import { StaffTableSkeleton } from "../components/StaffTableSkeleton";
 import { useStaffReports } from "../hooks/useStaffReports";
 import { currentReportingMonth, monthIndexOf } from "../model/reportStatuses";
 import { formatReportingMonth, monthKey, parseMonthKey, reportingMonth, reportingMonthOptions, type ReportingMonth } from "../model/reportingMonth";
@@ -91,11 +92,11 @@ export function StaffReportsPage() {
 
       <StaffReportsFilters rows={data.rows} filters={filters} onChange={changeFilters} />
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 border-b border-(--tanaw-border-soft) pb-3 text-sm">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 text-sm">
         <p role="status" className="flex flex-wrap items-center gap-x-3 font-semibold text-(--tanaw-text) tabular-nums">
           {data.isLoading || data.isError ? null : filtered ? `Showing ${visibleRows.length} of ${data.rows.length} enterprises` : `${data.rows.length} ${data.rows.length === 1 ? "enterprise" : "enterprises"}`}
           {filtered && (
-            <button type="button" onClick={clearFilters} className="font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
+            <button type="button" onClick={clearFilters} className="rounded-sm font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)">
               Clear filters
             </button>
           )}
@@ -112,10 +113,12 @@ export function StaffReportsPage() {
           )}
         </p>
       </div>
-      <div>
-        {data.isLoading || data.isError ? (
-          <p role={data.isError ? "alert" : "status"} className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
-            {data.isError ? "Reports could not be loaded. Refresh the page to try again." : "Loading reports…"}
+      <div className="mt-3">
+        {data.isLoading ? (
+          <StaffTableSkeleton label="Loading reports…" cells={["w-3/5", "w-24", "w-28", "w-20", "w-24", "w-16"]} />
+        ) : data.isError ? (
+          <p role="alert" className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
+            Reports could not be loaded. Refresh the page to try again.
           </p>
         ) : (
           <StaffReportsTable

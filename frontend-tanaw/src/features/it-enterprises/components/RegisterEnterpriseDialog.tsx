@@ -53,7 +53,7 @@ export function RegisterEnterpriseDialog({ onClose }: { onClose: () => void }) {
       ]);
       toast.success(
         <>
-          <span className="block font-bold">Enterprise registered</span>
+          <span className="block font-semibold">Enterprise registered</span>
           <span className="mt-0.5 block text-[0.8125rem] font-normal">The invitation went to {account.email}.</span>
         </>,
       );
@@ -115,25 +115,29 @@ export function RegisterEnterpriseDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <form id={formId} noValidate onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] items-start gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className="grid min-w-0 content-start gap-5">
+      <form id={formId} noValidate onSubmit={submit} className="grid grid-cols-[minmax(0,1fr)] items-start gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="grid min-w-0 content-start gap-6">
           <NameField {...fieldProps} />
           <AttractionFields {...fieldProps} />
           <AddressFields {...fieldProps} />
           <ManagerFields {...fieldProps} />
-          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-1">
             <ContactNumberInput {...fieldProps} />
             <CapacityField {...fieldProps} />
           </div>
           <EmailField {...fieldProps} />
           <div data-field-name="openingHours">
-            <p className="mb-1.5 text-xs font-semibold text-(--tanaw-text-secondary)">Opening hours</p>
+            <p className="mb-1.5 text-[13px] font-medium text-(--tanaw-text-secondary)">Opening hours</p>
             {editHours ? (
               <OpeningHoursField value={form.openingHours} onChange={(value) => update("openingHours", value)} error={errors.openingHours} />
             ) : (
               <p className="text-sm text-(--tanaw-text)">
                 {hoursSummary ?? "Custom hours."} <span className="text-(--tanaw-text-secondary)">You can change hours and add closed days after registering.</span>{" "}
-                <button type="button" onClick={() => setEditHours(true)} className="font-semibold text-(--tanaw-accent-ink) underline underline-offset-4">
+                <button
+                  type="button"
+                  onClick={() => setEditHours(true)}
+                  className="ease-tanaw-out rounded-sm font-semibold text-(--tanaw-accent-ink) underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-[text-decoration-color] duration-200 hover:decoration-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+                >
                   Change hours now
                 </button>
               </p>

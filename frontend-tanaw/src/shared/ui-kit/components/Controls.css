@@ -1,0 +1,205 @@
+/*
+ * Light and motion for the kit's controls (DESIGN.md "Default UI style"). Buttons lift a pixel on hover
+ * and settle when pressed; the primary button catches one soft sweep of light; icons nudge toward where
+ * the action goes; a focused field lights its icon. Individual transform properties (translate, scale)
+ * are used so they never override the rotate and translate utilities on the same element.
+ * prefers-reduced-motion keeps the colour feedback and drops the movement.
+ */
+
+/* ---------- Buttons ---------- */
+
+/* Primary: a narrow band of light crosses the green once per hover, under the label. */
+.tanaw-button:is([data-variant="primary"], [data-variant="destructive"]) {
+  overflow: hidden;
+}
+
+.tanaw-button:is([data-variant="primary"], [data-variant="destructive"])::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgb(255 255 255 / 0.2) 46%,
+    rgb(255 255 255 / 0.07) 54%,
+    transparent 72%
+  );
+  /* The band sits at 28–72% of the layer, so ±72% parks it just outside either edge. */
+  translate: -72% 0;
+  content: "";
+  pointer-events: none;
+}
+
+.tanaw-button > svg {
+  transition:
+    translate 220ms var(--ease-tanaw-out),
+    scale 220ms var(--ease-tanaw-out),
+    color 200ms var(--ease-tanaw-out);
+}
+
+@media (hover: hover) {
+  .tanaw-button:is([data-variant="primary"], [data-variant="destructive"]):not(:disabled):hover::after {
+    translate: 72% 0;
+    /* An even glide, so the band is seen the whole way across rather than flashing past. */
+    transition: translate 820ms var(--ease-tanaw-in-out);
+  }
+
+  /* A leading icon rises a hair; a trailing icon (an arrow, a chevron) steps toward where it leads. */
+  .tanaw-button:not(:disabled):hover > svg:first-child {
+    translate: 0 -1px;
+    scale: 1.07;
+  }
+
+  .tanaw-button:not(:disabled):hover > svg:last-child:not(:first-child) {
+    translate: 2px 0;
+  }
+
+  /* Quiet buttons hand their icon the accent on hover, so the eye finds the action. */
+  .tanaw-button:is([data-variant="secondary"], [data-variant="ghost"]):not(:disabled):hover > svg {
+    color: var(--tanaw-accent-ink);
+  }
+}
+
+/* ---------- Rows and links ---------- */
+
+/* Anything that leads somewhere (a row, a "See all" link, a card-free list item) shows it on hover:
+   its trailing chevron or arrow steps toward where it goes. Expanding chevrons (down/up) are left
+   to their own turn. */
+:is(a, button, summary, [role="button"], [role="link"], [role="row"], tr) :is(.lucide-chevron-right, .lucide-arrow-right, .lucide-arrow-up-right, .lucide-external-link) {
+  transition: translate 220ms var(--ease-tanaw-out);
+}
+
+@media (hover: hover) {
+  :is(a, button:not(:disabled), summary, [role="button"], [role="link"], [role="row"], tr):hover :is(.lucide-chevron-right, .lucide-arrow-right) {
+    translate: 3px 0;
+  }
+
+  :is(a, button:not(:disabled), [role="button"], [role="link"]):hover :is(.lucide-arrow-up-right, .lucide-external-link) {
+    translate: 2px -2px;
+  }
+}
+
+/* ---------- Fields ---------- */
+
+/* The icon inside a field (search glass, calendar) takes the accent and grows a touch while focused. */
+.tanaw-field-icon {
+  transition:
+    color 200ms var(--ease-tanaw-out),
+    scale 200ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-field:focus-within .tanaw-field-icon {
+  color: var(--tanaw-accent-ink);
+  scale: 1.08;
+}
+
+/* Fields and dropdown triggers show focus with their accent edge and halo, so the page-wide focus
+   outline (components.css) steps aside for them. */
+.tanaw-control:focus-visible,
+.tanaw-field input:focus-visible,
+:is(.tanaw-select-trigger, .tanaw-picker-trigger):focus-visible {
+  outline: none;
+}
+
+/* The placeholder fades back a step once the field is focused, so the caret leads. */
+.tanaw-control::placeholder {
+  transition: opacity 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-control:focus::placeholder {
+  opacity: 0.6;
+}
+
+/* A dropdown trigger's chevron dips a pixel on hover, as if inviting the press. */
+@media (hover: hover) {
+  :is(.tanaw-select-trigger, .tanaw-picker-trigger):not(:disabled):not([aria-expanded="true"]):hover .tanaw-select-chevron {
+    translate: 0 1px;
+    color: var(--tanaw-text);
+  }
+}
+
+.tanaw-select-chevron {
+  transition:
+    rotate 220ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out),
+    color 200ms var(--ease-tanaw-out);
+}
+
+:is(.tanaw-select-trigger, .tanaw-picker-trigger)[aria-expanded="true"] .tanaw-select-chevron {
+  color: var(--tanaw-accent-ink);
+}
+
+/* Small things that appear (a clear button, a count) pop in rather than blink in. */
+.tanaw-pop-in {
+  animation: tanaw-pop-in 180ms var(--ease-tanaw-out) both;
+}
+
+@keyframes tanaw-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* ---------- Dialogs ---------- */
+
+/* The scrim: a green-tinted dusk that softly blurs the page behind, deepest at the edges. */
+.tanaw-dialog-backdrop {
+  background: var(--tanaw-scrim);
+  -webkit-backdrop-filter: blur(8px) saturate(1.08);
+  backdrop-filter: blur(8px) saturate(1.08);
+}
+
+/* A fine rim of light along the panel's top edge, as on the topbar glass. */
+.tanaw-dialog {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    var(--shadow-tanaw-dialog);
+}
+
+.dark .tanaw-dialog {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    var(--shadow-tanaw-dialog);
+}
+
+/* While more content waits below, the footer casts a soft shade upward over it. */
+.tanaw-dialog-footer[data-overflow] {
+  box-shadow: 0 -14px 24px -18px rgb(15 23 42 / 0.28);
+}
+
+.dark .tanaw-dialog-footer[data-overflow] {
+  box-shadow: 0 -14px 24px -18px rgb(0 0 0 / 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-button:is([data-variant="primary"], [data-variant="destructive"])::after {
+    display: none;
+  }
+
+  .tanaw-button > svg,
+  .tanaw-field-icon,
+  .tanaw-select-chevron,
+  .tanaw-control::placeholder {
+    transition: none;
+  }
+
+  .tanaw-button:not(:disabled):hover > svg,
+  :is(a, button, summary, [role="button"], [role="link"], [role="row"], tr):hover :is(.lucide-chevron-right, .lucide-arrow-right, .lucide-arrow-up-right, .lucide-external-link),
+  .tanaw-field:focus-within .tanaw-field-icon,
+  :is(.tanaw-select-trigger, .tanaw-picker-trigger):hover .tanaw-select-chevron {
+    translate: none;
+    scale: none;
+  }
+
+  .tanaw-pop-in {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .tanaw-button:is([data-variant="primary"], [data-variant="destructive"])::after {
+    display: none;
+  }
+}

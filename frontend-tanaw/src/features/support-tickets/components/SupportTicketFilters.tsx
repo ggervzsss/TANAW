@@ -1,17 +1,16 @@
-import { Search } from "lucide-react";
 import { FilterSelect } from "@/shared/components/ui";
+import { SearchField } from "@/shared/ui-kit";
 import { ticketGroupFilters, ticketStatusFilters, type TicketFilterState, type TicketGroupFilter, type TicketStatusFilter } from "../model";
 
+/** Search plus status and group filters, open on the page above the requests. */
 export function SupportTicketFilters({ filters, onChange }: { filters: TicketFilterState; onChange: (update: (current: TicketFilterState) => TicketFilterState) => void }) {
   return (
-    <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
-      <div className="relative min-w-65 flex-1">
-        <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
-        <input
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-65 flex-1">
+        <SearchField
           value={filters.query}
-          onChange={(event) => onChange((current) => ({ ...current, query: event.target.value }))}
+          onChange={(query) => onChange((current) => ({ ...current, query }))}
           placeholder="Search reference, place, person, request or group"
-          className="tanaw-data-search focus:ring-tanaw-ledger w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
       <FilterSelect value={filters.status} onChange={(value) => onChange((current) => ({ ...current, status: value as TicketStatusFilter }))} options={ticketStatusFilters} />

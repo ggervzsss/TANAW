@@ -1,8 +1,9 @@
-import { Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
+import { cn, controlClassName } from "@/shared/ui-kit";
 import { MAX_PERIODS_PER_DAY, WEEKDAYS, dayHours, setDayHours, weekdayLabels, type DayMode, type OpeningHours, type Weekday } from "../model/openingHours";
 
-const control =
-  "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-600 dark:bg-[#172033] dark:text-slate-100";
+/** The kit's soft tinted field, compact for a row of times. */
+const control = cn(controlClassName, "rounded-tanaw-sm h-9 w-auto px-2.5 tabular-nums");
 
 /**
  * Opening hours, day by day: closed, open 24 hours, or one or more opening periods. TANAW only
@@ -13,21 +14,33 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
     onChange(setDayHours(value, { day, mode, periods: mode === "hours" ? (periods.length ? periods : [{ open: "08:00", close: "17:00" }]) : [] }));
 
   return (
-    <fieldset data-field-name="openingHours" className="rounded-2xl border border-slate-200 p-4 md:col-span-2 dark:border-slate-700">
-      <legend className="px-1 text-[11px] font-bold tracking-wide text-slate-500 uppercase">Opening hours</legend>
-      <p className="text-sm text-slate-500">TANAW shows a place as offline only while it is open. A midday break is two opening times on the same day.</p>
-      <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-700/70">
+    <fieldset data-field-name="openingHours" className="m-0 min-w-0 border-0 p-0 md:col-span-2">
+      <legend className="mb-1 p-0 text-[13px] font-medium text-(--tanaw-text-secondary)">Opening hours</legend>
+      <p className="text-[13px] text-(--tanaw-text-secondary)">TANAW shows a place as offline only while it is open. A midday break is two opening times on the same day.</p>
+      <div className="mt-2 divide-y divide-(--tanaw-border-soft) border-y border-(--tanaw-border-soft)">
         {WEEKDAYS.map((day) => {
           const entry = dayHours(value, day);
           const periods = entry.periods ?? [];
           return (
             <div key={day} className="grid gap-2 py-2.5 sm:grid-cols-[7rem_10rem_minmax(0,1fr)] sm:items-center">
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{weekdayLabels[day]}</span>
-              <select aria-label={`${weekdayLabels[day]} hours`} value={entry.mode} onChange={(event) => update(day, event.target.value as DayMode)} className={control}>
-                <option value="hours">Open</option>
-                <option value="open24h">Open 24 hours</option>
-                <option value="closed">Closed</option>
-              </select>
+              <span className="text-sm font-semibold text-(--tanaw-text)">{weekdayLabels[day]}</span>
+              <span className="group relative flex items-center">
+                <select
+                  aria-label={`${weekdayLabels[day]} hours`}
+                  value={entry.mode}
+                  onChange={(event) => update(day, event.target.value as DayMode)}
+                  className={cn(control, "w-full cursor-pointer appearance-none pr-8 font-medium")}
+                >
+                  <option value="hours">Open</option>
+                  <option value="open24h">Open 24 hours</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  aria-hidden="true"
+                  className="ease-tanaw-out pointer-events-none absolute right-2.5 text-(--tanaw-text-muted) transition-[translate,color] duration-200 group-focus-within:text-(--tanaw-accent-ink) group-hover:translate-y-px group-hover:text-(--tanaw-text) motion-reduce:transition-none motion-reduce:group-hover:translate-y-0"
+                />
+              </span>
               {entry.mode === "hours" ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {periods.map((period, index) => (
@@ -36,39 +49,66 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                         type="time"
                         aria-label={`${weekdayLabels[day]} opening time ${index + 1}`}
                         value={period.open}
-                        onChange={(event) => update(day, "hours", periods.map((item, at) => (at === index ? { ...item, open: event.target.value } : item)))}
+                        onChange={(event) =>
+                          update(
+                            day,
+                            "hours",
+                            periods.map((item, at) => (at === index ? { ...item, open: event.target.value } : item)),
+                          )
+                        }
                         className={control}
                       />
-                      <span className="text-slate-400">to</span>
+                      <span className="text-(--tanaw-text-muted)">to</span>
                       <input
                         type="time"
                         aria-label={`${weekdayLabels[day]} closing time ${index + 1}`}
                         value={period.close}
-                        onChange={(event) => update(day, "hours", periods.map((item, at) => (at === index ? { ...item, close: event.target.value } : item)))}
+                        onChange={(event) =>
+                          update(
+                            day,
+                            "hours",
+                            periods.map((item, at) => (at === index ? { ...item, close: event.target.value } : item)),
+                          )
+                        }
                         className={control}
                       />
                       {periods.length > 1 && (
-                        <button type="button" aria-label={`Remove ${weekdayLabels[day]} opening time ${index + 1}`} onClick={() => update(day, "hours", periods.filter((_, at) => at !== index))} className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                          <X size={14} />
+                        <button
+                          type="button"
+                          aria-label={`Remove ${weekdayLabels[day]} opening time ${index + 1}`}
+                          onClick={() =>
+                            update(
+                              day,
+                              "hours",
+                              periods.filter((_, at) => at !== index),
+                            )
+                          }
+                          className="ease-tanaw-out rounded-full p-1 text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-tonal-danger) hover:text-(--tanaw-danger) active:scale-90 motion-reduce:transition-none"
+                        >
+                          <X size={14} aria-hidden="true" />
                         </button>
                       )}
                     </span>
                   ))}
                   {periods.length < MAX_PERIODS_PER_DAY && (
-                    <button type="button" onClick={() => update(day, "hours", [...periods, { open: "13:00", close: "17:00" }])} className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
-                      <Plus size={13} />
+                    <button
+                      type="button"
+                      onClick={() => update(day, "hours", [...periods, { open: "13:00", close: "17:00" }])}
+                      className="group/add rounded-tanaw-sm ease-tanaw-out -mx-1.5 inline-flex min-h-8 items-center gap-1 px-1.5 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-colors duration-200 hover:bg-(--tanaw-control-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+                    >
+                      <Plus size={13} aria-hidden="true" className="ease-tanaw-out transition-transform duration-200 group-hover/add:rotate-90 motion-reduce:transition-none" />
                       Add a break
                     </button>
                   )}
                 </div>
               ) : (
-                <span className="text-sm text-slate-500">{entry.mode === "closed" ? "Closed all day" : "Open all day"}</span>
+                <span className="text-sm text-(--tanaw-text-secondary)">{entry.mode === "closed" ? "Closed all day" : "Open all day"}</span>
               )}
             </div>
           );
         })}
       </div>
-      {error && <p className="mt-2 text-xs font-bold text-red-700">{error}</p>}
+      {error && <p className="mt-2 text-[13px] font-medium text-(--tanaw-error)">{error}</p>}
     </fieldset>
   );
 }

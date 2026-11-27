@@ -19,7 +19,7 @@ type StaffReportsTableProps = {
 export function StaffReportsTable({ rows, emptyMessage, remindingId, wasReminded, onOpen, onRemind }: StaffReportsTableProps) {
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="tanaw-staff-rise overflow-x-auto">
         <table className="tanaw-staff-table">
           <thead>
             <tr>

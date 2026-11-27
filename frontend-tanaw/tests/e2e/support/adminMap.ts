@@ -131,7 +131,9 @@ export async function waitForMapReady(page: Page) {
  * (Leaflet animates zoom with CSS transform transitions) and the boundary and markers stay identical for 100 ms of
  * samples taken by the test runner. Checking running transitions catches a marker still sliding into
  * place after the boundary has landed, which position samples alone can miss. Sampling from the runner
- * keeps working when a test pauses the page clock.
+ * keeps working when a test pauses the page clock. A map whose pins or boundary are briefly gone (the
+ * pins are removed and drawn again when the camera moves between the city and a barangay) has not
+ * settled either, so a reading taken afterwards always finds them.
  */
 export async function waitForMapToSettle(page: Page, timeoutMs = 10_000) {
   const sample = () =>
@@ -144,19 +146,25 @@ export async function waitForMapToSettle(page: Page, timeoutMs = 10_000) {
         if (!target || target.classList.contains("leaflet-tile")) return false;
         return !(animation instanceof CSSTransition) || animation.transitionProperty === "transform";
       });
+      const drawn =
+        document.querySelector("#admin-enterprise-map .leaflet-marker-icon") !== null &&
+        Array.from(document.querySelectorAll<Element>("#admin-enterprise-map path.tanaw-boundary-path")).some((path) => {
+          const rect = path.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
       const signature = Array.from(document.querySelectorAll<Element>("#admin-enterprise-map path.tanaw-boundary-path, #admin-enterprise-map .leaflet-marker-icon"))
         .map((element) => {
           const rect = element.getBoundingClientRect();
           return `${rect.left.toFixed(1)},${rect.top.toFixed(1)},${rect.width.toFixed(1)},${rect.height.toFixed(1)}`;
         })
         .join("|");
-      return { animating, signature };
+      return { animating: animating || !drawn, signature };
     });
   const deadline = Date.now() + timeoutMs;
   let previous = await sample();
   let stillSince = previous.animating ? null : Date.now();
   while (stillSince === null || Date.now() - stillSince < 100) {
-    if (Date.now() > deadline) throw new Error(`The admin map kept moving for ${timeoutMs} ms.`);
+    if (Date.now() > deadline) throw new Error(`The admin map kept moving, or was not fully drawn, for ${timeoutMs} ms.`);
     await new Promise((resolve) => setTimeout(resolve, 50));
     const current = await sample();
     if (current.animating || current.signature !== previous.signature) stillSince = current.animating ? null : Date.now();

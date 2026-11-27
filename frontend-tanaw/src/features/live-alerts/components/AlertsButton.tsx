@@ -29,7 +29,7 @@ export function AlertsButton({ dashboardPath, className }: { dashboardPath: stri
           <span
             aria-hidden="true"
             data-alert-count={count}
-            className={cn("absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] leading-5 font-bold text-white", camera ? "bg-(--tanaw-danger)" : "bg-(--tanaw-warn-ink)")}
+            className={cn("absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-full px-1 text-xs leading-5 font-bold text-white", camera ? "bg-(--tanaw-danger)" : "bg-(--tanaw-warn-ink)")}
           >
             {count > 99 ? "99+" : count}
           </span>

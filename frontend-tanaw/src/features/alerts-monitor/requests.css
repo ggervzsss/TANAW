@@ -1,0 +1,153 @@
+/*
+ * Admin Requests: the request list on the left and the chosen request's details on the right. Open
+ * rows split by hairlines, a soft 12px tint on hover, and a green highlight that glides to the chosen
+ * request. Colours come from the app tokens.
+ */
+
+.tanaw-requests-item {
+  position: relative;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition: border-color 160ms var(--ease-tanaw-out);
+}
+
+/* The hovered or chosen row reads as one rounded tint, so its hairline steps aside. */
+.tanaw-requests-item:has(> .tanaw-requests-row:hover),
+.tanaw-requests-item:has(> .tanaw-requests-row[aria-current="true"]) {
+  border-bottom-color: transparent;
+}
+
+.tanaw-requests-row {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: var(--tanaw-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-tanaw-out);
+}
+
+.tanaw-requests-row:hover:not([aria-current="true"]) {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-requests-row:active:not([aria-current="true"]) {
+  background: var(--tanaw-selected-bg);
+}
+
+.tanaw-requests-row:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+/* The chosen request's highlight: a soft green tint, no outline, that glides from row to row (motion layoutId). */
+.tanaw-requests-selection {
+  position: absolute;
+  z-index: 0;
+  inset: 2px 0;
+  border-radius: 12px;
+  background: var(--tanaw-selected-bg);
+  pointer-events: none;
+}
+
+/*
+ * Quick instructions: tonal chips, no outline. The chosen one takes the green tint and its tick
+ * draws in; the others deepen on hover and settle when pressed.
+ */
+.tanaw-requests-chip {
+  display: inline-flex;
+  min-height: 36px;
+  cursor: pointer;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    background-color 200ms var(--ease-tanaw-out),
+    color 200ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out),
+    scale 120ms var(--ease-tanaw-out);
+}
+
+.tanaw-requests-chip:hover {
+  background: var(--tanaw-control-bg-hover);
+  translate: 0 -1px;
+}
+
+.tanaw-requests-chip:active {
+  scale: 0.96;
+  translate: 0 0;
+}
+
+.tanaw-requests-chip[aria-pressed="true"] {
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-requests-chip:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-requests-chip__tick {
+  animation: tanaw-requests-tick-in 220ms var(--ease-tanaw-out) both;
+}
+
+@keyframes tanaw-requests-tick-in {
+  from {
+    opacity: 0;
+    scale: 0.5;
+  }
+}
+
+/* The location link in Details: the underline slides in. */
+.tanaw-requests-link {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  transition: text-decoration-color 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-requests-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* The details pane fades up a few pixels when another request is chosen. */
+.tanaw-requests-detail {
+  animation: tanaw-requests-fade-up 240ms var(--ease-tanaw-out) both;
+}
+
+@keyframes tanaw-requests-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-requests-item,
+  .tanaw-requests-row,
+  .tanaw-requests-chip,
+  .tanaw-requests-link {
+    transition: none;
+  }
+
+  .tanaw-requests-chip:hover,
+  .tanaw-requests-chip:active {
+    translate: none;
+    scale: none;
+  }
+
+  .tanaw-requests-detail,
+  .tanaw-requests-chip__tick {
+    animation: none;
+  }
+}

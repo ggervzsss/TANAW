@@ -16,7 +16,7 @@ export function FormField({ name, label, type = "text", required = false, placeh
   const descriptionId = error || helperText ? `${name}-description` : undefined;
   return (
     <label data-field-name={name} className="block">
-      <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-slate-500 uppercase">{label}</span>
+      <span className="mb-1.5 block text-[0.8125rem] font-semibold text-(--tanaw-text-secondary)">{label}</span>
       <input
         name={name}
         type={type}
@@ -30,12 +30,12 @@ export function FormField({ name, label, type = "text", required = false, placeh
         aria-describedby={descriptionId}
         data-form-error-focus
         className={[
-          "focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border bg-white px-4 py-3 text-sm font-medium text-slate-900 transition outline-none focus:ring-4 dark:bg-[#0f172a] dark:text-slate-100 dark:placeholder:text-slate-500",
-          error ? "border-red-300" : "border-slate-300",
+          "tanaw-control w-full rounded-tanaw-md border bg-(--tanaw-control-bg) px-4 py-3 text-sm text-(--tanaw-text) transition-[border-color,box-shadow,background-color] duration-200 ease-tanaw-out outline-none placeholder:text-(--tanaw-text-placeholder) hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover) focus:border-(--tanaw-accent-ink) focus:bg-(--tanaw-control-bg-focus) focus:shadow-(--tanaw-field-ring)",
+          error ? "border-(--tanaw-error)" : "border-(--tanaw-control-border)",
         ].join(" ")}
       />
       {(error || helperText) && (
-        <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-red-600" : "text-slate-500"}`}>
+        <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-(--tanaw-error)" : "text-(--tanaw-text-muted)"}`}>
           {error || helperText}
         </p>
       )}

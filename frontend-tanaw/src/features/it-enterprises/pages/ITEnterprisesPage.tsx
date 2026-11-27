@@ -1,5 +1,5 @@
 import { Building2, ChevronRight, Plus } from "lucide-react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
@@ -30,6 +30,9 @@ import {
 import { manageEnterprisePath } from "../model/paths";
 import "../itEnterprises.css";
 
+/** The chosen chip's tint glides to the next choice instead of jumping. */
+const GLIDE = { type: "tween", duration: 0.24, ease: [0.2, 0.8, 0.2, 1] } as const;
+
 /*
  * IT Enterprises (/it/enterprises): every enterprise account with its sign-in state, desktop app and
  * cameras. ?show=attention|pending|sending picks a chip, ?q= searches, and ?register=1 opens the
@@ -42,6 +45,7 @@ export function ITEnterprisesPage() {
   const registerOpen = params.get("register") === "1";
   const formats = useDisplayFormats();
   const { rows, isLoading, isError, healthFailed, refetch } = useEnterpriseRows();
+  const reduceMotion = useReducedMotion();
 
   const counts = useMemo(() => chipCounts(rows), [rows]);
   const figures = useMemo(() => summarizeEnterprises(rows), [rows]);
@@ -98,33 +102,40 @@ export function ITEnterprisesPage() {
 
           <div className="mt-5.5 flex flex-wrap items-end gap-x-6 gap-y-4">
             <div className="min-w-0 flex-[1_1_20rem] sm:max-w-104">
-              <label htmlFor="it-enterprise-search" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+              <label htmlFor="it-enterprise-search" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
                 Search
               </label>
               <SearchField id="it-enterprise-search" value={query} onChange={(value) => setParam({ q: value || null })} placeholder="Enterprise, barangay or owner email" label="Search enterprises" />
             </div>
             <div>
-              <span id="it-enterprise-show" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+              <span id="it-enterprise-show" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
                 Show
               </span>
-              <div role="group" aria-labelledby="it-enterprise-show" className="flex flex-wrap gap-1.5">
-                {CHIPS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    aria-pressed={chip === item.key}
-                    onClick={() => showChip(item.key)}
-                    className={cn(
-                      "inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                      chip === item.key
-                        ? "border-(--tanaw-action) bg-(--ite-chip-on) text-(--tanaw-accent-ink)"
-                        : "border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-(--tanaw-text) hover:border-(--tanaw-control-border-hover)",
-                    )}
-                  >
-                    {item.label} <span className="font-bold text-(--tanaw-text-muted) tabular-nums">{isLoading ? "–" : counts[item.key].toLocaleString("en-US")}</span>
-                  </button>
-                ))}
-              </div>
+              <LayoutGroup id="it-enterprise-show">
+                <div role="group" aria-labelledby="it-enterprise-show" className="flex min-h-11 flex-wrap items-center gap-1">
+                  {CHIPS.map((item) => {
+                    const on = chip === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => showChip(item.key)}
+                        className={cn(
+                          "rounded-tanaw-md ease-tanaw-out relative inline-flex min-h-10 cursor-pointer items-center gap-2 px-3.5 text-sm font-medium transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100",
+                          on ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)",
+                        )}
+                      >
+                        {on && <motion.span layoutId="ite-chip-highlight" aria-hidden="true" className="ite-chip-highlight" transition={reduceMotion ? { duration: 0 } : GLIDE} />}
+                        <span className="relative">{item.label}</span>{" "}
+                        <span className={cn("relative font-semibold tabular-nums", on ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text-muted)")}>
+                          {isLoading ? "–" : counts[item.key].toLocaleString("en-US")}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </LayoutGroup>
             </div>
           </div>
 
@@ -177,36 +188,40 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
     isLoading ? (
       <Skeleton className="mt-2.5 h-9 w-20" />
     ) : (
-      <span className="font-display mt-2.5 block text-4xl leading-none font-bold text-(--tanaw-text) tabular-nums">
+      <span className="ite-value mt-2.5 block text-4xl leading-none font-semibold tracking-[-0.03em] text-(--tanaw-text) tabular-nums">
         {main.toLocaleString("en-US")}
         {of !== undefined && " "}
-        {of !== undefined && <span className="text-xl text-(--tanaw-text-muted)">of {of.toLocaleString("en-US")}</span>}
+        {of !== undefined && <span className="text-xl font-medium tracking-normal text-(--tanaw-text-muted)">of {of.toLocaleString("en-US")}</span>}
       </span>
     );
   return (
     <dl className="grid grid-cols-3 border-y border-(--tanaw-border-soft) max-lg:grid-cols-1 [&>div+div]:border-l [&>div+div]:border-(--tanaw-border-soft) max-lg:[&>div+div]:border-t max-lg:[&>div+div]:border-l-0">
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Registered enterprises</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Registered enterprises</dt>
         <dd>
           {value(figures.total)}
           <span className={note}>{isLoading ? " " : registeredNote(figures)}</span>
         </dd>
       </div>
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Desktop apps sending data</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Desktop apps sending data</dt>
         <dd>
           {value(figures.appsSending, figures.appsTotal)}
           <span className={note}>{isLoading ? " " : appsNote(figures)}</span>
         </dd>
       </div>
       <div className={cell}>
-        <dt className="text-sm font-bold text-(--tanaw-text)">Cameras counting</dt>
+        <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Cameras counting</dt>
         <dd>
           {value(figures.camerasCounting, figures.camerasTotal)}
           <span className={cn(note, "flex flex-wrap items-center gap-x-2.5 gap-y-1")}>
             {isLoading ? " " : camerasNote(figures)}
             {!isLoading && figures.attention > 0 && (
-              <button type="button" onClick={onShowAttention} className="font-semibold text-(--tanaw-accent-ink) underline underline-offset-4">
+              <button
+                type="button"
+                onClick={onShowAttention}
+                className="ease-tanaw-out rounded-sm font-semibold text-(--tanaw-accent-ink) underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-[text-decoration-color] duration-200 hover:decoration-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+              >
                 Show places that need attention
               </button>
             )}
@@ -218,13 +233,13 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
 }
 
 function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: EnterpriseRow[]; isLoading: boolean; formats: DisplayFormats; empty: ReactNode }) {
-  const head = "px-4 py-3 text-[11px] font-bold tracking-label text-(--tanaw-text-secondary) uppercase";
+  const head = "px-4 py-2.5 text-xs font-semibold tracking-label text-(--tanaw-label) uppercase";
   return (
     <div className="mt-4 overflow-x-auto">
-      <table className="ite-table w-full min-w-245 border-collapse text-left text-sm">
+      <table className="ite-table w-full min-w-245 border-separate border-spacing-0 text-left text-sm">
         <caption className="sr-only">Enterprises with their account, desktop app and cameras</caption>
         <thead>
-          <tr className="border-b border-(--tanaw-border-soft)">
+          <tr>
             <th scope="col" className={cn(head, "w-[28%] pl-3")}>
               Enterprise
             </th>
@@ -245,7 +260,7 @@ function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: Enterprise
         <tbody>
           {isLoading
             ? Array.from({ length: 5 }, (_, index) => (
-                <tr key={index} className="border-b border-(--tanaw-border-soft)">
+                <tr key={index}>
                   {Array.from({ length: 5 }, (__, cellIndex) => (
                     <td key={cellIndex} className={cn("px-4 py-4", cellIndex === 0 && "pl-3")}>
                       <Skeleton className="h-4 w-3/4" />
@@ -269,9 +284,9 @@ function EnterpriseTableRow({ row, formats }: { row: EnterpriseRow; formats: Dis
   const resend = resendLabel(row);
   const sub = "mt-0.5 block text-[13px] text-(--tanaw-text-muted)";
   return (
-    <tr onClick={openRowFromClick} className="tanaw-row-link border-b border-(--tanaw-border-soft) align-top">
+    <tr onClick={openRowFromClick} className="tanaw-row-link align-top">
       <th scope="row" className="py-4 pr-4 pl-3 font-normal">
-        <Link data-row-primary to={manageEnterprisePath(row.enterpriseId)} className="block text-base font-bold text-(--tanaw-text)">
+        <Link data-row-primary to={manageEnterprisePath(row.enterpriseId)} className="block text-base font-semibold text-(--tanaw-text)">
           {row.name}
         </Link>
         <span className="mt-0.5 block text-[13px] text-(--tanaw-text-secondary)">{placeLine(row)}</span>

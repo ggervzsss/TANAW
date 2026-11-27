@@ -1,29 +1,108 @@
-/* Recent Activity (Admin): colours only this screen uses. The drawer is portalled, so it repeats the scope. */
+/*
+ * Recent Activity (Admin): open rows split by hairlines, a soft 12px tint on hover, and a green
+ * highlight that glides to the activity whose details are open. The drawer is portalled, so it
+ * repeats the scope. Colours come from the app tokens.
+ */
 .tanaw-recent-activity,
 .tanaw-activity-drawer {
-  --ra-chip: #e9efeb;
-  --ra-chip-ink: #3f4f47;
-  --ra-scrim: rgb(9 24 17 / 0.36);
+  --ra-chip: var(--tanaw-surface-inset);
+  --ra-chip-ink: var(--tanaw-text-secondary);
+  --ra-ease: var(--ease-tanaw-out);
 }
 
-.dark .tanaw-recent-activity,
-.dark .tanaw-activity-drawer {
-  --ra-chip: rgb(174 188 201 / 0.14);
-  --ra-chip-ink: #cbd5e1;
-  --ra-scrim: rgb(0 0 0 / 0.55);
+/* Column headers: the one place uppercase tracked labels stay. */
+.tanaw-activity-head {
+  color: var(--tanaw-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.tanaw-activity-item {
+  position: relative;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition: border-color 160ms var(--ra-ease);
+}
+
+/* The hovered or open row reads as one rounded tint, so its hairline steps aside. */
+.tanaw-activity-item:has(> .tanaw-activity-row:hover),
+.tanaw-activity-item:has(> .tanaw-activity-row[aria-expanded="true"]) {
+  border-bottom-color: transparent;
+}
+
+.tanaw-activity-row {
+  position: relative;
+  z-index: 1;
+  border-radius: 12px;
+  transition: background-color 160ms var(--ra-ease);
+}
+
+.tanaw-activity-row:hover:not([aria-expanded="true"]) {
+  background: var(--tanaw-control-hover);
+}
+
+.tanaw-activity-row:active:not([aria-expanded="true"]) {
+  background: var(--tanaw-selected-bg);
+}
+
+/* The activity name takes the accent while its row is pointed at. */
+.tanaw-activity-row .tanaw-activity-title {
+  transition: color 200ms var(--ra-ease);
+}
+
+.tanaw-activity-row:hover .tanaw-activity-title {
+  color: var(--tanaw-accent-ink);
+}
+
+/* Related pages in the drawer: a tinted row whose arrow steps toward the page it opens. */
+.tanaw-activity-link {
+  transition:
+    background-color 200ms var(--ra-ease),
+    scale 120ms var(--ra-ease);
+}
+
+.tanaw-activity-link:active {
+  scale: 0.99;
+}
+
+.tanaw-activity-selection {
+  position: absolute;
+  z-index: 0;
+  inset: 2px 0;
+  border-radius: 12px;
+  background: var(--tanaw-selected-bg);
+  pointer-events: none;
+}
+
+.tanaw-activity-fade {
+  animation: tanaw-activity-fade-up 240ms var(--ra-ease) both;
+}
+
+@keyframes tanaw-activity-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 .tanaw-activity-drawer__panel {
-  animation: tanaw-activity-drawer-in 180ms ease-out;
+  animation: tanaw-activity-drawer-in 260ms var(--ra-ease);
 }
 
 .tanaw-activity-drawer__scrim {
-  animation: tanaw-activity-scrim-in 180ms ease-out;
+  animation: tanaw-activity-scrim-in 200ms var(--ra-ease);
+}
+
+/* The drawer body fades up when Previous or Next shows another activity. */
+.tanaw-activity-drawer__body {
+  animation: tanaw-activity-fade-up 220ms var(--ra-ease) both;
 }
 
 @keyframes tanaw-activity-drawer-in {
   from {
-    transform: translateX(24px);
+    transform: translateX(32px);
     opacity: 0;
   }
 }
@@ -36,7 +115,20 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tanaw-activity-drawer__panel,
-  .tanaw-activity-drawer__scrim {
+  .tanaw-activity-drawer__scrim,
+  .tanaw-activity-drawer__body,
+  .tanaw-activity-fade {
     animation: none;
+  }
+
+  .tanaw-activity-item,
+  .tanaw-activity-row,
+  .tanaw-activity-row .tanaw-activity-title,
+  .tanaw-activity-link {
+    transition: none;
+  }
+
+  .tanaw-activity-link:active {
+    scale: none;
   }
 }

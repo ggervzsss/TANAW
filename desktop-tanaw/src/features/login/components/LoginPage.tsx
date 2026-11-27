@@ -1,20 +1,20 @@
 import { type CSSProperties, type ChangeEvent, type FormEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { motion } from "motion/react";
-import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
+import { AlertCircle, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
 import { routePaths } from "../../../app/router/routePaths";
 import { Button } from "../../../ui-kit";
-import { cn } from "../../../utils/cn";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "../../../utils/password-policy";
 import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
 import { loginSchema, type LoginFormValues } from "../schemas/login-schema";
 import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
+import { AuthActionTrail } from "./AuthActionTrail";
 import { AuthThemeToggle } from "./AuthThemeToggle";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";
 import { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE } from "../utils/login-background-assets";
 import { TANAW_LOGO } from "../../../lib/assets";
+import "../login.css";
 
 type FormErrors = Partial<Record<keyof LoginFormValues, string>>;
 type DialogMode = "recovery" | "support" | null;
@@ -67,7 +67,7 @@ function CriticalLoginBackground({ onReady }: { onReady: () => void }) {
   };
 
   return (
-    <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" data-ready={isReady} aria-hidden="true">
+    <div className="tanaw-login-photo absolute inset-0 w-full" data-ready={isReady} aria-hidden="true">
       <img
         src={CITY_HALL_DAY_IMAGE}
         alt=""
@@ -177,9 +177,10 @@ export function LoginPage() {
   return (
     <div
       ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
+      className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage relative min-h-svh w-full bg-(--tanaw-bg) text-(--tanaw-text)"
       style={stageGlowStyle}
       data-auth-background-ready={isBackgroundReady}
+      data-auth-entrance={shouldAnimateEntrance}
     >
       <CriticalLoginBackground onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
@@ -205,176 +206,144 @@ export function LoginPage() {
       </div>
       <AuthThemeToggle />
 
-      <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
-        <motion.div
-          className="relative z-10 max-w-xl"
-          initial={{ opacity: 0, y: 18 }}
-          animate={shouldAnimateEntrance ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
-          transition={{ duration: 0.65, ease: "easeOut" }}
-        >
-          <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
-            <SampaguitaIcon className="h-8 w-8" />
-          </div>
-          <h1 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)]">Enterprise Portal</h1>
-          <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
-          <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
-            Secure access for tourism enterprise reporting, camera monitoring, and operational compliance.
-          </p>
-          <div className="tanaw-auth-hero-location mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
-            <MapPin className="h-5 w-5 flex-none text-white" strokeWidth={2} />
-            <span>San Pedro, Laguna, Philippines</span>
-          </div>
-        </motion.div>
-      </section>
-
-      <motion.form
-        initial={{ opacity: 0, x: 18 }}
-        animate={shouldAnimateEntrance ? { opacity: 1, x: 0 } : { opacity: 0, x: 18 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        onSubmit={handleSubmit}
-        noValidate
-        autoComplete="on"
-        className="tanaw-auth-card relative z-10 ml-auto w-full max-w-145 rounded-[30px] border border-white/80 bg-white/96 p-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl xl:p-10"
-        onPointerMove={(event) => event.stopPropagation()}
-      >
-        <div className="tanaw-auth-card-header mb-8">
-          <div className="flex items-center gap-6">
-            <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
-            <div>
-              <h2 className="tanaw-auth-brand-title font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
-              <p className="tanaw-auth-brand-subtitle mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>
+      <div className="tanaw-auth-shell relative z-10">
+        <section className="tanaw-auth-hero relative text-white">
+          <div className="tanaw-auth-hero__inner">
+            <div className="tanaw-auth-hero__icon tanaw-sampaguita-glow">
+              <SampaguitaIcon className="h-8 w-8" />
+            </div>
+            <h1 className="tanaw-auth-hero-title">Enterprise Portal</h1>
+            <span className="tanaw-auth-hero__mark" aria-hidden="true" />
+            <p className="tanaw-auth-hero-copy">Secure access for tourism enterprise reporting, camera monitoring, and operational compliance.</p>
+            <div className="tanaw-auth-hero-location">
+              <MapPin className="h-4 w-4 flex-none" strokeWidth={2} aria-hidden="true" />
+              <span>San Pedro, Laguna, Philippines</span>
             </div>
           </div>
-          <div className="tanaw-auth-divider mt-8 flex items-center gap-3 text-(--tanaw-gold)">
-            <SampaguitaIcon className="h-4 w-4 flex-none" />
-            <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
-          </div>
-        </div>
+        </section>
 
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Username or email</span>
-            <div
-              data-state={errors.username ? "invalid" : values.username ? "valid" : "empty"}
-              className={cn(
-                "tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
-                errors.username ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
-              )}
-            >
-              <UserRound size={19} className="tanaw-auth-field-icon pointer-events-none absolute left-5" />
-              <input
-                id="enterprise-login-identifier"
-                name="username"
-                type="text"
-                autoComplete="username"
-                className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium outline-none"
-                placeholder="Enter username or registered email"
-                value={values.username}
-                onChange={updateField("username")}
-                disabled={loginMutation.isPending}
-                aria-invalid={Boolean(errors.username)}
-              />
-              {errors.username ? <AlertCircle className="absolute right-5 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
+        <main className="tanaw-auth-main">
+          <div className="tanaw-auth-card" onPointerMove={(event) => event.stopPropagation()}>
+            <div className="tanaw-auth-card__body">
+              <div className="tanaw-auth-card__content tanaw-auth-rise">
+                <header className="tanaw-auth-card-header">
+                  <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
+                  <div className="min-w-0">
+                    <h2 className="tanaw-auth-brand-title">TANAW PORTAL</h2>
+                    <p className="tanaw-auth-brand-subtitle">Enterprise Tourism Management</p>
+                    <span className="tanaw-auth-civic-line" aria-hidden="true" />
+                  </div>
+                </header>
+
+                <form onSubmit={handleSubmit} noValidate autoComplete="on">
+                  <div className="tanaw-auth-field-group">
+                    <label htmlFor="enterprise-login-identifier" className="tanaw-auth-label">
+                      Username or email
+                    </label>
+                    <div className="tanaw-auth-field" data-state={errors.username ? "invalid" : values.username ? "valid" : "empty"}>
+                      <UserRound className="tanaw-auth-field-icon pointer-events-none absolute left-4 h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
+                      <input
+                        id="enterprise-login-identifier"
+                        name="username"
+                        type="text"
+                        autoComplete="username"
+                        className="tanaw-auth-input h-full w-full rounded-tanaw-md bg-transparent pr-12 pl-12 text-[0.9375rem] outline-none"
+                        placeholder="Enter username or registered email"
+                        value={values.username}
+                        onChange={updateField("username")}
+                        disabled={loginMutation.isPending}
+                        aria-invalid={Boolean(errors.username)}
+                        aria-describedby={errors.username ? "enterprise-login-identifier-error" : undefined}
+                      />
+                      {errors.username ? <AlertCircle className="absolute right-4 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} aria-hidden="true" /> : null}
+                    </div>
+                    <div id="enterprise-login-identifier-error" className="tanaw-auth-field-message" aria-live="polite">
+                      {errors.username ? <p className="tanaw-auth-field-error">{errors.username}</p> : null}
+                    </div>
+                  </div>
+
+                  <div className="tanaw-auth-field-group">
+                    <label htmlFor="enterprise-login-password" className="tanaw-auth-label">
+                      Password
+                    </label>
+                    <div className="tanaw-auth-field" data-state={errors.password ? "invalid" : values.password ? "valid" : "empty"}>
+                      <LockKeyhole className="tanaw-auth-field-icon pointer-events-none absolute left-4 h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
+                      <input
+                        id="enterprise-login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        className="tanaw-auth-input h-full w-full rounded-tanaw-md bg-transparent pr-22 pl-12 text-[0.9375rem] outline-none"
+                        placeholder="Enter your password"
+                        value={values.password}
+                        onChange={updateField("password")}
+                        maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+                        disabled={loginMutation.isPending}
+                        aria-invalid={Boolean(errors.password)}
+                        aria-describedby={errors.password ? "enterprise-login-password-error" : undefined}
+                      />
+                      {errors.password ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} aria-hidden="true" /> : null}
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowPassword((current) => !current)}
+                        className="tanaw-auth-field-action absolute right-3"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff key="hide" className="h-5 w-5" strokeWidth={1.9} /> : <Eye key="show" className="h-5 w-5" strokeWidth={1.9} />}
+                      </button>
+                    </div>
+                    <div id="enterprise-login-password-error" className="tanaw-auth-field-message" aria-live="polite">
+                      {errors.password ? <p className="tanaw-auth-field-error">{errors.password}</p> : null}
+                    </div>
+                  </div>
+
+                  <div className="tanaw-auth-control-gap flex items-center justify-between gap-4">
+                    <label className="tanaw-auth-check">
+                      <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
+                      Remember me
+                    </label>
+                    <button type="button" onClick={() => setActiveDialog("recovery")} className="tanaw-auth-link">
+                      Forgot password?
+                    </button>
+                  </div>
+
+                  {authMessage ? (
+                    <div className="tanaw-auth-alert mb-4" role="alert" aria-live="assertive">
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-none" strokeWidth={2.2} aria-hidden="true" />
+                      <span>{authMessage}</span>
+                    </div>
+                  ) : null}
+
+                  <Button
+                    type="submit"
+                    disabled={loginMutation.isPending || loginMutation.lockoutSeconds > 0}
+                    aria-busy={loginMutation.isPending || undefined}
+                    size="lg"
+                    fullWidth
+                    className="tanaw-auth-primary-action tanaw-auth-sheen"
+                    trailingIcon={<AuthActionTrail busy={loginMutation.isPending} />}
+                  >
+                    {loginMutation.lockoutSeconds > 0 ? `Try again in ${formatLockout(loginMutation.lockoutSeconds)}` : loginMutation.isPending ? "Signing in..." : "Sign in"}
+                  </Button>
+
+                  <div className="tanaw-auth-support-row">
+                    <Headphones className="tanaw-auth-support-icon" strokeWidth={1.9} aria-hidden="true" />
+                    <span className="tanaw-auth-support-row__text">
+                      <span className="tanaw-auth-support-row__title">Need help signing in?</span>
+                      <span className="tanaw-auth-support-row__copy">Contact our support team.</span>
+                    </span>
+                    <button type="button" onClick={() => setActiveDialog("support")} className="tanaw-auth-link tanaw-auth-support-row__action">
+                      Contact support
+                      <ExternalLink className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-            <span className="mt-1 block min-h-4 text-xs font-medium text-(--tanaw-error)">{errors.username}</span>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Password</span>
-            <div
-              data-state={errors.password ? "invalid" : values.password ? "valid" : "empty"}
-              className={cn(
-                "tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
-                errors.password ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
-              )}
-            >
-              <LockKeyhole size={19} className="tanaw-auth-field-icon pointer-events-none absolute left-5" />
-              <input
-                id="enterprise-login-password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium outline-none"
-                placeholder="Enter your password"
-                value={values.password}
-                onChange={updateField("password")}
-                maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
-                disabled={loginMutation.isPending}
-                aria-invalid={Boolean(errors.password)}
-              />
-              {errors.password ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword((current) => !current)}
-                className="tanaw-auth-field-action absolute right-4 rounded-full p-1 transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
-              </button>
-            </div>
-            <span className="mt-1 block min-h-4 text-xs font-medium text-(--tanaw-error)">{errors.password}</span>
-          </label>
-        </div>
-
-        <div className="tanaw-auth-control-gap mt-1 mb-7 flex items-center justify-between gap-4">
-          <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-(--tanaw-text)">
-            <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-5 w-5 rounded border-(--tanaw-border) accent-(--tanaw-green)" />
-            Remember me
-          </label>
-          <button
-            type="button"
-            onClick={() => setActiveDialog("recovery")}
-            className="tanaw-soft-link -mr-2 rounded-full px-3 py-1.5 text-sm font-semibold text-(--tanaw-green) transition hover:text-(--tanaw-green-dark)"
-          >
-            Forgot password?
-          </button>
-        </div>
-
-        {authMessage ? (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" strokeWidth={2.2} aria-hidden="true" />
-            <span>{authMessage}</span>
           </div>
-        ) : null}
-
-        <Button
-          type="submit"
-          disabled={loginMutation.isPending || loginMutation.lockoutSeconds > 0}
-          size="lg"
-          fullWidth
-          className="tanaw-auth-primary-action"
-          trailingIcon={<ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />}
-        >
-          {loginMutation.lockoutSeconds > 0 ? `Try again in ${formatLockout(loginMutation.lockoutSeconds)}` : loginMutation.isPending ? "Signing in..." : "Sign in"}
-        </Button>
-
-        <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
-          <span className="h-px flex-1 bg-(--tanaw-border)" />
-          <span>OR</span>
-          <span className="h-px flex-1 bg-(--tanaw-border)" />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="tanaw-auth-support-icon flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
-              <Headphones className="h-6 w-6" strokeWidth={1.9} />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold text-(--tanaw-text)">Need help signing in?</span>
-              <span className="block text-sm text-(--tanaw-muted)">Contact our support team.</span>
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setActiveDialog("support")}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-(--tanaw-green) transition hover:text-(--tanaw-green-dark)"
-          >
-            Contact support
-            <ExternalLink className="h-4 w-4" strokeWidth={2} />
-          </button>
-        </div>
-      </motion.form>
+        </main>
+      </div>
 
       {activeDialog === "recovery" ? <PasswordRecoveryDialog onClose={() => setActiveDialog(null)} /> : null}
       {activeDialog === "support" ? <SupportRequestDialog onClose={() => setActiveDialog(null)} /> : null}

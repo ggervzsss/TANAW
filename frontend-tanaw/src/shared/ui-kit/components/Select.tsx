@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "../lib/cn";
 import { getNextDropdownIndex, shouldShowDropdownSearch, type DropdownKey } from "../lib/dropdown";
-import { popIn } from "../lib/motion";
+import { easeOut, popIn } from "../lib/motion";
 import { useExclusivePopupDismissal } from "../lib/popup-dismissal";
 import { ModalPortal } from "./ModalPortal";
 
@@ -191,17 +191,17 @@ export function Select({
   };
 
   const triggerClassName = isDirectory
-    ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition focus:outline-none"
+    ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition duration-150 ease-tanaw-out focus:outline-none"
     : cn(
-        "tanaw-select-trigger flex w-full items-center justify-between gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-left font-semibold text-(--tanaw-text) shadow-tanaw-resting transition outline-none hover:border-(--tanaw-control-border-hover) focus:border-(--tanaw-accent-ink) focus:ring-4 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-(--tanaw-control-disabled) disabled:opacity-60",
-        size === "sm" ? "min-h-8 rounded-tanaw-sm px-2 py-1.5 text-xs" : "min-h-10 rounded-tanaw-md px-3 py-2 text-sm",
+        "tanaw-select-trigger flex w-full items-center justify-between gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-left font-medium text-(--tanaw-text) transition-[background-color,border-color,box-shadow,color,scale] duration-200 ease-tanaw-out outline-none hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover) focus-visible:border-(--tanaw-accent-ink) focus-visible:shadow-(--tanaw-field-ring) active:scale-[0.99] aria-expanded:border-(--tanaw-accent-ink) aria-expanded:bg-(--tanaw-control-bg-focus) aria-expanded:shadow-(--tanaw-field-ring) disabled:cursor-not-allowed disabled:border-transparent disabled:bg-(--tanaw-control-disabled) disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100",
+        size === "sm" ? "min-h-8 rounded-tanaw-sm px-2.5 py-1.5 text-xs" : "min-h-11 rounded-tanaw-md px-3.5 py-2 text-sm",
         isInvalid && "border-(--tanaw-error)",
       );
 
   return (
     <div data-field-name={name} className={cn("relative min-w-0", className)}>
       {label && (
-        <span className={cn("mb-2 block text-xs font-bold tracking-label uppercase", isDirectory ? "tanaw-directory-select-label" : "text-(--tanaw-label)")}>{label}</span>
+        <span className={cn("mb-2 block", isDirectory ? "tanaw-directory-select-label text-xs font-bold tracking-label uppercase" : "text-[0.8125rem] font-semibold text-(--tanaw-text-secondary)")}>{label}</span>
       )}
       {name && <input type="hidden" name={name} value={value} />}
       <button
@@ -224,17 +224,17 @@ export function Select({
         onKeyDown={handleKeyDown}
         className={triggerClassName}
       >
-        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : !selectedOption && "font-medium text-(--tanaw-text-muted)")}>
+        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[13px] font-semibold" : !selectedOption && "font-normal text-(--tanaw-text-placeholder)")}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {selectedOption?.meta && (
-            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)"}>{selectedOption.meta}</span>
+            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)"}>{selectedOption.meta}</span>
           )}
           <ChevronDown
             size={size === "sm" ? 14 : 16}
             aria-hidden="true"
-            className={cn("shrink-0 transition-transform duration-200", isDirectory ? "tanaw-directory-select-chevron" : "text-(--tanaw-text-muted)", isOpen && "rotate-180")}
+            className={cn("tanaw-select-chevron shrink-0", isDirectory ? "tanaw-directory-select-chevron" : "text-(--tanaw-text-muted)", isOpen && "rotate-180")}
           />
         </span>
       </button>
@@ -252,19 +252,26 @@ export function Select({
               ref={menuRef}
               tabIndex={-1}
               {...popIn}
-              style={menuPosition}
+              style={{ ...menuPosition, transformOrigin: menuPosition.bottom === undefined ? "top center" : "bottom center" }}
               onKeyDown={handleKeyDown}
               onPointerDown={(event) => event.stopPropagation()}
               className={cn(
-                "tanaw-dropdown-menu fixed z-1501 flex flex-col overflow-hidden rounded-tanaw-md shadow-tanaw-raised outline-none",
+                "tanaw-dropdown-menu fixed z-1501 flex flex-col overflow-hidden rounded-tanaw-lg shadow-tanaw-dialog outline-none",
                 isDirectory ? "tanaw-directory-select-menu border backdrop-blur-md" : "border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised)",
                 menuClassName,
               )}
             >
               {searchEnabled && (
                 <div className={cn("shrink-0 border-b p-2", isDirectory ? "tanaw-directory-select-search-shell" : "border-(--tanaw-border-soft)")}>
-                  <label className={cn("relative flex items-center rounded-tanaw-sm border", isDirectory ? "tanaw-directory-select-search" : "border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)")}>
-                    <Search size={14} aria-hidden="true" className={cn("absolute left-3", isDirectory ? "tanaw-directory-select-chevron" : "text-(--tanaw-text-muted)")} />
+                  <label
+                    className={cn(
+                      "tanaw-field relative flex items-center rounded-tanaw-sm border",
+                      isDirectory
+                        ? "tanaw-directory-select-search"
+                        : "border-(--tanaw-control-border) bg-(--tanaw-control-bg) transition-[background-color,border-color,box-shadow] duration-200 ease-tanaw-out focus-within:border-(--tanaw-accent-ink) focus-within:bg-(--tanaw-control-bg-focus) focus-within:shadow-(--tanaw-field-ring)",
+                    )}
+                  >
+                    <Search size={14} aria-hidden="true" className={cn("absolute left-3", isDirectory ? "tanaw-directory-select-chevron" : "tanaw-field-icon text-(--tanaw-text-muted)")} />
                     <input
                       autoFocus
                       type="search"
@@ -302,25 +309,34 @@ export function Select({
                       onClick={() => selectOption(option)}
                       onMouseEnter={() => setActiveIndex(index)}
                       className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2 text-left text-sm transition-colors",
+                        "relative isolate flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2.5 text-left text-sm transition-colors duration-150",
                         option.disabled && "cursor-not-allowed opacity-50",
                         isDirectory
                           ? active || selected
                             ? "tanaw-directory-select-option--active font-semibold ring-1"
                             : "tanaw-directory-select-option"
-                          : active
-                            ? "bg-(--tanaw-interactive-selected-bg) font-semibold text-(--tanaw-accent-ink)"
-                            : selected
-                              ? "font-semibold text-(--tanaw-accent-ink)"
-                              : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)",
+                          : selected
+                            ? "font-semibold text-(--tanaw-accent-ink)"
+                            : active
+                              ? "text-(--tanaw-text)"
+                              : "text-(--tanaw-text-secondary)",
                       )}
                     >
+                      {/* The highlight glides to the option under the pointer or the arrow keys instead of jumping. */}
+                      {!isDirectory && active && (
+                        <motion.span
+                          aria-hidden="true"
+                          layoutId={`${listboxId}-active`}
+                          className="absolute inset-0 -z-10 rounded-tanaw-sm bg-(--tanaw-interactive-selected-bg)"
+                          transition={{ duration: 0.18, ease: easeOut }}
+                        />
+                      )}
                       <span className={cn("truncate", isDirectory && "text-xs font-medium")}>{option.label}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {option.meta && (
-                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs text-(--tanaw-text-muted)"}>{option.meta}</span>
+                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs text-(--tanaw-text-muted)"}>{option.meta}</span>
                         )}
-                        {selected && <Check size={15} aria-hidden="true" className="text-(--tanaw-accent-ink)" />}
+                        {selected && <Check size={15} aria-hidden="true" className="tanaw-pop-in text-(--tanaw-accent-ink)" />}
                       </span>
                     </button>
                   );

@@ -12,14 +12,16 @@ const toneClasses: Record<FigureTone, string> = {
 function Figure({ title, value, note, tone, isLoading }: { title: string; value: number; note: string; tone: FigureTone; isLoading: boolean }) {
   return (
     <div className="it-overview__figure">
-      <dt className="text-sm font-bold text-(--tanaw-text)">{title}</dt>
-      <dd className="m-0 mt-1.5">
+      <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">{title}</dt>
+      <dd className="m-0 mt-2">
         {isLoading ? (
           <Skeleton className="h-9 w-16" />
         ) : (
-          <span className={cn("font-display block text-4xl leading-none font-bold tabular-nums", value > 0 ? toneClasses[tone] : toneClasses.plain)}>{value.toLocaleString("en-US")}</span>
+          <span className={cn("it-overview__value block text-4xl leading-none font-semibold tracking-[-0.03em] tabular-nums", value > 0 ? toneClasses[tone] : toneClasses.plain)}>
+            {value.toLocaleString("en-US")}
+          </span>
         )}
-        <span className="mt-1.5 block text-[13px] text-(--tanaw-text-muted)">{isLoading ? "Loading" : note}</span>
+        <span className="mt-2 block text-[13px] text-(--tanaw-text-muted)">{isLoading ? "Loading" : note}</span>
       </dd>
     </div>
   );

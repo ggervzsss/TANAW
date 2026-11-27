@@ -1,74 +1,321 @@
-import { ArrowLeft, ArrowRight, BookOpen, LifeBuoy, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Building2,
+  ChevronRight,
+  Compass,
+  FileText,
+  KeyRound,
+  LayoutDashboard,
+  LifeBuoy,
+  MapPinned,
+  Search,
+  SlidersHorizontal,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { useId, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { getRoleHelpPath } from "@/app/routers/roleRoutes";
-import { PageHeader } from "@/shared/components/layout";
-import { Panel } from "@/shared/components/panel";
-import { EmptyState, PageMotion } from "@/shared/components/ui";
+import { Button } from "@/shared/ui-kit";
 import type { UserRole } from "@/shared/types/role.types";
 import { helpArticles } from "../data/articles";
 import { articlesForRole, searchHelpArticles, type HelpArticle } from "../model/helpArticles";
+import "../help-center.css";
+
+const categoryIcons: Record<string, LucideIcon> = {
+  "Account & Access": KeyRound,
+  "Getting Started": Compass,
+  "Map & Enterprises": MapPinned,
+  Requests: LifeBuoy,
+  Reports: FileText,
+  Overview: LayoutDashboard,
+  Enterprises: Building2,
+  "LGU Personnel": Users,
+  System: SlidersHorizontal,
+};
+
+const articleCount = (count: number) => `${count} ${count === 1 ? "article" : "articles"}`;
 
 export function HelpCenterPage({ role }: { role: UserRole }) {
   const { articleId } = useParams();
   const roleArticles = useMemo(() => articlesForRole(helpArticles, role), [role]);
   const article = articleId ? roleArticles.find((candidate) => candidate.id === articleId) : undefined;
-  if (articleId) return <HelpArticleView article={article} role={role} roleArticles={roleArticles} />;
+  if (articleId) return <HelpArticleView key={articleId} article={article} role={role} roleArticles={roleArticles} />;
   return <HelpCenterHome role={role} articles={roleArticles} />;
 }
 
 function HelpCenterHome({ role, articles }: { role: UserRole; articles: HelpArticle[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const categories = [...new Set(articles.map((article) => article.category))].sort();
+  const searchTitleId = useId();
+  const resultsTitleId = useId();
+  const categories = useMemo(() => [...new Set(articles.map((article) => article.category))].sort(), [articles]);
   const results = useMemo(() => searchHelpArticles(articles, query).filter((result) => !category || result.article.category === category), [articles, category, query]);
   const isFiltering = Boolean(query.trim() || category);
 
   return (
-    <PageMotion>
-      <PageHeader title="Help Center" description="Find clear guidance for the TANAW workflows available to your account." />
-      <div className="space-y-7">
-        <Panel className="overflow-hidden bg-linear-to-br from-emerald-950 to-emerald-800 p-7 text-white dark:from-[#071713] dark:to-[#0d3b2d]">
-          <p className="text-xs font-black tracking-[0.2em] text-emerald-200 uppercase">Self-service support</p>
-          <h2 className="mt-2 text-2xl font-bold">How can we help?</h2>
-          <div className="relative mt-5 max-w-3xl">
-            <Search className="absolute top-1/2 left-4 -translate-y-1/2 text-emerald-700" size={20} aria-hidden="true" />
-            <input value={query} onChange={(event) => { setQuery(event.target.value); setCategory(null); }} type="search" aria-label="Search help articles" placeholder="Search help articles..." className="h-13 w-full rounded-2xl border border-(--tanaw-control-border) bg-(--tanaw-control-bg) pr-12 pl-12 text-base text-(--tanaw-text) shadow-lg outline-none placeholder:text-(--tanaw-text-muted) focus:ring-4 focus:ring-emerald-300/35" />
-            {query && <button type="button" aria-label="Clear help search" onClick={() => setQuery("")} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={17} /></button>}
-          </div>
-        </Panel>
+    <div className="help-page">
+      <header>
+        <p className="help-kicker">Self-service support</p>
+        <h1 className="help-title">Help Center</h1>
+        <p className="help-lede">Find clear guidance for the TANAW workflows available to your account.</p>
+      </header>
 
+      <section className="help-search" aria-labelledby={searchTitleId}>
+        <h2 id={searchTitleId} className="help-search-title">
+          How can we help?
+        </h2>
+        <div className="help-search-field">
+          <Search className="help-search-icon" size={19} aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setCategory(null);
+            }}
+            type="search"
+            aria-label="Search help articles"
+            placeholder="Search help articles..."
+            className="help-search-input"
+          />
+          {query && (
+            <button type="button" aria-label="Clear help search" onClick={() => setQuery("")} className="help-search-clear">
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="help-layout">
+        <CategoryList
+          categories={categories}
+          articles={articles}
+          current={category}
+          onSelect={(item) => {
+            setQuery("");
+            setCategory(item);
+          }}
+        />
         {isFiltering ? (
-          <section aria-labelledby="help-results-heading">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 id="help-results-heading" className="text-xl font-bold text-slate-950 dark:text-white">{category ? category : `Results for “${query.trim()}”`}</h2><button type="button" onClick={() => { setQuery(""); setCategory(null); }} className="text-sm font-bold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Reset</button></div>
-            {results.length > 0 ? <div className="grid gap-3">{results.map(({ article, snippet }) => <ArticleResult key={article.id} article={article} snippet={snippet} role={role} />)}</div> : <EmptyState icon={Search} title="No help articles found" description="Try a workflow name, feature label, or a shorter search." />}
+          <section className="help-main" aria-labelledby={resultsTitleId}>
+            <div className="help-section-header">
+              <div className="help-section-heading">
+                <h2 id={resultsTitleId} className="help-section-title">
+                  {category ? category : `Results for “${query.trim()}”`}
+                </h2>
+                <span className="help-section-count">{articleCount(results.length)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setCategory(null);
+                }}
+                className="help-reset"
+              >
+                Reset
+              </button>
+            </div>
+            {results.length > 0 ? (
+              <ArticleList key={category ?? query.trim()}>
+                {results.map(({ article, snippet }, index) => (
+                  <ArticleRow key={article.id} index={index} article={article} snippet={snippet} role={role} showCategory={!category} />
+                ))}
+              </ArticleList>
+            ) : (
+              <div className="help-empty">
+                <span className="help-empty-icon" aria-hidden="true">
+                  <Search size={22} />
+                </span>
+                <h3 className="help-empty-title">No help articles found</h3>
+                <p className="help-empty-text">Try a workflow name, feature label, or a shorter search.</p>
+              </div>
+            )}
           </section>
         ) : (
           <>
             <ArticleCollection title="Recommended for you" articles={articles.filter((article) => article.recommended).slice(0, 3)} role={role} />
-            <section aria-labelledby="help-categories-heading"><h2 id="help-categories-heading" className="mb-4 text-xl font-bold text-slate-950 dark:text-white">Categories</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{categories.map((item) => <button key={item} type="button" onClick={() => setCategory(item)} className="flex min-h-24 items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left font-bold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:text-white"><span>{item}</span><ArrowRight size={17} className="text-emerald-700 dark:text-emerald-300" /></button>)}</div></section>
             <ArticleCollection title="Common issues" articles={articles.filter((article) => article.commonIssue)} role={role} />
           </>
         )}
       </div>
-    </PageMotion>
+    </div>
+  );
+}
+
+function CategoryList({
+  categories,
+  articles,
+  current,
+  onSelect,
+}: {
+  categories: string[];
+  articles: HelpArticle[];
+  current: string | null;
+  onSelect: (category: string) => void;
+}) {
+  const titleId = useId();
+  return (
+    <section className="help-aside" aria-labelledby={titleId}>
+      <div className="help-section-header">
+        <h2 id={titleId} className="help-section-title">
+          Categories
+        </h2>
+      </div>
+      <ul className="help-topics" role="list">
+        {categories.map((item) => {
+          const Icon = categoryIcons[item] ?? BookOpen;
+          const count = articles.filter((article) => article.category === item).length;
+          return (
+            <li key={item}>
+              <button type="button" onClick={() => onSelect(item)} aria-current={item === current ? "true" : undefined} className="help-topic">
+                <span className="help-topic-icon" aria-hidden="true">
+                  <Icon size={16} />
+                </span>
+                <span className="help-topic-label">{item}</span>
+                <span className="help-topic-count" aria-hidden="true">
+                  {count}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
 function ArticleCollection({ title, articles, role }: { title: string; articles: HelpArticle[]; role: UserRole }) {
+  const titleId = useId();
   if (articles.length === 0) return null;
-  return <section><h2 className="mb-4 text-xl font-bold text-slate-950 dark:text-white">{title}</h2><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">{articles.map((article) => <ArticleResult key={article.id} article={article} snippet={article.summary} role={role} />)}</div></section>;
+  return (
+    <section className="help-main" aria-labelledby={titleId}>
+      <div className="help-section-header">
+        <h2 id={titleId} className="help-section-title">
+          {title}
+        </h2>
+      </div>
+      <ArticleList>
+        {articles.map((article, index) => (
+          <ArticleRow key={article.id} index={index} article={article} snippet={article.summary} role={role} />
+        ))}
+      </ArticleList>
+    </section>
+  );
 }
 
-function ArticleResult({ article, snippet, role }: { article: HelpArticle; snippet: string; role: UserRole }) {
-  return <Link to={`${getRoleHelpPath(role)}/${article.id}`} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-white/10 dark:bg-white/5"><span className="text-xs font-black tracking-wide text-emerald-700 uppercase dark:text-emerald-300">{article.category}</span><h3 className="mt-2 font-bold text-slate-950 group-hover:text-emerald-800 dark:text-white dark:group-hover:text-emerald-200">{article.title}</h3><p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">{snippet}</p></Link>;
+function ArticleList({ children }: { children: ReactNode }) {
+  return (
+    <ul className="help-list" role="list">
+      {children}
+    </ul>
+  );
+}
+
+function ArticleRow({ article, snippet, role, index, showCategory = true }: { article: HelpArticle; snippet: string; role: UserRole; index: number; showCategory?: boolean }) {
+  return (
+    <li style={{ "--help-row": index } as CSSProperties}>
+      <Link to={`${getRoleHelpPath(role)}/${article.id}`} className="help-row">
+        <span className="help-row-text">
+          {showCategory && <span className="help-row-category">{article.category}</span>}
+          <span className="help-row-title">{article.title}</span>
+          <span className="help-row-snippet">{snippet}</span>
+        </span>
+        <ChevronRight size={18} aria-hidden="true" className="help-row-arrow" />
+      </Link>
+    </li>
+  );
 }
 
 function HelpArticleView({ article, role, roleArticles }: { article?: HelpArticle; role: UserRole; roleArticles: HelpArticle[] }) {
   const navigate = useNavigate();
   const { pathname, search, hash } = useLocation();
   const basePath = getRoleHelpPath(role);
-  if (!article) return <PageMotion><PageHeader title="Help Center" description="This article is not available for your account." /><EmptyState icon={BookOpen} title="Article not available" description="Return to Help Center to browse guidance for your role." action={<button type="button" onClick={() => navigate(basePath)} className="bg-tanaw-green rounded-xl px-4 py-2.5 text-sm font-bold text-white">Back to Help Center</button>} /></PageMotion>;
-  const related = article.relatedArticleIds.map((id) => roleArticles.find((candidate) => candidate.id === id)).filter((candidate): candidate is HelpArticle => Boolean(candidate));
-  return <PageMotion><PageHeader title="Help Center" description={article.category} /><article><button type="button" onClick={() => navigate(basePath)} className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-emerald-700 hover:underline dark:text-emerald-300"><ArrowLeft size={16} /> Back to Help Center</button><Panel className="overflow-hidden"><header className="border-b border-slate-200 p-6 sm:p-8 dark:border-white/10"><span className="text-xs font-black tracking-wide text-emerald-700 uppercase dark:text-emerald-300">{article.category}</span><h2 className="mt-2 text-2xl font-bold text-slate-950 dark:text-white">{article.title}</h2><p className="mt-3 max-w-[75ch] text-base leading-7 text-slate-600 dark:text-slate-300">{article.summary}</p></header><div className="space-y-7 p-6 sm:p-8">{article.sections.map((section) => <section key={section.heading}><h2 className="text-lg font-bold text-slate-950 dark:text-white">{section.heading}</h2>{section.paragraphs?.map((paragraph) => <p key={paragraph} className="mt-2 max-w-[75ch] leading-7 text-slate-600 dark:text-slate-300">{paragraph}</p>)}{section.steps && <ol className="mt-3 max-w-[75ch] list-decimal space-y-2 pl-5 text-slate-600 marker:font-bold marker:text-emerald-700 dark:text-slate-300 dark:marker:text-emerald-300">{section.steps.map((step) => <li key={step} className="pl-1 leading-7">{step}</li>)}</ol>}</section>)}{article.supportPath && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-300/20 dark:bg-emerald-400/10"><LifeBuoy size={20} className="text-emerald-700 dark:text-emerald-300" /><h2 className="mt-2 font-bold text-slate-950 dark:text-white">Still need help?</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Send a request to IT, or follow the ones already sent.</p><Link to={article.supportPath} state={{ returnTo: pathname + search + hash }} className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800">Open Requests</Link></div>}</div></Panel>{related.length > 0 && <div className="mt-7"><h2 className="mb-3 text-lg font-bold text-slate-950 dark:text-white">Related articles</h2><div className="grid gap-3 sm:grid-cols-2">{related.map((item) => <ArticleResult key={item.id} article={item} snippet={item.summary} role={role} />)}</div></div>}</article></PageMotion>;
+
+  if (!article) {
+    return (
+      <div className="help-page help-page--article">
+        <header>
+          <h1 className="help-title">Help Center</h1>
+          <p className="help-lede">This article is not available for your account.</p>
+        </header>
+        <div className="help-empty help-empty--page">
+          <span className="help-empty-icon" aria-hidden="true">
+            <BookOpen size={22} />
+          </span>
+          <h2 className="help-empty-title help-empty-title--page">Article not available</h2>
+          <p className="help-empty-text">Return to Help Center to browse guidance for your role.</p>
+          <Button className="help-empty-action" onClick={() => navigate(basePath)}>
+            Back to Help Center
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const related = article.relatedArticleIds
+    .map((id) => roleArticles.find((candidate) => candidate.id === id))
+    .filter((candidate): candidate is HelpArticle => Boolean(candidate));
+
+  return (
+    <div className="help-page help-page--article">
+      <button type="button" onClick={() => navigate(basePath)} className="help-back">
+        <ArrowLeft size={16} aria-hidden="true" /> Back to Help Center
+      </button>
+      <article>
+        <header className="help-article-header">
+          <p className="help-kicker">{article.category}</p>
+          <h1 className="help-title">{article.title}</h1>
+          <p className="help-lede help-lede--article">{article.summary}</p>
+        </header>
+        <div className="help-article-body">
+          {article.sections.map((section) => (
+            <section key={section.heading}>
+              <h2 className="help-article-heading">{section.heading}</h2>
+              {section.paragraphs?.map((paragraph) => (
+                <p key={paragraph} className="help-article-paragraph">
+                  {paragraph}
+                </p>
+              ))}
+              {section.steps && (
+                <ol className="help-steps">
+                  {section.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          ))}
+        </div>
+        {article.supportPath && (
+          <div className="help-support">
+            <span className="help-support-icon" aria-hidden="true">
+              <LifeBuoy size={20} />
+            </span>
+            <div className="help-support-text">
+              <h2 className="help-support-title">Still need help?</h2>
+              <p>Send a request to IT, or follow the ones already sent.</p>
+            </div>
+            <Link to={article.supportPath} state={{ returnTo: pathname + search + hash }} className="help-action">
+              Open Requests
+            </Link>
+          </div>
+        )}
+      </article>
+      {related.length > 0 && (
+        <section className="help-related">
+          <div className="help-section-header">
+            <h2 className="help-section-title">Related articles</h2>
+          </div>
+          <ArticleList>
+            {related.map((item, index) => (
+              <ArticleRow key={item.id} index={index} article={item} snippet={item.summary} role={role} />
+            ))}
+          </ArticleList>
+        </section>
+      )}
+    </div>
+  );
 }

@@ -75,8 +75,8 @@ test("keeps the Enterprise card usable at supported Electron window sizes", asyn
     const box = await card.boundingBox();
 
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(500);
-    expect(box!.width).toBeLessThanOrEqual(582);
+    expect(box!.width).toBeGreaterThanOrEqual(416);
+    expect(box!.width).toBeLessThanOrEqual(504);
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
@@ -107,7 +107,7 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await identifier.fill("enterprise@example.com");
   await expect(identifierShell).toHaveAttribute("data-state", "valid");
   await identifier.focus();
-  await expect(identifierShell).toHaveCSS("background-color", "rgb(16, 30, 50)");
+  await expect(identifierShell).toHaveCSS("background-color", "rgb(19, 32, 43)");
   await expect(identifier).toHaveCSS("caret-color", await token(page, "--tanaw-green"));
 
   await password.fill("A readable Enterprise passphrase");
@@ -115,7 +115,7 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await expect(password).toHaveAttribute("type", "text");
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await expect(identifierShell).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(identifierShell).toHaveCSS("background-color", "rgba(18, 52, 35, 0.055)");
 });
 
 test("keeps keyboard focus inside sign-in dialogs and returns it on Escape", async ({ page }) => {

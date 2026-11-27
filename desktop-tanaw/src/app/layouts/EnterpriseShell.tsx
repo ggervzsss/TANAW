@@ -6,6 +6,7 @@ import { isAxiosError } from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
 import { CameraServiceStartupCard } from "../../features/camera/components/CameraServiceStartupCard";
+import { GlobalTanawAssistant } from "../../features/dashboard/components/GlobalTanawAssistant";
 import { DEFAULT_ML_SERVICE_BASE_URL, MlServiceRequestError, getMlServiceStatus, listLocalCameras, resetUnreadableLocalData, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
@@ -329,6 +330,9 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
           </div>
         )}
       </main>
+
+      {/* TANAW Insights opens from the topbar on every page and floats over it. */}
+      <GlobalTanawAssistant />
 
       <CriticalAlertToasts
         toasts={criticalToasts}

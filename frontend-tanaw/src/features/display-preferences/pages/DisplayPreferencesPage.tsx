@@ -50,32 +50,27 @@ export function DisplayPreferencesPage() {
   );
 }
 
+/** Text sizes as radio rows with a dot; each row shows an "Aa" at its own size. */
 function TextSizeOptions({ value, onChange }: { value: TextSizePreference; onChange: (value: TextSizePreference) => void }) {
   const name = useId();
   const descriptionId = `${name}-description`;
   return (
-    <fieldset className="tanaw-display-options-group" aria-describedby={descriptionId}>
-      <legend className="tanaw-display-legend">Text size</legend>
+    <fieldset className="tanaw-display-column" aria-describedby={descriptionId}>
+      <legend className="tanaw-display-column-title">Text size</legend>
       <p id={descriptionId} className="tanaw-display-help">
         Choose a readable size without changing browser zoom.
       </p>
       <div className="tanaw-display-options">
-        {textSizeOptions.map((option) => {
-          const selected = value === option.value;
-          return (
-            <label key={option.value} className="tanaw-display-option">
-              <input type="radio" name={name} value={option.value} checked={selected} onChange={() => onChange(option.value)} />
-              <span className="tanaw-display-option-label">
-                {option.label}
-                {selected && <Check size={15} aria-hidden="true" />}
-              </span>{" "}
-              <span className="tanaw-display-option-description">{option.description}</span>
-              <span className="tanaw-display-option-sample" aria-hidden="true" style={{ fontSize: textSizeRootValue(option.value) }}>
-                Aa
-              </span>
-            </label>
-          );
-        })}
+        {textSizeOptions.map((option) => (
+          <label key={option.value} className="tanaw-choice">
+            <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+            <span className="tanaw-choice-title">{option.label}</span>{" "}
+            <span className="tanaw-choice-description">{option.description}</span>
+            <span className="tanaw-display-sample" aria-hidden="true" style={{ fontSize: textSizeRootValue(option.value) }}>
+              Aa
+            </span>
+          </label>
+        ))}
       </div>
     </fieldset>
   );
@@ -83,7 +78,7 @@ function TextSizeOptions({ value, onChange }: { value: TextSizePreference; onCha
 
 /**
  * The preview is ordinary TANAW content. Text size scales the whole page from the root, so the
- * card shows exactly what the rest of the portal looks like at the selected size and theme.
+ * sample shows exactly what the rest of the portal looks like at the selected size and theme.
  */
 function DisplayPreview({ textSize }: { textSize: TextSizePreference }) {
   const headingId = useId();

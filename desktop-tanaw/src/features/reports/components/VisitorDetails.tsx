@@ -1,13 +1,14 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
 import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
-import { formatReportDate, OTHER_ORIGINS, otherOriginsTotal, reportingDateKey, setDayOrigin, type ReportDay } from "../model/daily-origins";
+import { formatReportDate, OTHER_ORIGINS, otherOriginsTotal, setDayOrigin } from "../model/daily-origins";
 import { var1MonthlyCells } from "../model/var1";
-import { ReportDayPicker } from "./ReportDayPicker";
+import type { SelectedReportDay } from "../hooks/useSelectedReportDay";
 
 type Props = {
-  days: ReportDay[];
+  /** The day on screen. Its picker sits under Tourism Period in the report header. */
+  selected: SelectedReportDay | null;
   /** False for reports submitted before daily entry; they show monthly totals. */
   hasDailyOrigins: boolean;
   demo: DemoBreakdown;
@@ -15,7 +16,6 @@ type Props = {
   /** While TANAW's counts load, figures show placeholders in their own shape. */
   isLoading?: boolean;
   isReadOnly: boolean;
-  period: string;
   setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
 };
 
@@ -25,8 +25,7 @@ type Row = { label: string; male: Cell; female: Cell; total: Cell };
 const ESTIMATED = "Estimated by TANAW from the cameras. Visitors entered for other origins are deducted from it.";
 const NOT_RECORDED = "TANAW had no male/female estimate for this day.";
 
-export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isLoading = false, isReadOnly, period, setOrigins }: Props) {
-  const selected = useSelectedDay(days, period);
+export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoading = false, isReadOnly, setOrigins }: Props) {
   const figure = (content: ReactNode) => (isLoading ? <Skeleton className="report-cell-skeleton" /> : content);
   if (!hasDailyOrigins || !selected) return <MonthlyVisitorDetails demo={demo} metrics={metrics} figure={figure} />;
   const day = selected.day;
@@ -41,10 +40,7 @@ export function VisitorDetails({ days, hasDailyOrigins, demo, metrics, isLoading
     <>
       <header className="report-visitor-heading">
         <h3>Visitor Details</h3>
-        <div>
-          <p>{day.unique ? `Enter the male and female for each visitor origin. The total must equal ${day.unique.toLocaleString()}` : "TANAW recorded no visitors on this day."}</p>
-          <ReportDayPicker days={days} selectedDate={day.date} onSelect={selected.select} />
-        </div>
+        <p>{day.unique ? `Enter the male and female for each visitor origin. The total must equal ${day.unique.toLocaleString()}` : "TANAW recorded no visitors on this day."}</p>
       </header>
       <div className="report-origin-table-scroll">
         <table className="report-origin-table" aria-label={`Visitor origins for ${formatReportDate(day.date)}`}>
@@ -136,9 +132,7 @@ function MonthlyVisitorDetails({ demo, metrics, figure }: { demo: DemoBreakdown;
     <>
       <header className="report-visitor-heading">
         <h3>Visitor Details</h3>
-        <div>
-          <p>Monthly visitor origins as submitted. Daily origins were not recorded for this report.</p>
-        </div>
+        <p>Monthly visitor origins as submitted. Daily origins were not recorded for this report.</p>
       </header>
       <div className="report-origin-table-scroll">
         <table className="report-origin-table" aria-label="Monthly visitor origins">
@@ -190,24 +184,4 @@ function OriginColumns() {
 
 function display(value: Cell) {
   return value === null ? "—" : value.toLocaleString();
-}
-
-/**
- * The day shown in the table. Until the user picks a day or edits one, it follows the first
- * day that needs them (else today), so it stays put while they type.
- */
-function useSelectedDay(days: ReportDay[], period: string) {
-  const [selection, setSelection] = useState<{ period: string; date: string } | null>(null);
-  const pinned = selection?.period === period ? days.find((day) => day.date === selection.date) : undefined;
-  const day = pinned ?? defaultDay(days);
-  if (!day) return null;
-  return { day, select: (date: string) => setSelection({ period, date }) };
-}
-
-/** The day shown first: one that needs fixing, else the latest day with visitors, else today. */
-function defaultDay(days: ReportDay[]) {
-  const today = reportingDateKey();
-  const reached = days.filter((day) => day.status !== "upcoming");
-  const latestVisited = [...reached].reverse().find((day) => Boolean(day.unique));
-  return days.find((day) => day.status === "missing") ?? latestVisited ?? reached.find((day) => day.date === today) ?? reached[reached.length - 1] ?? days[0];
 }

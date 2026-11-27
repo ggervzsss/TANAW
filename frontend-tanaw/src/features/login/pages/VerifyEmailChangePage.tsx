@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, MailCheck, MapPin, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, MailCheck, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { TANAW_LOGO } from "@/shared/constants/branding";
+import { Skeleton } from "@/shared/ui-kit";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { AuthStageGlow, AuthThemeToggle, LoginBackground } from "../components";
-import { useAuthStageGlow } from "../hooks";
+import { AuthBrandHeader, AuthHero, AuthStageLayout } from "../components";
 import { type EmailChangeVerificationResult, verifyAccountEmailChange } from "../services";
 
 type VerificationView = "verifying" | "invalid" | "verified";
@@ -15,8 +14,6 @@ export function VerifyEmailChangePage() {
   const [view, setView] = useState<VerificationView>(token ? "verifying" : "invalid");
   const [result, setResult] = useState<EmailChangeVerificationResult | null>(null);
   const [message, setMessage] = useState(token ? "" : "This verification link is missing its security token.");
-  const { cursorRef, stageRef } = useAuthStageGlow<HTMLElement>();
-  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -39,71 +36,48 @@ export function VerifyEmailChangePage() {
   }, [token]);
 
   return (
-    <section
-      ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) text-(--tanaw-text)"
-      data-auth-background-ready={isBackgroundReady}
+    <AuthStageLayout
+      hero={
+        <AuthHero
+          titleAs="h1"
+          icon={<ShieldCheck className="h-8 w-8" aria-hidden="true" />}
+          title="Protect your TANAW identity"
+          copy="Email ownership is confirmed before TANAW IT can apply a sign-in or recovery-address change."
+        />
+      }
     >
-      <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
-      <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
-      <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <AuthStageGlow cursorRef={cursorRef} />
-      <AuthThemeToggle />
-
-      <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:px-12 xl:px-20">
-        <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end px-2 pb-12 text-white lg:flex">
-          <div className="relative z-10 max-w-xl">
-            <ShieldCheck className="mb-5 h-9 w-9 text-(--tanaw-gold)" aria-hidden="true" />
-            <h1 className="font-display text-5xl leading-tight font-bold text-white drop-shadow-lg xl:text-6xl">Protect your TANAW identity</h1>
-            <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
-            <p className="mt-6 max-w-lg text-lg leading-8 font-medium text-white/95">Email ownership is confirmed before TANAW IT can apply a sign-in or recovery-address change.</p>
-            <div className="mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
-              <MapPin className="h-5 w-5 text-white" aria-hidden="true" />
-              <span>San Pedro, Laguna, Philippines</span>
-            </div>
-          </div>
-        </section>
-
-        <main className="flex items-center justify-center lg:justify-end">
-          <section className="tanaw-auth-card w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] backdrop-blur-xl sm:px-10 sm:py-10">
-            <header className="mb-8 flex items-center gap-5 border-b border-(--tanaw-gold)/60 pb-7">
-              <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
-              <div>
-                <p className="font-sans text-2xl font-extrabold text-(--tanaw-green) sm:text-3xl">TANAW PORTAL</p>
-                <p className="mt-1 text-sm font-semibold text-(--tanaw-muted)">Email Ownership Verification</p>
-              </div>
-            </header>
-
-            {view === "verifying" ? <VerifyingState /> : null}
-            {view === "invalid" ? <InvalidState message={message} /> : null}
-            {view === "verified" && result ? <VerifiedState result={result} /> : null}
-          </section>
-        </main>
-      </div>
-    </section>
+      <AuthBrandHeader titleAs="p" subtitle="Email Ownership Verification" />
+      {view === "verifying" ? <VerifyingState /> : null}
+      {view === "invalid" ? <InvalidState message={message} /> : null}
+      {view === "verified" && result ? <VerifiedState result={result} /> : null}
+    </AuthStageLayout>
   );
 }
 
 function VerifyingState() {
   return (
-    <div className="flex min-h-64 flex-col items-center justify-center text-center" aria-live="polite">
-      <LoaderCircle className="h-10 w-10 animate-spin text-(--tanaw-green)" aria-hidden="true" />
-      <h2 className="mt-5 font-display text-xl font-extrabold">Verifying email ownership</h2>
-      <p className="mt-2 max-w-sm text-sm leading-6 font-medium text-(--tanaw-muted)">TANAW is checking this single-use link. The address will not change until IT approves the request.</p>
+    <div className="tanaw-auth-state" aria-live="polite" aria-busy="true">
+      <h2 className="tanaw-auth-state__title">Verifying email ownership</h2>
+      <p className="tanaw-auth-state__copy">TANAW is checking this single-use link. The address will not change until IT approves the request.</p>
+      <div className="tanaw-auth-state__skeleton" aria-hidden="true">
+        <Skeleton className="block h-4 w-3/4" />
+        <Skeleton className="block h-4 w-1/2" />
+        <Skeleton className="mt-3 block h-12 w-44" />
+      </div>
     </div>
   );
 }
 
 function InvalidState({ message }: { message: string }) {
   return (
-    <div className="py-4 text-center" role="alert">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-        <AlertCircle className="h-7 w-7" aria-hidden="true" />
+    <div className="tanaw-auth-state" role="alert">
+      <span className="tanaw-auth-state__mark tanaw-auth-state__mark--danger">
+        <AlertCircle className="h-6 w-6" aria-hidden="true" />
       </span>
-      <h2 className="mt-5 font-display text-xl font-extrabold">Verification link unavailable</h2>
-      <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">{message}</p>
-      <p className="mt-2 text-sm leading-6 text-(--tanaw-muted)">Request a new email change from TANAW or contact support if you did not initiate it.</p>
-      <Link to={routes.login} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-(--tanaw-green) px-5 py-3 text-sm font-bold text-white">
+      <h2 className="tanaw-auth-state__title">Verification link unavailable</h2>
+      <p className="tanaw-auth-state__copy">{message}</p>
+      <p className="tanaw-auth-state__copy">Request a new email change from TANAW or contact support if you did not initiate it.</p>
+      <Link to={routes.login} className="tanaw-auth-button tanaw-auth-sheen mt-6">
         Return to TANAW <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>
@@ -112,19 +86,19 @@ function InvalidState({ message }: { message: string }) {
 
 function VerifiedState({ result }: { result: EmailChangeVerificationResult }) {
   return (
-    <div className="py-4 text-center" aria-live="polite">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-        <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
+    <div className="tanaw-auth-state" aria-live="polite">
+      <span className="tanaw-auth-state__mark tanaw-auth-state__mark--success">
+        <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
       </span>
-      <h2 className="mt-5 font-display text-xl font-extrabold">Email ownership verified</h2>
-      <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">
-        Thank you, {result.displayName}. Ownership of <strong className="text-(--tanaw-text)">{result.requestedEmail}</strong> is confirmed.
+      <h2 className="tanaw-auth-state__title">Email ownership verified</h2>
+      <p className="tanaw-auth-state__copy">
+        Thank you, {result.displayName}. Ownership of <strong className="font-semibold text-(--tanaw-text)">{result.requestedEmail}</strong> is confirmed.
       </p>
-      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm leading-6 text-amber-900">
+      <div className="tanaw-auth-note tanaw-auth-note--warning tanaw-auth-note--ruled mt-6">
         <MailCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <p>Your current sign-in email remains active until TANAW IT reviews and approves the request. Both addresses will be notified after approval.</p>
       </div>
-      <Link to={routes.login} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-(--tanaw-green) px-5 py-3 text-sm font-bold text-white">
+      <Link to={routes.login} className="tanaw-auth-button tanaw-auth-sheen mt-6">
         Return to TANAW <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>

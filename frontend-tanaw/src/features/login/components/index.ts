@@ -4,3 +4,4 @@ export { LoginBackground } from "./LoginBackground";
 export { LoginForm } from "./LoginForm";
 export { AccountActivationCard } from "./AccountActivationCard";
 export { AuthStageGlow } from "./AuthStageGlow";
+export { AuthBrandHeader, AuthHero, AuthStageLayout } from "./AuthStageLayout";

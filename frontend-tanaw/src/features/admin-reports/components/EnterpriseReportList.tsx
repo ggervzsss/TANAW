@@ -15,7 +15,7 @@ export function EnterpriseReportList({ rows, openEnterpriseId, onOpen }: Enterpr
     <div className="mt-3.5 overflow-x-auto">
       <div className="min-w-225">
         <div
-          className="tanaw-er-cols border-b border-(--tanaw-border-soft) px-3 py-3 text-[0.6875rem] font-bold tracking-[0.12em] text-(--tanaw-text-secondary) uppercase"
+          className="tanaw-er-cols tanaw-er-head border-b border-(--tanaw-border-soft) px-3 py-3"
           aria-hidden="true"
         >
           <span>Enterprise</span>
@@ -25,9 +25,9 @@ export function EnterpriseReportList({ rows, openEnterpriseId, onOpen }: Enterpr
           <span>Reviewed by</span>
           <span />
         </div>
-        <ul aria-label="Enterprise reports" className="m-0 list-none p-0">
+        <ul aria-label="Enterprise reports" className="tanaw-er-fade m-0 list-none p-0">
           {rows.map(({ enterprise, entry }) => (
-            <li key={enterprise.id}>
+            <li key={enterprise.id} className="tanaw-er-item">
               <button
                 type="button"
                 aria-haspopup="dialog"
@@ -36,8 +36,8 @@ export function EnterpriseReportList({ rows, openEnterpriseId, onOpen }: Enterpr
                 className="tanaw-er-row tanaw-er-cols"
               >
                 <span className="min-w-0">
-                  <span className="block font-bold">{enterprise.name}</span>
-                  <span className="mt-0.5 block text-[0.78125rem] text-(--tanaw-text-secondary) tabular-nums">
+                  <span className="tanaw-er-row__name block font-semibold">{enterprise.name}</span>
+                  <span className="mt-0.5 block text-[13px] text-(--tanaw-text-secondary) tabular-nums">
                     {enterprise.barangay} · {entry.reportCode ?? "No report yet"}
                   </span>
                 </span>
@@ -62,7 +62,7 @@ export function EnterpriseReportList({ rows, openEnterpriseId, onOpen }: Enterpr
                   <span className="sr-only">Reviewed by </span>
                   {entry.reviewedBy ?? "Not reviewed"}
                 </span>
-                <ChevronRight size={16} aria-hidden="true" className="justify-self-end text-(--tanaw-text-muted)" />
+                <ChevronRight size={16} aria-hidden="true" className="tanaw-er-row__chevron justify-self-end" />
               </button>
             </li>
           ))}

@@ -1,4 +1,4 @@
-import { CameraOff, TrendingUp } from "lucide-react";
+import { ArrowRight, CameraOff, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { LiveAlert } from "@/shared/types";
@@ -30,20 +30,21 @@ export function LiveAlertList({ alerts, dashboardPath, emptyText = "Nothing need
             </span>
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                <span className={cn("text-[0.8125rem] font-bold", toneClass[tone].label)}>{alertKindLabel(alert)}</span>
-                <span className="text-[0.8125rem] text-(--tanaw-text-muted) tabular-nums">{alertSince(alert.startedAt, now, timeFormat)}</span>
+                <span className={cn("text-[13px] font-semibold", toneClass[tone].label)}>{alertKindLabel(alert)}</span>
+                <span className="text-[13px] text-(--tanaw-text-muted) tabular-nums">{alertSince(alert.startedAt, now, timeFormat)}</span>
               </p>
-              <p className="mt-0.5 font-bold wrap-break-word text-(--tanaw-text)">{alertPlace(alert)}</p>
+              <p className="mt-0.5 font-semibold wrap-break-word text-(--tanaw-text)">{alertPlace(alert)}</p>
               <p className="mt-1 text-sm leading-relaxed text-(--tanaw-text-secondary)">{alert.summary}</p>
-              {alert.detail && <p className="mt-1.5 rounded-lg bg-(--tanaw-surface-inset) px-3 py-2 text-[0.8125rem] wrap-break-word text-(--tanaw-text-secondary)">{alert.detail}</p>}
+              {alert.detail && <p className="mt-2 border-l-2 border-(--tanaw-border) py-0.5 pl-3 text-[13px] wrap-break-word text-(--tanaw-text-secondary)">{alert.detail}</p>}
               {dashboardPath && (
-              <Link
-                to={alertMapPath(alert, dashboardPath)}
-                onClick={onNavigate}
-                className="mt-2 inline-flex min-h-9 items-center text-sm font-semibold text-(--tanaw-accent-ink) underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
-              >
-                Show on map
-              </Link>
+                <Link
+                  to={alertMapPath(alert, dashboardPath)}
+                  onClick={onNavigate}
+                  className="group mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+                >
+                  Show on map
+                  <ArrowRight size={15} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
+                </Link>
               )}
             </div>
           </li>

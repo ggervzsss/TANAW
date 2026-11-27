@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import { motion } from "motion/react";
 import { useId, useMemo, useRef, useState } from "react";
 import { MONTH_NAMES, submissionTone } from "@/features/reports/model/reportStatuses";
-import { ModalPortal, StatusPill, cn, dialogIn, useDialogFocus } from "@/shared/ui-kit";
+import { ModalPortal, StatusPill, cn, dialogIn, easeOut, useDialogFocus } from "@/shared/ui-kit";
 import type { FinalReport, SystemLog } from "@/shared/types";
 import { buildMonthEntry, historyMonths, historyYears, needsAllMonths, summarizeYear, type EnterpriseReportProfile, type ReportIndex } from "../model/enterpriseReports";
 import { monthKeyId, type MonthKey } from "../model/reportMonths";
@@ -39,6 +39,8 @@ function formatMonthYear(date: Date) {
  */
 export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, reviewers, logs, finalReports, today, onClose }: EnterpriseReportModalProps) {
   const panelRef = useRef<HTMLElement | null>(null);
+  // The header draws its hairline only once the body has scrolled under it.
+  const [scrolled, setScrolled] = useState(false);
   const titleId = useId();
   const subtitleId = useId();
   useDialogFocus(panelRef, onClose);
@@ -90,10 +92,11 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
   return (
     <ModalPortal lockScroll>
       <motion.div
-        className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgb(9_24_17/0.48)] px-5 py-8 backdrop-blur-[2px] max-sm:px-3 max-sm:py-4 dark:bg-[rgb(0_0_0/0.62)]"
+        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.24, ease: easeOut }}
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
@@ -106,24 +109,29 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
           aria-describedby={subtitleId}
           tabIndex={-1}
           {...dialogIn}
-          className="rounded-tanaw-xl flex max-h-[calc(100dvh-4rem)] w-full max-w-230 flex-col overflow-hidden border border-(--tanaw-border-soft) bg-(--tanaw-surface) text-(--tanaw-text) shadow-[0_24px_64px_rgb(4_20_12/0.28)] outline-none max-sm:max-h-[calc(100dvh-2rem)]"
+          className="tanaw-dialog relative my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-230 flex-col overflow-hidden rounded-tanaw-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-dialog outline-none sm:max-h-[calc(100dvh-3rem)]"
         >
-          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-7.5 pt-5 pb-4 max-sm:px-5">
+          <header
+            data-scrolled={scrolled || undefined}
+            className="flex shrink-0 items-start justify-between gap-5 border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-sm:px-5 max-sm:pt-5 max-sm:pb-4"
+          >
             <div className="min-w-0">
-              <h2 id={titleId} className="font-display text-[1.625rem] leading-[1.15] font-bold wrap-break-word max-sm:text-2xl">
+              <h2 id={titleId} className="font-display text-2xl leading-tight font-bold tracking-[-0.015em] wrap-break-word max-sm:text-xl">
                 {profile.name}
               </h2>
-              <p id={subtitleId} className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.90625rem] text-(--tanaw-text-secondary)">
+              <p id={subtitleId} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-(--tanaw-text-secondary)">
                 <span>{locationLine(profile.barangay)}</span>
                 {profile.category && (
                   <>
-                    <span aria-hidden="true">·</span>
+                    <span aria-hidden="true" className="text-(--tanaw-text-muted)">
+                      ·
+                    </span>
                     <span>{profile.category}</span>
                   </>
                 )}
               </p>
-              <p className="mt-2.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-(--tanaw-text-secondary)">
-                <span>{viewed.period} report</span>
+              <p className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px] text-(--tanaw-text-secondary)">
+                <span className="font-semibold text-(--tanaw-text)">{viewed.period} report</span>
                 <StatusPill tone={submissionTone[viewed.submission]}>{viewed.submission}</StatusPill>
                 {viewed.submissionNote && <span className="text-(--tanaw-text-muted)">{viewed.submissionNote}</span>}
               </p>
@@ -132,26 +140,29 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
               type="button"
               aria-label="Close report details"
               onClick={onClose}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-colors hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="-mt-0.5 -mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
             >
-              <X size={20} aria-hidden="true" />
+              <X size={18} aria-hidden="true" />
             </button>
           </header>
 
-          <div className="tanaw-er-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7.5 pt-4 pb-6 max-sm:px-5">
-            <dl className="tanaw-er-facts m-0">
+          <div
+            onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
+            className="tanaw-er-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5 max-sm:pb-5"
+          >
+            <dl className="tanaw-er-facts m-0 border-t border-(--tanaw-border-soft) pt-4">
               {facts.map((fact) => (
                 <div key={fact.label} className="min-w-0">
-                  <dt className="text-[0.75rem] text-(--tanaw-text-muted)">{fact.label}</dt>
-                  <dd className={cn("m-0 mt-0.5 text-sm font-semibold", fact.wrap && "wrap-anywhere", !fact.value && "text-(--tanaw-text-muted)")}>
+                  <dt className="text-[13px] text-(--tanaw-text-muted)">{fact.label}</dt>
+                  <dd className={cn("m-0 mt-1 text-sm font-semibold", fact.wrap && "wrap-anywhere", !fact.value && "text-(--tanaw-text-muted)")}>
                     {fact.value ?? <span aria-label="Not available">—</span>}
                   </dd>
                 </div>
               ))}
               {!showContact && (
                 <div className="min-w-0">
-                  <dt className="text-[0.75rem] text-(--tanaw-text-muted)">Contact details</dt>
-                  <dd className="m-0 mt-0.5 text-sm text-(--tanaw-text-secondary)">Shown once the {viewed.period} report is sent.</dd>
+                  <dt className="text-[13px] text-(--tanaw-text-muted)">Contact details</dt>
+                  <dd className="m-0 mt-1 text-sm text-(--tanaw-text-secondary)">Shown once the {viewed.period} report is sent.</dd>
                 </div>
               )}
             </dl>

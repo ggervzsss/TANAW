@@ -61,7 +61,8 @@ html.dark :is(.bg-tanaw-green, [class~="bg-(--tanaw-green)"]):hover:not(:disable
 
 /* Dashboard: a neutral surface ramp, restrained chart colors and no outlined card grid. */
 html.dark .overview-layout,
-html.dark .overview-main {
+html.dark .overview-main,
+html.dark .tanaw-assistant-scope {
   --enterprise-text: var(--theme-text);
   --enterprise-muted: var(--theme-secondary);
   --dashboard-focus: var(--theme-focus);
@@ -78,53 +79,53 @@ html.dark .overview-main {
   --dashboard-demographic-others: var(--theme-chart-third);
   --dashboard-donut-separator: var(--theme-surface);
 }
-html.dark .enterprise-shell .overview-layout .assistant-message > div {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-message > div {
   background: var(--theme-surface);
 }
-html.dark .enterprise-shell .overview-layout .assistant-message button {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-message button {
   background: var(--theme-accent-tint);
   color: var(--theme-text);
 }
-html.dark .enterprise-shell .overview-layout .assistant-message button:hover {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-message button:hover {
   background: var(--theme-accent-hover);
 }
-html.dark .enterprise-shell .overview-layout .assistant-message > svg {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-message > svg {
   background: var(--theme-accent-tint);
   color: var(--theme-accent-strong);
 }
-html.dark .enterprise-shell .overview-layout .assistant-user-message {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-user-message {
   background: var(--theme-accent-tint);
   color: var(--theme-text);
 }
-html.dark .enterprise-shell .overview-layout .assistant-language {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-language {
   color: var(--theme-muted);
 }
-html.dark .enterprise-shell .overview-layout .assistant-language button {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-language button {
   border-color: var(--theme-outline);
   color: var(--theme-text);
 }
-html.dark .enterprise-shell .overview-layout .assistant-language button[aria-pressed="true"] {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-language button[aria-pressed="true"] {
   border-color: var(--theme-action);
   background: var(--theme-action);
   color: var(--theme-on-action);
 }
-html.dark .enterprise-shell .overview-layout :is(.assistant-basis, .assistant-pending) {
+html.dark .enterprise-shell .tanaw-assistant-scope :is(.assistant-basis, .assistant-pending) {
   color: var(--theme-muted);
 }
-html.dark .enterprise-shell .overview-layout .assistant-note {
+html.dark .enterprise-shell .tanaw-assistant-scope .assistant-note {
   border-color: var(--theme-warning-text);
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant form {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant form {
   background: var(--theme-inset);
   border-color: var(--theme-outline);
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant form:focus-within {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant form:focus-within {
   border-color: var(--theme-focus);
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant form input {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant form input {
   background: transparent !important;
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant form button {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant form button {
   color: var(--theme-accent);
 }
 html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip {
@@ -346,7 +347,7 @@ html.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table in
 html.dark
   .enterprise-shell
   .tanaw-reports-workspace
-  :is(.report-information-fields svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .reports-text-button) {
+  :is(.report-information-fields dd > svg, .report-next-steps h3 svg, .report-history-filters [role="combobox"] svg, .report-view-action, .reports-text-button) {
   color: var(--theme-accent) !important;
 }
 html.dark .enterprise-shell .tanaw-reports-workspace .reports-button {
@@ -569,9 +570,9 @@ html.dark .enterprise-shell .overview-layout :is(.design-card, .tanaw-assistant)
   border-color: transparent;
   box-shadow: var(--theme-shadow);
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant {
   background: var(--theme-raised);
 }
-html.dark .enterprise-shell .overview-layout .tanaw-assistant > header {
+html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant > header {
   border-color: var(--theme-divider);
 }

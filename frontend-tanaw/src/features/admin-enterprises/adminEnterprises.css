@@ -1,50 +1,209 @@
 /*
- * Registered Enterprises and Enterprise Details. Colours that only these two screens use; everything
- * else comes from the app tokens in src/styles/tokens.css.
+ * Registered Enterprises and Enterprise Details: open sections and hairline rows, no cards. Colours
+ * come from the app tokens in src/styles/tokens.css, so light and dark follow the theme.
  */
 
 .admin-enterprises {
-  --ae-chip: #e4f1e8;
-  --ae-bar: #7fcf9f;
-  --ae-peak: #055b25;
-  --ae-peak-text: #ffffff;
-  --ae-segment-on: var(--tanaw-action);
-  --ae-segment-on-text: var(--tanaw-on-action);
+  --ae-ease: var(--ease-tanaw-out);
+  --ae-chip: var(--tanaw-selected-bg);
+  --ae-bar: var(--tanaw-chart-entry);
+  --ae-peak: var(--tanaw-chart-entry);
+  --ae-peak-text: var(--tanaw-page);
 }
 
-.dark .admin-enterprises {
-  --ae-chip: #17382f;
-  --ae-bar: #2b6f55;
-  --ae-peak: #6ee7b7;
-  --ae-peak-text: #0b141d;
-  --ae-segment-on: #6ee7b7;
-  --ae-segment-on-text: #0b141d;
+/* Section headings: Inter 650, with a 13px caption under them. */
+.admin-enterprises .ae-heading {
+  color: var(--tanaw-text);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
-/* The trend period control: a pill track on Inset, the checked segment filled. */
-.admin-enterprises .ae-trend-period.tanaw-segmented {
-  gap: 0;
-  padding: 3px;
-  border: 1px solid var(--tanaw-border-soft);
-  border-radius: 999px;
-  background: var(--tanaw-surface-inset);
+/* A section fades up a few pixels when what it shows changes. */
+.admin-enterprises .ae-fade {
+  animation: ae-fade-up 240ms var(--ae-ease) both;
 }
 
-.admin-enterprises .ae-trend-period [role="radio"][aria-checked="true"] {
-  background: var(--ae-segment-on);
-  color: var(--ae-segment-on-text);
+@keyframes ae-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
-.admin-enterprises .ae-table tbody tr {
-  transition: background-color 120ms ease;
+/*
+ * Table rows: quiet, split by hairlines, with a soft 12px tint on hover. The table keeps separate
+ * borders so the cells can round; the hovered row drops its own hairline so the tint reads as one
+ * rounded row.
+ */
+.admin-enterprises .ae-table {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.admin-enterprises .ae-table tbody tr:hover {
-  background: var(--tanaw-control-hover);
+.admin-enterprises .ae-table :is(thead th, tbody tr > *) {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+}
+
+.admin-enterprises .ae-table tbody tr > * {
+  transition:
+    background-color 160ms var(--ae-ease),
+    border-color 160ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:hover {
+  background-color: transparent;
+}
+
+/*
+ * The hairlines stay straight: only the hovered row rounds its ends, once its own hairline and the
+ * one above it have stepped aside, so no row ever reads as the bottom edge of a card.
+ */
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:hover > *,
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:focus-within > * {
+  border-bottom-color: transparent;
+  background-color: var(--tanaw-control-hover);
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:has(+ tr.tanaw-row-link:hover) > * {
+  border-bottom-color: transparent;
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:is(:hover, :focus-within) > :first-child {
+  border-radius: 12px 0 0 12px;
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:is(:hover, :focus-within) > :last-child {
+  border-radius: 0 12px 12px 0;
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:active > * {
+  background-color: var(--tanaw-selected-bg);
+}
+
+.admin-enterprises .ae-table tbody tr [data-row-primary] {
+  transition: color 160ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-table tbody tr.tanaw-row-link:hover [data-row-primary] {
+  color: var(--tanaw-accent-ink);
+}
+
+.admin-enterprises .ae-table tbody tr .tanaw-row-chevron {
+  color: var(--tanaw-text-muted);
+  transition:
+    color 160ms var(--ae-ease),
+    transform 200ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-table tbody tr:hover .tanaw-row-chevron {
+  color: var(--tanaw-accent-ink);
+  transform: translateX(3px);
+}
+
+/* The sortable column header: the arrow lifts toward the direction it will sort next. */
+.admin-enterprises .ae-sort {
+  transition: color 160ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-sort svg {
+  transition: translate 200ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-sort:hover svg {
+  translate: 0 -1px;
+}
+
+/* Filter chips and inline actions: a tint that deepens on hover and settles when pressed. */
+.admin-enterprises .ae-chip {
+  transition:
+    background-color 200ms var(--ae-ease),
+    scale 120ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-chip:hover {
+  background: color-mix(in srgb, var(--tanaw-accent-ink) 16%, var(--ae-chip));
+}
+
+.admin-enterprises .ae-chip:active {
+  scale: 0.96;
+}
+
+.admin-enterprises .ae-chip svg {
+  transition: rotate 200ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-chip:hover svg {
+  rotate: 90deg;
+}
+
+.admin-enterprises .ae-text-action {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  transition: text-decoration-color 200ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-text-action:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Monitored Locations: the "Message IT" link's arrow steps toward where it leads. */
+.admin-enterprises .ae-link-arrow svg {
+  transition: translate 200ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-link-arrow:hover svg {
+  translate: 3px 0;
+}
+
+/* The trend readout: the pointed period's figure as keyed text above the chart, never in a box. */
+.admin-enterprises .ae-readout {
+  display: flex;
+  min-height: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--tanaw-text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-enterprises .ae-readout strong {
+  color: var(--tanaw-text);
+  font-weight: 650;
+}
+
+.admin-enterprises .ae-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--ae-peak);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-enterprises .ae-table tbody tr {
+  .admin-enterprises .ae-fade {
+    animation: none;
+  }
+
+  .admin-enterprises .ae-table tbody tr > *,
+  .admin-enterprises .ae-table tbody tr [data-row-primary],
+  .admin-enterprises .ae-table tbody tr .tanaw-row-chevron,
+  .admin-enterprises :is(.ae-sort, .ae-sort svg, .ae-chip, .ae-chip svg, .ae-text-action, .ae-link-arrow svg) {
     transition: none;
+  }
+
+  .admin-enterprises .ae-table tbody tr:hover .tanaw-row-chevron {
+    transform: none;
+  }
+
+  .admin-enterprises :is(.ae-sort:hover svg, .ae-chip:active, .ae-chip:hover svg, .ae-link-arrow:hover svg) {
+    translate: none;
+    scale: none;
+    rotate: none;
   }
 }

@@ -85,15 +85,15 @@ export function MonthPicker({ value, onChange, label, hideLabel = false, min, ma
         aria-labelledby={`${labelId} ${valueId}`}
         onClick={() => (open ? close() : openPanel())}
         className={cn(
-          "shadow-tanaw-resting inline-flex h-11 w-full items-center gap-2 rounded-[10px] border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3 text-sm font-semibold text-(--tanaw-text) transition-colors hover:border-(--tanaw-accent-ink)",
-          open && "border-(--tanaw-action) ring-3 ring-(--tanaw-action)/12",
+          "tanaw-picker-trigger inline-flex h-11 w-full items-center gap-2 rounded-tanaw-md border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3.5 text-sm font-medium text-(--tanaw-text) outline-none transition-[border-color,background-color,box-shadow,scale] duration-200 ease-tanaw-out hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover) focus-visible:border-(--tanaw-accent-ink) focus-visible:shadow-(--tanaw-field-ring) active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
+          open && "border-(--tanaw-accent-ink) bg-(--tanaw-control-bg-focus) shadow-(--tanaw-field-ring)",
         )}
       >
         <CalendarDays size={16} className="shrink-0 text-(--tanaw-accent-ink)" aria-hidden="true" />
         <span id={valueId} className="min-w-0 flex-1 truncate text-left tabular-nums">
           {pickerMonthLabel(value)}
         </span>
-        <ChevronDown size={15} className={cn("shrink-0 transition-transform", open && "rotate-180")} aria-hidden="true" />
+        <ChevronDown size={15} className={cn("tanaw-select-chevron shrink-0 text-(--tanaw-text-muted)", open && "rotate-180")} aria-hidden="true" />
       </button>
 
       {open && (
@@ -101,7 +101,7 @@ export function MonthPicker({ value, onChange, label, hideLabel = false, min, ma
           ref={panelRef}
           role="dialog"
           aria-label={`Choose the ${label.toLowerCase()}`}
-          className={cn("shadow-tanaw-raised absolute top-full z-1100", align === "right" ? "right-0" : "left-0", "mt-2 w-72 rounded-[14px] border border-(--tanaw-border-soft) bg-(--tanaw-surface) p-3.5 text-(--tanaw-text)")}
+          className={cn("shadow-tanaw-dialog absolute top-full z-1100", align === "right" ? "right-0" : "left-0", "tanaw-enter mt-2 w-72 rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text)")}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.stopPropagation();

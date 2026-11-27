@@ -1,0 +1,225 @@
+/*
+ * LGU Personnel: column names on a quiet green band with soft ends, rows split by hairlines. A row
+ * that opens tints on hover with 12px ends and the hairlines beside it step back. On phones the
+ * same rows stack, still split by hairlines rather than boxed.
+ */
+
+.it-personnel__table thead th {
+  background: color-mix(in srgb, var(--tanaw-accent-ink) 6%, transparent);
+}
+
+.it-personnel__table thead th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.it-personnel__table thead th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.it-personnel__table tbody :is(th, td) {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.it-personnel__row {
+  position: relative;
+  margin-inline: -12px;
+  padding-inline: 12px;
+  border-radius: var(--radius-tanaw-md);
+}
+
+.it-personnel__row::after {
+  content: "";
+  position: absolute;
+  inset-inline: 12px;
+  bottom: 0;
+  height: 1px;
+  background: var(--tanaw-border-soft);
+  pointer-events: none;
+  transition: opacity var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+@media (hover: hover) {
+  .it-personnel__table tbody tr.tanaw-row-link:hover > * {
+    background: var(--tanaw-control-hover);
+    border-bottom-color: transparent;
+  }
+
+  .it-personnel__table tbody tr:has(+ tr.tanaw-row-link:hover) > * {
+    border-bottom-color: transparent;
+  }
+
+  .it-personnel__table tbody tr.tanaw-row-link:hover > :first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .it-personnel__table tbody tr.tanaw-row-link:hover > :last-child {
+    border-radius: 0 12px 12px 0;
+  }
+
+  .it-personnel__row.tanaw-row-link:hover::after,
+  .it-personnel__row:has(+ .tanaw-row-link:hover)::after {
+    opacity: 0;
+  }
+}
+
+/* The list fades up a few pixels when it arrives. */
+.it-personnel__list {
+  animation: it-personnel-rise var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+
+@keyframes it-personnel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Role choices: open rows with a dot, never boxes. The chosen role takes a soft green tint with no
+ * edge, and the tint glides to the next choice (motion layoutId in PersonnelFields). Other rows tint
+ * faintly on hover. The dot is drawn here: a ring that fills from the centre when chosen.
+ */
+.it-personnel__role {
+  position: relative;
+  transition: background-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+@media (hover: hover) {
+  .it-personnel__role[data-on="false"]:not([data-disabled]):hover {
+    background: var(--tanaw-control-hover);
+  }
+
+  .it-personnel__role[data-on="false"]:not([data-disabled]):hover .it-personnel__dot {
+    border-color: var(--tanaw-accent-ink);
+  }
+}
+
+.it-personnel__role-highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-selected-bg);
+}
+
+.it-personnel__dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--tanaw-control-border-hover);
+  border-radius: 999px;
+  appearance: none;
+  background: var(--tanaw-control-bg-focus);
+  box-shadow: inset 0 0 0 9px var(--tanaw-control-bg-focus);
+  cursor: inherit;
+  transition:
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    box-shadow 220ms var(--ease-tanaw-out);
+}
+
+/* Chosen: the ring takes the accent and a dot grows from the centre. */
+.it-personnel__dot:checked {
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-accent-ink);
+  box-shadow: inset 0 0 0 3.5px var(--tanaw-control-bg-focus);
+}
+
+.it-personnel__dot:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The phone field with its +63 prefix: the same soft tint as the kit's fields. */
+.it-personnel__phone {
+  border: 1px solid var(--tanaw-control-border);
+  background: var(--tanaw-control-bg);
+  transition:
+    border-color 200ms var(--ease-tanaw-out),
+    background-color 200ms var(--ease-tanaw-out),
+    box-shadow 200ms var(--ease-tanaw-out);
+}
+
+.it-personnel__phone:hover {
+  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-bg-hover);
+}
+
+.it-personnel__phone:focus-within {
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-control-bg-focus);
+  box-shadow: var(--tanaw-field-ring);
+}
+
+.it-personnel__phone[data-invalid] {
+  border-color: var(--tanaw-error);
+}
+
+.it-personnel__phone[data-invalid]:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-error) 14%, transparent);
+}
+
+/* "Show deactivated accounts": a soft square that fills green with a tick, instead of the browser's box. */
+.it-personnel__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--tanaw-control-border-hover);
+  border-radius: 5px;
+  appearance: none;
+  background: var(--tanaw-control-bg-focus) center / 12px 12px no-repeat;
+  cursor: inherit;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    scale 120ms var(--ease-tanaw-out);
+}
+
+.it-personnel__check:checked {
+  border-color: var(--tanaw-action);
+  background-color: var(--tanaw-action);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+.it-personnel__check:active {
+  scale: 0.9;
+}
+
+.it-personnel__check:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  label:hover > .it-personnel__check:not(:checked) {
+    border-color: var(--tanaw-accent-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-personnel__table tbody :is(th, td),
+  .it-personnel__row::after,
+  .it-personnel__role,
+  .it-personnel__dot,
+  .it-personnel__phone,
+  .it-personnel__check {
+    transition: none;
+  }
+
+  .it-personnel__check:active {
+    scale: none;
+  }
+
+  .it-personnel__list {
+    animation: none;
+  }
+}

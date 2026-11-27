@@ -6,6 +6,8 @@ import { isRoleSettingsPath } from "@/app/routers/roleRoutes";
 import { scheduleAuthorizedRoutePreload } from "@/app/routers/routeModules";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeaderProvider } from "@/shared/components/layout";
+import { usePageEnter } from "@/shared/ui-kit/lib/page-enter";
+import { ViewSkeleton } from "@/shared/ui-kit/patterns/ViewSkeleton";
 import { currentUserQueryKey, getCurrentUser } from "@/shared/services/accountService";
 import type { UserRole } from "@/shared/types/role.types";
 import { createPageStateKey, readPageState, writePageState } from "@/shared/utils/pageState";
@@ -38,12 +40,14 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
   const isSettings = isRoleSettingsPath(role, pathname);
   const title = pageHeader?.pathname === pathname ? pageHeader.title : undefined;
-  const titleClassName = "text-(--tanaw-text) mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl";
+  const titleClassName = "tanaw-page-title tanaw-page-title--signed mb-7 shrink-0 max-sm:mb-5";
   const sectionClassName =
     "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100 max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible";
   const mainClassName =
-    "it-portal-main flex-1 overflow-y-auto bg-(--tanaw-page) px-8 py-8 text-[15px] transition-colors duration-200 max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5 dark:bg-(--tanaw-page-bg)";
-  const mainContentClassName = "mx-auto w-full max-w-470";
+    "it-portal-main tanaw-portal-content flex-1 overflow-y-auto px-[clamp(1.5rem,4vw,4.5rem)] pt-9 pb-14 text-[15px] transition-colors duration-200 max-sm:px-4 max-sm:pt-6 max-sm:pb-8";
+  const mainContentClassName = "mx-auto w-full max-w-420";
+  // A new page fades up into place; moving between settings sections is left to the settings page.
+  usePageEnter(mainRef, isSettings ? "settings" : pathname, { rise: isSettings ? 0 : 4 });
   const scrollStateKey = useMemo(() => createPageStateKey({ portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" }, pathname, "scroll"), [pathname, role, user?.id, user?.role]);
 
   const currentUserQuery = useQuery({
@@ -119,7 +123,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   }, [navigate, role]);
 
   const outlet = (
-    <Suspense fallback={<DestinationShellFallback />}>
+    <Suspense fallback={<DestinationShellFallback padded={isSettings} />}>
       <Outlet context={theme} />
     </Suspense>
   );
@@ -147,15 +151,9 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   );
 }
 
-function DestinationShellFallback() {
-  return (
-    <div
-      className="grid min-h-64 place-items-center rounded-2xl border border-slate-200/70 bg-white/70 text-sm font-semibold text-emerald-800 shadow-sm dark:border-white/8 dark:bg-white/3 dark:text-emerald-200"
-      role="status"
-    >
-      Preparing workspace...
-    </div>
-  );
+/** While a page's code loads: an outline of a typical page, shown only if the load takes a beat. */
+function DestinationShellFallback({ padded }: { padded: boolean }) {
+  return <ViewSkeleton label="Preparing workspace..." className={padded ? "px-[clamp(1.25rem,3vw,3rem)] py-8" : undefined} />;
 }
 
 function isScrollPosition(value: unknown): value is { mainTop: number; windowTop: number } {

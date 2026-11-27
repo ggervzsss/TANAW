@@ -45,7 +45,7 @@ export function EnterpriseReportDialog({ report, isUpdating, onClose, onAccept }
       </div>
       <Var2mSheet form={var2mFromIntakeReport(report)} label={`${report.enterprise} VAR 2M`} />
       <section aria-labelledby={`${report.id}-notes`} className="space-y-1 text-sm text-(--tanaw-text-secondary)">
-        <h3 id={`${report.id}-notes`} className="text-sm font-bold text-(--tanaw-text)">
+        <h3 id={`${report.id}-notes`} className="text-[0.9375rem] font-[650] text-(--tanaw-text)">
           Submission notes
         </h3>
         <p className="wrap-anywhere whitespace-pre-wrap">{notes || "No notes were sent with this report."}</p>

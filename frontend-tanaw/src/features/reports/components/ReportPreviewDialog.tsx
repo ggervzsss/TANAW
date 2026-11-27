@@ -23,7 +23,7 @@ export function ReportPreviewDialog({ title, size = "full", description, onClose
       onClose={onClose}
       closeLabel="Close report"
       className="tanaw-report-preview"
-      bodyClassName="space-y-4 bg-(--tanaw-surface-inset) max-sm:p-2!"
+      bodyClassName="space-y-5 bg-(--tanaw-surface-inset) pt-5! max-sm:p-2!"
       footer={
         (onDownload || onPrint || actions) && (
           <>

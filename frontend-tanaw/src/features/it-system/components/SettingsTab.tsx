@@ -54,9 +54,16 @@ export function SettingsTab(props: SettingsTabProps) {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4" aria-busy="true">
-        <Skeleton className="h-20 w-full" label="Loading the settings" />
-        <Skeleton className="h-20 w-full" />
+      <div role="status" aria-label="Loading the settings" aria-busy="true">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-12 gap-y-4 border-b border-(--tanaw-border-soft) pb-7 max-lg:grid-cols-1 ${index === 0 ? "pt-2" : "pt-7"}`}>
+            <div>
+              <Skeleton className="h-4.5 w-40" />
+              <Skeleton className="mt-2.5 h-3 w-4/5" />
+            </div>
+            <Skeleton className="rounded-tanaw-md h-10 w-full max-w-sm" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -86,14 +93,14 @@ export function SettingsTab(props: SettingsTabProps) {
   return (
     <form onSubmit={submit} data-settings-draft={draftMarker} className="[--settings-gutter:1rem] [--settings-line:var(--tanaw-border-soft)]" aria-label="System settings" noValidate>
       <SettingSection title="Sign-in lockout" description="Stops password guessing on every account, including enterprises." first>
-        <div className="flex flex-wrap items-center gap-2.5 text-[0.9375rem] text-(--tanaw-text)">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[0.9375rem] leading-relaxed text-(--tanaw-text)">
           <span aria-hidden="true">Lock after</span>
           <Select
             ariaLabel="Wrong passwords before an account locks"
             value={String(draft.loginAttemptLimit)}
             options={numberOptions(LOGIN_ATTEMPT_OPTIONS)}
             onChange={(value) => set("loginAttemptLimit", Number(value))}
-            className="w-22"
+            className="it-system__inline-select"
           />
           <span aria-hidden="true">wrong passwords, for</span>
           <Select
@@ -101,21 +108,21 @@ export function SettingsTab(props: SettingsTabProps) {
             value={String(draft.loginLockMinutes)}
             options={numberOptions(LOGIN_LOCK_MINUTE_OPTIONS)}
             onChange={(value) => set("loginLockMinutes", Number(value))}
-            className="w-22"
+            className="it-system__inline-select"
           />
           <span aria-hidden="true">minutes</span>
         </div>
       </SettingSection>
 
       <SettingSection title="Camera not counting" description="When to flag a camera on the Overview and the Admin dashboard. Only during opening hours.">
-        <div className="flex flex-wrap items-center gap-2.5 text-[0.9375rem] text-(--tanaw-text)">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 text-[0.9375rem] leading-relaxed text-(--tanaw-text)">
           <span aria-hidden="true">Flag a camera after</span>
           <Select
             ariaLabel="Minutes without data before a camera is flagged"
             value={String(draft.cameraWaitMinutes)}
             options={numberOptions(CAMERA_WAIT_MINUTE_OPTIONS)}
             onChange={(value) => set("cameraWaitMinutes", Number(value))}
-            className="w-22"
+            className="it-system__inline-select"
           />
           <span aria-hidden="true">minutes without data</span>
         </div>
@@ -128,16 +135,16 @@ export function SettingsTab(props: SettingsTabProps) {
           value={String(draft.retentionDays)}
           onChange={(value) => set("retentionDays", Number(value))}
         />
-        <p className="mt-3 text-sm text-(--tanaw-text-secondary)" role="status">
+        <p className="mt-3.5 text-sm text-(--tanaw-text-secondary)" role="status">
           {props.cleanupLoading ? "Checking the last cleanup." : cleanupText(props.cleanup, dateFormat, timeFormat)}
         </p>
-        <Button type="button" variant="secondary" size="sm" className="mt-2.5" leadingIcon={<Trash2 size={15} />} loading={props.isRemoving} onClick={() => setConfirm("remove")}>
+        <Button type="button" variant="secondary" size="sm" className="mt-3" leadingIcon={<Trash2 size={15} aria-hidden="true" />} loading={props.isRemoving} onClick={() => setConfirm("remove")}>
           Remove older activity now
         </Button>
       </SettingSection>
 
       <SettingSection title="Date and time" description="How dates and times show for every account and on exported reports. Always Philippine time.">
-        <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+        <div className="it-system__formats grid grid-cols-2 gap-4 max-sm:grid-cols-1">
           <Select
             label="Date"
             value={draft.dateFormat}
@@ -153,7 +160,7 @@ export function SettingsTab(props: SettingsTabProps) {
         </div>
       </SettingSection>
 
-      <p className="mt-5 text-[0.84375rem] text-(--tanaw-text-muted)">{lastChangedText(updatedAt, updatedBy, dateFormat)}</p>
+      <p className="mt-6 text-[0.84375rem] text-(--tanaw-text-muted)">{lastChangedText(updatedAt, updatedBy, dateFormat)}</p>
 
       <SettingsSaveBar dirty={dirty} busy={isSaving} onDiscard={onDiscard} busyLabel="Saving settings...">
         Save settings
@@ -199,10 +206,10 @@ function SettingSection({ title, description, first = false, children }: { title
   return (
     <section
       aria-labelledby={id}
-      className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-10 gap-y-3 border-b border-(--tanaw-border-soft) pb-5.5 max-lg:grid-cols-1 ${first ? "pt-1" : "pt-5.5"}`}
+      className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-12 gap-y-4 border-b border-(--tanaw-border-soft) pb-7 max-lg:grid-cols-1 ${first ? "pt-2" : "pt-7"}`}
     >
       <div>
-        <h2 id={id} className="text-[1.0625rem] font-bold text-(--tanaw-text)">
+        <h2 id={id} className="text-[1.0625rem] font-[650] text-(--tanaw-text)">
           {title}
         </h2>
         <p className="mt-1 text-sm text-(--tanaw-text-secondary)">{description}</p>

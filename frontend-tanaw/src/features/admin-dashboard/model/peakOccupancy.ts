@@ -40,8 +40,12 @@ export function peakWindowFor(range: Pick<DateRange, "start" | "end">, today: Da
   return { window: from >= addDays(todayIso, -6) ? "7d" : "30d", from, to, clipped: range.start < earliest };
 }
 
-/** The chart points: hourly for today, daily inside the window otherwise. Missing readings are dropped. */
-export function peakPoints(series: readonly VisitorInsightPoint[], window: PeakWindow, timeFormat: SystemTimeFormat): PeakPoint[] {
+/**
+ * The chart points: hourly for today, daily inside the window otherwise. Missing readings are
+ * dropped, and a reply without a series (an empty or unexpected response) gives no points.
+ */
+export function peakPoints(series: readonly VisitorInsightPoint[] | undefined, window: PeakWindow, timeFormat: SystemTimeFormat): PeakPoint[] {
+  if (!Array.isArray(series)) return [];
   return series.flatMap((point) => {
     if (point.peakVisitors == null) return [];
     if (window.window === "today") return [{ key: point.startAt, label: formatHour(point.startAt, timeFormat), value: point.peakVisitors }];

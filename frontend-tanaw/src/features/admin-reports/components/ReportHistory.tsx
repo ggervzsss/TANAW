@@ -101,13 +101,13 @@ export function ReportHistory({
   ];
 
   return (
-    <section aria-labelledby={headingId} className="mt-4 border-t border-(--tanaw-border-soft) pt-4.5">
+    <section aria-labelledby={headingId} className="mt-5 border-t border-(--tanaw-border-soft) pt-6">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
         <div>
-          <h3 id={headingId} className="font-display text-xl font-bold">
+          <h3 id={headingId} className="text-lg leading-snug font-[650] tracking-[-0.01em]">
             Report Submission History
           </h3>
-          <p className="mt-0.5 text-[0.8125rem] text-(--tanaw-text-muted)">Select a month to see its report log.</p>
+          <p className="mt-1 text-[13px] text-(--tanaw-text-secondary)">Select a month to see its report log.</p>
         </div>
         {years.length === 1 ? null : years.length <= YEAR_CHOICES_MAX ? (
           <SegmentedControl
@@ -122,25 +122,25 @@ export function ReportHistory({
         )}
       </div>
 
-      <dl className="mt-3.5 grid grid-cols-3 gap-2.5 max-sm:grid-cols-1">
+      <dl className="tanaw-er-figures mt-4">
         {figures.map((figure) => (
-          <div key={figure.label} className="rounded-xl bg-(--tanaw-surface-inset) px-4 py-3">
+          <div key={figure.label}>
             <dt>
-              <span className="block text-[0.84375rem] font-bold">{figure.label}</span>
-              <span className="block text-xs text-(--tanaw-text-muted)">{figure.sub}</span>
+              <span className="block text-sm font-semibold">{figure.label}</span>
+              <span className="block text-[13px] text-(--tanaw-text-muted)">{figure.sub}</span>
             </dt>
-            <dd className="m-0 mt-1.5">
+            <dd className="m-0 mt-2">
               <span className={cn("font-display block text-[1.5rem] leading-none font-bold tabular-nums", figure.color)}>{figure.value}</span>
-              {figure.note && <span className="mt-1.5 block text-[0.78125rem] text-(--tanaw-text-secondary)">{figure.note}</span>}
+              {figure.note && <span className="mt-1.5 block text-[13px] text-(--tanaw-text-secondary)">{figure.note}</span>}
             </dd>
           </div>
         ))}
       </dl>
 
-      <div className="mt-4 rounded-xl border border-(--tanaw-border-soft)">
+      <div className="mt-5">
         <div
           aria-hidden="true"
-          className="tanaw-er-month-cols tanaw-er-month-head rounded-t-xl border-b border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 py-2.5 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase"
+          className="tanaw-er-month-cols tanaw-er-month-head tanaw-er-head border-b border-(--tanaw-border-soft) px-3 py-2.5"
         >
           <span />
           <span>Period</span>
@@ -153,7 +153,7 @@ export function ReportHistory({
         {entries.length === 0 ? (
           <p className="m-0 px-3 py-6 text-sm text-(--tanaw-text-secondary)">No reporting months in {year} yet.</p>
         ) : (
-          <ul ref={listRef} aria-label={`Report months of ${year}`} className="m-0 list-none p-0">
+          <ul key={year} ref={listRef} aria-label={`Report months of ${year}`} className="tanaw-er-fade m-0 list-none p-0">
             {visible.map((entry) => {
               const open = entry.key === expandedKey;
               const logId = `er-log-${entry.key}`;
@@ -163,7 +163,7 @@ export function ReportHistory({
                 <li key={entry.key} data-month={entry.key} className="tanaw-er-month-item" data-open={open}>
                   <button type="button" aria-expanded={open} aria-controls={open ? logId : undefined} onClick={() => onToggleMonth(entry.key)} className="tanaw-er-month-row tanaw-er-month-cols">
                     <ChevronRight size={16} aria-hidden="true" className="tanaw-er-month-chevron" />
-                    <span className="font-bold whitespace-nowrap">{entry.period}</span>
+                    <span className="font-semibold whitespace-nowrap">{entry.period}</span>
                     <span className="tanaw-er-optional whitespace-nowrap text-(--tanaw-text-secondary) tabular-nums">
                       <span className="sr-only">Report ID </span>
                       {entry.reportCode ?? "—"}
@@ -191,17 +191,17 @@ export function ReportHistory({
                   </button>
                   {open && (
                     <div id={logId} className="tanaw-er-log pt-1 pr-4.5 pb-2 pl-10.5 max-sm:pl-4">
-                      <p className="m-0 text-[0.6875rem] font-bold tracking-widest text-(--tanaw-text-secondary) uppercase">
-                        Report log · <span className="tracking-normal normal-case">{entry.period}</span>
+                      <p className="m-0 text-[13px] font-semibold text-(--tanaw-text-secondary)">
+                        Report log · <span>{entry.period}</span>
                       </p>
                       <ol aria-label={`${entry.period} report log`} className="m-0 mt-3 list-none py-0 pr-0 pl-1.5">
                         {events.map((event) => (
                           <li key={event.id} className="tanaw-er-log-item">
                             <span aria-hidden="true" className="tanaw-er-log-dot" data-tone={event.tone} />
-                            <p className="m-0 text-sm font-bold">
-                              {event.title} <span className="ml-1.5 text-[0.78125rem] font-medium text-(--tanaw-text-muted)">{event.when}</span>
+                            <p className="m-0 text-sm font-semibold">
+                              {event.title} <span className="ml-1.5 text-[13px] font-medium text-(--tanaw-text-muted)">{event.when}</span>
                             </p>
-                            <p className="m-0 mt-0.75 text-[0.84375rem] text-(--tanaw-text-secondary)">{event.detail}</p>
+                            <p className="m-0 mt-1 text-[13px] text-(--tanaw-text-secondary)">{event.detail}</p>
                           </li>
                         ))}
                       </ol>
@@ -213,15 +213,15 @@ export function ReportHistory({
           </ul>
         )}
         {hasMore && (
-          <div className="border-t border-(--tanaw-border-soft) px-2 py-0.5">
+          <div className="border-t border-(--tanaw-border-soft) px-2 pt-1">
             <button
               type="button"
               aria-expanded={showAll}
               onClick={onToggleShowAll}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-(--tanaw-accent-ink) hover:underline focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="tanaw-er-more inline-flex min-h-11 items-center gap-1.5 rounded-tanaw-md px-3 text-sm font-semibold text-(--tanaw-accent-ink) hover:bg-(--tanaw-control-bg-hover) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
             >
               {showAll ? "Show fewer months" : `Show all ${entries.length} months of ${year}`}
-              <ChevronDown size={15} aria-hidden="true" className={cn("transition-transform", showAll && "rotate-180")} />
+              <ChevronDown size={15} aria-hidden="true" className={cn(showAll && "rotate-180")} />
             </button>
           </div>
         )}

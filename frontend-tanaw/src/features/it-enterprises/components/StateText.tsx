@@ -13,10 +13,10 @@ export function StateText({ tone, dot = false, children, className }: { tone: To
   );
 }
 
-/** A display-font section heading. */
+/** A section heading: Inter 650, as on the desktop app. */
 export function SectionHeading({ id, children }: { id?: string; children: ReactNode }) {
   return (
-    <h2 id={id} className="font-display text-xl leading-tight font-bold text-(--tanaw-text)">
+    <h2 id={id} className="text-lg leading-snug font-[650] tracking-[-0.01em] text-(--tanaw-text)">
       {children}
     </h2>
   );
@@ -25,7 +25,7 @@ export function SectionHeading({ id, children }: { id?: string; children: ReactN
 /** A label over a field, in the portal's form style. */
 export function FieldLabel({ htmlFor, children, optional = false }: { htmlFor?: string; children: ReactNode; optional?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
       {children}
       {optional && <span className="font-normal text-(--tanaw-text-muted)"> (optional)</span>}
     </label>
@@ -36,7 +36,7 @@ export function FieldLabel({ htmlFor, children, optional = false }: { htmlFor?: 
 export function FieldError({ id, children }: { id: string; children?: ReactNode }) {
   if (!children) return null;
   return (
-    <p id={id} className="mt-1.5 text-xs font-semibold text-(--tanaw-error)">
+    <p id={id} className="mt-1.5 text-[13px] font-medium text-(--tanaw-error)">
       {children}
     </p>
   );

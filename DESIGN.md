@@ -81,6 +81,17 @@ has a stated reason not to (an official DOT form, for example).
 - **Quiet interaction.** Rows and options tint on hover (`--tanaw-control-hover`) and take the
   green tint (`--tanaw-selected-bg`) when chosen. A selection highlight glides between options
   rather than jumping. Radio choices are rows with a dot, not tiles.
+- **Tinted controls.** Fields, dropdown triggers and quiet buttons are a soft translucent tint
+  (`--tanaw-control-bg`), never white boxes on the page. On focus a field lifts to the surface
+  colour with an accent edge and a soft halo. Only the one primary action is solid Civic Green;
+  it lifts a pixel and catches a sweep of light on hover, and every button settles when pressed.
+- **Toasts.** One look in both apps: a small pane of frosted glass under the topbar with a tinted
+  round icon in its tone, the message, a quiet dismiss button and a hairline along the foot that
+  runs down the time left (paused while the pointer rests on it). It springs in from just above,
+  the others slide to make room, and it leaves by lifting and fading, faster than it came.
+- **Sign-in.** The San Pedro photo fills the stage; the form sits on one compact floating panel of
+  frosted glass, as tall as its content. The primary action is flat Civic Green with a hairline of
+  light, and lifts onto a soft green glow with one sweep of light on hover.
 - **Loading.** Content that loads shows a skeleton in its own shape, with the shared calm
   shimmer; fast loads show no placeholder at all. Never a bare spinner for page content.
 - **Motion.** 150–260ms on `cubic-bezier(0.2, 0.8, 0.2, 1)`; a section fades up a few pixels when

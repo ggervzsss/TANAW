@@ -41,7 +41,10 @@ test("loads compiled styles and renders login feedback without CSP violations", 
 
   const feedback = page.getByRole("status").filter({ hasText: "Login successful" });
   await expect(feedback).toBeVisible();
-  await expect(feedback).toHaveCSS("display", "flex");
-  await expect(feedback).toHaveCSS("border-left-color", "rgb(22, 163, 74)");
+  // The compiled toast styles: a rounded glass toast holding the message.
+  const successToast = page.locator(".tanaw-toast--success").filter({ has: feedback });
+  await expect(successToast).toHaveCSS("display", "flex");
+  await expect(successToast).toHaveCSS("border-top-left-radius", "16px");
+  await expect(successToast.getByRole("button", { name: "Dismiss notification" })).toBeEnabled();
   expect(cspErrors).toEqual([]);
 });

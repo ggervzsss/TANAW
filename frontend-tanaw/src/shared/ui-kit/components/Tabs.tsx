@@ -1,5 +1,7 @@
+import { motion } from "motion/react";
 import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { easeOut } from "../lib/motion";
 
 function nextIndex(key: string, index: number, count: number): number | null {
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % count;
@@ -24,7 +26,8 @@ export type TabsProps = {
 
 /**
  * Underlined tabs that switch between views of one page ("Create reports", "Reports history").
- * Arrow keys move between tabs. Render the matching panel with role="tabpanel".
+ * The green underline glides to the chosen tab. Arrow keys move between tabs. Render the matching
+ * panel with role="tabpanel".
  */
 export function Tabs({ items, value, onChange, ariaLabel, idPrefix, className }: TabsProps) {
   const generated = useId();
@@ -63,14 +66,30 @@ export function Tabs({ items, value, onChange, ariaLabel, idPrefix, className }:
             onClick={() => onChange(item.value)}
             onKeyDown={onKeyDown}
             className={cn(
-              "relative -mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-50",
-              selected ? "border-(--tanaw-action) text-(--tanaw-accent-ink)" : "border-transparent text-(--tanaw-text-muted) hover:border-(--tanaw-border) hover:text-(--tanaw-text)",
+              "group relative inline-flex shrink-0 items-center gap-2 px-4 pt-2.5 pb-3.5 text-sm font-semibold whitespace-nowrap transition-colors duration-150 ease-tanaw-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-50",
+              selected ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text-muted) hover:text-(--tanaw-text)",
             )}
           >
-            {item.icon}
-            {item.label}
-            {item.count !== undefined && (
-              <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", selected ? "bg-(--tanaw-selected-bg)" : "bg-(--tanaw-surface-subtle)")}>{item.count}</span>
+            {/* A quiet tint behind the label on hover, inside the tab padding. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-1 top-1 bottom-2 rounded-tanaw-md bg-(--tanaw-control-bg) opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-disabled:opacity-0"
+            />
+            <span className="relative inline-flex items-center gap-2">
+              {item.icon}
+              {item.label}
+              {item.count !== undefined && (
+                <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", selected ? "bg-(--tanaw-selected-bg)" : "bg-(--tanaw-control-bg)")}>{item.count}</span>
+              )}
+            </span>
+            {selected && (
+              <motion.span
+                aria-hidden="true"
+                layoutId={`${generated}-tab-indicator`}
+                data-tab-indicator
+                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-(--tanaw-action)"
+                transition={{ duration: 0.24, ease: easeOut }}
+              />
             )}
           </button>
         );

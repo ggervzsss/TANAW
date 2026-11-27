@@ -8,6 +8,7 @@ import type { FinalReport } from "@/shared/types";
 import { PortalPageHeader, Select, StatusPill, Tabs, openRowFromClick } from "@/shared/ui-kit";
 import { AnnualReportDialog } from "../components/AnnualReportDialog";
 import { MonthlyReportDialog } from "../components/MonthlyReportDialog";
+import { StaffTableSkeleton } from "../components/StaffTableSkeleton";
 import { reportEnterprisesQueryKey } from "../hooks/useStaffReports";
 import {
   annualReportRows,
@@ -74,10 +75,12 @@ export function StaffConsolidatedReportsPage() {
         value={tab}
         onChange={(value) => updateParams({ tab: value === "annual" ? "annual" : null })}
       />
-      <div role="tabpanel" id={`consolidated-reports-panel-${tab}`} aria-labelledby={`consolidated-reports-tab-${tab}`}>
-        {isLoading || isError ? (
-          <p role={isError ? "alert" : "status"} className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
-            {isError ? "Consolidated reports could not be loaded. Refresh the page to try again." : "Loading consolidated reports…"}
+      <div role="tabpanel" id={`consolidated-reports-panel-${tab}`} aria-labelledby={`consolidated-reports-tab-${tab}`} className="pt-4">
+        {isLoading ? (
+          <StaffTableSkeleton label="Loading consolidated reports…" cells={tab === "monthly" ? ["w-2/5", "w-28", "w-12", "w-16", "w-24", "w-24", "w-4"] : ["w-16", "w-16", "w-20", "w-24", "w-4"]} />
+        ) : isError ? (
+          <p role="alert" className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
+            Consolidated reports could not be loaded. Refresh the page to try again.
           </p>
         ) : tab === "monthly" ? (
           <MonthlyTable reports={monthly} year={year} registered={registered} onOpen={(report) => updateParams({ report: report.id })} />
@@ -95,7 +98,7 @@ export function StaffConsolidatedReportsPage() {
 function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly FinalReport[]; year: number; registered: number | null; onOpen: (report: FinalReport) => void }) {
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="tanaw-staff-rise overflow-x-auto">
         <table className="tanaw-staff-table" aria-label={`Monthly reports for ${year}`}>
           <thead>
             <tr>
@@ -158,7 +161,7 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
 function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpen: (row: AnnualReportRow) => void }) {
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="tanaw-staff-rise overflow-x-auto">
         <table className="tanaw-staff-table" aria-label="Annual reports">
           <thead>
             <tr>

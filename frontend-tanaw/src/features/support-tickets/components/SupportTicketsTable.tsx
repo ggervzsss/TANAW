@@ -1,11 +1,12 @@
 import { Eye, Paperclip, TicketCheck } from "lucide-react";
 import type { ReactNode } from "react";
-import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { Request } from "@/shared/services/requests";
+import { Skeleton } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatTicketTime } from "../model";
 import { GroupBadge, TicketStatusBadge } from "./TicketBadges";
+import "../supportTickets.css";
 
 type SupportTicketsTableProps = {
   isItResponder: boolean;
@@ -16,12 +17,21 @@ type SupportTicketsTableProps = {
   toolbar: ReactNode;
 };
 
+const HEADINGS = ["Reference", "From", "Request", "Group", "Status", "Sent"];
+
+/** The requests as an open table: filters above, column names on a soft band, rows split by hairlines. */
 export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, tickets, timeFormat, toolbar }: SupportTicketsTableProps) {
+  const loading = isLoading && tickets.length === 0;
   return (
-    <Panel className="tanaw-data-panel mt-6 overflow-hidden">
+    <section aria-label="Requests" className="mt-6">
       {toolbar}
-      <div className="tanaw-data-table overflow-x-auto">
-        <table className="w-full min-w-260 table-fixed text-left text-sm">
+      {loading && (
+        <p role="status" className="sr-only">
+          Loading requests
+        </p>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="support-tickets__table w-full min-w-260 table-fixed border-separate border-spacing-0 text-left text-sm">
           <colgroup>
             <col className="w-[12%]" />
             <col className="w-[20%]" />
@@ -30,27 +40,24 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
             <col className="w-[12%]" />
             <col className="w-[14%]" />
           </colgroup>
-          <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+          <thead className="text-xs font-semibold tracking-label text-(--tanaw-label) uppercase">
             <tr>
-              {["Reference", "From", "Request", "Group", "Status", "Sent"].map((heading) => (
-                <th key={heading} className="px-4 py-4 whitespace-nowrap">
+              {HEADINGS.map((heading) => (
+                <th key={heading} className="px-4 py-2.5 whitespace-nowrap">
                   {heading}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
+          <tbody className="text-(--tanaw-text)" aria-busy={loading || undefined}>
+            {loading && <SkeletonRows />}
             {tickets.map((ticket) => (
               <TicketRow key={ticket.id} ticket={ticket} timeFormat={timeFormat} onOpen={() => onOpenTicket(ticket.id)} />
             ))}
-            {tickets.length === 0 && (
-              <tr>
+            {!loading && tickets.length === 0 && (
+              <tr data-empty="">
                 <td colSpan={6}>
-                  <EmptyState
-                    icon={TicketCheck}
-                    title={isLoading ? "Loading requests" : "No requests"}
-                    description={isLoading ? "Fetching requests." : "Requests from enterprises and from the sign-in page appear here."}
-                  />
+                  <EmptyState icon={TicketCheck} title="No requests" description="Requests from enterprises and from the sign-in page appear here." />
                 </td>
               </tr>
             )}
@@ -58,26 +65,58 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
         </table>
       </div>
 
-      <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
-        <span>Showing {tickets.length} requests</span>
+      <div className="mt-3 flex items-center justify-between gap-3 text-[13px] text-(--tanaw-text-secondary)">
+        <span className="tabular-nums">Showing {tickets.length} requests</span>
         <span>{isItResponder ? "IT request queue" : "Read only"}</span>
       </div>
-    </Panel>
+    </section>
+  );
+}
+
+/** Request rows in the table's shape while the requests load. */
+function SkeletonRows() {
+  return (
+    <>
+      {[0, 1, 2, 3].map((row) => (
+        <tr key={row} data-empty="" aria-hidden="true">
+          <td className="px-4 py-4">
+            <Skeleton className="h-3.5 w-20" />
+          </td>
+          <td className="px-4 py-4">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="mt-2 h-3 w-1/2" />
+          </td>
+          <td className="px-4 py-4">
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="mt-2 h-3 w-3/5" />
+          </td>
+          <td className="px-4 py-4">
+            <Skeleton className="h-5 w-24 rounded-full" />
+          </td>
+          <td className="px-4 py-4">
+            <Skeleton className="h-5 w-20 rounded-full" />
+          </td>
+          <td className="px-4 py-4">
+            <Skeleton className="h-3.5 w-20" />
+          </td>
+        </tr>
+      ))}
+    </>
   );
 }
 
 function TicketRow({ ticket, onOpen, timeFormat }: { ticket: Request; onOpen: () => void; timeFormat: SystemTimeFormat }) {
   const attachments = ticket.attachments ?? [];
   return (
-    <tr onClick={onOpen} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
-      <td className="px-4 py-4 align-top font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
+    <tr onClick={onOpen} className="group cursor-pointer">
+      <td className="px-4 py-4 align-top font-mono text-[13px] font-semibold text-(--tanaw-accent-ink)">{ticket.code}</td>
       <td className="px-4 py-4 align-top">
         <ExpandableTableText
           primary={ticket.enterpriseName ?? ticket.requesterName}
           secondary={ticket.enterpriseId ?? ticket.requesterEmail ?? ""}
           ariaLabel="ticket enterprise and ID"
-          className="font-bold text-gray-950"
-          secondaryClassName="font-mono text-[10px] font-semibold text-gray-500"
+          className="font-semibold text-(--tanaw-text)"
+          secondaryClassName="font-mono text-xs text-(--tanaw-text-muted)"
         />
       </td>
       <td className="px-4 py-4 align-top">
@@ -85,13 +124,13 @@ function TicketRow({ ticket, onOpen, timeFormat }: { ticket: Request; onOpen: ()
           primary={ticket.title}
           secondary={ticket.description}
           ariaLabel="ticket subject and description"
-          className="font-bold text-gray-950"
-          secondaryClassName="text-xs leading-relaxed text-gray-500"
+          className="font-semibold text-(--tanaw-text)"
+          secondaryClassName="text-[13px] leading-relaxed text-(--tanaw-text-secondary)"
           twoLines
         />
         {attachments.length > 0 && (
-          <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-            <Paperclip size={11} />
+          <p className="rounded-tanaw-sm mt-2 inline-flex items-center gap-1 bg-(--tanaw-selected-bg) px-2 py-1 text-xs font-semibold text-(--tanaw-accent-ink)">
+            <Paperclip size={12} aria-hidden="true" />
             {attachments.length} photo{attachments.length === 1 ? "" : "s"}
           </p>
         )}
@@ -103,9 +142,9 @@ function TicketRow({ ticket, onOpen, timeFormat }: { ticket: Request; onOpen: ()
         <TicketStatusBadge status={ticket.status} />
       </td>
       <td className="px-4 py-4 align-top">
-        <p className="text-[11px] font-bold text-gray-500 uppercase">{formatTicketTime(ticket.createdAt, timeFormat)}</p>
-        <button type="button" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-tanaw-ledger">
-          <Eye size={12} />
+        <p className="text-[13px] text-(--tanaw-text-secondary) tabular-nums">{formatTicketTime(ticket.createdAt, timeFormat)}</p>
+        <button type="button" className="rounded-tanaw-sm mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-(--tanaw-accent-ink) group-hover:underline">
+          <Eye size={13} aria-hidden="true" />
           Inspect
         </button>
       </td>

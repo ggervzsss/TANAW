@@ -112,19 +112,20 @@ export function AdminEnterpriseReportsPage() {
         }
       />
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <div className="w-68 max-sm:w-full">
-          <span aria-hidden="true" className="mb-2 block text-xs font-bold tracking-label text-(--tanaw-label) uppercase">
+      {/* The filters share the full width, the search taking the larger part, so no gap is left at the end of the row. */}
+      <div className="mt-4 grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
+        <div className="min-w-0 max-lg:col-span-2 max-sm:col-span-1">
+          <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
             Search reports
           </span>
           <SearchField value={query} onChange={changeQuery} placeholder="Enterprise, staff, or report ID" label="Search reports" />
         </div>
-        <Select label="Enterprise" value={enterpriseId} onChange={changeEnterprise} options={enterpriseOptions} searchable className="w-60 max-sm:w-full" />
-        <Select label="Submission status" value={submission} onChange={changeSubmission} options={SUBMISSION_OPTIONS} className="w-52 max-sm:w-full" />
-        <p role="status" className="mb-2.5 ml-auto text-[0.84375rem] text-(--tanaw-text-secondary) tabular-nums max-sm:ml-0">
-          {isLoading ? "Loading enterprises" : `${rows.length} of ${allRows.length} ${allRows.length === 1 ? "enterprise" : "enterprises"}`}
-        </p>
+        <Select label="Enterprise" value={enterpriseId} onChange={changeEnterprise} options={enterpriseOptions} searchable />
+        <Select label="Submission status" value={submission} onChange={changeSubmission} options={SUBMISSION_OPTIONS} />
       </div>
+      <p role="status" className="mt-3 text-sm font-semibold text-(--tanaw-text) tabular-nums">
+        {isLoading ? "Loading enterprises" : `${rows.length} of ${allRows.length} ${allRows.length === 1 ? "enterprise" : "enterprises"}`}
+      </p>
 
       {isError ? (
         <Alert
@@ -140,11 +141,7 @@ export function AdminEnterpriseReportsPage() {
           Check the connection and try again.
         </Alert>
       ) : isLoading ? (
-        <div className="mt-4 space-y-2" aria-hidden="true">
-          {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-16 w-full" />
-          ))}
-        </div>
+        <ReportListSkeleton />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={<FileSearch size={22} />}
@@ -186,6 +183,37 @@ export function AdminEnterpriseReportsPage() {
           onClose={closeEnterprise}
         />
       )}
+    </div>
+  );
+}
+
+/** The report list in its own shape while it loads: the column grid with quiet placeholder rows. */
+function ReportListSkeleton() {
+  return (
+    <div className="mt-3.5 overflow-x-hidden" aria-hidden="true">
+      <div className="min-w-225">
+        <div className="tanaw-er-cols border-b border-(--tanaw-border-soft) px-3 py-3.5">
+          {[40, 70, 60, 64, 60].map((width, index) => (
+            <span key={index} className="block" style={{ width: `${width}%` }}>
+              <Skeleton className="h-3 w-full" />
+            </span>
+          ))}
+          <span />
+        </div>
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={index} className="tanaw-er-cols border-b border-(--tanaw-border-soft) px-3 py-4">
+            <span className="block">
+              <Skeleton className="h-4 w-44" />
+              <Skeleton className="mt-2 h-3 w-32" />
+            </span>
+            <Skeleton className="h-3.5 w-16" />
+            <Skeleton shape="pill" className="h-6 w-24" />
+            <Skeleton shape="pill" className="h-6 w-24" />
+            <Skeleton className="h-3.5 w-24" />
+            <span />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

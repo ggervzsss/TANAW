@@ -13,7 +13,7 @@ import { retryAfterSeconds, sendPasswordReset } from "../services/itEnterpriseSe
 export function notifySuccess(title: string, text: string) {
   toast.success(
     <>
-      <span className="block font-bold">{title}</span>
+      <span className="block font-semibold">{title}</span>
       <span className="mt-0.5 block text-[0.8125rem] font-normal">{text}</span>
     </>,
   );
@@ -22,7 +22,7 @@ export function notifySuccess(title: string, text: string) {
 export function notifyError(title: string, text: string) {
   toast.error(
     <>
-      <span className="block font-bold">{title}</span>
+      <span className="block font-semibold">{title}</span>
       <span className="mt-0.5 block text-[0.8125rem] font-normal">{text}</span>
     </>,
   );

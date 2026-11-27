@@ -8,6 +8,7 @@ import { useSystemDisplayPreferences } from "../../preferences/system-display-pr
 import type { ReportRecord } from "../../../types/enterprise";
 import type { TrendFilter } from "../types/dashboard";
 import { compose, dataNeeds, loadAssistantData, PERIOD_FOR_FILTER, SUGGESTIONS, understand, type AssistantDataSource, type Language, type LanguagePreference, type Reply } from "../assistant";
+import "../tanaw-assistant.css";
 
 const LANGUAGE_STORAGE_KEY = "tanaw:assistant-language";
 const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguagePreference; label: string; hint: string }> = [
@@ -165,93 +166,95 @@ export function TanawAssistant({ open, onToggle, filter, report }: { open: boole
   );
 
   return (
-    <AnimatePresence initial={false}>
-      {open ? (
-        <AssistantPanel key="assistant-panel" reduceMotion={Boolean(reduceMotion)}>
-          <header>
-            <Bot size={43} />
-            <div>
-              <h2>TANAW Insights</h2>
-              <p>Answers from your establishment's counts</p>
-            </div>
-            <button className="design-icon-button" type="button" aria-label="Collapse TANAW Insights" aria-expanded={true} onClick={onToggle}>
-              <X size={18} />
-            </button>
-          </header>
-          <div className="assistant-language" role="group" aria-label="Reply language">
-            <span aria-hidden="true">Reply in</span>
-            {LANGUAGE_OPTIONS.map((option) => (
-              <button key={option.value} type="button" aria-pressed={language === option.value} title={option.hint} onClick={() => chooseLanguage(option.value)}>
-                {option.label}
+    <div className="tanaw-assistant-scope">
+      <AnimatePresence initial={false}>
+        {open ? (
+          <AssistantPanel key="assistant-panel" reduceMotion={Boolean(reduceMotion)}>
+            <header>
+              <Bot size={43} />
+              <div>
+                <h2>TANAW Insights</h2>
+                <p>Answers from your establishment's counts</p>
+              </div>
+              <button className="design-icon-button" type="button" aria-label="Collapse TANAW Insights" aria-expanded={true} onClick={onToggle}>
+                <X size={18} />
               </button>
-            ))}
-          </div>
-          <div
-            ref={conversation}
-            className="assistant-conversation"
-            role="log"
-            aria-label="Insights conversation"
-            aria-live="polite"
-            aria-busy={pending}
-            onScroll={(event) => {
-              savedScroll.current = event.currentTarget.scrollTop;
-              if (event.currentTarget.scrollHeight - event.currentTarget.scrollTop - event.currentTarget.clientHeight < 24) followLatest.current = true;
-            }}
-            onWheel={() => {
-              followLatest.current = false;
-            }}
-            onPointerDown={() => {
-              followLatest.current = false;
-            }}
-            onKeyDown={(event) => {
-              if (["PageUp", "Home", "ArrowUp"].includes(event.key)) followLatest.current = false;
-            }}
-          >
-            <div className="assistant-message" lang={shownLanguage}>
-              <Brain />
-              <div>
-                <strong>{copy.greeting}</strong>
-                <p>{copy.intro}</p>
-              </div>
+            </header>
+            <div className="assistant-language" role="group" aria-label="Reply language">
+              <span aria-hidden="true">Reply in</span>
+              {LANGUAGE_OPTIONS.map((option) => (
+                <button key={option.value} type="button" aria-pressed={language === option.value} title={option.hint} onClick={() => chooseLanguage(option.value)}>
+                  {option.label}
+                </button>
+              ))}
             </div>
-            <div className="assistant-message" lang={shownLanguage}>
-              <Brain />
-              <div>
-                <strong>{copy.prompt}</strong>
-                {suggestions(shownLanguage)}
-              </div>
-            </div>
-            {messages.map((message) => (
-              <motion.div
-                className="assistant-exchange"
-                key={message.id}
-                initial={!reduceMotion && message.id === latestMessageId ? { opacity: 0, y: 6 } : false}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <p className="assistant-question">{message.question}</p>
-                <div className="assistant-message" lang={message.reply?.language ?? shownLanguage}>
-                  <Brain />
-                  {message.reply ? <ReplyBody reply={message.reply} suggestions={suggestions} /> : <div className="assistant-pending">{copy.checking}</div>}
+            <div
+              ref={conversation}
+              className="assistant-conversation"
+              role="log"
+              aria-label="Insights conversation"
+              aria-live="polite"
+              aria-busy={pending}
+              onScroll={(event) => {
+                savedScroll.current = event.currentTarget.scrollTop;
+                if (event.currentTarget.scrollHeight - event.currentTarget.scrollTop - event.currentTarget.clientHeight < 24) followLatest.current = true;
+              }}
+              onWheel={() => {
+                followLatest.current = false;
+              }}
+              onPointerDown={() => {
+                followLatest.current = false;
+              }}
+              onKeyDown={(event) => {
+                if (["PageUp", "Home", "ArrowUp"].includes(event.key)) followLatest.current = false;
+              }}
+            >
+              <div className="assistant-message" lang={shownLanguage}>
+                <Brain />
+                <div>
+                  <strong>{copy.greeting}</strong>
+                  <p>{copy.intro}</p>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-          <p className="assistant-disclosure">{copy.disclosure}</p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void ask(input);
-            }}
-          >
-            <input ref={composer} aria-label="Ask TANAW about your visitor data" placeholder={copy.placeholder} value={input} maxLength={1000} onChange={(event) => setInput(event.target.value)} />
-            <button type="submit" aria-label="Send message" disabled={!input.trim() || pending}>
-              <Send size={23} />
-            </button>
-          </form>
-        </AssistantPanel>
-      ) : null}
-    </AnimatePresence>
+              </div>
+              <div className="assistant-message" lang={shownLanguage}>
+                <Brain />
+                <div>
+                  <strong>{copy.prompt}</strong>
+                  {suggestions(shownLanguage)}
+                </div>
+              </div>
+              {messages.map((message) => (
+                <motion.div
+                  className="assistant-exchange"
+                  key={message.id}
+                  initial={!reduceMotion && message.id === latestMessageId ? { opacity: 0, y: 6 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <p className="assistant-question">{message.question}</p>
+                  <div className="assistant-message" lang={message.reply?.language ?? shownLanguage}>
+                    <Brain />
+                    {message.reply ? <ReplyBody reply={message.reply} suggestions={suggestions} /> : <div className="assistant-pending">{copy.checking}</div>}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <p className="assistant-disclosure">{copy.disclosure}</p>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void ask(input);
+              }}
+            >
+              <input ref={composer} aria-label="Ask TANAW about your visitor data" placeholder={copy.placeholder} value={input} maxLength={1000} onChange={(event) => setInput(event.target.value)} />
+              <button type="submit" aria-label="Send message" disabled={!input.trim() || pending}>
+                <Send size={23} />
+              </button>
+            </form>
+          </AssistantPanel>
+        ) : null}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -389,7 +392,7 @@ function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduc
   return (
     <motion.aside
       id="tanaw-assistant-panel"
-      className={`design-card tanaw-assistant tanaw-assistant-dock${dragging ? " is-resizing" : ""}`}
+      className={`design-card tanaw-assistant tanaw-assistant-dock${dragging ? "is-resizing" : ""}`}
       aria-label="TANAW Insights"
       aria-hidden={!present}
       {...(!present ? { inert: "" } : {})}

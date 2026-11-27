@@ -1,32 +1,27 @@
-import { Inbox, Search } from "lucide-react";
-import { PageHeader } from "@/shared/components/layout";
-import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { PortalPageHeader, SearchField } from "@/shared/ui-kit";
 import { DevDeliveriesList } from "../components";
 import { useDevDeliveries } from "../hooks";
 
+/** Development Email: the activation and recovery messages TANAW sent, while running in development. */
 export function ITDevLogPage() {
   const { timeFormat } = useSystemDisplayPreferences();
   const deliveries = useDevDeliveries();
   return (
     <PageMotion>
-      <PageHeader title="Development Email" description="Development-only view of account activation and recovery messages sent by TANAW." />
-      <Panel className="overflow-hidden">
-        <PanelHeader title="Development Messages" icon={Inbox} />
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 p-4">
-          <div className="relative min-w-0 flex-1 sm:min-w-80">
-            <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
-            <input
-              value={deliveries.query}
-              onChange={(event) => deliveries.setQuery(event.target.value)}
-              placeholder="Search recipient or message"
-              className="focus:ring-tanaw-ledger w-full rounded-lg border border-slate-300 bg-white py-2 pr-4 pl-9 text-sm text-slate-900 transition outline-none focus:ring-1"
-            />
+      <PortalPageHeader title="Development Email" description="Development-only view of account activation and recovery messages sent by TANAW." />
+      <section aria-labelledby="dev-log-messages">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-(--tanaw-border-soft) pb-4">
+          <h2 id="dev-log-messages" className="text-lg leading-snug font-[650] tracking-[-0.01em] text-(--tanaw-text)">
+            Development Messages
+          </h2>
+          <div className="w-full max-w-sm min-w-0 sm:w-80">
+            <SearchField value={deliveries.query} onChange={deliveries.setQuery} placeholder="Search recipient or message" />
           </div>
         </div>
         <DevDeliveriesList deliveries={deliveries.filteredDeliveries} isLoading={deliveries.isLoading} timeFormat={timeFormat} />
-      </Panel>
+      </section>
     </PageMotion>
   );
 }

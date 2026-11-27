@@ -1,7 +1,11 @@
 import { Building2, Check, ChevronDown, Landmark, Search } from "lucide-react";
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useExclusivePopupDismissal } from "@/shared/ui-kit";
 import { filterPlaces, type PlaceOption } from "../model/places";
+
+/** The highlight's glide between options: the app's 150–260ms ease-out. */
+const GLIDE = { type: "tween", duration: 0.2, ease: [0.2, 0.8, 0.2, 1] } as const;
 
 type PlacePickerProps = {
   places: readonly PlaceOption[];
@@ -19,6 +23,7 @@ export function PlacePicker({ places, value, onChange, monitoredCount }: PlacePi
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const reduceMotion = useReducedMotion();
   const optionId = (index: number) => `${listId}-option-${index}`;
   const selected = places.find((place) => place.enterpriseId === value) ?? null;
   const matches = useMemo(() => filterPlaces(places, query), [places, query]);
@@ -75,9 +80,11 @@ export function PlacePicker({ places, value, onChange, monitoredCount }: PlacePi
       </button>
       {open && (
         <div ref={panelRef} role="dialog" aria-label="Choose where to show peak occupancy" className="tanaw-dashboard-popover">
-          <label className="relative block">
+          <label className="tanaw-dashboard-search-field relative block">
             <span className="sr-only">Search enterprise or barangay</span>
-            <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-(--tanaw-text-muted)" aria-hidden="true" />
+            <span className="pointer-events-none absolute top-1/2 left-3 flex -translate-y-1/2">
+              <Search size={16} className="tanaw-dashboard-search__icon" aria-hidden="true" />
+            </span>
             <input
               // The search is what the popover is for, so it takes focus when it opens.
               autoFocus
@@ -94,39 +101,44 @@ export function PlacePicker({ places, value, onChange, monitoredCount }: PlacePi
                 setActive(0);
               }}
               onKeyDown={onSearchKeyDown}
-              className="h-9.5 w-full rounded-[10px] border border-(--tanaw-control-border) bg-(--tanaw-page) pr-3 pl-9 text-sm text-(--tanaw-text) placeholder:text-(--tanaw-text-placeholder) focus-visible:border-(--tanaw-action) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--tanaw-focus-ring)"
+              className="tanaw-dashboard-search"
             />
           </label>
-          <ul id={listId} role="listbox" aria-label="Places" className="mt-2 max-h-68 list-none overflow-y-auto p-0">
-            {options.length === 0 && (
-              <li role="presentation" className="px-2.5 py-3 text-sm text-(--tanaw-text-secondary)">
-                No enterprise or barangay matches “{query.trim()}”. Check the spelling or clear the search.
-              </li>
-            )}
-            {options.map((option, index) => {
-              const isSelected = option === null ? value === null : option.enterpriseId === value;
-              return (
-                <li
-                  key={option?.enterpriseId ?? "all"}
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={isSelected}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onClick={() => choose(option)}
-                  onMouseMove={() => setActive(index)}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 ${isSelected ? "bg-(--tanaw-surface-inset)" : ""} ${index === active ? "outline-2 -outline-offset-2 outline-(--tanaw-focus-ring)" : ""} hover:bg-(--tanaw-control-hover) ${option === null ? "mb-1 border-b border-(--tanaw-border-soft) pb-2.5" : ""}`}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-sm text-(--tanaw-text) ${option === null ? "font-bold" : "font-semibold"}`}>{option?.name ?? "All of San Pedro"}</span>
-                    <span className="mt-0.5 block truncate text-xs text-(--tanaw-text-muted)">
-                      {option ? `Barangay ${option.barangay}` : `All ${monitoredCount} monitored ${monitoredCount === 1 ? "enterprise" : "enterprises"} combined`}
-                    </span>
-                  </span>
-                  {isSelected && <Check size={16} className="shrink-0 text-(--tanaw-accent-ink)" aria-hidden="true" />}
+          <LayoutGroup id={listId}>
+            <ul id={listId} role="listbox" aria-label="Places" className="mt-2.5 max-h-72 list-none overflow-y-auto overscroll-contain p-0">
+              {options.length === 0 && (
+                <li role="presentation" className="px-3 py-3 text-sm text-(--tanaw-text-secondary)">
+                  No enterprise or barangay matches “{query.trim()}”. Check the spelling or clear the search.
                 </li>
-              );
-            })}
-          </ul>
+              )}
+              {options.map((option, index) => {
+                const isSelected = option === null ? value === null : option.enterpriseId === value;
+                const isActive = index === Math.min(active, options.length - 1);
+                return [
+                  <li
+                    key={option?.enterpriseId ?? "all"}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={isSelected}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => choose(option)}
+                    onMouseMove={() => setActive(index)}
+                    className="tanaw-dashboard-option"
+                  >
+                    {isActive && <motion.span layoutId="place-picker-highlight" aria-hidden="true" className="tanaw-dashboard-option__glide" transition={reduceMotion ? { duration: 0 } : GLIDE} />}
+                    <span className="min-w-0 flex-1">
+                      <span className={`tanaw-dashboard-option__name block truncate text-sm text-(--tanaw-text) ${option === null ? "font-[650]" : "font-semibold"}`}>{option?.name ?? "All of San Pedro"}</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-(--tanaw-text-muted)">
+                        {option ? `Barangay ${option.barangay}` : `All ${monitoredCount} monitored ${monitoredCount === 1 ? "enterprise" : "enterprises"} combined`}
+                      </span>
+                    </span>
+                    {isSelected && <Check size={16} className="tanaw-dashboard-option__check shrink-0 text-(--tanaw-accent-ink)" aria-hidden="true" />}
+                  </li>,
+                  option === null && options.length > 1 ? <li key="all-rule" role="presentation" aria-hidden="true" className="mx-3 my-1 h-px bg-(--tanaw-border-soft)" /> : null,
+                ];
+              })}
+            </ul>
+          </LayoutGroup>
         </div>
       )}
     </div>

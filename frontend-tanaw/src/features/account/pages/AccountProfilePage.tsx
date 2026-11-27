@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Alert } from "@/shared/ui-kit";
-import { SettingsGroup, SettingsImageUpload, SettingsReadOnly, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
+import { SettingsGroup, SettingsImageUpload, SettingsNote, SettingsReadOnly, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { roleAccessLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
@@ -65,10 +64,10 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
             </div>
           </SettingsGroup>
           <SettingsGroup title="Account details">
-            <div className="mb-2">
+            <div className="tanaw-settings-readonly-note">
               <SettingsReadOnly>Read-only account details</SettingsReadOnly>
             </div>
-            <dl className="tanaw-settings-account-details">
+            <dl className="tanaw-settings-readonly">
               <div>
                 <dt>Department</dt>
                 <dd>{profile.user.department}</dd>
@@ -76,7 +75,7 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
             </dl>
           </SettingsGroup>
         </div>
-        {profile.saveError && <Alert tone="danger">{profile.saveError}</Alert>}
+        {profile.saveError && <SettingsNote tone="danger">{profile.saveError}</SettingsNote>}
       </fieldset>
       <SettingsSaveBar
         busy={profile.isLoading}

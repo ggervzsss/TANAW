@@ -41,8 +41,9 @@ test("keeps the shared portal login card controlled across desktop viewports", a
     const box = await card.boundingBox();
 
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(550);
-    expect(box!.width).toBeLessThanOrEqual(582);
+    // A compact floating panel: 26rem to 31.5rem wide, as tall as its content, centred on the window.
+    expect(box!.width).toBeGreaterThanOrEqual(416);
+    expect(box!.width).toBeLessThanOrEqual(504);
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
@@ -171,7 +172,7 @@ test("uses application-controlled login input states in dark and light mode", as
   await email.fill("admin@example.com");
   await expect(emailShell).toHaveAttribute("data-state", "valid");
   await email.focus();
-  await expect(emailShell).toHaveCSS("background-color", "rgb(16, 30, 50)");
+  await expect(emailShell).toHaveCSS("background-color", "rgb(19, 32, 43)");
   await expect(email).toHaveCSS("caret-color", "rgb(52, 211, 153)");
 
   await password.fill("A readable portal passphrase");
@@ -184,7 +185,7 @@ test("uses application-controlled login input states in dark and light mode", as
   await expect(emailShell).toHaveAttribute("data-state", "invalid");
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await expect(page.getByLabel("Email", { exact: true }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.getByLabel("Email", { exact: true }).locator("..")).toHaveCSS("background-color", "rgba(18, 52, 35, 0.055)");
 });
 
 test("prepares complete light and dark login backgrounds before revealing the page", async ({ page }) => {
@@ -310,7 +311,7 @@ test("keeps the cursor-following glow isolated without interfering with login co
   });
   expect(mutations).toEqual([]);
   expect(await cursor.evaluate((element) => getComputedStyle(element, "::after").animationName)).toBe("tanaw-cursor-ripple");
-  await expect(page.locator(".tanaw-auth-card")).toHaveCSS("backdrop-filter", "blur(24px)");
+  await expect(page.locator(".tanaw-auth-card")).toHaveCSS("backdrop-filter", "blur(24px) saturate(1.4)");
 
   const email = page.getByLabel("Email", { exact: true });
   const password = page.getByLabel("Password", { exact: true });

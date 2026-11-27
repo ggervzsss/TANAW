@@ -10,38 +10,108 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
 }
 
 /*
- * Staff Reports and Consolidated Reports: flat tables on the page background, separated by soft
- * rules, with uppercase tracked column names.
+ * Staff Reports and Consolidated Reports: open tables on the page background, like the Admin
+ * tables. Column names sit over a hairline (no band or box), rows are split by straight hairlines,
+ * and a row tints on hover with 12px ends while the hairlines beside it step back.
  */
 .tanaw-staff-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   color: var(--tanaw-text);
   font-size: 0.90625rem;
   text-align: left;
 }
 
 .tanaw-staff-table thead th {
-  padding: 10px 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--tanaw-border-soft);
-  color: var(--tanaw-text-secondary);
+  background: transparent;
+  color: var(--tanaw-label);
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   white-space: nowrap;
 }
 
+/* A row's name takes the accent while it is pointed at (the chevron steps forward from the shared row style). */
+.tanaw-staff-table tbody [data-row-primary] {
+  transition: color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.tanaw-staff-table tbody tr.tanaw-row-link:active > * {
+  background: var(--tanaw-selected-bg);
+}
+
 .tanaw-staff-table tbody :where(th, td) {
-  padding: 10px 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--tanaw-border-soft);
   font-weight: inherit;
   overflow-wrap: anywhere;
   vertical-align: middle;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
 }
 
-.tanaw-staff-table tbody tr:hover > * {
-  background: var(--tanaw-control-hover);
+@media (hover: hover) {
+  .tanaw-staff-table tbody tr:hover > * {
+    background: var(--tanaw-control-hover);
+    border-bottom-color: transparent;
+  }
+
+  .tanaw-staff-table tbody tr:has(+ tr:hover) > * {
+    border-bottom-color: transparent;
+  }
+
+  .tanaw-staff-table tbody tr:hover > :first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .tanaw-staff-table tbody tr:hover > :last-child {
+    border-radius: 0 12px 12px 0;
+  }
+
+  .tanaw-staff-table tbody tr.tanaw-row-link:hover [data-row-primary] {
+    color: var(--tanaw-accent-ink);
+  }
+
+}
+
+/* Loading rows keep the table's shape and never tint. */
+.tanaw-staff-table tbody tr[data-skeleton]:hover > * {
+  border-bottom-color: var(--tanaw-border-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* A table, its empty note or the loading rows fade up a few pixels when they arrive. */
+.tanaw-staff-rise {
+  animation: tanaw-staff-rise var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+
+@keyframes tanaw-staff-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-staff-table tbody :where(th, td),
+  .tanaw-staff-table tbody [data-row-primary] {
+    transition: none;
+  }
+
+  .tanaw-staff-rise {
+    animation: none;
+  }
 }
 
 .tanaw-staff-table :where(th, td):last-child {

@@ -9,7 +9,7 @@
   --ite-down: #b91c1c;
   --ite-closed: #cbd5e1;
   --ite-future: var(--tanaw-surface-inset);
-  --ite-chip-on: var(--tanaw-row-selected);
+  --ite-chip-on: var(--tanaw-selected-bg);
 }
 
 .dark .it-enterprises {
@@ -47,16 +47,81 @@
   border: 1px dashed var(--tanaw-border);
 }
 
-.it-enterprises .ite-table tbody tr {
-  transition: background-color 120ms ease;
+/*
+ * The enterprise table: column names on a quiet green band with soft ends, rows split by
+ * hairlines. A row tints on hover with 12px ends; the hairlines beside it step back.
+ */
+.it-enterprises .ite-table thead th {
+  background: color-mix(in srgb, var(--tanaw-accent-ink) 6%, transparent);
 }
 
-.it-enterprises .ite-table tbody tr:hover {
-  background: var(--tanaw-control-hover);
+.it-enterprises .ite-table thead th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.it-enterprises .ite-table thead th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.it-enterprises .ite-table tbody :is(th, td) {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+@media (hover: hover) {
+  .it-enterprises .ite-table tbody tr.tanaw-row-link:hover > * {
+    background: var(--tanaw-control-hover);
+    border-bottom-color: transparent;
+  }
+
+  .it-enterprises .ite-table tbody tr:has(+ tr.tanaw-row-link:hover) > * {
+    border-bottom-color: transparent;
+  }
+
+  .it-enterprises .ite-table tbody tr.tanaw-row-link:hover > :first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .it-enterprises .ite-table tbody tr.tanaw-row-link:hover > :last-child {
+    border-radius: 0 12px 12px 0;
+  }
+}
+
+/* The chosen Show chip: a soft green tint with no edge that glides between chips (see ITEnterprisesPage). */
+.it-enterprises .ite-chip-highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-tanaw-md);
+  background: var(--ite-chip-on);
+}
+
+/* Figures and tab panels fade up a few pixels when they arrive. */
+.it-enterprises .ite-value,
+.it-enterprises .ite-panel {
+  animation: ite-rise var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+
+@keyframes ite-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .it-enterprises .ite-table tbody tr {
+  .it-enterprises .ite-table tbody :is(th, td) {
     transition: none;
+  }
+
+  .it-enterprises .ite-value,
+  .it-enterprises .ite-panel {
+    animation: none;
   }
 }

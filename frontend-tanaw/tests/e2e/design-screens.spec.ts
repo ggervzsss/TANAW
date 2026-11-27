@@ -22,9 +22,9 @@ const telemetrySummary = {
 };
 
 const pages: Record<Role, string[]> = {
-  admin: ["dashboard", "enterprises", "reports", "activity", "requests", "notifications", "profile"],
-  it: ["dashboard", "requests", "enterprises", "personnel", "system", "system?tab=email", "system?tab=settings", "security", "display-preferences", "help"],
-  staff: ["reports", "consolidated-reports"],
+  admin: ["dashboard", "enterprises", "reports", "activity", "requests", "notifications", "settings/profile", "help"],
+  it: ["dashboard", "requests", "enterprises", "personnel", "system", "system?tab=email", "system?tab=settings", "settings/security", "settings/appearance", "help"],
+  staff: ["reports", "consolidated-reports", "notifications", "settings/profile", "help"],
 };
 
 function userFor(role: Role) {
@@ -54,7 +54,10 @@ async function mockPortal(page: Page, role: Role, theme: Theme) {
   const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   await page.addInitScript((value) => window.localStorage.setItem("tanaw-web-theme", value), theme);
   // Registered first so the specific routes below take precedence.
-  await page.route(/\/(operational|accounts|activity-logs|mail|reports|system|notifications|help)(\/|\?|$)/, (route) => route.fulfill(json([])));
+  // API calls only (fetch and XHR): page loads such as /staff/reports, and the dev server's source modules, reach the app.
+  await page.route(/\/(operational|accounts|activity-logs|mail|reports|system|notifications|help)(\/|\?|$)/, (route) =>
+    ["fetch", "xhr"].includes(route.request().resourceType()) ? route.fulfill(json([])) : route.fallback(),
+  );
   await page.route("**/auth/session", (route) => route.fulfill(json({ token: `${role}-design-token`, user })));
   await page.route("**/auth/me", (route) => route.fulfill(json(user)));
   await page.route("**/auth/preferences", (route) => route.fulfill(json(route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme })));
@@ -73,6 +76,10 @@ test("captures the web login page for design review", { tag: "@design-capture" }
     await expect(page.locator("main, form").first()).toBeVisible();
     await page.waitForTimeout(600);
     await page.screenshot({ path: `${folder}/web-login-${theme}.png` });
+    // Account activation: where an invited person registers their password.
+    await page.goto("/activate-account?token=design-review-token");
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `${folder}/web-activate-account-${theme}.png` });
   }
 });
 

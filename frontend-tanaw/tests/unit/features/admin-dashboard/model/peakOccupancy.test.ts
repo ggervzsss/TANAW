@@ -45,6 +45,11 @@ describe("peak occupancy points", () => {
     expect(peakLabel(points[0], window)).toBe("Peak 74 at 1 PM");
   });
 
+  it("gives no points for a reply without a series", () => {
+    const window = peakWindowFor({ start: "2026-11-23", end: "2026-11-23" }, today)!;
+    expect(peakPoints(undefined, window, "12-hour")).toEqual([]);
+  });
+
   it("rounds the axis top", () => {
     expect([niceAxisMax(0), niceAxisMax(74), niceAxisMax(120), niceAxisMax(260), niceAxisMax(1_050), niceAxisMax(12_300)]).toEqual([20, 80, 150, 300, 1_200, 15_000]);
   });

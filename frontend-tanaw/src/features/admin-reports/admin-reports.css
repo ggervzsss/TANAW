@@ -1,4 +1,7 @@
-/* Enterprise Reports (admin): column grids for the report list and the per-enterprise month history. */
+/*
+ * Enterprise Reports (admin): column grids for the report list and the per-enterprise month history.
+ * Open rows split by hairlines, with a soft 12px tint on hover and when chosen; no boxed tables.
+ */
 
 .tanaw-er-cols {
   display: grid;
@@ -7,29 +10,88 @@
   column-gap: 20px;
 }
 
+/* Column headers: the one place uppercase tracked labels stay. */
+.tanaw-er-head {
+  color: var(--tanaw-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.tanaw-er-item {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition: border-color 160ms var(--ease-tanaw-out);
+}
+
+/* The hovered or chosen row reads as one rounded tint, so its own hairline steps aside. */
+.tanaw-er-item:has(> .tanaw-er-row:hover),
+.tanaw-er-item:has(> .tanaw-er-row[aria-expanded="true"]) {
+  border-bottom-color: transparent;
+}
+
 .tanaw-er-row {
   width: 100%;
   padding: 14px 12px;
-  border-bottom: 1px solid var(--tanaw-border-soft);
+  border-radius: 12px;
   text-align: left;
   color: var(--tanaw-text);
   font-size: 0.875rem;
-  transition: background-color 120ms ease;
+  transition: background-color 200ms var(--ease-tanaw-out);
 }
 
 .tanaw-er-row:hover {
   background: var(--tanaw-control-hover);
 }
 
+.tanaw-er-row:active {
+  background: var(--tanaw-selected-bg);
+}
+
+.tanaw-er-row .tanaw-er-row__name {
+  transition: color 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-er-row:hover .tanaw-er-row__name {
+  color: var(--tanaw-accent-ink);
+}
+
 .tanaw-er-row[aria-expanded="true"] {
-  background: var(--tanaw-surface-inset);
-  box-shadow: inset 3px 0 0 var(--tanaw-action);
+  background: var(--tanaw-selected-bg);
+}
+
+.tanaw-er-row[aria-expanded="true"] .tanaw-er-row__name {
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-er-row .tanaw-er-row__chevron {
+  color: var(--tanaw-text-muted);
+  transition:
+    color 160ms var(--ease-tanaw-out),
+    transform 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-er-row:hover .tanaw-er-row__chevron {
+  color: var(--tanaw-accent-ink);
+  transform: translateX(2px);
 }
 
 .tanaw-er-row:focus-visible,
 .tanaw-er-month-row:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: -2px;
+}
+
+/* A section fades up a few pixels when what it shows changes. */
+.tanaw-er-fade {
+  animation: tanaw-er-fade-up 240ms var(--ease-tanaw-out) both;
+}
+
+@keyframes tanaw-er-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 /* The facts line under the dialog header: up to five short facts side by side, wrapping on narrow screens. */
@@ -41,6 +103,41 @@
 
 .tanaw-er-facts > div {
   max-width: 100%;
+}
+
+/* The year's three figures: an open strip split by hairlines, not tiles. */
+.tanaw-er-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid var(--tanaw-border-soft);
+}
+
+.tanaw-er-figures > div {
+  min-width: 0;
+  padding: 12px 20px;
+}
+
+.tanaw-er-figures > div:first-child {
+  padding-left: 0;
+}
+
+.tanaw-er-figures > div + div {
+  border-left: 1px solid var(--tanaw-border-soft);
+}
+
+@media (width < 40rem) {
+  .tanaw-er-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tanaw-er-figures > div {
+    padding: 12px 0;
+  }
+
+  .tanaw-er-figures > div + div {
+    border-top: 1px solid var(--tanaw-border-soft);
+    border-left: 0;
+  }
 }
 
 /* Month list columns: chevron, period, report ID, sent, submission, staff review, reviewed by. */
@@ -73,27 +170,44 @@
   }
 }
 
+/*
+ * Months are split by straight hairlines; only an open month (a tinted block) rounds its corners,
+ * so no row reads as the edge of a card.
+ */
+.tanaw-er-month-item {
+  border-radius: 0;
+  transition:
+    background-color 200ms var(--ease-tanaw-out),
+    border-color 200ms var(--ease-tanaw-out),
+    border-radius 200ms var(--ease-tanaw-out);
+}
+
 .tanaw-er-month-item + .tanaw-er-month-item {
   border-top: 1px solid var(--tanaw-border-soft);
 }
 
+/* An open month and its report log read as one softly tinted block. */
 .tanaw-er-month-item[data-open="true"] {
+  border-radius: 12px;
   background: var(--tanaw-control-hover);
 }
 
-.tanaw-er-month-item:last-child,
-.tanaw-er-month-item:last-child .tanaw-er-month-row {
-  border-bottom-right-radius: 11px;
-  border-bottom-left-radius: 11px;
+.tanaw-er-month-item[data-open="true"],
+.tanaw-er-month-item[data-open="true"] + .tanaw-er-month-item,
+.tanaw-er-month-item:has(> .tanaw-er-month-row:hover),
+.tanaw-er-month-item:has(> .tanaw-er-month-row:hover) + .tanaw-er-month-item {
+  border-top-color: transparent;
 }
 
 .tanaw-er-month-row {
   width: 100%;
   min-height: 52px;
   padding: 10px 12px;
+  border-radius: 12px;
   text-align: left;
   font-size: 0.875rem;
   color: var(--tanaw-text);
+  transition: background-color 160ms var(--ease-tanaw-out);
 }
 
 .tanaw-er-month-row:hover {
@@ -102,10 +216,36 @@
 
 .tanaw-er-month-row:hover .tanaw-er-month-chevron {
   color: var(--tanaw-accent-ink);
+  translate: 2px 0;
+}
+
+.tanaw-er-month-row[aria-expanded="true"]:hover .tanaw-er-month-chevron {
+  translate: none;
+}
+
+/* "Show all months": the chevron dips toward the months it will add. */
+.tanaw-er-more {
+  transition:
+    background-color 200ms var(--ease-tanaw-out),
+    scale 120ms var(--ease-tanaw-out);
+}
+
+.tanaw-er-more:active {
+  scale: 0.97;
+}
+
+.tanaw-er-more svg {
+  transition:
+    rotate 220ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-er-more:hover svg {
+  translate: 0 1px;
 }
 
 .tanaw-er-log {
-  animation: tanaw-er-log-in 160ms ease-out;
+  animation: tanaw-er-log-in 200ms var(--ease-tanaw-out);
 }
 
 @keyframes tanaw-er-log-in {
@@ -117,7 +257,10 @@
 
 .tanaw-er-month-chevron {
   color: var(--tanaw-text-muted);
-  transition: transform 150ms ease;
+  transition:
+    color 160ms var(--ease-tanaw-out),
+    transform 200ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out);
 }
 
 .tanaw-er-month-row[aria-expanded="true"] .tanaw-er-month-chevron {
@@ -158,12 +301,31 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tanaw-er-item,
   .tanaw-er-row,
-  .tanaw-er-month-chevron {
+  .tanaw-er-row .tanaw-er-row__name,
+  .tanaw-er-row .tanaw-er-row__chevron,
+  .tanaw-er-month-item,
+  .tanaw-er-month-row,
+  .tanaw-er-month-chevron,
+  .tanaw-er-more,
+  .tanaw-er-more svg {
     transition: none;
   }
 
-  .tanaw-er-log {
+  .tanaw-er-row:hover .tanaw-er-row__chevron {
+    transform: none;
+  }
+
+  .tanaw-er-month-row:hover .tanaw-er-month-chevron,
+  .tanaw-er-more:active,
+  .tanaw-er-more:hover svg {
+    translate: none;
+    scale: none;
+  }
+
+  .tanaw-er-log,
+  .tanaw-er-fade {
     animation: none;
   }
 }

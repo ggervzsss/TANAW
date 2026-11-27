@@ -1,22 +1,27 @@
 import { create } from "zustand";
+import type { ReportRecord } from "../../../types/enterprise";
+import type { TrendFilter } from "../types/dashboard";
+
+/** What the dashboard shows, so answers follow its date range and its latest report. */
+export type AssistantDashboardContext = { filter: TrendFilter; report: ReportRecord | null };
 
 type AssistantState = {
-  /** Whether the dashboard shows the TANAW Insights panel. */
+  /** Whether the TANAW Insights panel is open. The panel and its topbar launcher are on every page. */
   open: boolean;
-  /** True while the dashboard is on screen, so the topbar knows to offer the launcher. */
-  available: boolean;
+  /** Set while the dashboard is on screen; null on other pages. */
+  dashboard: AssistantDashboardContext | null;
   setOpen: (open: boolean) => void;
   toggle: () => void;
-  setAvailable: (available: boolean) => void;
+  setDashboard: (dashboard: AssistantDashboardContext | null) => void;
 };
 
-/** Shared by the dashboard (which renders the panel) and the topbar (which holds its launcher). */
+/** Shared by the shell (which renders the panel), the topbar (which holds its launcher) and the dashboard. */
 export const useAssistantStore = create<AssistantState>()((set) => ({
   open: false,
-  available: false,
+  dashboard: null,
   setOpen: (open) => set({ open }),
   toggle: () => set((state) => ({ open: !state.open })),
-  setAvailable: (available) => set(available ? { available } : { available, open: false }),
+  setDashboard: (dashboard) => set({ dashboard }),
 }));
 
 /** The topbar launcher; the panel returns focus here when it closes. */

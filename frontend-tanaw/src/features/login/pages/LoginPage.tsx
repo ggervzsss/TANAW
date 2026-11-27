@@ -1,12 +1,9 @@
-import { useEffect, useState } from "react";
-import { MapPin } from "lucide-react";
-import { motion } from "motion/react";
+import { useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
-import { TANAW_LOGO } from "@/shared/constants/branding";
-import { AuthParticles, AuthStageGlow, AuthThemeToggle, LoginBackground, LoginForm } from "../components";
-import { useAuthStageGlow, useLogin } from "../hooks";
+import { AuthBrandHeader, AuthHero, AuthStageLayout, LoginForm } from "../components";
+import { useLogin } from "../hooks";
 
 function SampaguitaIcon({ className = "" }: { className?: string }) {
   return (
@@ -25,8 +22,6 @@ export function LoginPage() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { clearLoginMessage, handleLoginSubmit, lockoutSeconds, loginMessage } = useLogin();
-  const { cursorRef, stageRef } = useAuthStageGlow<HTMLElement>();
-  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   useEffect(() => {
     if (user?.role === "enterprise") {
@@ -43,64 +38,23 @@ export function LoginPage() {
   }
 
   return (
-    <section
-      ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) text-(--tanaw-text)"
-      data-auth-background-ready={isBackgroundReady}
-    >
-      <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
-      <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
-      <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <AuthStageGlow cursorRef={cursorRef} />
-      <AuthParticles />
-      <AuthThemeToggle />
-
-      <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
-        <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white lg:flex xl:pb-14">
-          <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
-            <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
+    <AuthStageLayout
+      showParticles
+      panelClassName="tanaw-login-card"
+      hero={
+        <AuthHero
+          icon={
+            <span className="tanaw-sampaguita-glow inline-flex">
               <SampaguitaIcon className="h-8 w-8" />
-            </div>
-            <h2 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
-              Welcome to San Pedro
-            </h2>
-            <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
-            <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
-              Your platform to manage tourism, empower enterprises, and build a thriving community.
-            </p>
-            <div className="tanaw-auth-hero-location mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
-              <MapPin className="h-5 w-5 flex-none text-white" strokeWidth={2} />
-              <span>San Pedro, Laguna, Philippines</span>
-            </div>
-          </motion.div>
-        </section>
-
-        <main className="flex min-h-0 items-center justify-center lg:justify-end">
-          <motion.div
-            className="tanaw-auth-card tanaw-login-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.55, ease: "easeOut" }}
-          >
-            <header className="tanaw-auth-card-header mb-8">
-              <div className="flex items-center gap-5 sm:gap-7">
-                <img src={TANAW_LOGO} alt="" className="tanaw-auth-brand-logo" />
-                <div className="min-w-0">
-                  <h1 className="tanaw-auth-brand-title font-display text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
-                  <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">San Pedro Tourism Management</p>
-                </div>
-              </div>
-
-              <div className="tanaw-auth-divider mt-8 flex items-center gap-3 text-(--tanaw-gold)">
-                <SampaguitaIcon className="h-4 w-4 flex-none" />
-                <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
-              </div>
-            </header>
-
-            <LoginForm authMessage={loginMessage} lockoutSeconds={lockoutSeconds} onAuthMessageClear={clearLoginMessage} onSubmit={handleLoginSubmit} />
-          </motion.div>
-        </main>
-      </div>
-    </section>
+            </span>
+          }
+          title="Welcome to San Pedro"
+          copy="Your platform to manage tourism, empower enterprises, and build a thriving community."
+        />
+      }
+    >
+      <AuthBrandHeader subtitle="San Pedro Tourism Management" />
+      <LoginForm authMessage={loginMessage} lockoutSeconds={lockoutSeconds} onAuthMessageClear={clearLoginMessage} onSubmit={handleLoginSubmit} />
+    </AuthStageLayout>
   );
 }

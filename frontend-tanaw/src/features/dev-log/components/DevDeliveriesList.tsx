@@ -1,37 +1,40 @@
 import { Copy, Inbox, Mail } from "lucide-react";
 import toast from "react-hot-toast/headless";
-import { EmptyState } from "@/shared/components/ui";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { Badge, EmptyState, Skeleton } from "@/shared/ui-kit";
 import type { DevDelivery } from "../services";
 import { splitDevLogMessage } from "../utils/devLogMessage";
-import { Badge } from "../../../shared/ui-kit";
 
+const rowGrid = "grid gap-4 border-b border-(--tanaw-border-soft) py-5 lg:grid-cols-[220px_minmax(0,1fr)]";
+
+/** The messages as open rows split by hairlines: who and when on the left, the message on the right. */
 export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliveries: DevDelivery[]; isLoading: boolean; timeFormat: SystemTimeFormat }) {
+  if (isLoading && deliveries.length === 0) return <DevDeliveriesSkeleton />;
   if (deliveries.length === 0)
     return (
       <EmptyState
-        icon={Inbox}
+        icon={<Inbox size={22} />}
         title="No development messages"
-        description={isLoading ? "Loading development messages..." : "Account activation and recovery emails will appear here while running in development."}
+        description="Account activation and recovery emails will appear here while running in development."
       />
     );
   return (
-    <div className="divide-y divide-slate-100">
+    <div className="tanaw-enter">
       {deliveries.map((delivery) => (
-        <article key={delivery.id} className="grid gap-4 p-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <article key={delivery.id} className={rowGrid}>
           <aside className="space-y-2">
             <Badge tone="success">
               <Mail size={13} /> Email
             </Badge>
             <div>
-              <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
-              <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
+              <p className="text-sm font-semibold wrap-anywhere text-(--tanaw-text)">{delivery.recipient}</p>
+              <p className="mt-1 font-mono text-xs text-(--tanaw-text-muted)">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
             </div>
             <Badge>{delivery.status}</Badge>
           </aside>
           <section className="min-w-0">
-            <h2 className="mb-2 text-sm font-black text-slate-900">{delivery.subject}</h2>
+            <h3 className="mb-2 text-[0.9375rem] font-[650] text-(--tanaw-text)">{delivery.subject}</h3>
             <DevLogMessage body={delivery.body} />
           </section>
         </article>
@@ -40,25 +43,46 @@ export function DevDeliveriesList({ deliveries, isLoading, timeFormat }: { deliv
   );
 }
 
+/** Message rows in their own shape while the log loads. */
+function DevDeliveriesSkeleton() {
+  return (
+    <div role="status" aria-label="Loading development messages...">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className={rowGrid}>
+          <div className="space-y-2.5">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-2/5" />
+            <Skeleton className="rounded-tanaw-md mt-3 h-24 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DevLogMessage({ body }: { body: string }) {
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed whitespace-pre-wrap text-slate-700">
+    <pre className="rounded-tanaw-md max-h-64 overflow-auto bg-(--tanaw-surface-inset) p-4 text-[13px] leading-relaxed whitespace-pre-wrap text-(--tanaw-text-secondary)">
       {splitDevLogMessage(body).map((segment, index) =>
         segment.type === "text" ? (
           segment.value
         ) : (
           <span key={`${segment.value}-${index}`} className="inline-flex max-w-full items-center gap-1 align-middle">
-            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tanaw-ledger break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
+            <a href={segment.value} target="_blank" rel="noreferrer" className="break-all text-(--tanaw-accent-ink) underline underline-offset-2 hover:text-(--tanaw-action-hover)">
               {segment.value}
             </a>
             <button
               type="button"
               onClick={() => void copyLink(segment.value)}
-              className="text-tanaw-ledger inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              className="rounded-tanaw-sm inline-flex size-6 shrink-0 items-center justify-center text-(--tanaw-accent-ink) transition-colors duration-150 hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
               aria-label="Copy link"
               title="Copy link"
             >
-              <Copy size={12} aria-hidden="true" />
+              <Copy size={13} aria-hidden="true" />
             </button>
           </span>
         ),

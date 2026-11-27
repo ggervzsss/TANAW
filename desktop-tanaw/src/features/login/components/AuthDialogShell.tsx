@@ -5,6 +5,7 @@ import { ModalPortal, useDialogFocus } from "../../../ui-kit";
 
 type AuthDialogKind = "recovery" | "support";
 
+/** A denser sheet of the sign-in glass (login.css): eyebrow, title with the civic line, a round close. */
 export function AuthDialogShell({ children, kind, onClose }: { children: ReactNode; kind: AuthDialogKind; onClose: () => void }) {
   const isRecovery = kind === "recovery";
   const titleId = isRecovery ? "desktop-forgot-password-title" : "desktop-contact-support-title";
@@ -14,36 +15,32 @@ export function AuthDialogShell({ children, kind, onClose }: { children: ReactNo
 
   return (
     <ModalPortal lockScroll>
-      <div
-        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(3,20,12,0.54)] px-5 py-6 backdrop-blur-md sm:items-center sm:py-8"
-        role="presentation"
-        onMouseDown={onClose}
-        onPointerMove={(event) => event.stopPropagation()}
-      >
+      <div className="tanaw-auth-dialog-backdrop" role="presentation" onMouseDown={onClose} onPointerMove={(event) => event.stopPropagation()}>
         <motion.div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
-          className="tanaw-auth-dialog my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
-          initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
+          className="tanaw-auth-dialog"
+          initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: reduceMotion ? 0 : 0.22, ease: "easeOut" }}
+          transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.2, 0.8, 0.2, 1] }}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold tracking-[0.24em] text-(--tanaw-gold) uppercase">{isRecovery ? "Account Recovery" : "Support Desk"}</p>
-              <h2 id={titleId} className="mt-2 text-xl font-bold text-(--tanaw-text)">
+          <div className="tanaw-auth-dialog__header">
+            <div className="min-w-0">
+              <p className="tanaw-auth-dialog__eyebrow">{isRecovery ? "Account Recovery" : "Support Desk"}</p>
+              <h2 id={titleId} className="tanaw-auth-dialog__title">
                 {isRecovery ? "Forgot password" : "Contact support"}
               </h2>
+              <span className="tanaw-auth-civic-line tanaw-auth-civic-line--short" aria-hidden="true" />
             </div>
-            <button type="button" onClick={onClose} className="rounded-full p-2 text-(--tanaw-muted) transition hover:bg-emerald-50 hover:text-(--tanaw-green)" aria-label="Close dialog">
+            <button type="button" onClick={onClose} className="tanaw-auth-dialog__close" aria-label="Close dialog">
               <X className="h-5 w-5" />
             </button>
           </div>
-          {children}
+          <div className="tanaw-auth-dialog__body">{children}</div>
         </motion.div>
       </div>
     </ModalPortal>

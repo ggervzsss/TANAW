@@ -1,7 +1,6 @@
 import { FlaskConical } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import { DotFormModal } from "../../reports/components/DotFormModal";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
@@ -9,7 +8,6 @@ import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { SAMPLE_DASHBOARD_SHORTCUT, isSampleDashboardShortcut, toggleSampleDashboard, updateDeveloperSettings, useDeveloperSettings } from "../../preferences/developer-settings";
 import { sampleDashboard } from "../sample/sample-dashboard";
-import { countingFromPayload } from "../../reports/model/report-workspace";
 import { useEstablishmentAnalytics } from "../hooks/useEstablishmentAnalytics";
 import { useUsualBaseline } from "../hooks/useUsualBaseline";
 import { useCameraStatusTimes } from "../hooks/useCameraStatusTimes";
@@ -20,13 +18,13 @@ import type { TrafficPoint } from "../types/dashboard";
 import { useAssistantStore } from "../stores/assistant-store";
 import type { DashboardRange } from "../types/dashboard";
 import { assistantFilter, businessDate, dayStartMs, isSingleDay, presetRange, rangeLength, rangePhrase, weekdayName } from "../utils/dashboard-range";
-import { emptyDemo, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
+import { emptyDemo, metricsFromReport } from "../utils/reportLedger";
+import { loadLocalReportLedger } from "../services/report-ledger";
 import { BUCKET_HOURS, busiestIndex, dailyTraffic, dayChangeFromUsual, describeChange, hourlyTraffic, rangeChangeFromBefore } from "../utils/traffic";
 import { DashboardHeader } from "./DashboardHeader";
 import { EstablishmentMetrics } from "./EstablishmentMetrics";
 import { MonitoredLocations } from "./MonitoredLocations";
 import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
-import { TanawAssistant } from "./TanawAssistant";
 import { VisitorTrafficChart } from "./VisitorTrafficChart";
 import "../dashboard.css";
 
@@ -75,9 +73,7 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const error = sample ? null : real.error;
   const loading = sample ? false : real.loading;
   const { timeFormat } = useSystemDisplayPreferences();
-  const assistantOpen = useAssistantStore((state) => state.open);
-  const toggleAssistant = useAssistantStore((state) => state.toggle);
-  const setAssistantAvailable = useAssistantStore((state) => state.setAvailable);
+  const setAssistantDashboard = useAssistantStore((state) => state.setDashboard);
   const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
   const [ledger, setLedger] = useState<{ enterpriseId: typeof enterpriseId; reports: ReportRecord[] } | null>(null);
   const ledgerReports = ledger && ledger.enterpriseId === enterpriseId ? ledger.reports : [];
@@ -87,23 +83,7 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const [preview, setPreview] = useState<DotPreviewState | null>(null);
   usePersistentIssue({ id: "dashboard-report-previews", message: ledgerError, title: "Report previews unavailable", tone: "warning" });
 
-  useEffect(() => {
-    setAssistantAvailable(true);
-    return () => setAssistantAvailable(false);
-  }, [setAssistantAvailable]);
-
-  const refreshReports = useCallback(async () => {
-    const status = await getMlServiceStatus();
-    const submissions = await listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-    if (
-      submissions.some((item) => {
-        const data = countingFromPayload(item.payload.counting);
-        return data && data.enterprise_id !== enterpriseId;
-      })
-    )
-      throw new Error("Saved reports belong to another establishment.");
-    return sortReportsBySubmittedAt(submissions.map(reportFromLocalSubmission));
-  }, [enterpriseId]);
+  const refreshReports = useCallback(() => loadLocalReportLedger(enterpriseId), [enterpriseId]);
 
   useEffect(() => {
     let disposed = false;
@@ -130,6 +110,12 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
       window.clearInterval(timer);
     };
   }, [refreshReports, enterpriseId]);
+
+  // TANAW Insights lives in the shell; on the dashboard its answers follow this range and the latest report shown here.
+  const assistantPeriod = assistantFilter(range);
+  const latestReport = reports[0] ?? null;
+  useEffect(() => setAssistantDashboard({ filter: assistantPeriod, report: latestReport }), [setAssistantDashboard, assistantPeriod, latestReport]);
+  useEffect(() => () => setAssistantDashboard(null), [setAssistantDashboard]);
 
   const isToday = single && range.from === today;
   const elapsedHours = isToday ? (now - dayStartMs(today)) / 3_600_000 : null;
@@ -254,7 +240,6 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
           }
         />
       </div>
-      <TanawAssistant open={assistantOpen} onToggle={toggleAssistant} report={reports[0] ?? null} filter={assistantFilter(range)} />
     </div>
   );
 }

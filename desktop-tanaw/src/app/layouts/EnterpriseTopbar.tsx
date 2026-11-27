@@ -69,7 +69,6 @@ export function EnterpriseTopbar({
 }: EnterpriseTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
-  const assistantAvailable = useAssistantStore((state) => state.available);
   const assistantOpen = useAssistantStore((state) => state.open);
   const toggleAssistant = useAssistantStore((state) => state.toggle);
 
@@ -168,20 +167,18 @@ export function EnterpriseTopbar({
           </button>
 
           <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
-            {assistantAvailable && (
-              <button
-                id={ASSISTANT_LAUNCHER_ID}
-                type="button"
-                aria-label={assistantOpen ? "Close TANAW Insights" : "Open TANAW Insights"}
-                aria-expanded={assistantOpen}
-                aria-controls={assistantOpen ? "tanaw-assistant-panel" : undefined}
-                title="TANAW Insights"
-                onClick={toggleAssistant}
-                className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md hover:-translate-y-0.5 ${controlClasses.icon}`}
-              >
-                <Bot size={20} />
-              </button>
-            )}
+            <button
+              id={ASSISTANT_LAUNCHER_ID}
+              type="button"
+              aria-label={assistantOpen ? "Close TANAW Insights" : "Open TANAW Insights"}
+              aria-expanded={assistantOpen}
+              aria-controls={assistantOpen ? "tanaw-assistant-panel" : undefined}
+              title="TANAW Insights"
+              onClick={toggleAssistant}
+              className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md hover:-translate-y-0.5 ${controlClasses.icon}`}
+            >
+              <Bot size={20} />
+            </button>
             <div ref={notificationMenuRef} className="sm:relative">
               <NotificationDropdown
                 isOpen={isNotificationsOpen}

@@ -37,10 +37,10 @@ export function PasswordRequirements({ status, minLength, maxLength, className =
   return (
     <section
       aria-label="Password requirements"
-      className={cn("tanaw-password-requirements rounded-tanaw-lg border border-(--tanaw-success-line) bg-(--tanaw-success-surface) px-4 py-3", className)}
+      className={cn("tanaw-password-requirements rounded-tanaw-md bg-(--tanaw-success-surface) px-4 py-3", className)}
     >
       <div className="tanaw-password-requirements__header mb-2 flex items-center justify-between gap-3">
-        <p className="text-xs font-bold tracking-label text-(--tanaw-label) uppercase">Password requirements</p>
+        <p className="text-[0.8125rem] font-semibold text-(--tanaw-label)">Password requirements</p>
         <span className="tanaw-password-requirements__count text-xs font-semibold text-(--tanaw-accent-ink) tabular-nums">
           {status.characterCount} {status.characterCount === 1 ? "character" : "characters"}
         </span>

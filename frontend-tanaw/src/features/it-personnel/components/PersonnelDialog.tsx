@@ -132,8 +132,8 @@ export function PersonnelDialog({ account, lockedRoleReason, onClose, onInvited 
         </>
       }
     >
-      <form id={formId} noValidate onSubmit={submit} className="grid gap-5">
-        <div className="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)] items-start gap-3 max-sm:grid-cols-[minmax(0,1fr)_5.5rem]">
+      <form id={formId} noValidate onSubmit={submit} className="grid gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)] items-start gap-x-4 gap-y-5 max-sm:grid-cols-[minmax(0,1fr)_5.5rem]">
           <PersonnelTextField
             name="firstName"
             label="First name"
@@ -165,7 +165,7 @@ export function PersonnelDialog({ account, lockedRoleReason, onClose, onInvited 
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 items-start gap-3 max-sm:grid-cols-1">
+        <div className="grid grid-cols-2 items-start gap-x-4 gap-y-5 max-sm:grid-cols-1">
           <PersonnelTextField name="email" type="email" label="Work email" value={form.email} onChange={(value) => update("email", value)} error={errors.email} hint={emailHint} autoComplete="email" />
           <PersonnelPhoneField value={form.phoneLocal} onChange={(value) => update("phoneLocal", value)} error={errors.phoneLocal} />
         </div>

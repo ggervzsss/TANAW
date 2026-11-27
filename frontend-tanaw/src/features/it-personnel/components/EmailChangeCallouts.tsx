@@ -7,11 +7,11 @@ type Props = {
   onResolve: (accountId: string, action: "approve" | "decline") => void;
 };
 
-/** A pale gold notice for each sign-in email change waiting on IT. */
+/** A pale gold row, marked by a thin Seal Gold line, for each sign-in email change waiting on IT. */
 export function EmailChangeCallouts({ callouts, resolvingAccountId, onResolve }: Props) {
   if (!callouts.length) return null;
   return (
-    <div className="mt-5 grid gap-3">
+    <div className="mt-5 grid gap-2">
       {callouts.map((callout) => {
         const titleId = `email-change-${callout.accountId}`;
         const busy = resolvingAccountId === callout.accountId;
@@ -19,10 +19,10 @@ export function EmailChangeCallouts({ callouts, resolvingAccountId, onResolve }:
           <section
             key={callout.accountId}
             aria-labelledby={titleId}
-            className="rounded-tanaw-lg flex flex-wrap items-center justify-between gap-x-6 gap-y-3.5 border border-(--tanaw-warning-line) bg-(--tanaw-warning-surface) px-5 py-4"
+            className="rounded-tanaw-md flex flex-wrap items-center justify-between gap-x-6 gap-y-3 bg-(--tanaw-warning-surface) py-3.5 pr-4 pl-5 shadow-[inset_3px_0_0_var(--tanaw-gold-line)]"
           >
             <div className="min-w-0 flex-1 basis-80">
-              <h2 id={titleId} className="text-base font-bold text-(--tanaw-text)">
+              <h2 id={titleId} className="text-base font-[650] text-(--tanaw-text)">
                 {callout.title}
               </h2>
               <p className="mt-1 text-sm wrap-anywhere text-(--tanaw-text-secondary)">

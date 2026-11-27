@@ -19,7 +19,7 @@ export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from "./components/SegmentedControl";
 export { Pagination, type PaginationProps } from "./components/Pagination";
 export { Select, type SelectOption, type SelectProps } from "./components/Select";
-export { Skeleton, Spinner, type SkeletonProps, type SpinnerProps } from "./components/Spinner";
+export { Skeleton, SkeletonText, Spinner, type SkeletonProps, type SkeletonTextProps, type SpinnerProps } from "./components/Spinner";
 export { StatusPill, type StatusPillProps } from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Tabs, type TabItem, type TabsProps } from "./components/Tabs";
@@ -32,6 +32,7 @@ export { MetricStrip, type Metric, type MetricStripControl, type MetricStripProp
 export { PasswordMatchIndicator, PasswordRequirements, type PasswordMatchIndicatorProps, type PasswordRequirementStatus, type PasswordRequirementsProps } from "./patterns/PasswordRequirements";
 export { PortalPageHeader, type PortalPageHeaderProps } from "./patterns/PortalPageHeader";
 export { TopbarNavigation } from "./patterns/TopbarNavigation";
+export { ViewSkeleton, type ViewSkeletonProps, type ViewSkeletonVariant } from "./patterns/ViewSkeleton";
 
 // Helpers
 export { cn } from "./lib/cn";
@@ -56,7 +57,8 @@ export {
 export { DROPDOWN_SEARCH_MIN_OPTIONS, getNextDropdownIndex, shouldShowDropdownSearch, type DropdownKey } from "./lib/dropdown";
 export { useDialogFocus } from "./lib/focus-trap";
 export { initialsOf } from "./lib/initials";
-export { dialogIn, fadeInDown, popIn } from "./lib/motion";
+export { dialogIn, easeOut, fadeInDown, popIn } from "./lib/motion";
+export { usePageEnter } from "./lib/page-enter";
 export { hasVisualOverflow } from "./lib/overflow";
 export { useExclusivePopupDismissal } from "./lib/popup-dismissal";
 export { isMonthInRange, pickerMonthLabel, type PickerMonth } from "./lib/pickerMonth";

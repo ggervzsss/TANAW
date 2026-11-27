@@ -54,7 +54,7 @@ test("desktop dark theme, camera dialogs and automatic report filtering preserve
     const discard = page.getByRole("dialog", { name: "Discard unsaved settings?" });
     await discard.getByRole("button", { name: "Keep editing" }).click();
     await expect(currentPassword).toHaveValue("Unsaved password input");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Discard", exact: true }).click();
     await page.getByRole("button", { name: "Appearance" }).click();
     await page.getByRole("radio", { name: "Dark Mode" }).click();
     await expect(page.locator("html")).toHaveClass(/\bdark\b/);

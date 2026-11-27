@@ -5,7 +5,7 @@ import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPre
 import type { SystemLog } from "@/shared/types";
 import { Alert, DateRangePicker, Pagination, PortalPageHeader, SearchField, Select, formatRangeText, monthRange, type DateRange } from "@/shared/ui-kit";
 import { RecentActivityDrawer } from "../components/RecentActivityDrawer";
-import { RecentActivityList } from "../components/RecentActivityList";
+import { RecentActivityList, RecentActivitySkeleton } from "../components/RecentActivityList";
 import "../components/recentActivity.css";
 import { useActivityLogs } from "../hooks/useActivityLogs";
 import {
@@ -125,9 +125,9 @@ export function ActivityPage() {
         <DateRangePicker value={range} onChange={changeRange} variant="field" ariaLabel={`Choose a date range for ${PAGE_TITLE}`} today={now} />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[0.84375rem] text-(--tanaw-text-secondary)">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[13px] text-(--tanaw-text-secondary)">
         <p role="status" className="tabular-nums">
-          <span className="font-bold text-(--tanaw-text)">{summary.label}</span> · {isLoading ? "Loading records" : summary.count} · {rangeText}
+          <span className="font-semibold text-(--tanaw-text)">{summary.label}</span> · {isLoading ? "Loading records" : summary.count} · {rangeText}
         </p>
         {filtered && (
           <button type="button" onClick={showAll} className={linkButton}>
@@ -156,7 +156,10 @@ export function ActivityPage() {
           timeFormat={timeFormat}
           onSelect={(log: SystemLog) => setSelected(log.id)}
           empty={
-            <p className="border-b border-(--tanaw-border-soft) px-3 py-10 text-center text-sm text-(--tanaw-text-secondary)">
+            isLoading ? (
+              <RecentActivitySkeleton />
+            ) : (
+            <p className="tanaw-activity-fade border-b border-(--tanaw-border-soft) px-3 py-10 text-center text-sm text-(--tanaw-text-secondary)">
               {emptyMessage}{" "}
               {filtered && !isLoading && (
                 <button type="button" onClick={showAll} className={linkButton}>
@@ -164,6 +167,7 @@ export function ActivityPage() {
                 </button>
               )}
             </p>
+            )
           }
         />
         <Pagination page={paged.page} pageCount={paged.pageCount} onChange={setPageChoice} summary={paged.summary} ariaLabel="Activity pages" />

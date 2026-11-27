@@ -1,19 +1,21 @@
 import { Check, ChevronRight, Clock3, TriangleAlert, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Button, cn, openRowFromClick } from "@/shared/ui-kit";
+import { Button, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import type { ItOverview } from "../hooks/useItOverview";
+import { useScrollEdges } from "../hooks/useScrollEdges";
 import { firstRows, type ConnectionRow } from "../model/itOverview";
 import { itOverviewPaths } from "../model/paths";
 
-const rowClass = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 border-b border-(--tanaw-border-soft) py-4 max-sm:grid-cols-1";
+/** A row split from the next by a hairline; its hover band reaches past the text, which stays aligned with the heading. */
+const rowClass = "it-overview__row grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 py-4 max-sm:grid-cols-1";
 const metaClass = "flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] text-(--tanaw-text-secondary)";
-/** A row that opens as a whole: the hover band reaches past the text, which stays aligned with the heading. */
-const clickableRowClass = "tanaw-row-link -mx-3 px-3";
+/** A row that opens as a whole. */
+const clickableRowClass = "tanaw-row-link";
 
-const titleClass = "mt-1 block text-[0.96875rem] font-bold text-(--tanaw-text)";
+const titleClass = "mt-1 block text-[0.96875rem] font-semibold text-(--tanaw-text)";
 const placeClass = "mt-0.5 block text-sm text-(--tanaw-text-secondary)";
-const stateClass = "mt-1.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-bold";
+const stateClass = "mt-1.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold";
 
 function Section({
   id,
@@ -42,7 +44,7 @@ function Section({
 }) {
   const titleId = `${id}-title`;
   let body: ReactNode = children;
-  if (isLoading) body = <SectionMessage>Loading…</SectionMessage>;
+  if (isLoading) body = <SectionSkeleton label={`Loading ${title.toLowerCase()}`} />;
   else if (isError)
     body = (
       <div className="flex flex-wrap items-center gap-3 pt-4">
@@ -54,17 +56,19 @@ function Section({
     );
   else if (empty) body = <SectionMessage>{empty}</SectionMessage>;
   return (
-    <section aria-labelledby={titleId} className="min-w-0" data-testid={id}>
+    <section aria-labelledby={titleId} className="min-w-0" data-testid={id} data-overview-section={id}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-(--tanaw-border-soft) pb-3">
         <div className="min-w-0">
-          <h2 id={titleId} className="font-display m-0 text-[1.3125rem] leading-tight font-bold text-(--tanaw-text)">
+          <h2 id={titleId} className="m-0 text-lg leading-snug font-[650] tracking-[-0.01em] text-(--tanaw-text)">
             {title}
           </h2>
-          <p className="mt-1 mb-0 text-sm text-(--tanaw-text-secondary)">{description}</p>
+          <p className="mt-1 mb-0 text-[13px] text-(--tanaw-text-secondary)">{description}</p>
         </div>
         <SectionLink to={link.to}>{link.label}</SectionLink>
       </div>
-      {body}
+      <div key={isLoading ? "loading" : isError ? "error" : "rows"} className="it-overview__body">
+        {body}
+      </div>
       {!isLoading && !isError && hidden > 0 && (
         <p className="mt-3 mb-0 text-sm text-(--tanaw-text-secondary)">
           <SectionLink to={link.to}>{`${hidden.toLocaleString("en-US")} more on the full list`}</SectionLink>
@@ -78,16 +82,38 @@ function SectionLink({ to, children }: { to: string; children: string }) {
   return (
     <Link
       to={to}
-      className="inline-flex min-h-9 items-center gap-1 rounded-md text-sm font-semibold whitespace-nowrap text-(--tanaw-accent-ink) no-underline underline-offset-3 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+      className="group rounded-tanaw-sm ease-tanaw-out inline-flex min-h-9 items-center gap-1 text-sm font-semibold whitespace-nowrap text-(--tanaw-accent-ink) no-underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
     >
       {children}
-      <ChevronRight size={15} aria-hidden="true" />
+      <ChevronRight
+        size={15}
+        aria-hidden="true"
+        className="ease-tanaw-out transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+      />
     </Link>
   );
 }
 
 function SectionMessage({ children }: { children: ReactNode }) {
   return <p className="mt-4 mb-0 text-sm text-(--tanaw-text-secondary)">{children}</p>;
+}
+
+/** Three rows in the shape of the list while it loads. */
+function SectionSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="it-overview__skeleton">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className={rowClass}>
+          <div className="min-w-0">
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="mt-2.5 h-4 w-3/4" />
+            <Skeleton className="mt-2 h-3 w-1/2" />
+          </div>
+          <Skeleton className="rounded-tanaw-md h-9 w-24 max-sm:hidden" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Dot() {
@@ -138,7 +164,7 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
                 {row.stateLabel}
               </span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className={cn("flex items-center gap-4", !row.canStart && "max-sm:hidden")}>
               {row.canStart && (
                 <Button onClick={() => section.start(row)} loading={section.startingId === row.id} disabled={section.startingId !== null}>
                   Start on it<Hidden> ({row.code})</Hidden>
@@ -159,24 +185,16 @@ const connectionIcons: Record<ConnectionRow["kind"], ReactNode> = {
   camera: <TriangleAlert size={15} aria-hidden="true" />,
 };
 
-export function ConnectionsSection({ overview }: { overview: ItOverview }) {
-  const section = overview.connections;
-  const { shown, hidden } = firstRows(section.rows);
+/**
+ * Every connection problem, in a list that scrolls inside itself once it outgrows its space. Its
+ * edges fade while rows sit past them, and it takes keyboard focus while it scrolls.
+ */
+function ConnectionList({ rows, labelledBy }: { rows: readonly ConnectionRow[]; labelledBy: string }) {
+  const { ref, scrollProps } = useScrollEdges<HTMLUListElement>();
   return (
-    <Section
-      id="it-overview-connections"
-      title="Connection problems"
-      description="Desktop apps and cameras that are not sending visitor counts."
-      link={{ to: itOverviewPaths.enterprises, label: "All enterprises" }}
-      hidden={hidden}
-      isLoading={section.isLoading}
-      isError={section.isError}
-      errorText="Connection status could not be loaded."
-      onRetry={section.refetch}
-      empty={shown.length === 0 ? "Every open place is sending data and every camera is counting." : null}
-    >
-      <ul className="m-0 list-none p-0">
-        {shown.map((row) => (
+    <div className="it-overview__scroll-frame">
+      <ul ref={ref} data-fit-list="" aria-labelledby={labelledBy} className="it-overview__scroll m-0 list-none" {...scrollProps}>
+        {rows.map((row) => (
           <li key={`${row.enterpriseId}-${row.kind}`} onClick={openRowFromClick} className={cn(rowClass, clickableRowClass)}>
             <div className="min-w-0">
               <span className={cn(stateClass, "mt-0", row.kind === "offline" ? "text-(--tanaw-danger)" : "text-(--tanaw-warn-ink)")}>
@@ -189,10 +207,32 @@ export function ConnectionsSection({ overview }: { overview: ItOverview }) {
               <span className={placeClass}>{row.detail}</span>
               {row.requestCode && <span className={cn(metaClass, "mt-1.5")}>Request {row.requestCode} is open</span>}
             </div>
-            <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
+            <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron max-sm:hidden" />
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Shows every problem: the list scrolls rather than stopping at the first few. */
+export function ConnectionsSection({ overview }: { overview: ItOverview }) {
+  const section = overview.connections;
+  const rows = section.rows;
+  return (
+    <Section
+      id="it-overview-connections"
+      title="Connection problems"
+      description="Desktop apps and cameras that are not sending visitor counts."
+      link={{ to: itOverviewPaths.enterprises, label: "All enterprises" }}
+      hidden={0}
+      isLoading={section.isLoading}
+      isError={section.isError}
+      errorText="Connection status could not be loaded."
+      onRetry={section.refetch}
+      empty={rows.length === 0 ? "Every open place is sending data and every camera is counting." : null}
+    >
+      <ConnectionList rows={rows} labelledBy="it-overview-connections-title" />
     </Section>
   );
 }
@@ -236,7 +276,7 @@ export function AccountsSection({ overview }: { overview: ItOverview }) {
               )}
               <span className={placeClass}>{row.detail}</span>
             </div>
-            <div>
+            <div className={cn(row.action.type === "review" && "max-sm:hidden")}>
               {row.action.type === "review" ? (
                 <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
               ) : section.resentIds.has(row.id) ? (
@@ -284,7 +324,7 @@ export function EmailsSection({ overview }: { overview: ItOverview }) {
               {row.recipient && <span className={cn(placeClass, "wrap-break-word")}>{row.recipient}</span>}
               <span className={cn(placeClass, row.tone === "problem" ? "text-(--tanaw-danger)" : "")}>{row.reason}</span>
             </div>
-            <div>
+            <div className={cn(!row.canRetry && "max-sm:hidden")}>
               {row.canRetry && (
                 <Button variant="secondary" onClick={() => section.retry(row)} loading={section.retryingId === row.id} disabled={section.retryingId !== null}>
                   Try again<Hidden> for {row.to}</Hidden>

@@ -1,9 +1,9 @@
 .leaflet-popup-content-wrapper {
   background: var(--tanaw-surface) !important;
-  border: 1px solid #e5e5e5 !important;
+  border: 1px solid var(--tanaw-border-soft) !important;
   border-radius: 12px !important;
-  color: var(--color-tanaw-navy) !important;
-  box-shadow: 0 10px 25px -5px rgb(0 0 0 / 30%) !important;
+  color: var(--tanaw-text) !important;
+  box-shadow: var(--shadow-tanaw-soft) !important;
 }
 
 .leaflet-popup-content {
@@ -56,7 +56,7 @@
 .tanaw-map-marker-summary {
   width: min(15rem, 62vw);
   color: var(--tanaw-text);
-  font: 500 0.75rem/1.4 var(--font-sans);
+  font: 500 0.8125rem/1.4 var(--font-sans);
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -124,15 +124,15 @@
 }
 
 .tanaw-map-marker-summary dl > div {
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--tanaw-border-subtle);
+  padding: 0;
+  border: 0;
   border-radius: 8px;
-  background: var(--tanaw-surface-inset);
+  background: none;
 }
 
 .tanaw-map-marker-summary dt {
   color: var(--tanaw-text-secondary);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 .tanaw-map-marker-summary dd {
@@ -143,11 +143,11 @@
 
 #admin-enterprise-map .tanaw-enterprise-tooltip {
   padding: 0.75rem;
-  border: 1px solid var(--tanaw-border);
+  border: 1px solid var(--tanaw-border-soft);
   border-radius: 12px;
   background: var(--tanaw-surface-raised) !important;
-  box-shadow: 0 7px 24px rgb(14 42 29 / 0.18);
-  animation: tanaw-marker-tooltip-in 160ms ease-out;
+  box-shadow: var(--shadow-tanaw-soft);
+  animation: tanaw-marker-tooltip-in 180ms var(--ease-tanaw-out);
 }
 
 /* The selected pin's "View details" chip: a Civic Green link floating above the pin. */
@@ -289,24 +289,24 @@
 .tanaw-map-tooltip--boundary {
   min-width: auto;
   padding: 2px 4px;
-  color: var(--color-tanaw-navy);
-  font-size: 11px;
+  color: var(--tanaw-text);
+  font-size: 12px;
   font-weight: 800;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .tanaw-map-tooltip__title {
   margin: 0;
-  color: var(--color-tanaw-navy);
-  font-size: 11px;
+  color: var(--tanaw-text);
+  font-size: 12px;
   font-weight: 800;
 }
 
 .tanaw-map-tooltip__meta {
   margin: 2px 0 0;
-  color: #666666;
-  font-size: 9px;
-  text-transform: uppercase;
+  color: var(--tanaw-text-muted);
+  font-size: 12px;
+  text-transform: none;
 }
 
 .tanaw-map-popup {
@@ -317,23 +317,23 @@
 
 .tanaw-map-popup__title {
   margin: 0 0 4px;
-  color: var(--color-tanaw-navy);
+  color: var(--tanaw-text);
   font-size: 13px;
   font-weight: 800;
 }
 
 .tanaw-map-popup__meta {
   margin: 0 0 10px;
-  color: #666666;
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  color: var(--tanaw-text-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .tanaw-map-popup__metric {
   margin: 0 0 8px;
-  color: var(--color-tanaw-navy);
-  font-size: 10px;
+  color: var(--tanaw-text);
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -344,7 +344,7 @@
   border: 1px solid var(--color-tanaw-civic);
   border-radius: 999px;
   color: var(--color-tanaw-civic);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 

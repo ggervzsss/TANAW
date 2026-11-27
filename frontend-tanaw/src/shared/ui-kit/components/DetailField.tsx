@@ -4,7 +4,7 @@ import { cn } from "../lib/cn";
 export type DetailFieldProps = {
   label: string;
   value: ReactNode;
-  /** "card" is a framed inset tile (detail dialogs); "plain" is label above value with no frame. */
+  /** "card" sits on a hairline with air (detail dialogs); "plain" is label above value with no line. */
   variant?: "card" | "plain";
   className?: string;
 };
@@ -12,8 +12,8 @@ export type DetailFieldProps = {
 /** A label and value pair for detail dialogs and summaries. */
 export function DetailField({ label, value, variant = "card", className }: DetailFieldProps) {
   return (
-    <div data-detail-field className={cn(variant === "card" && "rounded-tanaw-md border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) p-4", className)}>
-      <p className="mb-1.5 text-xs font-bold tracking-label text-(--tanaw-text-muted) uppercase">{label}</p>
+    <div data-detail-field className={cn(variant === "card" && "border-b border-(--tanaw-border-soft) py-3", className)}>
+      <p className="mb-1 text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{label}</p>
       <div className="text-sm leading-relaxed font-semibold wrap-break-word text-(--tanaw-text)">{value}</div>
     </div>
   );
@@ -32,7 +32,7 @@ export function DetailList({ items, columns = 2, className }: DetailListProps) {
     <dl className={cn("grid gap-x-6 gap-y-4", columns === 2 && "sm:grid-cols-2", columns === 3 && "sm:grid-cols-2 lg:grid-cols-3", className)}>
       {items.map((item) => (
         <div key={item.label} className="min-w-0">
-          <dt className="text-xs font-bold tracking-label text-(--tanaw-text-muted) uppercase">{item.label}</dt>
+          <dt className="text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{item.label}</dt>
           <dd className="mt-1 text-sm font-semibold wrap-break-word text-(--tanaw-text)">{item.value}</dd>
         </div>
       ))}

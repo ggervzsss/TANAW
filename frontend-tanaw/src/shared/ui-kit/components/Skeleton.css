@@ -1,0 +1,114 @@
+/*
+ * Loading placeholders. A quiet block in the shape of what is loading, with one soft band of light
+ * travelling across it, so a page reads as "on its way" instead of flashing a spinner.
+ *
+ * - Blocks fade in (they never pop), and a whole skeleton screen waits a beat before it appears so
+ *   a fast load shows no placeholder flash at all.
+ * - The sweep is long and eased, with a pause between passes, which reads calmer than a constant
+ *   conveyor of light.
+ * - Reduced motion keeps a slow, gentle breathe instead of the sweep.
+ *
+ * The colours (--tanaw-skeleton-base, --tanaw-skeleton-shine) live in styles/tokens.css.
+ */
+
+/*
+ * The component rules sit in the components layer so Tailwind utilities passed through
+ * <Skeleton className> (rounded-*, hidden, sm:block, sizes) still override the default shape.
+ */
+@layer components {
+  .tanaw-skeleton {
+    display: block;
+    border-radius: var(--tanaw-skeleton-radius, 10px);
+    background-color: var(--tanaw-skeleton-base);
+    background-image: linear-gradient(
+      100deg,
+      transparent 0%,
+      transparent 34%,
+      var(--tanaw-skeleton-shine) 50%,
+      transparent 66%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 240% 100%;
+    animation:
+      tanaw-skeleton-enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
+      tanaw-skeleton-sweep var(--tanaw-skeleton-duration, 1.8s) cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  }
+
+  /* Round and pill shapes for avatars, icons and badges. */
+  .tanaw-skeleton--circle,
+  .tanaw-skeleton--pill {
+    border-radius: 999px;
+  }
+
+  .tanaw-skeleton-text {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tanaw-skeleton-text .tanaw-skeleton {
+    height: 12px;
+    border-radius: 6px;
+  }
+
+  .tanaw-skeleton-text .tanaw-skeleton:last-child:not(:first-child) {
+    width: 62%;
+  }
+
+  /*
+   * A whole skeleton screen (a page or panel still loading). It waits 120ms before showing, so
+   * quick loads go straight to content, then fades up gently.
+   */
+  .tanaw-skeleton-screen {
+    animation: tanaw-skeleton-screen-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tanaw-skeleton {
+      background-image: none;
+      background-color: var(--tanaw-skeleton-shine);
+      animation: tanaw-skeleton-breathe 2.4s ease-in-out infinite;
+    }
+
+    .tanaw-skeleton-screen {
+      animation: tanaw-skeleton-enter 1ms 120ms backwards;
+    }
+  }
+}
+
+@keyframes tanaw-skeleton-sweep {
+  0% {
+    background-position: 130% 0;
+  }
+  72%,
+  100% {
+    background-position: -130% 0;
+  }
+}
+
+@keyframes tanaw-skeleton-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tanaw-skeleton-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tanaw-skeleton-breathe {
+  50% {
+    opacity: 0.6;
+  }
+}

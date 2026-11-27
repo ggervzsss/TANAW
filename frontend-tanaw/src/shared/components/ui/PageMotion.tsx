@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { easeOut } from "../../ui-kit/lib/motion";
 import { fadeInDown } from "./motionVariants";
 
 type PageMotionProps = {
@@ -9,7 +10,7 @@ type PageMotionProps = {
 
 export function PageMotion({ children, className = "pb-12" }: PageMotionProps) {
   return (
-    <motion.div className={className} initial="hidden" animate="visible" variants={fadeInDown} transition={{ duration: 0.25, ease: "easeOut" }} style={{ willChange: "transform, opacity" }}>
+    <motion.div className={className} initial="hidden" animate="visible" variants={fadeInDown} transition={{ duration: 0.26, ease: easeOut }} style={{ willChange: "transform, opacity" }}>
       {children}
     </motion.div>
   );

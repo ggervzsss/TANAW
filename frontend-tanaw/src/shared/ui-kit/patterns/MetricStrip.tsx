@@ -2,6 +2,7 @@ import { Fragment, useId } from "react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
+import { Skeleton } from "../components/Spinner";
 import { cn } from "../lib/cn";
 import { fadeInDown } from "../lib/motion";
 
@@ -99,9 +100,9 @@ const toneClasses: Record<
 };
 
 /**
- * The signature metric strip: one white card holding several figures side by side, separated by
- * fading dividers, with the forest, gold and leaf accent thread across the top. Each figure has an
- * uppercase label, a 40px tabular count and a one-line detail.
+ * The metric strip: several figures side by side on the page surface, separated by fading
+ * dividers, between a hairline above and below. No card: each figure has a sentence-case
+ * label, a 40px tabular count and a one-line detail, and tints softly on hover.
  */
 export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSegment, layout = "scroll", className = "" }: MetricStripProps) {
   const grid = layout === "grid";
@@ -110,13 +111,13 @@ export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSeg
   return (
     <motion.section
       aria-label={ariaLabel}
-      className={cn("tanaw-unified-metrics relative overflow-hidden rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface) shadow-tanaw-resting transition-[background-color,border-color,box-shadow] duration-200", className)}
+      className={cn("tanaw-unified-metrics relative overflow-hidden border-b border-(--tanaw-border-soft) transition-[border-color] duration-200", className)}
       variants={fadeInDown}
       data-unified-metrics-header
     >
-      <div className="tanaw-unified-metrics__accent absolute inset-x-0 top-0 z-20 h-1.25" aria-hidden="true" data-metrics-accent />
+      <div className="tanaw-unified-metrics__accent absolute inset-x-0 top-0 z-20 h-px" aria-hidden="true" data-metrics-accent />
       <div
-        className="tanaw-unified-metrics__scroller overflow-x-auto pt-1.25 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--tanaw-focus-ring)"
+        className="tanaw-unified-metrics__scroller overflow-x-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--tanaw-focus-ring)"
         tabIndex={0}
         aria-label={`${ariaLabel}; scroll horizontally for additional metrics when needed`}
       >
@@ -134,7 +135,7 @@ export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSeg
                 <div className="tanaw-unified-metrics__segment group relative flex min-h-40 w-full flex-col justify-between overflow-hidden px-6 py-6 sm:px-7 sm:py-7">
                   <span className="tanaw-unified-metrics__hover pointer-events-none absolute inset-0" aria-hidden="true" />
                   <div className="relative z-10">
-                    <p className="text-[11px] leading-4 font-bold tracking-label text-(--tanaw-label) uppercase sm:text-xs">{controlSegment.title}</p>
+                    <p className="text-[0.8125rem] leading-5 font-semibold text-(--tanaw-text-secondary)">{controlSegment.title}</p>
                     {controlSegment.description && <div className="mt-3 text-[13px] leading-relaxed font-medium text-(--tanaw-text-muted)">{controlSegment.description}</div>}
                   </div>
                   <div className="relative z-10 mt-5">{controlSegment.content}</div>
@@ -170,14 +171,14 @@ function MetricSegment({ metric, labelId, grid }: { metric: Metric; labelId: str
       <div className="relative z-10 flex w-full items-start justify-between gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex min-h-5 items-start gap-2.5">
-            <p id={labelId} className="min-w-0 text-[11px] leading-4 font-bold tracking-label text-(--tanaw-label) uppercase sm:text-xs">
+            <p id={labelId} className="min-w-0 text-[0.8125rem] leading-5 font-semibold text-(--tanaw-text-secondary)">
               {metric.title}
             </p>
             {metric.badge && <span className="shrink-0">{metric.badge}</span>}
           </div>
           {metric.isLoading ? (
             <div className="mt-3" role="status" aria-label={`Loading ${metric.title}`}>
-              <span className="block h-10 w-24 animate-pulse rounded-tanaw-sm bg-(--tanaw-surface-strong) motion-reduce:animate-none" />
+              <Skeleton className="h-10 w-24" />
             </div>
           ) : (
             <p

@@ -56,31 +56,28 @@ export function ITPersonnelPage() {
 
       <EmailChangeCallouts callouts={page.callouts} resolvingAccountId={page.resolvingAccountId} onResolve={page.resolveEmailChange} />
 
-      <div className="mt-5 flex flex-wrap items-end gap-x-6 gap-y-4">
+      <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-4">
         <div className="max-w-sm min-w-0 flex-1 basis-72">
-          <label htmlFor="personnel-search" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+          <label htmlFor="personnel-search" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
             Search
           </label>
           <SearchField id="personnel-search" value={page.query} onChange={page.setQuery} placeholder="Name or email" label="Search" />
         </div>
         <div className="min-w-0">
-          <span aria-hidden="true" className="mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+          <span aria-hidden="true" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
             Role
           </span>
-          <SegmentedControl
-            ariaLabel="Role"
-            value={page.role}
-            onChange={(value) => page.setRole(value as PersonnelRoleFilter)}
-            options={ROLE_CHIPS.map((chip) => ({ ...chip, count: page.counts[chip.value] }))}
-          />
+          <div className="flex min-h-11 items-center">
+            <SegmentedControl
+              ariaLabel="Role"
+              value={page.role}
+              onChange={(value) => page.setRole(value as PersonnelRoleFilter)}
+              options={ROLE_CHIPS.map((chip) => ({ ...chip, count: page.counts[chip.value] }))}
+            />
+          </div>
         </div>
-        <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm font-semibold text-(--tanaw-text)">
-          <input
-            type="checkbox"
-            checked={page.showDeactivated}
-            onChange={(event) => page.setShowDeactivated(event.target.checked)}
-            className="h-4.5 w-4.5 accent-(--tanaw-action) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
-          />
+        <label className="rounded-tanaw-md ease-tanaw-out -mx-2.5 inline-flex min-h-11 cursor-pointer items-center gap-2.5 px-2.5 text-sm font-medium text-(--tanaw-text) transition-colors duration-200 hover:bg-(--tanaw-control-hover)">
+          <input type="checkbox" checked={page.showDeactivated} onChange={(event) => page.setShowDeactivated(event.target.checked)} className="it-personnel__check" />
           Show deactivated accounts
         </label>
       </div>

@@ -184,16 +184,25 @@ html[data-portal-theme-transition="fallback"] *::after {
     font-family: var(--font-sans);
     font-size: var(--text-base);
     color: var(--tanaw-text);
+    /* Crisp, even text: greyscale smoothing where the platform offers it, kerning and ligatures on. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
     transition:
       background-color 180ms ease,
       color 180ms ease;
   }
 
-  /* DESIGN.md: Bai Jamjuree for page titles and section headings; Inter for everything else. */
-  h1,
+  /* DESIGN.md: Bai Jamjuree for page titles (and the wordmark); Inter for everything else,
+     section headings included, as on the desktop app. Dialog titles opt in with font-display. */
+  h1 {
+    font-family: var(--font-display);
+  }
+
   h2,
   h3 {
-    font-family: var(--font-display);
+    letter-spacing: -0.006em;
   }
 
   :where(

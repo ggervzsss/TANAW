@@ -88,7 +88,7 @@ export function MapAlerts({ alerts, pinnedIds, expanded, onExpandedChange, selec
     <div className="tanaw-map-alerts" role="status" aria-live="polite">
       {visible && first && expanded && alerts.length > 1 ? (
         <section className="tanaw-map-alerts__panel" aria-labelledby={titleId} onKeyDown={onPanelKeyDown}>
-          <div className="flex items-center gap-2.5 border-b border-(--dash-rule) py-2 pr-1.5 pl-2.5">
+          <div className="flex items-center gap-3 border-b border-(--dash-rule) py-2 pr-2 pl-3">
             <ToneIcon tone={tone} />
             <h3 id={titleId} className={`tanaw-map-alerts__title tanaw-map-alerts__title--${tone} m-0 min-w-0 flex-1 text-sm font-bold`}>
               {title}
@@ -97,14 +97,14 @@ export function MapAlerts({ alerts, pinnedIds, expanded, onExpandedChange, selec
               Hide <ChevronDown size={14} aria-hidden="true" />
             </button>
           </div>
-          <ol className="m-0 max-h-62 list-none overflow-y-auto p-1.5" aria-label="Live alerts">
+          <ol className="m-0 max-h-62 list-none overflow-y-auto p-2" aria-label="Live alerts">
             {alerts.map((alert) => {
               const rowTone = alertTone(alert);
               const content = (
                 <>
                   <ToneIcon tone={rowTone} />
                   <span className="min-w-0">
-                    <span className="block truncate text-[13.5px] font-semibold">{alertPlace(alert)}</span>
+                    <span className="block truncate text-sm font-semibold">{alertPlace(alert)}</span>
                     <span className="mt-0.5 block truncate text-xs text-(--tanaw-text-muted)">
                       {alertSince(alert.startedAt, now, timeFormat)}
                       {isPinned(alert) ? "" : " · not pinned on the map"}

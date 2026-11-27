@@ -21,8 +21,12 @@ export function CriticalAlertToasts({ toasts, onReview, onDismiss }: CriticalAle
             exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
             transition={{ duration: reduceMotion ? 0 : 0.18 }}
             className="tanaw-toast tanaw-toast--error"
+            // motion runs this toast in and out, so the stylesheet entrance stays off.
+            style={{ animation: "none" }}
           >
-            <AlertTriangle size={20} className="tanaw-toast__icon" aria-hidden="true" />
+            <span className="tanaw-toast__icon self-start" aria-hidden="true">
+              <AlertTriangle strokeWidth={2.2} />
+            </span>
             <div className="min-w-0 flex-1">
               <div role="alert" className="wrap-break-word">
                 <p className="font-bold">Critical alert</p>

@@ -1,7 +1,7 @@
 import { Menu, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import toast from "react-hot-toast/headless";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
@@ -20,6 +20,13 @@ import type { ResolvedTheme } from "@/shared/utils/theme";
 import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
 import { useNavigationBadges } from "./hooks/useNavigationBadges";
 import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";
+import "./portal-topbar-glass.css";
+
+/** The edge highlights follow the pointer through a CSS variable, without re-rendering. */
+function followPointer(event: ReactPointerEvent<HTMLDivElement>) {
+  const bar = event.currentTarget;
+  bar.style.setProperty("--topbar-edge-x", `${event.clientX - bar.getBoundingClientRect().left}px`);
+}
 
 type PortalTopbarProps = {
   role: UserRole;
@@ -156,7 +163,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
-      <div data-topbar-theme={resolvedTheme} className={`relative overflow-visible ${topbarThemeClasses.frame}`}>
+      <div data-topbar-theme={resolvedTheme} className={`portal-topbar relative overflow-visible ${topbarThemeClasses.frame}`} onPointerMove={followPointer}>
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] max-lg:w-[76%]">
           <div
             data-topbar-image="day"
@@ -171,9 +178,10 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
         </div>
         <div className={`pointer-events-none absolute inset-0 ${topbarThemeClasses.overlay}`} />
         <div
-          className={`pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`}
+          className={`portal-topbar__overlay pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`}
         />
-        <div data-topbar-signature className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[linear-gradient(90deg,transparent,var(--tanaw-gold-line)_14%,var(--tanaw-gold-line)_86%,transparent)] opacity-85" />
+        <div className="portal-topbar__edge portal-topbar__edge--top" aria-hidden="true" />
+        <div className="portal-topbar__edge portal-topbar__edge--bottom" aria-hidden="true" />
 
         <div
           className={`relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2 ${role === "admin" ? "xl:max-[1340px]:gap-3 xl:max-[1340px]:px-5" : ""}`}

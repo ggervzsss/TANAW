@@ -1,3 +1,4 @@
+import { MotionConfig } from "motion/react";
 import { createBrowserRouter, RouterProvider, useBlocker } from "react-router-dom";
 import { hasSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { SettingsDiscardDialog } from "@/shared/ui-kit/patterns/SettingsDiscardDialog";
@@ -23,7 +24,12 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-  return <RouterProvider router={router} />;
+  // Movement follows the person's reduced-motion setting everywhere; state changes still show.
+  return (
+    <MotionConfig reducedMotion="user">
+      <RouterProvider router={router} />
+    </MotionConfig>
+  );
 }
 
 export default App;

@@ -1,34 +1,23 @@
-/* Admin Dashboard. Flat sections on the page background, separated by thin rules. */
+/*
+ * Admin Dashboard. Open sections on the page background, separated by hairlines and air; no cards.
+ * The map keeps a soft rounded frame because it is a visual canvas. Colours come from the app tokens
+ * (src/styles/tokens.css), so light and dark follow the theme.
+ */
 
 .tanaw-dashboard {
   --dash-rule: var(--tanaw-border-soft);
-  --dash-map: #e8f0ea;
-  --dash-track: #e4ede7;
-  --dash-r1: #055b25;
-  --dash-r2: #1f7a46;
-  --dash-r3: #3a8f62;
-  --dash-r4: #52a079;
-  --dash-r5: #6aae8b;
-  --dash-peak: #1f7a46;
-  --dash-busy-bg: #fdf0dc;
-  --dash-busy-ring: #d97706;
-  --dash-pop-shadow: 0 14px 36px rgb(16 36 27 / 0.16);
-  --dash-card-shadow: 0 6px 18px rgb(16 36 27 / 0.1);
-}
-
-.dark .tanaw-dashboard {
-  --dash-map: #0f1a20;
-  --dash-track: #1a2633;
-  --dash-r1: #6ee7b7;
-  --dash-r2: #4fd1a0;
-  --dash-r3: #3cb98b;
-  --dash-r4: #34a07a;
-  --dash-r5: #2e886a;
-  --dash-peak: #4fd1a0;
-  --dash-busy-bg: rgb(252 211 77 / 0.14);
-  --dash-busy-ring: #fbbf24;
-  --dash-pop-shadow: 0 14px 36px rgb(0 0 0 / 0.5);
-  --dash-card-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  --dash-ease: var(--ease-tanaw-out);
+  --dash-map: var(--tanaw-surface-inset);
+  --dash-track: var(--tanaw-surface-inset);
+  /* Most Visited bars: the leader in full chart green, the rest fading toward the page. */
+  --dash-r1: var(--tanaw-chart-entry);
+  --dash-r2: color-mix(in srgb, var(--tanaw-chart-entry) 84%, var(--tanaw-page));
+  --dash-r3: color-mix(in srgb, var(--tanaw-chart-entry) 70%, var(--tanaw-page));
+  --dash-r4: color-mix(in srgb, var(--tanaw-chart-entry) 58%, var(--tanaw-page));
+  --dash-r5: color-mix(in srgb, var(--tanaw-chart-entry) 48%, var(--tanaw-page));
+  --dash-peak: var(--tanaw-chart-entry);
+  --dash-busy-bg: var(--tanaw-warning-bg);
+  --dash-busy-ring: var(--tanaw-warn-ink);
 }
 
 .tanaw-dashboard__overview {
@@ -50,8 +39,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 32px 40px;
-  margin-top: 28px;
-  padding-top: 22px;
+  margin-top: 32px;
+  padding-top: 24px;
   border-top: 1px solid var(--dash-rule);
 }
 
@@ -73,7 +62,41 @@
   }
 }
 
-/* Pill triggers for the date range and place pickers, and the map display toggles. */
+/* Section headings: Inter 650, with a 13px caption under them. */
+.tanaw-dashboard-heading {
+  margin: 0;
+  color: var(--tanaw-text);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.tanaw-dashboard-caption {
+  margin-top: 4px;
+  color: var(--tanaw-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* A section fades up a few pixels when what it shows changes. */
+.tanaw-dashboard-fade {
+  animation: tanaw-dashboard-fade-up 240ms var(--dash-ease) both;
+}
+
+@keyframes tanaw-dashboard-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/*
+ * Pill trigger for the place picker, matching the kit's date range pill in Most Visited: a soft tint
+ * (never a white box) that deepens on hover, settles when pressed and lights its ring while open. Its
+ * place icon grows a touch on hover; the chevron dips, then turns over while the list is open.
+ */
 .tanaw-dashboard-pill {
   display: inline-flex;
   min-height: 36px;
@@ -81,22 +104,60 @@
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  border: 1px solid var(--dash-rule);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--tanaw-page);
+  background: var(--tanaw-control-bg);
   color: var(--tanaw-text);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+  transition:
+    background-color 200ms var(--dash-ease),
+    border-color 200ms var(--dash-ease),
+    box-shadow 200ms var(--dash-ease),
+    scale 120ms var(--dash-ease);
 }
 
 .tanaw-dashboard-pill:hover {
-  border-color: var(--tanaw-control-border-hover);
+  background: var(--tanaw-control-bg-hover);
+}
+
+.tanaw-dashboard-pill:active {
+  scale: 0.97;
 }
 
 .tanaw-dashboard-pill[aria-expanded="true"] {
-  border-color: var(--tanaw-action);
-  box-shadow: 0 0 0 3px rgb(5 91 37 / 0.12);
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-control-bg-focus);
+  box-shadow: var(--tanaw-field-ring);
+}
+
+.tanaw-dashboard-pill svg {
+  transition:
+    rotate 220ms var(--dash-ease),
+    translate 200ms var(--dash-ease),
+    scale 200ms var(--dash-ease),
+    color 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-pill svg:last-child {
+  color: var(--tanaw-text-muted);
+}
+
+@media (hover: hover) {
+  .tanaw-dashboard-pill:hover svg:first-child {
+    scale: 1.1;
+  }
+
+  .tanaw-dashboard-pill:not([aria-expanded="true"]):hover svg:last-child {
+    translate: 0 1px;
+    color: var(--tanaw-text);
+  }
+}
+
+.tanaw-dashboard-pill[aria-expanded="true"] svg:last-child {
+  rotate: 180deg;
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-dashboard-pill:focus-visible,
@@ -108,7 +169,24 @@
   outline-offset: 2px;
 }
 
-/* The place-names switch: a square map control in the top-right corner, sized like the zoom buttons. */
+/*
+ * Controls that float on the map (the place-names switch and the zoom buttons) are frosted glass
+ * over the tiles rather than white boxes: a translucent surface, a blur, a hairline of light and a
+ * soft shadow, so they stay legible over any basemap.
+ */
+.tanaw-dashboard {
+  --dash-glass: color-mix(in srgb, var(--tanaw-surface-raised) 78%, transparent);
+  --dash-glass-hover: color-mix(in srgb, var(--tanaw-surface-raised) 94%, transparent);
+  --dash-glass-edge: color-mix(in srgb, var(--tanaw-text) 8%, transparent);
+  --dash-glass-shadow: 0 6px 18px -6px rgb(9 24 17 / 0.22), 0 1px 2px rgb(9 24 17 / 0.06);
+}
+
+html.dark .tanaw-dashboard {
+  --dash-glass-edge: rgb(255 255 255 / 0.08);
+  --dash-glass-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.55), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+/* The place-names switch: a round-cornered map control in the top-right corner, sized like the zoom buttons. */
 .tanaw-map-control {
   position: absolute;
   z-index: 1000;
@@ -118,50 +196,87 @@
   width: 38px;
   height: 38px;
   place-items: center;
-  border: 1px solid var(--dash-rule);
-  border-radius: 10px;
-  background: var(--tanaw-surface);
-  box-shadow: var(--dash-card-shadow);
+  border: 1px solid var(--dash-glass-edge);
+  border-radius: 12px;
+  background: var(--dash-glass);
+  box-shadow: var(--dash-glass-shadow);
   color: var(--tanaw-text-secondary);
+  backdrop-filter: blur(10px) saturate(1.3);
   transition:
-    background-color 150ms ease,
-    color 150ms ease;
+    background-color 200ms var(--dash-ease),
+    border-color 200ms var(--dash-ease),
+    color 200ms var(--dash-ease),
+    translate 200ms var(--dash-ease),
+    scale 120ms var(--dash-ease);
+}
+
+.tanaw-map-control svg {
+  transition: scale 200ms var(--dash-ease);
 }
 
 .tanaw-map-control:hover {
-  background: var(--tanaw-control-hover);
+  background: var(--dash-glass-hover);
   color: var(--tanaw-text);
+  translate: 0 -1px;
 }
 
+.tanaw-map-control:hover svg {
+  scale: 1.08;
+}
+
+.tanaw-map-control:active {
+  scale: 0.94;
+  translate: 0 0;
+}
+
+/* Place names shown: the switch carries the accent tint, not a solid block. */
 .tanaw-map-control[aria-pressed="true"] {
-  border-color: var(--tanaw-action);
-  background: var(--tanaw-action);
-  color: var(--tanaw-on-action);
+  background: color-mix(in srgb, var(--tanaw-selected-bg) 88%, var(--dash-glass));
+  color: var(--tanaw-accent-ink);
 }
 
 .tanaw-map-control[aria-pressed="true"]:hover {
-  background: var(--tanaw-action-hover);
+  background: var(--tanaw-selected-bg);
 }
 
 .tanaw-dashboard-link {
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
   color: var(--tanaw-accent-ink);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
   text-decoration: none;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
   white-space: nowrap;
+  transition:
+    color 150ms var(--dash-ease),
+    text-decoration-color 200ms var(--dash-ease);
 }
 
 .tanaw-dashboard-link:hover {
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-color: currentColor;
 }
 
-/* Rows in Most Visited and the recent lists. */
+/* "View all ›": the arrow steps toward where the link leads. */
+.tanaw-dashboard-link__arrow {
+  display: inline-block;
+  transition: translate 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-link:hover .tanaw-dashboard-link__arrow {
+  translate: 3px 0;
+}
+
+/* Rows in Most Visited and the recent lists: quiet, with a soft tint on hover. */
 .tanaw-dashboard-row {
-  border-radius: 8px;
+  border-radius: 12px;
   color: inherit;
   text-decoration: none;
+  transition: background-color 160ms var(--dash-ease);
 }
 
 a.tanaw-dashboard-row:hover,
@@ -169,18 +284,35 @@ button.tanaw-dashboard-row:hover {
   background: var(--tanaw-control-hover);
 }
 
+a.tanaw-dashboard-row:active {
+  background: var(--tanaw-selected-bg);
+}
+
+/* A ranked place's name takes the accent and its bar brightens while pointed at. */
+.tanaw-rank-row .tanaw-rank-label {
+  transition: color 200ms var(--dash-ease);
+}
+
+a.tanaw-rank-row:hover .tanaw-rank-label {
+  color: var(--tanaw-accent-ink);
+}
+
+a.tanaw-rank-row:hover .tanaw-rank-bar > span {
+  filter: brightness(1.08) saturate(1.1);
+}
+
 .tanaw-rank-row {
   display: grid;
-  min-height: 28px;
+  min-height: 36px;
   grid-template-columns: 1.4rem minmax(0, 11rem) minmax(0, 1fr) 3.5rem;
   align-items: center;
   gap: 12px;
-  padding: 4px 6px;
+  padding: 4px 8px;
 }
 
 .tanaw-rank-bar {
   display: block;
-  height: 13px;
+  height: 10px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--dash-track);
@@ -190,6 +322,9 @@ button.tanaw-dashboard-row:hover {
   display: block;
   height: 100%;
   border-radius: 999px;
+  transition:
+    width 260ms var(--dash-ease),
+    filter 200ms var(--dash-ease);
 }
 
 /* The rounded map, its zoom control and the busy alert. */
@@ -197,10 +332,21 @@ button.tanaw-dashboard-row:hover {
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  /* A definite width keeps the minimum height from widening the frame past a phone screen. */
+  width: 100%;
   aspect-ratio: 720 / 400;
   min-height: 18rem;
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--dash-map);
+}
+
+/* While the boundaries load, the empty frame carries the calm skeleton sweep. */
+.tanaw-dashboard-map[data-loading="true"] {
+  background-color: var(--tanaw-skeleton-base);
+  background-image: linear-gradient(100deg, transparent 0%, transparent 34%, var(--tanaw-skeleton-shine) 50%, transparent 66%, transparent 100%);
+  background-repeat: no-repeat;
+  background-size: 240% 100%;
+  animation: tanaw-dashboard-sweep 1.8s var(--ease-tanaw-in-out) infinite;
 }
 
 .tanaw-dashboard-map #admin-enterprise-map {
@@ -211,23 +357,48 @@ button.tanaw-dashboard-row:hover {
 .tanaw-dashboard-map .leaflet-control-zoom {
   overflow: hidden;
   margin: 0 12px 12px 0 !important;
-  border: 1px solid var(--dash-rule) !important;
-  border-radius: 10px !important;
-  background: var(--tanaw-surface);
-  box-shadow: var(--dash-card-shadow);
+  border: 1px solid var(--dash-glass-edge) !important;
+  border-radius: 12px !important;
+  background: var(--dash-glass) !important;
+  box-shadow: var(--dash-glass-shadow) !important;
+  backdrop-filter: blur(10px) saturate(1.3);
 }
 
 .tanaw-dashboard-map .leaflet-control-zoom a {
   width: 36px !important;
   height: 36px !important;
-  border-bottom-color: var(--dash-rule) !important;
-  background: var(--tanaw-surface) !important;
+  border-bottom-color: var(--dash-glass-edge) !important;
+  background: transparent !important;
   color: var(--tanaw-text) !important;
   font: 600 18px/36px var(--font-sans) !important;
+  transition:
+    background-color 200ms var(--dash-ease),
+    color 200ms var(--dash-ease);
 }
 
 .tanaw-dashboard-map .leaflet-control-zoom a:hover {
-  background: var(--tanaw-control-hover) !important;
+  background: var(--tanaw-control-bg-hover) !important;
+  color: var(--tanaw-accent-ink) !important;
+}
+
+.tanaw-dashboard-map .leaflet-control-zoom a:active {
+  background: var(--tanaw-selected-bg) !important;
+}
+
+/* The map credit: a quiet caption on frosted glass in the corner, not a white strip. */
+.tanaw-dashboard-map .leaflet-control-attribution {
+  margin: 0 8px 6px 0 !important;
+  padding: 1px 8px !important;
+  border: 0 !important;
+  border-radius: 999px;
+  background: var(--dash-glass) !important;
+  box-shadow: none !important;
+  color: var(--tanaw-text-muted) !important;
+  backdrop-filter: blur(8px);
+}
+
+.tanaw-dashboard-map .leaflet-control-attribution a {
+  color: var(--tanaw-text-secondary) !important;
 }
 
 .tanaw-dashboard-map .leaflet-control-zoom a:focus-visible {
@@ -235,6 +406,30 @@ button.tanaw-dashboard-row:hover {
   outline-offset: -2px;
 }
 
+/* The map's own status line (loading, or a failed load). */
+.tanaw-dashboard-map__status {
+  position: absolute;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  max-width: calc(100% - 72px);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--dash-glass-edge);
+  border-radius: 12px;
+  background: var(--dash-glass-hover);
+  box-shadow: var(--dash-glass-shadow);
+  color: var(--tanaw-text);
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(10px) saturate(1.3);
+  animation: tanaw-dashboard-fade-up 220ms var(--dash-ease) both;
+}
+
+/* Live alerts float over the bottom of the map, like a toast: the one raised surface here. */
 .tanaw-map-alerts {
   position: absolute;
   z-index: 1000;
@@ -243,29 +438,30 @@ button.tanaw-dashboard-row:hover {
   width: calc(100% - 72px);
   max-width: 30rem;
   font-size: 13px;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .tanaw-map-alerts__card,
 .tanaw-map-alerts__panel {
-  border: 1px solid var(--dash-rule);
-  border-radius: 12px;
-  background: var(--tanaw-surface);
+  border: 1px solid var(--dash-glass-edge);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tanaw-surface-raised) 90%, transparent);
+  box-shadow: var(--shadow-tanaw-dialog);
   color: var(--tanaw-text);
+  backdrop-filter: blur(14px) saturate(1.3);
+  animation: tanaw-dashboard-fade-up 220ms var(--dash-ease) both;
 }
 
 .tanaw-map-alerts__card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px 6px 8px 10px;
-  box-shadow: var(--dash-card-shadow);
+  gap: 12px;
+  padding: 8px 8px 8px 12px;
 }
 
 .tanaw-map-alerts__panel {
   overflow: hidden;
-  box-shadow: 0 10px 28px rgb(16 36 27 / 0.16);
 }
 
 .tanaw-map-alerts__icon {
@@ -294,17 +490,36 @@ button.tanaw-dashboard-row:hover {
   color: var(--tanaw-danger-text);
 }
 
+/* Quiet text buttons on the alert: a tint on hover, a small settle when pressed. */
 .tanaw-map-alerts-button {
   min-height: 32px;
-  padding: 0 8px;
+  padding: 0 10px;
   border-radius: 8px;
   color: var(--tanaw-accent-ink);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
+  transition:
+    background-color 200ms var(--dash-ease),
+    color 200ms var(--dash-ease),
+    scale 120ms var(--dash-ease);
 }
 
 .tanaw-map-alerts-button:hover {
-  background: var(--tanaw-control-hover);
+  background: var(--tanaw-control-bg-hover);
+}
+
+.tanaw-map-alerts-button:active {
+  scale: 0.95;
+}
+
+.tanaw-map-alerts-button svg {
+  transition:
+    translate 200ms var(--dash-ease),
+    rotate 200ms var(--dash-ease);
+}
+
+.tanaw-map-alerts-button:hover svg {
+  translate: 0 1px;
 }
 
 .tanaw-map-alerts-button--icon {
@@ -315,6 +530,15 @@ button.tanaw-dashboard-row:hover {
   color: var(--tanaw-text-muted);
 }
 
+.tanaw-map-alerts-button--icon:hover {
+  color: var(--tanaw-text);
+}
+
+.tanaw-map-alerts-button--icon:hover svg {
+  translate: 0 0;
+  rotate: 90deg;
+}
+
 .tanaw-map-alerts-row {
   display: grid;
   width: 100%;
@@ -322,30 +546,286 @@ button.tanaw-dashboard-row:hover {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--tanaw-text);
   text-align: left;
   text-decoration: none;
+  transition: background-color 200ms var(--dash-ease);
 }
 
 .tanaw-map-alerts-row:hover {
-  background: var(--tanaw-control-hover);
+  background: var(--tanaw-control-bg-hover);
 }
 
 .tanaw-map-alerts-row[aria-pressed="true"] {
-  background: var(--tanaw-surface-inset);
+  background: var(--tanaw-selected-bg);
 }
 
-/* Popovers: the place picker. */
+.tanaw-map-alerts-row .tanaw-map-alerts__icon {
+  transition: scale 200ms var(--dash-ease);
+}
+
+.tanaw-map-alerts-row:hover .tanaw-map-alerts__icon {
+  scale: 1.08;
+}
+
+/* Popovers: the place picker. A raised surface, the one kind this page allows. */
 .tanaw-dashboard-popover {
   position: absolute;
   z-index: 60;
   top: calc(100% + 8px);
   right: 0;
-  width: min(310px, calc(100vw - 32px));
+  width: min(340px, calc(100vw - 32px));
   padding: 10px;
   border: 1px solid var(--dash-rule);
-  border-radius: 14px;
-  background: var(--tanaw-surface);
-  box-shadow: var(--dash-pop-shadow);
+  border-radius: 20px;
+  background: var(--tanaw-surface-raised);
+  box-shadow: var(--shadow-tanaw-dialog);
+  transform-origin: top right;
+  animation: tanaw-dashboard-pop 200ms var(--dash-ease) both;
+}
+
+@keyframes tanaw-dashboard-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+
+/* The search at the top of the popover: a soft tinted field that lights up while typing. */
+.tanaw-dashboard-search {
+  height: 42px;
+  width: 100%;
+  padding: 0 12px 0 38px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  font-size: 14px;
+  outline: none;
+  transition:
+    background-color 200ms var(--dash-ease),
+    border-color 200ms var(--dash-ease),
+    box-shadow 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-search::placeholder {
+  color: var(--tanaw-text-placeholder);
+  transition: opacity 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-search:hover {
+  background: var(--tanaw-control-bg-hover);
+}
+
+.tanaw-dashboard-search:focus {
+  border-color: var(--tanaw-accent-ink);
+  background: var(--tanaw-control-bg-focus);
+  box-shadow: var(--tanaw-field-ring);
+}
+
+.tanaw-dashboard-search:focus::placeholder {
+  opacity: 0.6;
+}
+
+.tanaw-dashboard-search__icon {
+  color: var(--tanaw-text-muted);
+  transition:
+    color 200ms var(--dash-ease),
+    scale 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-search-field:focus-within .tanaw-dashboard-search__icon {
+  color: var(--tanaw-accent-ink);
+  scale: 1.08;
+}
+
+.tanaw-dashboard-option {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  transition: background-color 200ms var(--dash-ease);
+}
+
+.tanaw-dashboard-option[aria-selected="true"] {
+  background: var(--tanaw-selected-bg);
+}
+
+.tanaw-dashboard-option[aria-selected="true"] .tanaw-dashboard-option__name {
+  color: var(--tanaw-accent-ink);
+}
+
+/* The chosen place's tick draws in rather than blinking on. */
+.tanaw-dashboard-option__check {
+  animation: tanaw-dashboard-check-in 220ms var(--dash-ease) both;
+}
+
+@keyframes tanaw-dashboard-check-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* The highlight that glides to the option the keyboard or pointer is on: a tint, never a ring. */
+.tanaw-dashboard-option__glide {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: 12px;
+  background: var(--tanaw-control-bg-hover);
+  pointer-events: none;
+}
+
+.tanaw-dashboard-option > :not(.tanaw-dashboard-option__glide) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Peak Occupancy readout: the pointed period's figure as keyed text, never in a box. */
+.tanaw-dashboard-readout {
+  display: flex;
+  min-height: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 4px;
+  color: var(--tanaw-text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tanaw-dashboard-readout strong {
+  color: var(--tanaw-text);
+  font-weight: 650;
+}
+
+.tanaw-dashboard-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--dash-peak);
+}
+
+/* The chart's loading shape: its hairline grid, with a skeleton area where the line will be. */
+.tanaw-dashboard-chart-skeleton {
+  position: relative;
+  display: grid;
+  height: 144px;
+  grid-template-rows: repeat(3, 1fr);
+  margin-top: 12px;
+}
+
+.tanaw-dashboard-chart-skeleton__rule {
+  border-top: 1px solid var(--tanaw-chart-grid);
+}
+
+/* Empty sections keep their working shape: the ranking's height, the chart's grid. */
+.tanaw-dashboard-empty {
+  display: flex;
+  min-height: 200px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.tanaw-dashboard-empty__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-dashboard-chart-empty {
+  position: relative;
+  display: grid;
+  min-height: 144px;
+  flex: 1 1 auto;
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.tanaw-dashboard-chart-empty > p {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  margin: 0;
+  padding: 0 16px;
+  place-items: center;
+  text-align: center;
+}
+
+@keyframes tanaw-dashboard-sweep {
+  0% {
+    background-position: 120% 0;
+  }
+  70%,
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-dashboard-fade,
+  .tanaw-dashboard-popover,
+  .tanaw-map-alerts__card,
+  .tanaw-map-alerts__panel,
+  .tanaw-dashboard-map__status,
+  .tanaw-dashboard-option__check {
+    animation: none;
+  }
+
+  .tanaw-dashboard-map[data-loading="true"] {
+    animation: none;
+    background-image: none;
+  }
+
+  .tanaw-dashboard-pill,
+  .tanaw-dashboard-pill svg,
+  .tanaw-map-control,
+  .tanaw-map-control svg,
+  .tanaw-dashboard-link,
+  .tanaw-dashboard-link__arrow,
+  .tanaw-dashboard-row,
+  .tanaw-rank-row .tanaw-rank-label,
+  .tanaw-rank-bar > span,
+  .tanaw-dashboard-map .leaflet-control-zoom a,
+  .tanaw-map-alerts-button,
+  .tanaw-map-alerts-button svg,
+  .tanaw-map-alerts-row,
+  .tanaw-map-alerts-row .tanaw-map-alerts__icon,
+  .tanaw-dashboard-search,
+  .tanaw-dashboard-search__icon,
+  .tanaw-dashboard-option {
+    transition: none;
+  }
+
+  /* Colour feedback stays; movement goes. */
+  .tanaw-dashboard-pill,
+  .tanaw-dashboard-pill svg,
+  .tanaw-map-control,
+  .tanaw-map-control svg,
+  .tanaw-dashboard-link__arrow,
+  .tanaw-map-alerts-button,
+  .tanaw-map-alerts-button svg,
+  .tanaw-map-alerts-row .tanaw-map-alerts__icon,
+  .tanaw-dashboard-search__icon {
+    translate: none !important;
+    scale: none !important;
+  }
+
+  .tanaw-map-alerts-button--icon:hover svg {
+    rotate: none;
+  }
 }

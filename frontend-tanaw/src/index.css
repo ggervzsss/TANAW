@@ -5,8 +5,12 @@
    web app's own panel shadow and maps older variable names onto the tokens. */
 @import "./styles/tokens.css";
 @import "./shared/ui-kit/patterns/MetricStrip.css";
+/* Light and motion for buttons and fields: the primary sweep, icon nudges, field icon focus. */
+@import "./shared/ui-kit/components/Controls.css";
 @import "./styles/foundation.css";
 @import "./styles/components.css";
+/* The page frame: top wash, page titles with the civic line, shared entrances. */
+@import "./styles/portal.css";
 @import "./features/login/auth.css";
 @import "./styles/scrollbars.css";
 @import "./features/reports/reports.css";

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { adminEnterpriseDetailsPath } from "@/app/routers/routes";
 import type { Request, RequestDetail as RequestTimeline } from "@/shared/services/requests";
-import { cn } from "@/shared/ui-kit";
+import { Skeleton, cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import {
   accountChangeSentence,
@@ -19,6 +19,7 @@ import {
 } from "../model";
 import { NoteForItComposer } from "./NoteForItComposer";
 import { RequestPhotos } from "./RequestPhotos";
+import "../requests.css";
 
 type RequestDetailProps = {
   request: Request;
@@ -55,8 +56,8 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
   const sentBy = request.enterpriseName ? `${request.requesterName}, ${request.enterpriseName}` : request.requesterName;
 
   return (
-    <article aria-labelledby="request-detail-title" className="min-w-0 py-1.5">
-      <p className={cn("text-[0.8125rem] font-bold", statusTextClass[request.status])}>{statusLabel}</p>
+    <article aria-labelledby="request-detail-title" className="tanaw-requests-detail min-w-0 py-1.5">
+      <p className={cn("text-[13px] font-semibold", statusTextClass[request.status])}>{statusLabel}</p>
       <h2 id="request-detail-title" className="mt-2 font-display text-[1.875rem] leading-[1.15] font-bold text-(--tanaw-text) max-sm:text-2xl">
         {request.title}
       </h2>
@@ -65,7 +66,7 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
         {requestStatusNote(request, handler, (value) => formatWhen(value))}
       </p>
 
-      <h3 className="mt-6 text-base font-bold">What happened</h3>
+      <h3 className="mt-6 text-base font-[650]">What happened</h3>
       <p className="mt-1.5 max-w-[68ch] leading-relaxed whitespace-pre-line text-(--tanaw-text-secondary)">{request.description}</p>
       {change && (
         <p className="mt-2 max-w-[68ch] text-sm leading-relaxed text-(--tanaw-text-secondary)">
@@ -74,13 +75,13 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
         </p>
       )}
 
-      <h3 className="mt-5.5 text-base font-bold">Details</h3>
+      <h3 className="mt-6 text-base font-[650]">Details</h3>
       <dl className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
         <DetailItem label="Location">
           {request.enterpriseId ? (
             <Link
               to={adminEnterpriseDetailsPath(request.enterpriseId)}
-              className="rounded-sm text-(--tanaw-accent-ink) no-underline hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="tanaw-requests-link rounded-sm text-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
             >
               {place}
             </Link>
@@ -102,7 +103,7 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
 
       <RequestPhotos attachments={request.attachments ?? []} />
 
-      <h3 className="mt-5.5 text-base font-bold">Latest updates</h3>
+      <h3 className="mt-6 text-base font-[650]">Latest updates</h3>
       <ol aria-busy={detailLoading || undefined} className="mt-2.5 list-none pl-2">
         {updates.map((update, index) => (
           <li key={update.id} className="relative border-l-2 border-(--tanaw-border-soft) pb-3.5 pl-5.5 last:pb-1">
@@ -110,14 +111,22 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
               aria-hidden="true"
               className={cn("absolute top-0.5 -left-1.75 size-3 rounded-full border-2", dotBorder[update.kind], index === 0 ? dotFill[update.kind] : "bg-(--tanaw-page)")}
             />
-            <p className="font-bold text-(--tanaw-text)">
-              {update.title} {update.at && <span className="text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{formatWhen(update.at)}</span>}
+            <p className="font-semibold text-(--tanaw-text)">
+              {update.title} {update.at && <span className="text-[13px] font-medium text-(--tanaw-text-muted)">{formatWhen(update.at)}</span>}
             </p>
             <p className="mt-0.5 text-sm wrap-break-word whitespace-pre-line text-(--tanaw-text-secondary)">{update.detail}</p>
           </li>
         ))}
       </ol>
-      {detailLoading && <p className="mt-1 text-[0.8125rem] text-(--tanaw-text-muted)">Loading the request's updates.</p>}
+      {detailLoading && (
+        <div role="status" className="mt-1 pl-2">
+          <span aria-hidden="true" className="block border-l-2 border-(--tanaw-border-soft) pb-1 pl-5.5">
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
+          </span>
+          <p className="mt-2 text-[13px] text-(--tanaw-text-muted)">Loading the request's updates.</p>
+        </div>
+      )}
 
       <NoteForItComposer key={request.id} request={request} recipients={handler.name ? `${handler.name} and the IT team` : "the IT team"} />
     </article>
@@ -127,8 +136,8 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
 function DetailItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:pr-0">
-      <dt className="text-[0.78125rem] text-(--tanaw-text-muted)">{label}</dt>
-      <dd className="mt-0.75 font-bold wrap-break-word text-(--tanaw-text)">{children}</dd>
+      <dt className="text-[13px] text-(--tanaw-text-muted)">{label}</dt>
+      <dd className="mt-1 font-semibold wrap-break-word text-(--tanaw-text)">{children}</dd>
     </div>
   );
 }

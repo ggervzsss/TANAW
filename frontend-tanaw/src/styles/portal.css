@@ -1,0 +1,154 @@
+/*
+ * The portal's page frame, following DESIGN.md "Default UI style": a Civic Green wash at the top of
+ * every page, the civic line under page titles, and the shared entrances. Pages are open, not
+ * boxed: sections sit on the page surface, separated by hairlines and air.
+ */
+
+/*
+ * The scrolling content area under the topbar, on the desktop app's page colour: a soft diagonal
+ * from pale green to near-white (in dark mode, a faint green glow in the corner over deep slate).
+ * The wash is a layer behind the content rather than a background image, so it scrolls away with
+ * the page and text above it still reads against the page colour. Content is centred within
+ * 105rem, with gutters that widen with the window.
+ */
+.tanaw-portal-content {
+  position: relative;
+  isolation: isolate;
+  background: var(--tanaw-page-gradient);
+}
+
+.tanaw-portal-content::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: -1;
+  height: 22rem;
+  background: var(--tanaw-top-wash);
+  content: "";
+  pointer-events: none;
+}
+
+@media (forced-colors: active) {
+  .tanaw-portal-content::before {
+    display: none;
+  }
+}
+
+/* ---------- Page titles ---------- */
+
+/* Bai Jamjuree 700, tight tracking; the civic line signs it from below. */
+.tanaw-page-title {
+  color: var(--tanaw-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 1.35rem + 1.1vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.tanaw-page-title--signed::after {
+  display: block;
+  width: 56px;
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--tanaw-civic-line);
+  transform-origin: left center;
+  animation: tanaw-civic-line-draw 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms both;
+  content: "";
+}
+
+/* The lede under a page title: Inter, one or two calm lines. */
+.tanaw-page-lede {
+  max-width: 68ch;
+  color: var(--tanaw-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+/*
+ * The civic line on its own: a short green, Seal Gold, green bar that draws in once. Use it under
+ * a title that is not a .tanaw-page-title, such as a dialog title.
+ */
+.tanaw-civic-line {
+  display: block;
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--tanaw-civic-line);
+  transform-origin: left center;
+  animation: tanaw-civic-line-draw 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms both;
+}
+
+.tanaw-civic-line--short {
+  width: 40px;
+  height: 3px;
+}
+
+@keyframes tanaw-civic-line-draw {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* ---------- Shared entrances ---------- */
+
+/*
+ * `.tanaw-enter` fades content up into place once (banners, panels that appear after an action);
+ * `.tanaw-stagger > *` does the same for a list, one item after another.
+ */
+.tanaw-enter,
+.tanaw-stagger > * {
+  animation: tanaw-enter-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.tanaw-stagger > :nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.tanaw-stagger > :nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.tanaw-stagger > :nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.tanaw-stagger > :nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.tanaw-stagger > :nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+@keyframes tanaw-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-page-title--signed::after,
+  .tanaw-civic-line {
+    animation: none;
+  }
+
+  .tanaw-enter,
+  .tanaw-stagger > * {
+    animation: none !important;
+  }
+}

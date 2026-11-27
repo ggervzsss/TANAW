@@ -70,7 +70,7 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <SegmentedControl ariaLabel="Activity type" options={systemActivityFilterOptions} value={filter} onChange={changeFilter} />
         <p className="text-[0.84375rem] text-(--tanaw-text-secondary)">Newest first. Entries never change. Select one to see the technical detail.</p>
       </div>
@@ -88,11 +88,8 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
         />
       )}
 
-      <div className="mt-3.5 border-t border-(--tanaw-border-soft)">
-        <div
-          aria-hidden="true"
-          className={cn(ROW_GRID, "tracking-label border-b border-(--tanaw-border-soft) px-3 py-2.5 text-[0.6875rem] font-bold text-(--tanaw-text-secondary) uppercase max-lg:hidden")}
-        >
+      <div className="mt-4">
+        <div aria-hidden="true" className={cn(ROW_GRID, "it-system__head tracking-label px-3 py-2.5 text-xs font-semibold text-(--tanaw-label) uppercase max-lg:hidden")}>
           <span>When</span>
           <span>Activity</span>
           <span>By</span>
@@ -101,10 +98,25 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
         </div>
 
         {isLoading ? (
-          <div className="grid gap-3 py-4" aria-busy="true">
-            <Skeleton className="h-12 w-full" label="Loading activity" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+          <div role="status" aria-label="Loading activity" aria-busy="true">
+            {[0, 1, 2, 3, 4].map((index) => (
+              <div key={index} className={cn(ROW_GRID, "items-start border-b border-(--tanaw-border-soft) px-3 py-3.5")}>
+                <span className="max-lg:hidden">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="mt-2 h-3 w-12" />
+                </span>
+                <span>
+                  <Skeleton className="h-4 w-3/5" />
+                  <Skeleton className="mt-2 h-3 w-4/5" />
+                </span>
+                <span className="max-lg:hidden">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="mt-2 h-3 w-16" />
+                </span>
+                <Skeleton className="h-3.5 w-20 max-lg:hidden" />
+                <span />
+              </div>
+            ))}
           </div>
         ) : rows.length === 0 ? (
           !isError && (
@@ -144,7 +156,7 @@ function ActivityRow({ row, expanded, onToggle, timeFormat }: { row: SystemActiv
   const { log } = row;
   const panelId = `activity-detail-${log.id}`;
   return (
-    <li className="border-b border-(--tanaw-border-soft)">
+    <li className="it-system__row" data-expanded={expanded || undefined}>
       <button
         type="button"
         data-activity-row={log.id}
@@ -153,8 +165,7 @@ function ActivityRow({ row, expanded, onToggle, timeFormat }: { row: SystemActiv
         onClick={onToggle}
         className={cn(
           ROW_GRID,
-          "w-full items-start px-3 py-3.5 text-left text-(--tanaw-text) transition-colors hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-          expanded && "bg-(--tanaw-selected-bg) hover:bg-(--tanaw-selected-bg)",
+          "w-full cursor-pointer items-start px-3 py-3.5 text-left text-(--tanaw-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
         )}
       >
         <span className="text-sm max-lg:order-2 max-lg:col-start-1 max-lg:flex max-lg:gap-1.5 max-lg:text-[0.8125rem] max-lg:text-(--tanaw-text-secondary)">
@@ -183,7 +194,10 @@ function ActivityRow({ row, expanded, onToggle, timeFormat }: { row: SystemActiv
         <ChevronDown
           size={18}
           aria-hidden="true"
-          className={cn("mt-0.5 text-(--tanaw-text-secondary) transition-transform motion-reduce:transition-none max-lg:col-start-2 max-lg:row-start-1", expanded && "rotate-180")}
+          className={cn(
+            "ease-tanaw-out mt-0.5 text-(--tanaw-text-secondary) transition-transform duration-200 motion-reduce:transition-none max-lg:col-start-2 max-lg:row-start-1",
+            expanded && "rotate-180 text-(--tanaw-accent-ink)",
+          )}
         />
       </button>
       {expanded && <ActivityDetail log={log} id={panelId} />}
@@ -196,7 +210,7 @@ function FieldList({ fields }: { fields: readonly TechnicalField[] }) {
     <>
       {fields.map((field) => (
         <div key={field.label} className="min-w-0">
-          <dt className="text-xs text-(--tanaw-text-muted)">{field.label}</dt>
+          <dt className="text-[13px] text-(--tanaw-text-muted)">{field.label}</dt>
           <dd className={cn("mt-0.5 text-sm wrap-anywhere text-(--tanaw-text)", field.mono && "font-mono text-[0.8125rem]")}>
             {field.value}
             {field.detail && <span className="mt-0.5 block font-mono text-xs text-(--tanaw-text-muted)">{field.detail}</span>}
@@ -210,10 +224,10 @@ function FieldList({ fields }: { fields: readonly TechnicalField[] }) {
 function ActivityDetail({ log, id }: { log: SystemActivityLog; id: string }) {
   const links = systemActivityLinks(log);
   return (
-    <div id={id} role="region" aria-label={`Technical detail: ${log.action}`} className="bg-(--tanaw-surface-inset) px-4 pt-3.5 pb-4">
+    <div id={id} role="region" aria-label={`Technical detail: ${log.action}`} className="it-system__detail px-4 pt-3.5 pb-4">
       {log.itDetail?.trim() && (
         <div className="mb-3.5">
-          <p className="text-xs text-(--tanaw-text-muted)">Technical detail</p>
+          <p className="text-[13px] text-(--tanaw-text-muted)">Technical detail</p>
           <p className="mt-0.5 font-mono text-[0.8125rem] wrap-anywhere whitespace-pre-wrap text-(--tanaw-text)">{log.itDetail.trim()}</p>
         </div>
       )}

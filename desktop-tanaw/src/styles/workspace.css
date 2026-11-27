@@ -988,7 +988,7 @@
   border-radius: 50%;
   box-shadow: 0 0 0 3px var(--dashboard-focus-halo);
 }
-.overview-layout .tanaw-assistant {
+.tanaw-assistant-scope .tanaw-assistant {
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
@@ -996,52 +996,52 @@
   animation: none;
   transform-origin: top right;
 }
-.overview-layout .tanaw-assistant > header {
+.tanaw-assistant-scope .tanaw-assistant > header {
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.overview-layout .tanaw-assistant header .design-icon-button {
+.tanaw-assistant-scope .tanaw-assistant header .design-icon-button {
   position: relative;
   transition:
     color 180ms ease,
     background-color 180ms ease,
     transform 160ms ease;
 }
-.overview-layout .tanaw-assistant header .design-icon-button::after {
+.tanaw-assistant-scope .tanaw-assistant header .design-icon-button::after {
   content: "";
   position: absolute;
   inset: -6px;
 }
-.overview-layout .tanaw-assistant .assistant-conversation {
+.tanaw-assistant-scope .tanaw-assistant .assistant-conversation {
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--tanaw-control-border-hover) transparent;
 }
-.overview-layout .assistant-message button {
+.tanaw-assistant-scope .assistant-message button {
   transition:
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 180ms ease;
 }
-.overview-layout .assistant-message button:hover {
+.tanaw-assistant-scope .assistant-message button:hover {
   background: var(--tanaw-selected-bg);
   transform: translateX(1px);
 }
-.overview-layout .assistant-message button:active {
+.tanaw-assistant-scope .assistant-message button:active {
   transform: scale(0.98);
 }
-.overview-layout .tanaw-assistant form {
+.tanaw-assistant-scope .tanaw-assistant form {
   flex: 0 0 auto;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease;
 }
-.overview-layout .tanaw-assistant form:focus-within {
+.tanaw-assistant-scope .tanaw-assistant form:focus-within {
   border-color: var(--dashboard-focus);
   box-shadow: 0 0 0 2px var(--dashboard-focus-halo);
 }
-.enterprise-shell .overview-layout .tanaw-assistant form input,
-.enterprise-shell .overview-layout .tanaw-assistant form input:focus {
+.enterprise-shell .tanaw-assistant-scope .tanaw-assistant form input,
+.enterprise-shell .tanaw-assistant-scope .tanaw-assistant form input:focus {
   border: 0 !important;
   border-radius: 0;
   outline: none !important;
@@ -1051,7 +1051,7 @@
   line-height: 24px;
   color: var(--enterprise-text);
 }
-.overview-layout .tanaw-assistant form button {
+.tanaw-assistant-scope .tanaw-assistant form button {
   display: grid;
   place-items: center;
   width: 32px;
@@ -1064,10 +1064,10 @@
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease;
 }
-.overview-layout .tanaw-assistant form button:hover:not(:disabled) {
+.tanaw-assistant-scope .tanaw-assistant form button:hover:not(:disabled) {
   background: var(--design-tint);
 }
-.overview-layout .tanaw-assistant form button:active:not(:disabled) {
+.tanaw-assistant-scope .tanaw-assistant form button:active:not(:disabled) {
   transform: scale(0.92);
 }
 .enterprise-shell:has(.overview-layout) [data-topbar-navigation] {
@@ -1109,10 +1109,10 @@
   border-color: color-mix(in srgb, var(--dashboard-focus) 24%, var(--dashboard-surface-border));
   box-shadow: var(--dashboard-surface-hover-shadow);
 }
-.overview-layout .tanaw-assistant > header {
+.tanaw-assistant-scope .tanaw-assistant > header {
   border-bottom-color: var(--dashboard-surface-border);
 }
-.overview-layout .assistant-message > div {
+.tanaw-assistant-scope .assistant-message > div {
   background: linear-gradient(140deg, var(--design-tint), color-mix(in srgb, var(--design-tint) 92%, #b6dfc0));
 }
 /* Opacity-only entrances preserve every card's measured position and size. */
@@ -1145,7 +1145,7 @@
   }
 }
 @media (max-width: 1100px) {
-  .overview-layout .tanaw-assistant {
+  .tanaw-assistant-scope .tanaw-assistant {
     grid-column: auto;
     grid-row: auto;
   }
@@ -1158,19 +1158,19 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  .overview-layout .assistant-message button:hover {
+  .tanaw-assistant-scope .assistant-message button:hover {
     transform: none;
   }
 }
-.overview-layout :is(.assistant-conversation, .dash-report-list)::-webkit-scrollbar {
+:is(.overview-layout .dash-report-list, .tanaw-assistant-scope .assistant-conversation)::-webkit-scrollbar {
   width: 6px;
 }
-.overview-layout :is(.assistant-conversation, .dash-report-list)::-webkit-scrollbar-thumb {
+:is(.overview-layout .dash-report-list, .tanaw-assistant-scope .assistant-conversation)::-webkit-scrollbar-thumb {
   background: var(--tanaw-control-border-hover);
   border: 1px solid transparent;
   background-clip: padding-box;
   border-radius: 8px;
 }
-.overview-layout :is(.assistant-conversation, .dash-report-list)::-webkit-scrollbar-thumb:hover {
+:is(.overview-layout .dash-report-list, .tanaw-assistant-scope .assistant-conversation)::-webkit-scrollbar-thumb:hover {
   background: var(--tanaw-text-muted);
 }

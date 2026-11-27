@@ -1,6 +1,7 @@
 // IT Enterprises and Manage an enterprise: the list with its figures, chips and invitation actions,
 // the Register enterprise dialog, and the Connection, Details and account, and Opening hours tabs.
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { transparentPng } from "./support/adminMap";
 import { json, mockPortalSession, portalUser } from "./support/session";
 
 // 3:51 PM on Nov 26, 2026 in Manila.
@@ -167,6 +168,8 @@ async function openIt(page: Page, path: string, options: { passwordReset?: "ok" 
   };
   const find = (reference: string) => accounts.find((item) => item.id === reference || item.enterpriseId === reference);
 
+  // Map tiles answer locally, so the location map never waits on the network.
+  await page.route(/https:\/\/[abcd]\.basemaps\.cartocdn\.com\/.*/, (route) => route.fulfill({ status: 200, contentType: "image/png", body: transparentPng }));
   await page.route("**/operational/notifications**", (route) => route.fulfill(json([])));
   await page.route("**/activity-logs**", (route) => route.fulfill(json([])));
   await page.route(/\/operational\/requests(\?.*)?$/, (route) => route.fulfill(json(requests)));

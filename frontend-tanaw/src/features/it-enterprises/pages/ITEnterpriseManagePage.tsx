@@ -42,7 +42,7 @@ export function ITEnterpriseManagePage() {
           action={
             <Link
               to={ENTERPRISES_PATH}
-              className="rounded-tanaw-md inline-flex h-10.5 items-center border border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-4 text-sm font-bold text-(--tanaw-text) no-underline hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="rounded-tanaw-md ease-tanaw-out inline-flex h-10.5 items-center bg-(--tanaw-control-bg) px-4.5 text-sm font-semibold text-(--tanaw-text) no-underline transition-[background-color,translate,scale] duration-200 hover:-translate-y-px hover:bg-(--tanaw-control-bg-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:translate-y-0 active:scale-[0.97] motion-reduce:transition-colors motion-reduce:hover:translate-y-0"
             >
               Go to Enterprises
             </Link>
@@ -75,10 +75,24 @@ export function ITEnterpriseManagePage() {
     return (
       <div className="it-enterprises w-full">
         <PortalPageHeader back={BACK} title={<span className="sr-only">Loading enterprise</span>} />
-        <div role="status" aria-label="Loading enterprise" className="space-y-4">
-          <Skeleton className="h-10 w-full max-w-xl" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-64 w-full" />
+        <div role="status" aria-label="Loading enterprise">
+          <Skeleton className="h-8 w-full max-w-md" />
+          <Skeleton className="mt-3 h-4 w-full max-w-sm" />
+          <div className="mt-6 flex gap-6 border-b border-(--tanaw-border-soft) pb-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-sm:grid-cols-1">
+            {[0, 1, 2, 3].map((index) => (
+              <div key={index} className="px-5 py-4 first:pl-0 max-lg:px-0">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="mt-2.5 h-4 w-32" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="mt-8 h-5 w-40" />
+          <Skeleton className="mt-4 h-14 w-full" />
         </div>
       </div>
     );
@@ -99,7 +113,7 @@ export function ITEnterpriseManagePage() {
     <div className="it-enterprises w-full">
       <PortalPageHeader back={BACK} title={row.name} description={headerLine(row, formats)} actions={<StatusLine row={row} />} className="mb-4" />
       <Tabs items={TABS} value={tab} onChange={selectTab} ariaLabel="Enterprise sections" idPrefix="ite" />
-      <div role="tabpanel" id={`ite-panel-${tab}`} aria-labelledby={`ite-tab-${tab}`} className="pt-6">
+      <div key={tab} role="tabpanel" id={`ite-panel-${tab}`} aria-labelledby={`ite-tab-${tab}`} className="ite-panel pt-6">
         {tab === "connection" && <ConnectionTab row={row} formats={formats} />}
         {tab === "details" && <DetailsTab key={row.id} row={row} formats={formats} onAccountUpdated={setAccount} />}
         {tab === "hours" && <HoursTab key={row.id} row={row} formats={formats} onAccountUpdated={setAccount} />}
@@ -117,7 +131,7 @@ function StatusLine({ row }: { row: EnterpriseRow }) {
   const status = statusLine(row);
   const Icon = status.tone === "ok" ? CheckCircle2 : status.tone === "muted" ? Info : AlertTriangle;
   return (
-    <p role="status" className={cn("inline-flex items-center gap-2 text-sm font-bold", toneText[status.tone])}>
+    <p role="status" className={cn("inline-flex items-center gap-2 text-sm font-semibold", toneText[status.tone])}>
       <Icon size={16} aria-hidden="true" />
       {status.text}
     </p>

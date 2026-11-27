@@ -248,9 +248,9 @@ function CameraMonitorSkeleton() {
           <div className="camera-metrics-heading">
             <Skeleton className="h-4 w-28" />
           </div>
-          <div className="camera-metrics-grid">
-            {[true, false, false, true].map((wide, index) => (
-              <div key={index} className="camera-metric camera-metric--placeholder" data-wide={wide || undefined}>
+          <div className="camera-metrics-grid" data-mode="entrance-exit">
+            {(["entry", "exit", "occupancy", "visitors"] as const).map((tone) => (
+              <div key={tone} className="camera-metric camera-metric--placeholder" data-tone={tone}>
                 <SkeletonText lines={1} />
                 <Skeleton className="camera-metric-skeleton" />
               </div>

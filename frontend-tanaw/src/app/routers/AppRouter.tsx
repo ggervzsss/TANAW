@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
+import { ViewSkeleton } from "@/shared/ui-kit/patterns/ViewSkeleton";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { legacyPortalRedirects, routes } from "./routes";
@@ -152,10 +153,11 @@ function LegacyRedirect({ to }: { to: string }) {
   return <Navigate to={query ? `${path}?${query}` : path} replace />;
 }
 
+/** Before the session is known or a screen's code arrives: a quiet page outline on the green wash. */
 function RouteLoadingFallback() {
   return (
-    <div className="grid min-h-svh place-items-center bg-[#f4f8f5] text-sm font-semibold text-(--tanaw-green)" role="status">
-      Loading TANAW workspace…
+    <div className="tanaw-portal-content min-h-svh bg-(--tanaw-page) px-8 pt-12 max-xl:px-6 max-sm:px-4 max-sm:pt-8">
+      <ViewSkeleton label="Loading TANAW workspace…" className="mx-auto max-w-420" />
     </div>
   );
 }

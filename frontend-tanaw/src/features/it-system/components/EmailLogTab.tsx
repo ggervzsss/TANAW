@@ -25,7 +25,7 @@ const RESULT_TONE: Record<EmailResult, { text: string; dot: string }> = {
 };
 
 const linkButton = "font-semibold text-(--tanaw-accent-ink) underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)";
-const headCell = "px-4 py-3 text-[0.6875rem] font-bold tracking-label text-(--tanaw-text-secondary) uppercase";
+const headCell = "px-4 py-2.5 text-xs font-semibold tracking-label text-(--tanaw-label) uppercase";
 
 type EmailLogTabProps = {
   deliveries: readonly EmailLogEntry[];
@@ -48,7 +48,7 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <SegmentedControl ariaLabel="Email result" options={options} value={filter} onChange={(value) => setFilter(parseEmailLogFilter(value))} />
         <p className="text-[0.84375rem] text-(--tanaw-text-secondary)">Every email TANAW sent in the last 7 days.</p>
       </div>
@@ -67,9 +67,22 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
       )}
 
       {isLoading ? (
-        <div className="mt-4 grid gap-3" aria-busy="true">
-          <Skeleton className="h-12 w-full" label="Loading the email log" />
-          <Skeleton className="h-12 w-full" />
+        <div role="status" aria-label="Loading the email log" aria-busy="true" className="mt-4">
+          <Skeleton className="h-9 w-full rounded-[10px]" />
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="grid grid-cols-[16%_30%_20%_minmax(0,1fr)] border-b border-(--tanaw-border-soft) py-3.5">
+              <Skeleton className="ml-3 h-4 w-24" />
+              <span className="px-4">
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="mt-2 h-3 w-1/2" />
+              </span>
+              <Skeleton className="mx-4 h-4 w-28" />
+              <span className="px-4">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="mt-2 h-3 w-36" />
+              </span>
+            </div>
+          ))}
         </div>
       ) : rows.length === 0 ? (
         !isError && (
@@ -83,11 +96,11 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
         )
       ) : (
         <div className="mt-3.5 overflow-x-auto">
-          <table className="w-full min-w-200 border-collapse text-left text-sm">
+          <table className="it-system__table w-full min-w-200 border-separate border-spacing-0 text-left text-sm">
             <caption className="sr-only">{filter === "problems" ? "Emails that were not delivered in the last 7 days" : "Emails sent in the last 7 days"}</caption>
             <thead>
-              <tr className="border-y border-(--tanaw-border-soft)">
-                <th scope="col" className={cn(headCell, "w-[16%] pl-0")}>
+              <tr>
+                <th scope="col" className={cn(headCell, "w-[16%] pl-3")}>
                   Sent
                 </th>
                 <th scope="col" className={cn(headCell, "w-[30%]")}>
@@ -99,7 +112,7 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
                 <th scope="col" className={headCell}>
                   Result
                 </th>
-                <th scope="col" className={cn(headCell, "pr-0 text-right")}>
+                <th scope="col" className={cn(headCell, "pr-3 text-right")}>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -111,12 +124,12 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
                 const detail = emailResultDetail(delivery);
                 const who = emailRecipientLine(delivery);
                 return (
-                  <tr key={delivery.id} data-email-row={delivery.id} className="border-b border-(--tanaw-border-soft) hover:bg-(--tanaw-control-hover)">
-                    <td className="py-3.5 pr-4 align-top text-(--tanaw-text-secondary) tabular-nums">
+                  <tr key={delivery.id} data-email-row={delivery.id}>
+                    <td className="py-3.5 pr-4 pl-3 align-top text-(--tanaw-text-secondary) tabular-nums">
                       {activityDayLabel(delivery.createdAt, now, dateFormat)}, {formatPhilippineTime(delivery.createdAt, timeFormat)}
                     </td>
                     <th scope="row" className="px-4 py-3.5 align-top font-normal">
-                      <span className="block font-bold wrap-anywhere text-(--tanaw-text)">{delivery.recipient}</span>
+                      <span className="block font-semibold wrap-anywhere text-(--tanaw-text)">{delivery.recipient}</span>
                       {who && <span className="mt-0.5 block text-[0.8125rem] text-(--tanaw-text-secondary)">{who}</span>}
                     </th>
                     <td className="px-4 py-3.5 align-top text-(--tanaw-text)">{emailKindLabel(delivery.purpose)}</td>
@@ -127,7 +140,7 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
                       </span>
                       {detail && <span className="mt-0.5 block text-[0.8125rem] text-(--tanaw-text-muted)">{detail}</span>}
                     </td>
-                    <td className="py-3.5 pl-4 text-right align-top">
+                    <td className="py-3.5 pr-3 pl-4 text-right align-top">
                       {delivery.canRetry && (
                         <Button
                           variant="secondary"

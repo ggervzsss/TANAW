@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { CircleAlert, CircleCheckBig, LoaderCircle } from "lucide-react";
+import { Check, CircleAlert, Info, LoaderCircle, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
+import toast, { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { AuthSessionManager } from "@/app/session/AuthSessionManager";
 import { useAuthStore } from "@/app/store/authStore";
@@ -67,44 +67,90 @@ export function AppProviders({ children }: AppProvidersProps) {
   );
 }
 
+const TOAST_GUTTER_PX = 10;
+
+/**
+ * Toasts under the topbar (styles/components.css). Each toast rides in its own slot, placed by the
+ * measured heights of the toasts above it, so a new toast pushes the others down and a leaving one
+ * lets them glide back up. Resting the pointer on a toast pauses every timer.
+ */
 function TanawToaster() {
   const { pathname } = useLocation();
   const { toasts, handlers } = useToaster(tanawToastOptions);
+  const [paused, setPaused] = useState(false);
   const hasPortalTopbar = portalRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const containerClassName = hasPortalTopbar ? "tanaw-toast-viewport tanaw-toast-viewport--portal" : "tanaw-toast-viewport tanaw-toast-viewport--auth";
 
+  const pause = () => {
+    setPaused(true);
+    handlers.startPause();
+  };
+  const resume = () => {
+    setPaused(false);
+    handlers.endPause();
+  };
+
   return (
-    <div
-      data-rht-toaster=""
-      className={containerClassName}
-      style={hasPortalTopbar ? portalToastContainerStyle : authToastContainerStyle}
-      onMouseEnter={handlers.startPause}
-      onMouseLeave={handlers.endPause}
-    >
-      {toasts.map((toast) => (
-        <TanawToast key={toast.id} toast={toast} />
+    <div data-rht-toaster="" data-paused={paused || undefined} className={containerClassName} style={hasPortalTopbar ? portalToastContainerStyle : authToastContainerStyle}>
+      {toasts.map((item) => (
+        <TanawToast
+          key={item.id}
+          toast={item}
+          offset={handlers.calculateOffset(item, { reverseOrder: false, gutter: TOAST_GUTTER_PX })}
+          onHeight={handlers.updateHeight}
+          onPause={pause}
+          onResume={resume}
+        />
       ))}
     </div>
   );
 }
 
-function TanawToast({ toast }: { toast: Toast }) {
-  const className = [toast.className ?? "tanaw-toast", toast.visible ? "" : "tanaw-toast--leaving"].filter(Boolean).join(" ");
+type TanawToastProps = {
+  toast: Toast;
+  offset: number;
+  onHeight: (toastId: string, height: number) => void;
+  onPause: () => void;
+  onResume: () => void;
+};
+
+function TanawToast({ toast: item, offset, onHeight, onPause, onResume }: TanawToastProps) {
+  const slotRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot) return undefined;
+    const measure = () => onHeight(item.id, slot.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [item.id, onHeight]);
+
+  const className = [item.className ?? "tanaw-toast", item.visible ? "" : "tanaw-toast--leaving"].filter(Boolean).join(" ");
 
   return (
-    <div className={className} style={toast.style} {...toast.ariaProps}>
-      <span className="tanaw-toast__icon" aria-hidden="true">
-        {resolveToastIcon(toast)}
-      </span>
-      <div className="tanaw-toast__message">{resolveValue(toast.message, toast)}</div>
+    <div ref={slotRef} className="tanaw-toast-slot" style={{ translate: `0 ${offset}px` }}>
+      <div className={className} style={item.style} onMouseEnter={onPause} onMouseLeave={onResume}>
+        <span className="tanaw-toast__icon" aria-hidden="true">
+          {resolveToastIcon(item)}
+        </span>
+        <div className="tanaw-toast__message" {...item.ariaProps}>
+          {resolveValue(item.message, item)}
+        </div>
+        <button type="button" className="tanaw-toast__dismiss" aria-label="Dismiss notification" disabled={!item.visible} onClick={() => toast.dismiss(item.id)}>
+          <X size={15} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }
 
-function resolveToastIcon(toast: Toast): ReactNode {
-  if (toast.icon) return toast.icon;
-  if (toast.type === "success") return <CircleCheckBig className="h-5 w-5" />;
-  if (toast.type === "error") return <CircleAlert className="h-5 w-5" />;
-  if (toast.type === "loading") return <LoaderCircle className="h-5 w-5 animate-spin" />;
-  return null;
+function resolveToastIcon(item: Toast): ReactNode {
+  if (item.icon) return item.icon;
+  if (item.type === "success") return <Check strokeWidth={2.6} />;
+  if (item.type === "error") return <CircleAlert strokeWidth={2.2} />;
+  if (item.type === "loading") return <LoaderCircle className="animate-spin" strokeWidth={2.2} />;
+  return <Info strokeWidth={2.2} />;
 }

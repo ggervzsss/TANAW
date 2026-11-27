@@ -1,7 +1,6 @@
 import { Bell, CheckCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/shared/components/layout";
-import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import type { UserRole } from "@/shared/types/role.types";
 import { NotificationList } from "../components";
@@ -17,6 +16,7 @@ const roleDescription: Record<NotificationsPageProps["role"], string> = {
   staff: "Review enterprise report submissions that require staff action.",
 };
 
+/** Every notification for the signed-in role, as one open list of quiet rows (no card around it). */
 export function NotificationsPage({ role }: NotificationsPageProps) {
   const navigate = useNavigate();
   const { allNotifications, isLoading, markAllAsRead, markAsRead, unreadCount } = usePortalNotifications(role);
@@ -29,24 +29,26 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
   return (
     <PageMotion>
       <PageHeader title="Notifications" description={roleDescription[role]} />
-      <Panel className="overflow-hidden">
-        <PanelHeader
-          title="All Notifications"
-          icon={Bell}
-          right={
-            <button
-              type="button"
-              disabled={allNotifications.length === 0 || unreadCount === 0}
-              onClick={markAllAsRead}
-              className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-xl border border-(--tanaw-control-border) bg-white px-3 text-xs font-bold text-tanaw-ledger shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10 dark:disabled:text-slate-600"
-            >
-              <CheckCheck size={13} />
-              Mark all read
-            </button>
-          }
-        />
-        <NotificationList notifications={allNotifications} isLoading={isLoading} onOpen={openNotification} />
-      </Panel>
+      <section aria-labelledby="all-notifications-title" className="border-t border-(--tanaw-border-soft)">
+        <div className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-3">
+          <h2 id="all-notifications-title" className="flex items-center gap-2 text-base font-[650] text-(--tanaw-text)">
+            <Bell size={16} className="text-(--tanaw-accent-ink)" aria-hidden="true" />
+            All Notifications
+          </h2>
+          <button
+            type="button"
+            disabled={allNotifications.length === 0 || unreadCount === 0}
+            onClick={markAllAsRead}
+            className="group inline-flex min-h-9 shrink-0 items-center gap-2 rounded-tanaw-md px-3 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
+          >
+            <CheckCheck size={14} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-enabled:group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
+            Mark all read
+          </button>
+        </div>
+        <div className="py-1">
+          <NotificationList notifications={allNotifications} isLoading={isLoading} onOpen={openNotification} />
+        </div>
+      </section>
     </PageMotion>
   );
 }

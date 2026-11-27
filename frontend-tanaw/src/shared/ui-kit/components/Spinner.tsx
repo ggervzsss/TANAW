@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+import "./Skeleton.css";
 import { cn } from "../lib/cn";
 
 export type SpinnerProps = {
@@ -7,7 +9,7 @@ export type SpinnerProps = {
   className?: string;
 };
 
-/** A small rotating ring in the current text colour. */
+/** A small rotating ring in the current text colour, for buttons and inline actions, never page content. */
 export function Spinner({ size = 16, label = "Loading", className }: SpinnerProps) {
   return (
     <span role={label ? "status" : undefined} aria-label={label || undefined} aria-hidden={label ? undefined : true} className={cn("inline-flex shrink-0", className)}>
@@ -19,15 +21,37 @@ export function Spinner({ size = 16, label = "Loading", className }: SpinnerProp
   );
 }
 
-export type SkeletonProps = { className?: string; label?: string };
+export type SkeletonProps = {
+  className?: string;
+  /** Announced to screen readers; leave it out for blocks inside a skeleton that already announces itself. */
+  label?: string;
+  style?: CSSProperties;
+  /** "block" (default) has soft 10px corners; "circle" and "pill" are fully round, for avatars, icons and badges. */
+  shape?: "block" | "circle" | "pill";
+};
 
-/** A pulsing placeholder block while content loads. */
-export function Skeleton({ className, label }: SkeletonProps) {
+/** A placeholder block in the shape of what is loading, with a soft sweep of light. */
+export function Skeleton({ className, label, style, shape = "block" }: SkeletonProps) {
   return (
     <span
       role={label ? "status" : undefined}
       aria-label={label}
-      className={cn("block animate-pulse rounded-tanaw-sm bg-(--tanaw-surface-strong) motion-reduce:animate-none", className ?? "h-4 w-24")}
+      aria-hidden={label ? undefined : true}
+      style={style}
+      className={cn("tanaw-skeleton", shape !== "block" && `tanaw-skeleton--${shape}`, className ?? "h-4 w-24")}
     />
+  );
+}
+
+export type SkeletonTextProps = { lines?: number; className?: string };
+
+/** Placeholder lines for a paragraph or a label and its value; the last line is shorter. */
+export function SkeletonText({ lines = 2, className }: SkeletonTextProps) {
+  return (
+    <span aria-hidden="true" className={cn("tanaw-skeleton-text", className)}>
+      {Array.from({ length: lines }, (_, line) => (
+        <span key={line} className="tanaw-skeleton" />
+      ))}
+    </span>
   );
 }

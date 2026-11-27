@@ -1,0 +1,112 @@
+/*
+ * IT Requests list: open rows split by hairlines. A row tints on hover with soft 12px ends, the
+ * chosen request takes the green tint (it glides between rows, see ITRequestList), and the
+ * hairlines beside a tinted row step back so the tint reads as one shape.
+ */
+
+.it-requests__row {
+  position: relative;
+}
+
+.it-requests__row::after {
+  content: "";
+  position: absolute;
+  inset-inline: 12px;
+  bottom: 0;
+  height: 1px;
+  background: var(--tanaw-border-soft);
+  pointer-events: none;
+  transition: opacity var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.it-requests__row > button {
+  transition: background-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.it-requests__selection {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--radius-tanaw-md);
+  background: var(--tanaw-row-selected);
+}
+
+.it-requests__row[data-selected]::after,
+.it-requests__row:has(+ .it-requests__row[data-selected])::after {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .it-requests__row:not([data-selected]) > button:hover {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  .it-requests__row:has(> button:hover)::after,
+  .it-requests__row:has(+ .it-requests__row > button:hover)::after {
+    opacity: 0;
+  }
+}
+
+/* A day heading sits on the page at rest; once rows scroll under it, it takes the page colour and a hairline. */
+.it-requests__day {
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    box-shadow var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.it-requests__day[data-stuck] {
+  background: var(--tanaw-page);
+  box-shadow: 0 1px 0 var(--tanaw-border-soft);
+}
+
+/* The detail pane fades up a few pixels when another request opens. */
+.it-requests__detail {
+  animation: it-requests-rise var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+
+@keyframes it-requests-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-requests__row::after,
+  .it-requests__row > button {
+    transition: none;
+  }
+
+  .it-requests__detail {
+    animation: none;
+  }
+}
+
+/* The Move to another type menu drops in from its button. */
+.it-requests__menu {
+  transform-origin: top left;
+  animation: it-requests-pop var(--tanaw-duration-fast) var(--ease-tanaw-out) both;
+}
+
+@keyframes it-requests-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-requests__menu {
+    animation: none;
+  }
+}

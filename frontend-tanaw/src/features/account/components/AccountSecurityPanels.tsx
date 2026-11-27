@@ -1,8 +1,7 @@
 import type { FormEvent, RefObject } from "react";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
-import { Alert } from "@/shared/ui-kit";
 import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
-import { SettingsGroup, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
+import { SettingsGroup, SettingsNote, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "@/shared/utils/passwordPolicy";
 import type { PasswordErrors } from "../model";
 import { AccountField } from "./AccountField";
@@ -100,7 +99,7 @@ export function PasswordChangePanel(props: PasswordChangePanelProps) {
             </div>
           </div>
         </SettingsGroup>
-        {saveError && <Alert tone="danger">{saveError}</Alert>}
+        {saveError && <SettingsNote tone="danger">{saveError}</SettingsNote>}
       </fieldset>
       <SettingsSaveBar busy={isLoading} dirty={dirty} onDiscard={onClear} busyLabel="Updating password...">
         Update password

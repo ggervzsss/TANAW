@@ -6,7 +6,9 @@ import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPerio
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { VisitorDetails } from "./VisitorDetails";
+import { ReportDayPicker } from "./ReportDayPicker";
 import { missingDays, type ReportDay } from "../model/daily-origins";
+import { useSelectedReportDay } from "../hooks/useSelectedReportDay";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
 import { SupplementaryNotes } from "./SupplementaryNotes";
@@ -55,6 +57,8 @@ export function ReportDraftPanel({
   setOrigins,
   setNotes,
 }: Props) {
+  const selectedDay = useSelectedReportDay(days, period);
+  const dailyDay = hasDailyOrigins ? selectedDay : null;
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
@@ -81,17 +85,24 @@ export function ReportDraftPanel({
               </dd>
             </div>
             <div>
-              <dt>Tourism Period</dt>
-              <dd>
-                <CalendarDays aria-hidden="true" />
-                <span>{formatReportingPeriodLabel(period)}</span>
-              </dd>
-            </div>
-            <div>
               <dt>Tourism Attraction</dt>
               <dd>
                 <Landmark aria-hidden="true" />
                 <span>{attractionType ?? "Not recorded"}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Tourism Period</dt>
+              {/* Daily reports pick the day Visitor Details shows here; older monthly reports show the month. */}
+              <dd>
+                {dailyDay ? (
+                  <ReportDayPicker days={days} selectedDate={dailyDay.day.date} onSelect={dailyDay.select} />
+                ) : (
+                  <>
+                    <CalendarDays aria-hidden="true" />
+                    <span>{formatReportingPeriodLabel(period)}</span>
+                  </>
+                )}
               </dd>
             </div>
           </dl>
@@ -129,13 +140,12 @@ export function ReportDraftPanel({
       <div className="report-create-body">
         <section className="report-visitor-card" aria-label="Visitor Details">
           <VisitorDetails
-            days={days}
+            selected={dailyDay}
             hasDailyOrigins={hasDailyOrigins}
             demo={demo}
             metrics={metrics}
             isLoading={isPeriodChanging}
             isReadOnly={isReadOnly || isPeriodChanging}
-            period={period}
             setOrigins={setOrigins}
           />
         </section>

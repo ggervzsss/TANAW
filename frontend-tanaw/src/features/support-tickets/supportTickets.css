@@ -1,0 +1,60 @@
+/*
+ * Requests in Settings: an open table on the page. Column names sit on a quiet green band with soft
+ * ends, rows are split by hairlines, and a row tints on hover with 12px ends while the hairlines
+ * beside it step back. The request window's sections are open too, split by hairlines.
+ */
+
+.support-tickets__table thead th {
+  background: color-mix(in srgb, var(--tanaw-accent-ink) 6%, transparent);
+}
+
+.support-tickets__table thead th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.support-tickets__table thead th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.support-tickets__table tbody td {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+}
+
+.support-tickets__table tbody tr[data-empty] td {
+  border-bottom: 0;
+}
+
+@media (hover: hover) {
+  .support-tickets__table tbody tr:not([data-empty]):hover > td {
+    background: var(--tanaw-control-hover);
+    border-bottom-color: transparent;
+  }
+
+  .support-tickets__table tbody tr:has(+ tr:not([data-empty]):hover) > td {
+    border-bottom-color: transparent;
+  }
+
+  .support-tickets__table tbody tr:not([data-empty]):hover > td:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .support-tickets__table tbody tr:not([data-empty]):hover > td:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+}
+
+/* Sections of the request window: a heading, then the content, with a hairline between sections. */
+.support-tickets__section + .support-tickets__section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-tickets__table tbody td {
+    transition: none;
+  }
+}

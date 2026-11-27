@@ -19,35 +19,36 @@ export type PortalPageHeaderProps = {
 };
 
 /**
- * The page title used by the Admin and Staff portals: Bai Jamjuree heading, the Seal Gold signature
- * line under it (TANAW's thin gold accent, used once per screen), and a short description.
+ * The page title used by the Admin and Staff portals: a Bai Jamjuree heading signed by the civic
+ * line (a short green, Seal Gold, green bar that draws in once), then an Inter lede. It sits on the
+ * page's green wash, with no box around it.
  */
 export function PortalPageHeader({ title, description, back, actions, leading, children, titleId, className }: PortalPageHeaderProps) {
   return (
-    <header className={cn("tanaw-portal-header mb-5", className)}>
+    <header className={cn("tanaw-portal-header mb-8 max-sm:mb-6", className)}>
       {back && (
         <Link
           to={back.to}
           aria-label={back.ariaLabel}
-          className="mb-3 inline-flex min-h-8 items-center gap-1.5 rounded-md text-sm font-semibold text-(--tanaw-text-secondary) no-underline transition-colors hover:text-(--tanaw-text)"
+          className="group mb-4 -ml-1 inline-flex min-h-8 items-center gap-1.5 rounded-tanaw-sm px-1 text-sm font-semibold text-(--tanaw-text-secondary) no-underline transition-colors duration-150 hover:text-(--tanaw-accent-ink)"
         >
-          <ArrowLeft size={16} aria-hidden="true" />
+          <ArrowLeft size={16} aria-hidden="true" className="transition-transform duration-150 ease-tanaw-out group-hover:-translate-x-0.5 motion-reduce:transition-none" />
           {back.label}
         </Link>
       )}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="flex min-w-0 items-start gap-5">
           {leading}
           <div className="min-w-0">
-            <h1 id={titleId} className="font-display text-[2rem] leading-[1.15] font-bold tracking-[-0.01em] text-(--tanaw-text) max-sm:text-2xl">
+            <h1 id={titleId} className="tanaw-page-title">
               {title}
             </h1>
-            <span className="tanaw-signature-line mt-2 block h-0.75 w-14 rounded-full bg-(--tanaw-gold-line)" aria-hidden="true" />
-            {description && <p className="mt-2.5 max-w-[72ch] text-[0.9375rem] text-(--tanaw-text-secondary)">{description}</p>}
+            <span className="tanaw-civic-line tanaw-signature-line mt-3" aria-hidden="true" />
+            {description && <p className="tanaw-page-lede mt-3">{description}</p>}
             {children}
           </div>
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
       </div>
     </header>
   );

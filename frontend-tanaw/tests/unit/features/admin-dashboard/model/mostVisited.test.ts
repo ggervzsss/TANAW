@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatCompactCount, mostVisitedSource, mostVisitedSubtitle, rankVisitors, type VisitorEntry } from "@/features/admin-dashboard/model/mostVisited";
+import type { ApiVisitorRanking } from "@/contracts/api";
+import { formatCompactCount, mostVisitedSource, mostVisitedSubtitle, rankVisitors, readVisitorRanking, type VisitorEntry } from "@/features/admin-dashboard/model/mostVisited";
 
 describe("most visited sources", () => {
   it("names the sources the server used", () => {
@@ -46,5 +47,29 @@ describe("most visited ranking", () => {
   it("formats compact counts", () => {
     expect(formatCompactCount(14_200)).toBe("14.2K");
     expect(formatCompactCount(980)).toBe("980");
+  });
+});
+
+describe("reading a ranking reply", () => {
+  it("passes a real ranking through unchanged", () => {
+    const ranking: ApiVisitorRanking = {
+      start: "2026-11-01",
+      end: "2026-11-23",
+      includesToday: true,
+      enterprises: [{ enterpriseId: "plaza", enterpriseName: "City Plaza", barangay: "Poblacion", category: "Park", visitors: 350 }],
+      reportMonths: [],
+      cameraDays: 23,
+      uncoveredDays: 0,
+    };
+    expect(readVisitorRanking(ranking)).toEqual(ranking);
+    expect(readVisitorRanking(undefined)).toBeUndefined();
+  });
+
+  it("reads an empty or unexpected reply as a range nothing covers, instead of breaking the page", () => {
+    const empty = readVisitorRanking([] as unknown as ApiVisitorRanking)!;
+    expect(empty.enterprises).toEqual([]);
+    expect(rankVisitors(empty.enterprises, "enterprises")).toEqual([]);
+    expect(mostVisitedSubtitle("enterprises", 5, empty)).toBe("No monthly report or camera count covers this range.");
+    expect(readVisitorRanking({ cameraDays: 4 } as unknown as ApiVisitorRanking)).toMatchObject({ enterprises: [], reportMonths: [], cameraDays: 4, uncoveredDays: 0 });
   });
 });

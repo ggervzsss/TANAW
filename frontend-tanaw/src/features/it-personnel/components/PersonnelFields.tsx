@@ -1,7 +1,12 @@
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useId, useState, type ReactNode } from "react";
 import { Input, cn } from "@/shared/ui-kit";
 import { PHILIPPINE_MOBILE_ERROR, toPhilippineLocalDigits } from "@/shared/utils/accountValidation";
 import { PERSONNEL_ROLES, personnelRoleAbout, personnelRoleLabel, type PersonnelRole } from "../model";
+import "../itPersonnel.css";
+
+/** The chosen role's tint glides to the next choice instead of jumping. */
+const GLIDE = { type: "tween", duration: 0.26, ease: [0.2, 0.8, 0.2, 1] } as const;
 
 type TextFieldProps = {
   name: string;
@@ -16,7 +21,7 @@ type TextFieldProps = {
   optional?: boolean;
 };
 
-const labelClass = "mb-1.5 block text-xs font-semibold text-(--tanaw-text-secondary)";
+const labelClass = "mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)";
 
 export function PersonnelTextField({ name, label, value, onChange, error, hint, type = "text", autoComplete, maxLength, optional = false }: TextFieldProps) {
   const id = useId();
@@ -64,15 +69,14 @@ export function PersonnelPhoneField({ value, onChange, error }: { value: string;
       <label htmlFor={id} className={labelClass}>
         Phone<span className="font-normal text-(--tanaw-text-muted)"> (optional)</span>
       </label>
-      <div
-        className={cn(
-          "rounded-tanaw-md shadow-tanaw-resting flex h-11 overflow-hidden border bg-(--tanaw-control-bg) transition-[border-color,box-shadow] focus-within:border-(--tanaw-accent-ink) focus-within:ring-4 focus-within:ring-emerald-600/15 hover:border-(--tanaw-control-border-hover)",
-          shownError ? "border-(--tanaw-error)" : "border-(--tanaw-control-border)",
-        )}
-      >
-        <span aria-hidden="true" className="flex items-center border-r border-(--tanaw-border-soft) bg-(--tanaw-surface-inset) px-3 text-sm font-semibold text-(--tanaw-text-secondary)">
+      <div data-invalid={shownError ? "" : undefined} className="it-personnel__phone tanaw-field rounded-tanaw-md group flex h-11 overflow-hidden">
+        <span
+          aria-hidden="true"
+          className="ease-tanaw-out flex items-center pr-2.5 pl-3.5 text-sm font-semibold text-(--tanaw-text-secondary) tabular-nums transition-colors duration-200 group-focus-within:text-(--tanaw-accent-ink)"
+        >
           +63
         </span>
+        <span aria-hidden="true" className="my-2.5 w-px shrink-0 bg-(--tanaw-control-border-hover)" />
         <input
           id={id}
           name="phoneLocal"
@@ -101,13 +105,13 @@ export function PersonnelPhoneField({ value, onChange, error }: { value: string;
 function FieldNote({ id, error, hint }: { id: string; error?: string; hint?: ReactNode }) {
   if (error)
     return (
-      <p id={id} role="alert" className="mt-1.5 text-xs font-semibold text-(--tanaw-danger-text)">
+      <p id={id} role="alert" className="mt-1.5 text-[13px] font-medium text-(--tanaw-danger-text)">
         {error}
       </p>
     );
   if (!hint) return null;
   return (
-    <p id={id} className="mt-1.5 text-xs leading-relaxed text-(--tanaw-text-muted)">
+    <p id={id} className="mt-1.5 text-[13px] leading-relaxed text-(--tanaw-text-muted)">
       {hint}
     </p>
   );
@@ -124,39 +128,46 @@ type RoleCardsProps = {
 export function RoleCards({ value, onChange, lockedReason, error }: RoleCardsProps) {
   const name = useId();
   const noteId = `${name}-note`;
+  const reduceMotion = useReducedMotion();
   return (
     <fieldset data-field-name="role" className="m-0 border-0 p-0" aria-describedby={lockedReason || error ? noteId : undefined}>
-      <legend className={labelClass}>Role</legend>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {PERSONNEL_ROLES.map((role) => {
-          const checked = value === role;
-          const disabled = Boolean(lockedReason) && !checked;
-          return (
-            <label
-              key={role}
-              data-on={checked}
-              className={cn(
-                "rounded-tanaw-md grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 border px-4 py-3.5 transition-colors",
-                checked ? "border-(--tanaw-action) bg-(--tanaw-selected-bg)" : "border-(--tanaw-control-border) hover:border-(--tanaw-accent-ink)",
-                disabled && "cursor-not-allowed opacity-55 hover:border-(--tanaw-control-border)",
-              )}
-            >
-              <input
-                type="radio"
-                name={name}
-                value={role}
-                checked={checked}
-                disabled={disabled}
-                onChange={() => onChange(role)}
-                data-form-error-focus={checked || undefined}
-                className="mt-0.5 h-4.5 w-4.5 accent-(--tanaw-action) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
-              />
-              <span className="font-bold text-(--tanaw-text)">{personnelRoleLabel[role]}</span>
-              <span className="col-start-2 text-[0.84375rem] leading-relaxed text-(--tanaw-text-secondary)">{personnelRoleAbout[role]}</span>
-            </label>
-          );
-        })}
-      </div>
+      <legend className={cn(labelClass, "mb-2")}>Role</legend>
+      <LayoutGroup id={name}>
+        {/* The rows reach a little past the fields on both sides, so each dot lines up with the field edges above. */}
+        <div className="-mx-3 grid gap-0.5">
+          {PERSONNEL_ROLES.map((role) => {
+            const checked = value === role;
+            const disabled = Boolean(lockedReason) && !checked;
+            return (
+              <label
+                key={role}
+                data-on={checked}
+                data-disabled={disabled || undefined}
+                className={cn(
+                  "it-personnel__role rounded-tanaw-md grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-1 px-3 py-3.5",
+                  disabled && "cursor-not-allowed opacity-55",
+                )}
+              >
+                {checked && <motion.span layoutId="personnel-role-highlight" aria-hidden="true" className="it-personnel__role-highlight" transition={reduceMotion ? { duration: 0 } : GLIDE} />}
+                <input
+                  type="radio"
+                  name={name}
+                  value={role}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => onChange(role)}
+                  data-form-error-focus={checked || undefined}
+                  className="it-personnel__dot relative mt-0.5"
+                />
+                <span className={cn("ease-tanaw-out relative font-semibold transition-colors duration-200", checked ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text)")}>
+                  {personnelRoleLabel[role]}
+                </span>
+                <span className="relative col-start-2 text-[0.84375rem] leading-relaxed text-(--tanaw-text-secondary)">{personnelRoleAbout[role]}</span>
+              </label>
+            );
+          })}
+        </div>
+      </LayoutGroup>
       <FieldNote id={noteId} error={error} hint={lockedReason} />
     </fieldset>
   );

@@ -1,5 +1,7 @@
-import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { easeOut } from "../lib/motion";
 
 function nextIndex(key: string, index: number, count: number): number | null {
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % count;
@@ -22,10 +24,12 @@ export type SegmentedControlProps = {
 
 /**
  * A row of pill-shaped choices that filter one list ("Needs attention", "Escalated support"), each
- * with an optional count. Sentence case. The selected choice fills with Civic Green.
+ * with an optional count. Sentence case. The chosen pill takes the soft green tint, and the tint
+ * glides from one choice to the next instead of jumping.
  */
 export function SegmentedControl({ options, value, onChange, ariaLabel, size = "md", className }: SegmentedControlProps) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const indicatorId = useId();
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const enabled = options.filter((option) => !option.disabled);
@@ -57,14 +61,25 @@ export function SegmentedControl({ options, value, onChange, ariaLabel, size = "
             onClick={() => onChange(option.value)}
             onKeyDown={onKeyDown}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full font-bold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:opacity-50",
-              size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
-              selected ? "bg-(--tanaw-action) text-(--tanaw-on-action) shadow-tanaw-resting" : "text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text)",
+              "relative isolate inline-flex items-center gap-2 rounded-full font-semibold whitespace-nowrap transition-[color,background-color,scale] duration-200 ease-tanaw-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none",
+              size === "sm" ? "px-3 py-1.5 text-[0.8125rem]" : "px-4 py-2 text-sm",
+              selected ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-bg) hover:text-(--tanaw-text)",
             )}
           >
+            {selected && (
+              <motion.span
+                aria-hidden="true"
+                layoutId={`${indicatorId}-segment`}
+                data-segment-indicator
+                className="absolute inset-0 -z-10 rounded-full bg-(--tanaw-selected-bg)"
+                transition={{ duration: 0.24, ease: easeOut }}
+              />
+            )}
             {option.label}
             {option.count !== undefined && (
-              <span className={cn("rounded-full px-1.5 text-xs tabular-nums", selected ? "bg-white/20 text-(--tanaw-on-action)" : "bg-(--tanaw-surface-subtle) text-(--tanaw-text-muted)")}>{option.count}</span>
+              <span className={cn("rounded-full px-1.5 text-xs tabular-nums", selected ? "bg-(--tanaw-accent-ink)/12 text-(--tanaw-accent-ink)" : "bg-(--tanaw-control-bg) text-(--tanaw-text-muted)")}>
+                {option.count}
+              </span>
             )}
           </button>
         );

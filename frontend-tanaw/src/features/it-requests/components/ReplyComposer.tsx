@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { Check, Send } from "lucide-react";
 import { useId } from "react";
 import type { Request } from "@/shared/services/requests";
 import { Button, Textarea, cn } from "@/shared/ui-kit";
@@ -27,8 +27,8 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
 
   if (!actions.canReply) {
     return (
-      <section aria-labelledby={headingId} className="mt-3.5 border-t border-(--tanaw-border-soft) pt-4.5">
-        <h3 id={headingId} className="text-base font-bold">
+      <section aria-labelledby={headingId} className="mt-4 border-t border-(--tanaw-border-soft) pt-5">
+        <h3 id={headingId} className="text-base font-[650]">
           Reply to {senderName(request)}
         </h3>
         <p className="mt-1 text-[0.84375rem] text-(--tanaw-text-secondary)">
@@ -44,15 +44,15 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
   };
 
   return (
-    <section aria-labelledby={headingId} className="mt-3.5 border-t border-(--tanaw-border-soft) pt-4.5">
-      <h3 id={headingId} className="text-base font-bold">
+    <section aria-labelledby={headingId} className="mt-4 border-t border-(--tanaw-border-soft) pt-5">
+      <h3 id={headingId} className="text-base font-[650]">
         Reply to {senderName(request)}
       </h3>
       <p id={hintId} className="mt-1 text-[0.84375rem] text-(--tanaw-text-secondary)">
         {replyHint(request)}
       </p>
 
-      <p id={quickLabelId} className="mt-3 text-xs font-semibold text-(--tanaw-text-secondary)">
+      <p id={quickLabelId} className="mt-3 text-[13px] font-medium text-(--tanaw-text-secondary)">
         Quick replies
       </p>
       <div role="group" aria-labelledby={quickLabelId} className="mt-1.5 flex flex-wrap gap-2">
@@ -65,19 +65,18 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
               aria-pressed={pressed}
               onClick={() => onDraftChange(reply.text)}
               className={cn(
-                "min-h-9 cursor-pointer rounded-full border px-3.5 text-[0.84375rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                pressed
-                  ? "border-(--tanaw-action) bg-(--tanaw-row-selected) text-(--tanaw-accent-ink)"
-                  : "border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-(--tanaw-text) hover:border-(--tanaw-accent-ink) hover:bg-(--tanaw-control-hover)",
+                "group rounded-tanaw-md ease-tanaw-out inline-flex min-h-9 cursor-pointer items-center gap-1.5 px-3.5 text-[0.84375rem] font-medium transition-[background-color,color,translate,scale] duration-200 hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:translate-y-0 active:scale-[0.97] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+                pressed ? "bg-(--tanaw-selected-bg) font-semibold text-(--tanaw-accent-ink)" : "bg-(--tanaw-control-bg) text-(--tanaw-text) hover:bg-(--tanaw-control-bg-hover)",
               )}
             >
+              {pressed && <Check size={14} strokeWidth={2.6} aria-hidden="true" className="tanaw-pop-in -ml-0.5" />}
               {reply.label}
             </button>
           );
         })}
       </div>
 
-      <label htmlFor={fieldId} className="mt-3.5 block text-xs font-semibold text-(--tanaw-text-secondary)">
+      <label htmlFor={fieldId} className="mt-4 block text-[13px] font-medium text-(--tanaw-text-secondary)">
         Your reply
       </label>
       <Textarea
