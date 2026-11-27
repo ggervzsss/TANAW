@@ -331,6 +331,17 @@
   min-height: 34px;
   padding-block: 6px;
 }
+/* Stacked hidden labels size the trigger to its widest month; equal-width digits keep days and years even. */
+.report-day-picker-label {
+  display: inline-grid;
+  font-variant-numeric: tabular-nums;
+}
+.report-day-picker-label > span {
+  grid-area: 1 / 1;
+}
+.report-day-picker-sizer {
+  visibility: hidden;
+}
 .report-day-picker-icon {
   position: relative;
   display: inline-flex;
@@ -370,8 +381,7 @@
 .report-day-popover[data-placement="top"],
 .report-search-popover[data-placement="top"] {
   transform-origin: bottom right;
-}
-@keyframes reports-popover-enter {
+}@keyframes reports-popover-enter {
   from {
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
