@@ -27,6 +27,11 @@
   border-bottom: 0;
 }
 
+/* Loading rows never tint, but keep the hairlines of the rows they stand in for. */
+.support-tickets__table tbody tr[data-empty][data-skeleton] td {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+}
+
 @media (hover: hover) {
   .support-tickets__table tbody tr:not([data-empty]):hover > td {
     background: var(--tanaw-control-hover);

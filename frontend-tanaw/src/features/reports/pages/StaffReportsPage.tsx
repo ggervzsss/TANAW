@@ -6,7 +6,7 @@ import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
 import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
-import { StaffTableSkeleton } from "../components/StaffTableSkeleton";
+import { StaffTableSkeleton, type StaffTableSkeletonColumn } from "../components/StaffTableSkeleton";
 import { useStaffReports } from "../hooks/useStaffReports";
 import { currentReportingMonth, monthIndexOf } from "../model/reportStatuses";
 import { formatReportingMonth, monthKey, parseMonthKey, reportingMonth, reportingMonthOptions, type ReportingMonth } from "../model/reportingMonth";
@@ -23,6 +23,16 @@ import {
 } from "../model/staffReports";
 
 const STATUS_ID = "staff-reports-status";
+
+/** The columns of StaffReportsTable, for its loading rows. */
+const STAFF_REPORT_COLUMNS: readonly StaffTableSkeletonColumn[] = [
+  { header: "Enterprise", width: "w-3/5" },
+  { header: "Report ID", className: "tanaw-hide-sm", width: "w-24" },
+  { header: "Sent", className: "tanaw-hide-sm", width: "w-28" },
+  { header: "Submission", pill: true },
+  { header: "Staff review", pill: true },
+  { header: <span className="sr-only">Action</span>, width: "w-16" },
+];
 
 /**
  * Staff Reports. URL: `?month=2026-10` (the reporting month, default the current one), the filters
@@ -115,7 +125,7 @@ export function StaffReportsPage() {
       </div>
       <div className="mt-3">
         {data.isLoading ? (
-          <StaffTableSkeleton label="Loading reports…" cells={["w-3/5", "w-24", "w-28", "w-20", "w-24", "w-16"]} />
+          <StaffTableSkeleton label="Loading reports…" columns={STAFF_REPORT_COLUMNS} subline />
         ) : data.isError ? (
           <p role="alert" className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
             Reports could not be loaded. Refresh the page to try again.

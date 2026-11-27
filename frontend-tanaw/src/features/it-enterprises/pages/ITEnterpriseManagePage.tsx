@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Info, SearchX } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Button, EmptyState, PortalPageHeader, Skeleton, Tabs, cn } from "@/shared/ui-kit";
 import { formatPhilippineDate } from "@/shared/utils/dateTime";
-import { ConnectionTab } from "../components/ConnectionTab";
+import { CameraRowsSkeleton, ConnectionTab } from "../components/ConnectionTab";
 import { DetailsTab } from "../components/DetailsTab";
 import { HoursTab } from "../components/HoursTab";
 import { toneText } from "../components/tones";
@@ -74,25 +74,52 @@ export function ITEnterpriseManagePage() {
   if (isLoading || !row) {
     return (
       <div className="it-enterprises w-full">
-        <PortalPageHeader back={BACK} title={<span className="sr-only">Loading enterprise</span>} />
+        {/* The page in its own shape: the title and lede in their line heights, the tabs, then the Connection tab's facts and cameras. */}
+        <PortalPageHeader
+          back={BACK}
+          className="mb-4"
+          title={
+            <>
+              <span className="sr-only">Loading enterprise</span>
+              <Skeleton className="inline-block h-[0.8em] w-md max-w-full align-middle" />
+            </>
+          }
+          description={<Skeleton className="inline-block h-4 w-sm max-w-full align-middle" />}
+          actions={<Skeleton className="h-4 w-48" />}
+        />
         <div role="status" aria-label="Loading enterprise">
-          <Skeleton className="h-8 w-full max-w-md" />
-          <Skeleton className="mt-3 h-4 w-full max-w-sm" />
-          <div className="mt-6 flex gap-6 border-b border-(--tanaw-border-soft) pb-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-36" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-sm:grid-cols-1">
-            {[0, 1, 2, 3].map((index) => (
-              <div key={index} className="px-5 py-4 first:pl-0 max-lg:px-0">
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="mt-2.5 h-4 w-32" />
-              </div>
+          <div aria-hidden="true" className="flex gap-1 border-b border-(--tanaw-border-soft)">
+            {["w-24", "w-36", "w-28"].map((width) => (
+              <span key={width} className="flex h-5 box-content items-center px-4 pt-2.5 pb-3.5">
+                <Skeleton className={cn("h-3.5", width)} />
+              </span>
             ))}
           </div>
-          <Skeleton className="mt-8 h-5 w-40" />
-          <Skeleton className="mt-4 h-14 w-full" />
+          <div aria-hidden="true" className={cn("pt-6", tab !== "connection" && "hidden")}>
+            <div className="grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-sm:grid-cols-1 lg:[&>div+div]:border-l lg:[&>div+div]:border-(--tanaw-border-soft)">
+              {[0, 1, 2, 3].map((index) => (
+                <div key={index} className="min-w-0 px-5 py-4 first:pl-0 max-lg:px-0 max-lg:py-3">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3 w-28" />
+                  </span>
+                  <span className="mt-1 flex h-6 items-center">
+                    <Skeleton className="h-4 w-32" />
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8">
+              <span className="flex h-6 items-center">
+                <Skeleton className="h-4.5 w-40" />
+              </span>
+              <span className="mt-1 flex h-5 items-center">
+                <Skeleton className="h-3 w-56" />
+              </span>
+              <div className="mt-2 border-t border-(--tanaw-border-soft)">
+                <CameraRowsSkeleton />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

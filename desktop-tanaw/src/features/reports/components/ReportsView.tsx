@@ -37,12 +37,13 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     executeSubmit,
     handleDownloadReport,
     handlePreviewReport,
-    handleSelectLedgerRow,
+    handleSelectPeriod,
     hasDailyOrigins,
     isPeriodChanging,
     isReadOnly,
     isSubmitting,
     ledgerRows,
+    months,
     notes,
     origins,
     period,
@@ -57,12 +58,9 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
   const reviewKey = JSON.stringify([period, activeReportId, origins, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
   const previewIsDraft = previewReport?.reportId === (activeReportId ?? "TANAW-DRAFT") && !isReadOnly;
   const previewValidation = previewReport ? ((previewIsDraft ? dailyOriginsError(days) : null) ?? validateDemographicAllocation(previewReport.metrics, previewReport.demo)) : null;
+  // Reports History only previews: the month in Create Reports changes from its Tourism Period picker.
   const selectTab = (next: "create" | "history") => {
-    if (next === "create" && previewedLedgerKey) {
-      const row = ledgerRows.find((item) => item.key === previewedLedgerKey);
-      if (row && row.key !== activeLedgerKey) handleSelectLedgerRow(row);
-      setPreviewedLedgerKey(null);
-    }
+    if (next === "create") setPreviewedLedgerKey(null);
     setTab(next);
   };
 
@@ -139,6 +137,8 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           isPeriodChanging={isPeriodChanging}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
+          months={months}
+          onSelectPeriod={handleSelectPeriod}
           notes={notes}
           period={period}
           validationError={validationError}
@@ -165,10 +165,7 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           isLoading={isPeriodChanging && !ledgerRows.length}
           onDownloadReport={handleDownloadReport}
           onPreviewReport={handlePreviewReport}
-          onSelectReport={(row) => {
-            // Previewing alone must not replace a draft or start its persistence hooks.
-            setPreviewedLedgerKey(row.key);
-          }}
+          onSelectReport={(row) => setPreviewedLedgerKey(row.key)}
         />
       </div>
     </div>

@@ -414,18 +414,19 @@ export function CameraSettingsPanel(props: Props) {
                   {videoStatus}
                 </span>
               </p>
-              <CameraConnectionFields value={editForm} hostError={props.cameraIpError} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
+              <CameraConnectionFields value={editForm} hostError={props.cameraIpError} readOnly={busy} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
               <Field label="Camera Username" htmlFor="settings-username">
                 <input
                   id="settings-username"
                   autoComplete="username"
                   value={editForm.username ?? ""}
+                  readOnly={busy}
                   placeholder="Enter camera username"
                   onChange={(event) => onEditFormChange({ ...editForm, username: event.target.value })}
                 />
               </Field>
               <Field label="Camera Password" htmlFor="settings-camera-password">
-                <PasswordVisibilityInput id="settings-camera-password" variant="modal" autoComplete="new-password"
+                <PasswordVisibilityInput id="settings-camera-password" variant="modal" autoComplete="new-password" readOnly={busy}
                   value={editForm.password ?? ""} placeholder="Enter new password (optional)" onChange={(password) => onEditFormChange({ ...editForm, password })} />
                 {hasStoredPassword && <small>Password configured. Leave blank to keep it unchanged.</small>}
               </Field>

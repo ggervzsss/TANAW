@@ -1,5 +1,5 @@
 import type { ReportLedgerRow } from "../components/ReportLedgerTable";
-import { reportingMonthSortValue } from "./reporting-period";
+import { reportingMonthKey, reportingMonthSortValue } from "./reporting-period";
 
 const ROW_KIND_PRIORITY: Record<ReportLedgerRow["kind"], number> = {
   current: 0,
@@ -16,4 +16,17 @@ export function sortReportLedgerRows(rows: ReportLedgerRow[]) {
     if (periodDifference !== 0) return periodDifference;
     return ROW_KIND_PRIORITY[first.kind] - ROW_KIND_PRIORITY[second.kind];
   });
+}
+
+/**
+ * The months Create Reports can switch between, oldest first: one row per reporting month, taking
+ * the live month first, then a submitted report, then a month still waiting for its report.
+ */
+export function reportMonthRows(rows: ReportLedgerRow[]) {
+  const months = new Map<string, ReportLedgerRow>();
+  for (const row of sortReportLedgerRows(rows)) {
+    const key = reportingMonthKey(row.report.period ?? row.report.date);
+    if (!months.has(key)) months.set(key, row);
+  }
+  return [...months.values()].reverse();
 }

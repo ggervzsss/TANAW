@@ -55,29 +55,68 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: Tick
 /** The request window's shape while the request loads. */
 function TicketDetailSkeleton() {
   return (
+    // The same two columns and hairline-split sections as TicketDetailContent, at its line heights.
     <div role="status" aria-label="Loading request details" className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-      <div>
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-3 h-6 w-3/5" />
-        <Skeleton className="mt-3 h-3 w-full" />
-        <Skeleton className="mt-2 h-3 w-4/5" />
-        <div className="mt-6 grid gap-4 border-t border-(--tanaw-border-soft) pt-5 md:grid-cols-2">
-          {[0, 1, 2, 3].map((index) => (
-            <div key={index}>
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="mt-2 h-4 w-2/3" />
+      <div aria-hidden="true" className="min-w-0">
+        <div className="support-tickets__section flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <span className="flex h-[19.5px] items-center">
+              <Skeleton className="h-3 w-24" />
+            </span>
+            <span className="mt-1 flex h-[1.72rem] items-center">
+              <Skeleton className="h-5 w-3/5" />
+            </span>
+            <span className="mt-2 flex h-[1.42rem] items-center">
+              <Skeleton className="h-3.5 w-full max-w-3xl" />
+            </span>
+            <span className="flex h-[1.42rem] items-center">
+              <Skeleton className="h-3.5 w-4/5 max-w-2xl" />
+            </span>
+          </div>
+          <Skeleton shape="pill" className="h-6.5 w-24 shrink-0" />
+        </div>
+        <div className="support-tickets__section grid gap-4 md:grid-cols-2">
+          {[0, 1, 2, 3, 4, 5].map((index) => (
+            <div key={index} className="border-b border-(--tanaw-border-soft) py-3">
+              <span className="mb-1 flex h-[19.5px] items-center">
+                <Skeleton className="h-3 w-20" />
+              </span>
+              <span className="flex h-[1.42rem] items-center">
+                <Skeleton className="h-3.5 w-2/3" />
+              </span>
             </div>
           ))}
         </div>
-      </div>
-      <div>
-        <Skeleton className="h-4 w-32" />
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Skeleton className="rounded-tanaw-md h-9 w-full" />
-          <Skeleton className="rounded-tanaw-md h-9 w-full" />
+        <div className="support-tickets__section">
+          <span className="flex h-[1.41rem] items-center justify-between gap-3">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-3 w-16" />
+          </span>
+          <span className="mt-3 flex h-5 items-center">
+            <Skeleton className="h-3.5 w-3/5" />
+          </span>
         </div>
-        <Skeleton className="mt-8 h-4 w-28" />
-        <Skeleton className="rounded-tanaw-md mt-4 h-20 w-full" />
+      </div>
+      <div aria-hidden="true" className="min-w-0 xl:border-l xl:border-(--tanaw-border-soft) xl:pl-8">
+        <div className="support-tickets__section">
+          <span className="flex h-[1.41rem] items-center">
+            <Skeleton className="h-4 w-32" />
+          </span>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Skeleton className="h-8.5 w-full rounded-tanaw-md" />
+            <Skeleton className="h-8.5 w-full rounded-tanaw-md" />
+          </div>
+          <span className="mt-4 mb-1.5 flex h-[19.5px] items-center">
+            <Skeleton className="h-3 w-12" />
+          </span>
+          <Skeleton className="h-10 w-full rounded-tanaw-md" />
+        </div>
+        <div className="support-tickets__section">
+          <span className="flex h-[1.41rem] items-center">
+            <Skeleton className="h-4 w-28" />
+          </span>
+          <Skeleton className="mt-4 h-20 w-full rounded-tanaw-md" />
+        </div>
       </div>
     </div>
   );

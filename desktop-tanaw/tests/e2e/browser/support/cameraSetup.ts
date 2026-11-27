@@ -39,6 +39,7 @@ export async function setup(page: Page) {
   let streamGeneration = 1;
   let failTest = false;
   let failWrite = false;
+  let testHold: Promise<void> | null = null;
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   const user = { id: "camera-operator", email: "camera@example.test", role: "enterprise", name: "Camera Operator", enterpriseId: "camera-enterprise", enterpriseName: "Camera Workspace" };
   await page.route("**/auth/**", (route) => {
@@ -92,7 +93,7 @@ export async function setup(page: Page) {
       },
     };
   });
-  await mockMlRequest(page, "*", (request) => {
+  await mockMlRequest(page, "*", async (request) => {
     const path = new URL(request.url).pathname;
     const body = JSON.parse(request.body || "{}");
     const reply = (value: unknown, code = 200) => mlResponse({ status: code, body: JSON.stringify(value) });
@@ -145,6 +146,7 @@ export async function setup(page: Page) {
       });
     if (path === "/camera/test") {
       requests.push({ path, body });
+      if (testHold) await testHold;
       return reply({ ok: !failTest, message: failTest ? "Camera unreachable" : "Verified" });
     }
     if (path === "/camera/start") {
@@ -191,6 +193,10 @@ export async function setup(page: Page) {
     },
     setFailWrite: (value: boolean) => {
       failWrite = value;
+    },
+    /** Keeps camera connection tests waiting until the promise settles. */
+    holdTest: (until: Promise<void> | null) => {
+      testHold = until;
     },
   };
 }

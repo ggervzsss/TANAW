@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Info } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { TrafficPoint } from "../types/dashboard";
 import { PLOT_TOP, SHADE_LEVELS, trafficGeometry } from "../utils/traffic";
+import { TrafficChartLoading } from "./DashboardSkeleton";
 
 type ChartProps = {
   points: TrafficPoint[];
@@ -195,13 +196,7 @@ export function VisitorTrafficChart({ points, busiest, summary, inProgressKey, i
       </div>
 
       {loading ? (
-        <div className="dash-chart-loading" aria-busy="true" aria-label="Loading visitor traffic">
-          <div className="dash-chart-skeleton">
-            {[38, 52, 64, 72, 86, 100, 80].map((height, i) => (
-              <span key={height} className="design-skeleton" style={{ height: `${height}%`, animationDelay: `${i * 80}ms` }} />
-            ))}
-          </div>
-        </div>
+        <TrafficChartLoading label="Loading visitor traffic" />
       ) : empty ? (
         <div className="dash-chart-empty" role="status">
           {unavailable ? "History unavailable. Check the local camera service." : "No observations available for this period."}

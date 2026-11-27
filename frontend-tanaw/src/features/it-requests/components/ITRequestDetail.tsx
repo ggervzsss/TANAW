@@ -219,9 +219,13 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
         ))}
       </ol>
       {detailLoading && (
-        <div role="status" aria-label="Loading the conversation." className="mt-1 grid gap-2 pl-7.5">
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-3 w-3/4 max-w-120" />
+        <div role="status" aria-label="Loading the conversation." className="mt-1 pb-1 pl-7.5">
+          <span className="flex h-6 items-center">
+            <Skeleton className="h-4 w-48" />
+          </span>
+          <span className="mt-0.75 flex h-5 items-center">
+            <Skeleton className="h-3 w-3/4 max-w-120" />
+          </span>
         </div>
       )}
 

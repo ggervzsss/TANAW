@@ -53,7 +53,25 @@ export function EnterpriseDetailsPage() {
   if (directory.isLoading) {
     return (
       <div className="admin-enterprises w-full">
-        <PortalPageHeader back={back} title={<span className="sr-only">Loading enterprise</span>} />
+        {/* The real header frame (back link, photo, title, civic line, address, tags, date range) with bars where the text goes. */}
+        <PortalPageHeader
+          back={back}
+          leading={<Skeleton className="h-28 w-42 shrink-0 rounded-tanaw-lg max-sm:hidden" />}
+          title={
+            <>
+              <span className="sr-only">Loading enterprise</span>
+              <Skeleton className="inline-block h-[0.85em] w-72 max-w-full align-middle" />
+            </>
+          }
+          description={<Skeleton className="inline-block h-[0.95em] w-96 max-w-full align-middle" />}
+          actions={<Skeleton shape="pill" className="h-9 w-44" />}
+        >
+          <span aria-hidden="true" className="mt-3 flex gap-2">
+            <Skeleton className="h-7 w-20" />
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-7 w-24" />
+          </span>
+        </PortalPageHeader>
         <DetailsSkeleton />
       </div>
     );
@@ -187,49 +205,44 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
   );
 }
 
-/** The page in its own shape while the enterprise loads: photo and title, four figures, the trend and the camera list. */
+/** The page below its header while the enterprise loads: four figures, the trend and the camera list, at their real line heights. */
 function DetailsSkeleton() {
   return (
     <div role="status" aria-label="Loading enterprise">
       <div aria-hidden="true">
-        <div className="flex items-start gap-5">
-          <Skeleton className="h-28 w-42 shrink-0 rounded-tanaw-lg max-sm:hidden" />
-          <div className="min-w-0 flex-1 pt-1">
-            <Skeleton className="h-8 w-72 max-w-full" />
-            <Skeleton shape="pill" className="mt-3 h-1 w-14" />
-            <Skeleton className="mt-3 h-4 w-96 max-w-full" />
-            <span className="mt-3 flex gap-2">
-              <Skeleton className="h-7 w-20" />
-              <Skeleton className="h-7 w-28" />
-              <Skeleton className="h-7 w-24" />
-            </span>
-          </div>
-        </div>
         <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2 max-sm:grid-cols-1">
           {[0, 1, 2, 3].map((index) => (
             <div key={index} className={figureRuleClass(index)}>
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="mt-1.5 h-3 w-32" />
+              <span className="flex h-5 items-center">
+                <Skeleton className="h-4 w-24" />
+              </span>
+              <span className="flex h-[19.5px] items-center">
+                <Skeleton className="h-3 w-32" />
+              </span>
               <Skeleton className="mt-3 h-8.5 w-20" />
-              <Skeleton className="mt-2 h-3 w-28" />
+              <span className="mt-2 flex h-[19.5px] items-center">
+                <Skeleton className="h-3 w-28" />
+              </span>
             </div>
           ))}
         </div>
         <div className="mt-8 grid grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-8 max-[1100px]:grid-cols-1">
           <div>
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
+            <SectionHeadingSkeleton title="w-40" caption="w-64" />
             <TrendSkeleton />
           </div>
           <div className="border-l border-(--tanaw-border-soft) pl-10 max-[1100px]:border-t max-[1100px]:border-l-0 max-[1100px]:pt-6 max-[1100px]:pl-0">
-            <Skeleton className="h-5 w-44" />
-            <Skeleton className="mt-2 h-3.5 w-40" />
-            {[0, 1, 2].map((index) => (
-              <span key={index} className="flex justify-between gap-3 border-b border-(--tanaw-border-soft) py-3.5">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-4 w-20" />
-              </span>
-            ))}
+            <SectionHeadingSkeleton title="w-44" caption="w-40" />
+            <span className="mt-3 block">
+              {[0, 1, 2].map((index) => (
+                <span key={index} className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-3">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-4 w-28" />
+                  </span>
+                  <Skeleton className="h-4 w-20" />
+                </span>
+              ))}
+            </span>
           </div>
         </div>
       </div>
@@ -238,19 +251,36 @@ function DetailsSkeleton() {
   );
 }
 
-/** The trend chart's shape while it loads: the hairline grid with a skeleton where the line goes. */
+/** A section heading (18px at 1.3) and its 13px caption, as bars in their line boxes. */
+function SectionHeadingSkeleton({ title, caption }: { title: string; caption: string }) {
+  return (
+    <>
+      <span className="flex h-[23.4px] items-center">
+        <Skeleton className={cn("h-5", title)} />
+      </span>
+      <span className="mt-1 flex h-[19.5px] items-center">
+        <Skeleton className={cn("h-3.5 max-w-full", caption)} />
+      </span>
+    </>
+  );
+}
+
+/** The trend chart's shape while it loads: the empty readout line, then the hairline grid with a skeleton where the line goes. */
 function TrendSkeleton({ label }: { label?: string }) {
   return (
-    <div role={label ? "status" : undefined} aria-label={label} className="relative mt-4.5 grid h-65 grid-rows-4">
-      {[0, 1, 2, 3].map((index) => (
-        <span key={index} aria-hidden="true" className="border-t border-(--tanaw-chart-grid)" />
-      ))}
-      <Skeleton className="absolute right-2 bottom-7 left-14 h-[58%] rounded-t-tanaw-md rounded-b-none" />
-      <span aria-hidden="true" className="absolute right-2 bottom-0 left-14 flex justify-between">
-        {[0, 1, 2, 3, 4, 5].map((index) => (
-          <Skeleton key={index} className="h-3 w-8" />
+    <div role={label ? "status" : undefined} aria-label={label} className="mt-4">
+      <span aria-hidden="true" className="block h-5" />
+      <div className="relative grid h-65 grid-rows-4">
+        {[0, 1, 2, 3].map((index) => (
+          <span key={index} aria-hidden="true" className="border-t border-(--tanaw-chart-grid)" />
         ))}
-      </span>
+        <Skeleton className="absolute right-2 bottom-7 left-14 h-[58%] rounded-t-tanaw-md rounded-b-none" />
+        <span aria-hidden="true" className="absolute right-2 bottom-0 left-14 flex justify-between">
+          {[0, 1, 2, 3, 4, 5].map((index) => (
+            <Skeleton key={index} className="h-3 w-8" />
+          ))}
+        </span>
+      </div>
     </div>
   );
 }

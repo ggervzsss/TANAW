@@ -49,14 +49,24 @@ function DevDeliveriesSkeleton() {
     <div role="status" aria-label="Loading development messages...">
       {[0, 1, 2].map((index) => (
         <div key={index} className={rowGrid}>
-          <div className="space-y-2.5">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-4 w-44" />
-            <Skeleton className="h-3 w-32" />
+          {/* Kind badge, recipient and time, status badge; then subject and message, each line in its own height. */}
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-18 rounded-full" />
+            <div>
+              <span className="flex h-5 items-center">
+                <Skeleton className="h-3.5 w-44" />
+              </span>
+              <span className="mt-1 flex h-4 items-center">
+                <Skeleton className="h-3 w-32" />
+              </span>
+            </div>
+            <Skeleton className="h-6 w-14 rounded-full" />
           </div>
           <div>
-            <Skeleton className="h-4 w-2/5" />
-            <Skeleton className="rounded-tanaw-md mt-3 h-24 w-full" />
+            <span className="mb-2 flex h-5.5 items-center">
+              <Skeleton className="h-4 w-2/5" />
+            </span>
+            <Skeleton className="rounded-tanaw-md h-36 w-full" />
           </div>
         </div>
       ))}

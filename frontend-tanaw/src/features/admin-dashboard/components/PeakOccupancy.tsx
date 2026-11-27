@@ -22,8 +22,11 @@ const axisTick = { fontSize: 12, fill: "var(--tanaw-chart-axis)" };
 /** The chart's shape while camera counts load: its hairline grid and a skeleton where the line goes. */
 function ChartSkeleton() {
   return (
-    <div role="status" aria-label="Loading camera counts…" className="mt-3">
-      <Skeleton className="mb-1 h-3.5 w-36" />
+    <div role="status" aria-label="Loading camera counts…" className="mt-3 flex flex-1 flex-col">
+      {/* The readout line above the chart: 20px tall with 4px below it, as in .tanaw-dashboard-readout. */}
+      <span className="mb-1 flex h-5 items-center">
+        <Skeleton className="h-3.5 w-36" />
+      </span>
       <div aria-hidden="true" className="tanaw-dashboard-chart-skeleton">
         <span className="tanaw-dashboard-chart-skeleton__rule" />
         <span className="tanaw-dashboard-chart-skeleton__rule" />

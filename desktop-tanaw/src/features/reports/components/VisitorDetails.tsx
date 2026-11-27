@@ -1,6 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
-import { Skeleton } from "../../../ui-kit";
+import { Skeleton, SkeletonLine } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { formatReportDate, OTHER_ORIGINS, otherOriginsTotal, setDayOrigin } from "../model/daily-origins";
 import { var1MonthlyCells } from "../model/var1";
@@ -40,7 +40,15 @@ export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoa
     <>
       <header className="report-visitor-heading">
         <h3>Visitor Details</h3>
-        <p>{day.unique ? `Enter the male and female for each visitor origin. The total must equal ${day.unique.toLocaleString()}` : "TANAW recorded no visitors on this day."}</p>
+        <p>
+          {isLoading ? (
+            <SkeletonLine width="26rem" />
+          ) : day.unique ? (
+            `Enter the male and female for each visitor origin. The total must equal ${day.unique.toLocaleString()}`
+          ) : (
+            "TANAW recorded no visitors on this day."
+          )}
+        </p>
       </header>
       <div className="report-origin-table-scroll">
         <table className="report-origin-table" aria-label={`Visitor origins for ${formatReportDate(day.date)}`}>
@@ -104,7 +112,11 @@ export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoa
         </table>
       </div>
       <div className="report-day-actions">
-        {day.status === "missing" ? (
+        {isLoading ? (
+          <p>
+            <SkeletonLine width="22rem" />
+          </p>
+        ) : day.status === "missing" ? (
           <p data-tone="missing" role="status">
             <CircleAlert aria-hidden="true" />
             These origins add up to more than the {(day.unique ?? 0).toLocaleString()} visitors TANAW counted. Lower them to continue.

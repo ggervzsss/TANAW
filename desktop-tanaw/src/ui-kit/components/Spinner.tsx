@@ -42,6 +42,16 @@ export function Skeleton({ className, label, style, shape = "block" }: SkeletonP
   );
 }
 
+export type SkeletonLineProps = { width: string; className?: string };
+
+/**
+ * A bar standing in for one line of text. It takes exactly the line box of the element it sits in
+ * (its font size and line height), so a heading or caption keeps its height while it waits.
+ */
+export function SkeletonLine({ width, className }: SkeletonLineProps) {
+  return <Skeleton className={cn("my-[0.2lh] inline-block h-[0.6lh] max-w-full align-top", className)} style={{ width }} />;
+}
+
 export type SkeletonTextProps = { lines?: number; className?: string };
 
 /** Placeholder lines for a paragraph or a label and its value; the last line is shorter. */

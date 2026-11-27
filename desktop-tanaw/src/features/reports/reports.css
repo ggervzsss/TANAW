@@ -399,6 +399,62 @@
 .report-day-calendar header span[data-tone="missing"] {
   color: var(--reports-missing-text);
 }
+.report-day-calendar header > span:not([data-tone]) {
+  color: var(--reports-muted);
+}
+/* Month switch: the month between quiet previous and next buttons. */
+.report-month-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px -4px 0;
+}
+.report-month-switch strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: center;
+}
+.report-month-switch button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--reports-text);
+  transition:
+    background-color 150ms var(--reports-ease),
+    color 150ms var(--reports-ease);
+}
+.report-month-switch button:hover:not(:disabled) {
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+.report-month-switch button:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
+}
+.report-month-switch button:disabled {
+  opacity: 0.35;
+}
+.report-month-switch svg {
+  width: 18px;
+  height: 18px;
+}
+.report-day-calendar header > span {
+  text-align: center;
+}
+.report-month-note {
+  margin: 0;
+  padding: 4px 4px 2px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--reports-muted);
+  text-align: center;
+}
 .report-day-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -931,57 +987,6 @@
   gap: 20px 40px;
   padding: 16px 0 8px;
   animation: reports-panel-rise 240ms var(--reports-ease);
-}
-
-
-/* Shared with the review dialog, so these are not scoped to the workspace. */
-.report-counting-basis {
-  display: grid;
-  gap: 10px;
-  font-size: var(--text-sm);
-  line-height: 21px;
-  color: var(--tanaw-text-secondary);
-}
-.report-counting-basis p {
-  margin: 0;
-}
-.report-counting-basis__title {
-  font-weight: 600;
-  color: var(--tanaw-accent-ink);
-}
-.report-counting-basis dl {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0 16px;
-  margin: 0;
-}
-.report-counting-basis :is(dt, dd) {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--tanaw-border-soft);
-}
-.report-counting-basis dd {
-  margin: 0;
-  text-align: right;
-  font-weight: 600;
-  color: var(--tanaw-text);
-  font-variant-numeric: tabular-nums;
-}
-.report-counting-basis summary {
-  width: fit-content;
-  border-radius: 6px;
-  font-weight: 600;
-  color: var(--tanaw-accent-ink);
-  cursor: pointer;
-}
-.report-counting-basis details > p {
-  margin: 8px 0;
-}
-.report-counting-basis ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding-left: 18px;
-  list-style: disc;
 }
 .report-notes label {
   display: block;
@@ -1714,20 +1719,6 @@
   margin: 12px 24px -8px;
   border-radius: 8px;
 }
-.var1-supporting-details {
-  margin: 12px 0 0;
-  font-size: 13px;
-  line-height: 20px;
-}
-.var1-supporting-details summary {
-  cursor: pointer;
-  border-radius: 5px;
-  width: fit-content;
-}
-.var1-supporting-details > p {
-  white-space: pre-wrap;
-  padding: 14px;
-}
 .tanaw-var1-viewer :is(button, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: 3px;
@@ -1857,8 +1848,7 @@
   }
   .var1-viewer-header,
   .var1-viewer-footer,
-  .var1-validation,
-  .var1-supporting-details {
+  .var1-validation {
     display: none !important;
   }
   .var1-official-table thead {

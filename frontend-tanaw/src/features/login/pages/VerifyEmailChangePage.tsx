@@ -56,13 +56,21 @@ export function VerifyEmailChangePage() {
 
 function VerifyingState() {
   return (
+    // Both outcomes open with a 48px mark and end with a ruled note and a button; keep that shape.
     <div className="tanaw-auth-state" aria-live="polite" aria-busy="true">
+      <Skeleton shape="circle" className="mb-4 h-12 w-12" />
       <h2 className="tanaw-auth-state__title">Verifying email ownership</h2>
       <p className="tanaw-auth-state__copy">TANAW is checking this single-use link. The address will not change until IT approves the request.</p>
-      <div className="tanaw-auth-state__skeleton" aria-hidden="true">
-        <Skeleton className="block h-4 w-3/4" />
-        <Skeleton className="block h-4 w-1/2" />
-        <Skeleton className="mt-3 block h-12 w-44" />
+      <div aria-hidden="true">
+        <span className="tanaw-auth-note--ruled mt-6 block">
+          <span className="flex h-[1.4rem] items-center">
+            <Skeleton className="h-4 w-3/4" />
+          </span>
+          <span className="flex h-[1.4rem] items-center">
+            <Skeleton className="h-4 w-1/2" />
+          </span>
+        </span>
+        <Skeleton className="mt-6 h-12 w-44" />
       </div>
     </div>
   );

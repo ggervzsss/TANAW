@@ -143,18 +143,27 @@ function ListEmptyState({ isLoading, filtered, onClear }: { isLoading: boolean; 
     return (
       <div role="status" aria-label="Loading requests">
         <div aria-hidden="true">
-          <span className="block border-b border-(--tanaw-border-soft) px-4 pt-3 pb-2">
+          {/* The day heading and request rows at their real line heights (see RequestList and requests.css). */}
+          <span className="flex h-[calc(19.5px+1.25rem)] items-center border-b border-(--tanaw-border-soft) px-4 pt-3 pb-2">
             <Skeleton className="h-3.5 w-16" />
           </span>
           {[0, 1, 2, 3].map((index) => (
-            <span key={index} className="block border-b border-(--tanaw-border-soft) px-4 py-4">
-              <span className="flex justify-between gap-3">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-3 w-12" />
+            <span key={index} className="block border-b border-(--tanaw-border-soft) py-0.5">
+              <span className="block px-4 py-3.5">
+                <span className="flex h-[19.5px] items-center justify-between gap-3">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-12" />
+                </span>
+                <span className="mt-1 flex h-[1.33rem] items-center">
+                  <Skeleton className="h-4 w-4/5" />
+                </span>
+                <span className="mt-0.5 flex h-5 items-center">
+                  <Skeleton className="h-3.5 w-36" />
+                </span>
+                <span className="mt-2 flex h-[19.5px] items-center">
+                  <Skeleton className="h-3 w-20" />
+                </span>
               </span>
-              <Skeleton className="mt-2.5 h-4 w-4/5" />
-              <Skeleton className="mt-2 h-3.5 w-36" />
-              <Skeleton className="mt-3 h-3 w-20" />
             </span>
           ))}
         </div>
@@ -194,22 +203,52 @@ function useMinuteClock() {
 /** The details pane in its own shape while the requests load: status, title, the story and the details grid. */
 function DetailSkeleton() {
   return (
+    // Each bar sits in a box of its line's height in RequestDetail, so the details arrive without a jump.
     <div aria-hidden="true" className="py-1.5">
-      <Skeleton className="h-3.5 w-24" />
-      <Skeleton className="mt-3 h-8 w-3/4" />
-      <Skeleton className="mt-3 h-4 w-64 max-w-full" />
-      <Skeleton className="mt-7 h-4 w-32" />
-      <Skeleton className="mt-3 h-3.5 w-full max-w-[68ch]" />
-      <Skeleton className="mt-2 h-3.5 w-5/6 max-w-[60ch]" />
-      <Skeleton className="mt-7 h-4 w-20" />
+      <span className="flex h-[19.5px] items-center">
+        <Skeleton className="h-3.5 w-24" />
+      </span>
+      <span className="mt-2 flex h-[2.15625rem] items-center max-sm:h-[1.725rem]">
+        <Skeleton className="h-8 w-3/4 max-sm:h-6" />
+      </span>
+      <span className="mt-2.5 flex h-[1.36rem] items-center">
+        <Skeleton className="h-4 w-64 max-w-full" />
+      </span>
+      <span className="mt-6 flex h-6 items-center">
+        <Skeleton className="h-4 w-32" />
+      </span>
+      <span className="mt-1.5 flex h-6.5 items-center">
+        <Skeleton className="h-3.5 w-full max-w-[68ch]" />
+      </span>
+      <span className="flex h-6.5 items-center">
+        <Skeleton className="h-3.5 w-5/6 max-w-[60ch]" />
+      </span>
+      <span className="mt-6 flex h-6 items-center">
+        <Skeleton className="h-4 w-20" />
+      </span>
       <div className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
-        {[0, 1, 2, 3].map((index) => (
+        {[0, 1, 2, 3, 4, 5].map((index) => (
           <span key={index} className="block border-b border-(--tanaw-border-soft) py-3 pr-4">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="mt-2 h-4 w-36" />
+            <span className="flex h-[19.5px] items-center">
+              <Skeleton className="h-3 w-20" />
+            </span>
+            <span className="mt-1 flex h-6 items-center">
+              <Skeleton className="h-4 w-36 max-w-full" />
+            </span>
           </span>
         ))}
       </div>
+      <span className="mt-6 flex h-6 items-center">
+        <Skeleton className="h-4 w-28" />
+      </span>
+      <span className="mt-2.5 block border-l-2 border-(--tanaw-border-soft) pb-1 pl-5.5 ml-2">
+        <span className="flex h-6 items-center">
+          <Skeleton className="h-4 w-44" />
+        </span>
+        <span className="mt-0.5 flex h-5 items-center">
+          <Skeleton className="h-3.5 w-64 max-w-full" />
+        </span>
+      </span>
     </div>
   );
 }

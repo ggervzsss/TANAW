@@ -8,6 +8,8 @@ type Props = {
   onChange: (value: CameraConnection) => void;
   hostError?: string;
   streamError?: string;
+  /** Locks the address while the connection is being tested. */
+  readOnly?: boolean;
 };
 
 const inputClass =
@@ -17,7 +19,7 @@ const inputClass =
  * The camera's address. Supported brands need only the IP address; TANAW finds a working
  * stream when the connection is tested. Custom RTSP is the one case where an address is typed.
  */
-export function CameraConnectionFields({ value, onChange, hostError, streamError }: Props) {
+export function CameraConnectionFields({ value, onChange, hostError, streamError, readOnly = false }: Props) {
   const id = useId();
   const brand = value.cameraBrand ?? "tapo";
   const host = value.cameraHost ?? "";
@@ -28,6 +30,7 @@ export function CameraConnectionFields({ value, onChange, hostError, streamError
       <div className="space-y-1">
         <CameraIpAddressField
           host={host}
+          readOnly={readOnly}
           error={hostError ?? (host && !isValidIpv4(host) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
           onHostChange={(cameraHost) => update({ cameraHost })}
         />
@@ -52,6 +55,7 @@ export function CameraConnectionFields({ value, onChange, hostError, streamError
         type="text"
         spellCheck={false}
         value={value.rtsp}
+        readOnly={readOnly}
         placeholder="rtsp://192.168.1.20:554/live"
         aria-invalid={Boolean(error)}
         aria-describedby={`${id}-help ${id}-error`}

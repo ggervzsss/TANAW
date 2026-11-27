@@ -8,7 +8,7 @@ import type { FinalReport } from "@/shared/types";
 import { PortalPageHeader, Select, StatusPill, Tabs, openRowFromClick } from "@/shared/ui-kit";
 import { AnnualReportDialog } from "../components/AnnualReportDialog";
 import { MonthlyReportDialog } from "../components/MonthlyReportDialog";
-import { StaffTableSkeleton } from "../components/StaffTableSkeleton";
+import { StaffTableSkeleton, type StaffTableSkeletonColumn } from "../components/StaffTableSkeleton";
 import { reportEnterprisesQueryKey } from "../hooks/useStaffReports";
 import {
   annualReportRows,
@@ -25,6 +25,25 @@ import {
 
 const EMPTY_REPORTS: FinalReport[] = [];
 const formatCount = (value: number | null) => (value === null ? "Not recorded" : value.toLocaleString("en-US"));
+const opensReport = <span className="sr-only">Opens the report</span>;
+
+/** The columns of MonthlyTable and AnnualTable, for their loading rows. */
+const MONTHLY_COLUMNS: readonly StaffTableSkeletonColumn[] = [
+  { header: "Month", width: "w-2/5" },
+  { header: "Report ID", className: "tanaw-hide-sm", width: "w-28" },
+  { header: "Enterprises", className: "tanaw-num", width: "w-12" },
+  { header: "Visitors", className: "tanaw-num", width: "w-16" },
+  { header: "Generated", className: "tanaw-hide-sm", width: "w-24" },
+  { header: "Status", pill: true },
+  { header: opensReport, width: "w-4" },
+];
+const ANNUAL_COLUMNS: readonly StaffTableSkeletonColumn[] = [
+  { header: "Year", width: "w-16" },
+  { header: "Months included", className: "tanaw-num", width: "w-16" },
+  { header: "Visitors", className: "tanaw-num", width: "w-20" },
+  { header: "Status", pill: true },
+  { header: opensReport, width: "w-4" },
+];
 
 /**
  * Staff Consolidated Reports. URL: `?tab=annual` (Monthly by default), `&year=2026`,
@@ -77,7 +96,7 @@ export function StaffConsolidatedReportsPage() {
       />
       <div role="tabpanel" id={`consolidated-reports-panel-${tab}`} aria-labelledby={`consolidated-reports-tab-${tab}`} className="pt-4">
         {isLoading ? (
-          <StaffTableSkeleton label="Loading consolidated reports…" cells={tab === "monthly" ? ["w-2/5", "w-28", "w-12", "w-16", "w-24", "w-24", "w-4"] : ["w-16", "w-16", "w-20", "w-24", "w-4"]} />
+          <StaffTableSkeleton label="Loading consolidated reports…" columns={tab === "monthly" ? MONTHLY_COLUMNS : ANNUAL_COLUMNS} />
         ) : isError ? (
           <p role="alert" className="mt-3.5 text-sm text-(--tanaw-text-secondary)">
             Consolidated reports could not be loaded. Refresh the page to try again.

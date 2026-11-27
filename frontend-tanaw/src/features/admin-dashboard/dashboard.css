@@ -713,13 +713,24 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
   background: var(--dash-peak);
 }
 
-/* The chart's loading shape: its hairline grid, with a skeleton area where the line will be. */
+/*
+ * The chart's loading shape: its hairline grid, with a skeleton area where the line will be. It
+ * sits right under the readout and is 144px tall, stretching with the column above 1100px, as the
+ * chart does.
+ */
 .tanaw-dashboard-chart-skeleton {
   position: relative;
   display: grid;
   height: 144px;
   grid-template-rows: repeat(3, 1fr);
-  margin-top: 12px;
+}
+
+@media (min-width: 1101px) {
+  .tanaw-dashboard-chart-skeleton {
+    min-height: 144px;
+    height: auto;
+    flex: 1 1 auto;
+  }
 }
 
 .tanaw-dashboard-chart-skeleton__rule {

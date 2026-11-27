@@ -166,47 +166,78 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
   );
 }
 
-/** Request rows in the list's shape while the requests load. */
+/**
+ * Request rows in the list's shape while the requests load: a day heading, then rows with the type
+ * and time, title, place, and status line, each bar in its text line's own height.
+ */
 function ListSkeleton() {
   return (
-    <div role="status" aria-label="Loading requests" className="px-3 pt-3">
-      <Skeleton className="mb-1.5 h-3 w-16" />
+    <div role="status" aria-label="Loading requests">
+      <span className="flex h-5 box-content items-center px-3 pt-3 pb-1.5">
+        <Skeleton className="h-3 w-16" />
+      </span>
       {[0, 1, 2, 3, 4].map((index) => (
-        <div key={index} className="border-b border-(--tanaw-border-soft) py-3.5">
-          <span className="flex justify-between gap-3">
+        <div key={index} className="border-b border-(--tanaw-border-soft) px-3 py-3.5">
+          <span className="flex h-5 items-center justify-between gap-3">
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-3 w-12" />
           </span>
-          <Skeleton className="mt-2.5 h-4 w-4/5" />
-          <Skeleton className="mt-2 h-3 w-1/2" />
-          <Skeleton className="mt-3 h-3 w-28" />
+          <span className="mt-1 flex h-5.5 items-center">
+            <Skeleton className="h-4 w-4/5" />
+          </span>
+          <span className="mt-0.5 flex h-5 items-center">
+            <Skeleton className="h-3.5 w-1/2" />
+          </span>
+          <span className="mt-2 flex h-5 items-center">
+            <Skeleton className="h-3 w-28" />
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-/** The detail pane's shape while the requests load: status, title, actions and details. */
+/** One text line of the detail pane: the bar sits in the line's own height. */
+function DetailLine({ box, bar }: { box: string; bar: string }) {
+  return (
+    <span className={cn("flex items-center", box)}>
+      <Skeleton className={bar} />
+    </span>
+  );
+}
+
+/**
+ * The detail pane's shape while the requests load: status, title and status note, actions, what
+ * happened, the six details, and the start of the conversation.
+ */
 function DetailSkeleton() {
   return (
     <div aria-hidden="true" className="py-1.5">
-      <Skeleton className="h-3 w-36" />
-      <Skeleton className="mt-3 h-7 w-3/5" />
-      <Skeleton className="mt-3 h-4 w-2/5" />
-      <div className="mt-5 flex gap-2.5">
+      <DetailLine box="h-5" bar="h-3 w-36" />
+      <DetailLine box="mt-2 h-7" bar="h-5.5 w-3/5" />
+      <DetailLine box="mt-2.5 h-5.5" bar="h-3.5 w-2/5" />
+      <div className="mt-4.5 flex gap-2.5">
         <Skeleton className="rounded-tanaw-md h-11 w-32" />
         <Skeleton className="rounded-tanaw-md h-11 w-36" />
       </div>
-      <Skeleton className="mt-7 h-4 w-32" />
-      <Skeleton className="mt-3 h-3 w-full max-w-136" />
-      <Skeleton className="mt-2 h-3 w-4/5 max-w-md" />
-      <div className="mt-6 grid grid-cols-2 gap-x-4 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
-        {[0, 1, 2, 3].map((index) => (
-          <div key={index} className="border-b border-(--tanaw-border-soft) py-3">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="mt-2 h-4 w-2/3" />
+      <DetailLine box="mt-7 h-6" bar="h-4 w-32" />
+      <div className="mt-1.5">
+        <DetailLine box="h-6.5" bar="h-3.5 w-full max-w-136" />
+        <DetailLine box="h-6.5" bar="h-3.5 w-4/5 max-w-md" />
+      </div>
+      <DetailLine box="mt-6 h-6" bar="h-4 w-20" />
+      <div className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <div key={index} className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:pr-0">
+            <DetailLine box="h-5" bar="h-3 w-20" />
+            <DetailLine box="mt-0.75 h-6" bar="h-4 w-2/3" />
           </div>
         ))}
+      </div>
+      <DetailLine box="mt-6 h-6" bar="h-4 w-48" />
+      <div className="mt-2.5 pl-7.5">
+        <DetailLine box="h-6" bar="h-4 w-48" />
+        <DetailLine box="mt-0.75 h-5" bar="h-3 w-3/4 max-w-120" />
       </div>
     </div>
   );

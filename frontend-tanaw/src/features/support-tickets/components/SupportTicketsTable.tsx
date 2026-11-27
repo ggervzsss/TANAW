@@ -73,31 +73,38 @@ export function SupportTicketsTable({ isItResponder, isLoading, onOpenTicket, ti
   );
 }
 
-/** Request rows in the table's shape while the requests load. */
+/**
+ * Request rows in the table's shape while the requests load: the same cells, hairlines and badges
+ * as TicketRow, with each bar in a box of its line's height.
+ */
 function SkeletonRows() {
+  const line = (height: string, bar: string) => (
+    <span className={`flex ${height} items-center`}>
+      <Skeleton className={bar} />
+    </span>
+  );
   return (
     <>
       {[0, 1, 2, 3].map((row) => (
-        <tr key={row} data-empty="" aria-hidden="true">
-          <td className="px-4 py-4">
-            <Skeleton className="h-3.5 w-20" />
+        <tr key={row} data-empty="" data-skeleton="" aria-hidden="true">
+          <td className="px-4 py-4 align-top">{line("h-[19.5px]", "h-3.5 w-20")}</td>
+          <td className="px-4 py-4 align-top">
+            {line("h-5", "h-4 w-3/4")}
+            <span className="mt-1 block">{line("h-4", "h-3 w-1/2")}</span>
           </td>
-          <td className="px-4 py-4">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="mt-2 h-3 w-1/2" />
+          <td className="px-4 py-4 align-top">
+            {line("h-5", "h-4 w-4/5")}
+            <span className="mt-1 block">{line("h-[1.32rem]", "h-3 w-3/5")}</span>
           </td>
-          <td className="px-4 py-4">
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="mt-2 h-3 w-3/5" />
+          <td className="px-4 py-4 align-top">
+            <Skeleton shape="pill" className="h-6.5 w-24" />
           </td>
-          <td className="px-4 py-4">
-            <Skeleton className="h-5 w-24 rounded-full" />
+          <td className="px-4 py-4 align-top">
+            <Skeleton shape="pill" className="h-6.5 w-20" />
           </td>
-          <td className="px-4 py-4">
-            <Skeleton className="h-5 w-20 rounded-full" />
-          </td>
-          <td className="px-4 py-4">
-            <Skeleton className="h-3.5 w-20" />
+          <td className="px-4 py-4 align-top">
+            {line("h-[19.5px]", "h-3.5 w-20")}
+            <span className="mt-2 block">{line("h-[19.5px]", "h-3 w-14")}</span>
           </td>
         </tr>
       ))}

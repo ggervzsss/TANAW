@@ -7,6 +7,7 @@ import type { TicketDraftPrefill } from "../../tickets/model/ticket-draft";
 import { useScrollableList } from "../hooks/useScrollableList";
 import type { CameraStatusMarks } from "../utils/camera-status";
 import { isCameraCounting } from "../utils/establishment";
+import { LocationListLoading } from "./DashboardSkeleton";
 
 type LocationsProps = {
   cameras: Camera[];
@@ -41,17 +42,7 @@ export function MonitoredLocations({ cameras, live, loading, marks, formatSince 
       </h2>
       <p className="dash-section-sub">Cameras at this enterprise.</p>
       {loading ? (
-        <ul className="dash-location-list" aria-busy="true" aria-label="Loading cameras">
-          {[0, 1, 2].map((row) => (
-            <li key={row} className="dash-location">
-              <span className="design-skeleton dash-location-icon" />
-              <div className="dash-location-body">
-                <span className="design-skeleton dash-line-skeleton" style={{ width: "60%" }} />
-                <span className="design-skeleton dash-line-skeleton dash-line-skeleton-sm" style={{ width: "80%" }} />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <LocationListLoading label="Loading cameras" />
       ) : cameras.length === 0 ? (
         <p className="dash-locations-empty">Add a camera in Camera Setup to start counting visitors.</p>
       ) : (

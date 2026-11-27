@@ -149,10 +149,14 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
           {[0, 1].map((index) => (
             <div key={index} className="flex items-center justify-between gap-3 border-b border-(--tanaw-border-soft) py-3">
               <span className="min-w-0 flex-1">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="mt-2 h-3 w-28" />
+                <span className="flex h-6 items-center">
+                  <Skeleton className="h-4 w-40" />
+                </span>
+                <span className="flex h-5 items-center">
+                  <Skeleton className="h-3 w-28" />
+                </span>
               </span>
-              <Skeleton className="rounded-tanaw-md h-9 w-20" />
+              <Skeleton className="rounded-tanaw-md h-8.5 w-20" />
             </div>
           ))}
         </div>

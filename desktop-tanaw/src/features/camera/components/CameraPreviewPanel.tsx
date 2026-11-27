@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { CircleAlert, MapPin, Maximize, Minimize, Play, RefreshCw, Settings, Square, Trash2, Video } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { Button, Skeleton, SkeletonText } from "../../../ui-kit";
+import { Button } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import { useBoundedLoading } from "../hooks/useBoundedLoading";
@@ -10,6 +10,7 @@ import { CameraSettingsPanel } from "./CameraSettingsPanel";
 import { cameraDisplayKey, readCameraDisplay } from "../model/camera-display";
 import { cameraModeName } from "../utils/camera-mode";
 import { CameraLiveMetrics } from "./CameraLiveMetrics";
+import { CameraMonitorSkeleton } from "./CameraSetupSkeleton";
 import { CameraStatusBadge } from "./CameraList";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
@@ -218,46 +219,6 @@ function CameraMonitor({
         </section>
         <CameraLiveMetrics activeCam={activeCam} area={area} counts={counts} health={health} runtimeReady={runtimeReady && !serviceIssue} loading={metricsLoading} />
       </motion.div>
-    </div>
-  );
-}
-
-/** The monitoring layout in outline while the saved cameras load. */
-function CameraMonitorSkeleton() {
-  return (
-    <div className="camera-preview-card camera-preview-card--loading" role="status" aria-label="Loading camera">
-      <div className="camera-preview-heading" aria-hidden="true">
-        <Skeleton className="camera-skeleton-icon" />
-        <span className="camera-identity">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-2 h-3.5 w-32" />
-        </span>
-        <Skeleton className="h-10 w-28" />
-      </div>
-      <div className="camera-preview-layout" aria-hidden="true">
-        <div className="camera-preview-surface">
-          <div className="camera-preview-toolbar">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-9 w-36" />
-          </div>
-          <div className="camera-preview-frame">
-            <Skeleton className="camera-skeleton-stage" />
-          </div>
-        </div>
-        <div className="camera-live-metrics">
-          <div className="camera-metrics-heading">
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="camera-metrics-grid" data-mode="entrance-exit">
-            {(["entry", "exit", "occupancy", "visitors"] as const).map((tone) => (
-              <div key={tone} className="camera-metric camera-metric--placeholder" data-tone={tone}>
-                <SkeletonText lines={1} />
-                <Skeleton className="camera-metric-skeleton" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

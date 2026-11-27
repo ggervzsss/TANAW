@@ -1,7 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen, Plus, Video } from "lucide-react";
-import { Badge, Button, Skeleton, Tooltip, initialsOf } from "../../../ui-kit";
+import { Badge, Button, Tooltip, initialsOf } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { cameraModeName } from "../utils/camera-mode";
+import { CameraListPlaceholders } from "./CameraSetupSkeleton";
 
 type CameraListProps = {
   cameras: Camera[];
@@ -58,19 +59,7 @@ export function CameraList({ cameras, activeCamId, cameraLimit, collapsed, loadi
             </button>
           );
         })}
-        {showPlaceholders && (
-          <span className="camera-list-placeholders" role="status" aria-label="Loading cameras">
-            {[0, 1, 2].map((row) => (
-              <span key={row} className="camera-list-placeholder" aria-hidden="true">
-                <Skeleton className="camera-list-placeholder-glyph" />
-                <span className="camera-list-placeholder-copy">
-                  <Skeleton className="h-3.5 w-4/5" />
-                  <Skeleton className="h-3 w-1/2" />
-                </span>
-              </span>
-            ))}
-          </span>
-        )}
+        {showPlaceholders && <CameraListPlaceholders />}
         {cameras.length === 0 && !collapsed && !showPlaceholders && <p className="camera-list-empty">No cameras registered.</p>}
       </nav>
       <footer className="camera-list-footer">

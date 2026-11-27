@@ -38,19 +38,26 @@ function ListSkeleton({ label, twoLines = false }: { label: string; twoLines?: b
         <div key={width} aria-hidden="true" className="border-t border-(--dash-rule) px-2 py-3 first:border-t-0">
           {twoLines ? (
             <>
-              <span className="flex items-center justify-between gap-3">
+              {/* Each bar sits in its line's box: a 20px title line, then the 13px status line. */}
+              <span className="flex h-5 items-center justify-between gap-3">
                 <Skeleton className="h-3.5 w-3/5" />
                 <Skeleton className="h-3.5 w-12 shrink-0" />
               </span>
-              <Skeleton className="mt-2 h-3 w-20" />
+              <span className="mt-1 flex h-[19.5px] items-center">
+                <Skeleton className="h-3 w-20" />
+              </span>
             </>
           ) : (
-            <span className="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-center gap-3">
-              <Skeleton className="h-3.5 w-24" />
-              <span className="block" style={{ width: `${width}%` }}>
+            <span className="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-center gap-3 *:flex *:h-5 *:items-center max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:*:first:col-span-2">
+              <span>
+                <Skeleton className="h-3.5 w-24" />
+              </span>
+              <span style={{ width: `${width}%` }}>
                 <Skeleton className="h-3.5 w-full" />
               </span>
-              <Skeleton className="h-3.5 w-16" />
+              <span>
+                <Skeleton className="h-3.5 w-16" />
+              </span>
             </span>
           )}
         </div>

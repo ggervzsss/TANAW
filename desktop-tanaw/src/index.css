@@ -104,7 +104,7 @@ textarea,
 
 /*
  * Toasts (DESIGN.md "Default UI style"). A small pane of frosted glass under the topbar, washed
- * with its tone: a short accent bar at the left edge, the icon in a solid round seal of the accent,
+ * with its tone: the icon in a solid round seal of the accent,
  * the message and a quiet dismiss button, over a soft glow of the same colour. A toast springs in
  * from just above, slightly blurred and small; the others slide to make room; leaving, it lifts,
  * softens and fades faster than it came. Resting the pointer on a toast pauses every timer.
@@ -144,7 +144,7 @@ textarea,
   min-width: min(18rem, calc(100vw - 2rem));
   max-width: min(28rem, calc(100vw - 2rem));
   overflow: hidden;
-  padding: 10px 10px 10px 20px;
+  padding: 10px 10px 10px 12px;
   border: 1px solid var(--toast-edge);
   border-radius: 16px;
   background:
@@ -189,19 +189,6 @@ textarea,
   --toast-wash: rgb(224 238 251 / 0.72);
   --toast-edge: rgb(39 91 134 / 0.2);
   --toast-glow: rgb(39 91 134 / 0.28);
-}
-
-/* The accent: a short rounded bar at the left edge, in the toast's tone. */
-.tanaw-toast::before {
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 7px;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, transparent, var(--toast-accent) 28%, var(--toast-accent) 72%, transparent);
-  content: "";
-  pointer-events: none;
 }
 
 /* The icon sits in a solid round seal of its tone, ringed by a soft halo, and pops in just after

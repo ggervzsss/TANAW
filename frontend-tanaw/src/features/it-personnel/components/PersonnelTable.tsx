@@ -124,26 +124,57 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
   );
 }
 
-/** Table rows in the list's shape while the accounts load. */
+/**
+ * The list's shape while the accounts load: on wide screens the column band and table rows, on
+ * phones the stacked records with their Role, Access and Last signed in lines and an action. Each
+ * bar sits in its text line's own height so the rows keep their height when the accounts arrive.
+ */
 function PersonnelSkeleton() {
   return (
     <div className="mt-4" role="status" aria-busy="true" aria-label="Loading LGU personnel">
       <Skeleton className="h-9 w-full rounded-[10px] max-lg:hidden" />
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index} className="grid grid-cols-[30%_10%_22%_16%_minmax(0,1fr)] items-start gap-0 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
-          <div className="pl-3 max-lg:pl-0">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="mt-2 h-3 w-52 max-w-full" />
+      <div className="border-t border-(--tanaw-border-soft) lg:border-t-0">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className="grid grid-cols-[30%_10%_22%_16%_minmax(0,1fr)] items-start gap-0 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
+            <div className="pl-3 max-lg:pl-0">
+              <span className="flex h-6 items-center">
+                <Skeleton className="h-4 w-40" />
+              </span>
+              <span className="mt-0.5 flex h-5 items-center">
+                <Skeleton className="h-3 w-52 max-w-full" />
+              </span>
+            </div>
+            <span className="flex h-5 items-center pl-4 max-lg:hidden">
+              <Skeleton className="h-3.5 w-12" />
+            </span>
+            <div className="pl-4 max-lg:hidden">
+              <span className="flex h-5 items-center">
+                <Skeleton className="h-3.5 w-24" />
+              </span>
+              <span className="mt-0.5 flex h-5 items-center">
+                <Skeleton className="h-3 w-32" />
+              </span>
+            </div>
+            <span className="flex h-5 items-center pl-4 max-lg:hidden">
+              <Skeleton className="h-3.5 w-24" />
+            </span>
+            <Skeleton className="rounded-tanaw-md ml-auto h-10.5 w-28 max-lg:hidden" />
+            <span aria-hidden="true" className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 lg:hidden">
+              {[16, 28, 24].map((width) => (
+                <span key={width} className="contents">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3 w-20" />
+                  </span>
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3.5" style={{ width: `${width * 4}px` }} />
+                  </span>
+                </span>
+              ))}
+            </span>
+            <Skeleton className="rounded-tanaw-md mt-3 h-10.5 w-28 lg:hidden" />
           </div>
-          <Skeleton className="ml-4 h-4 w-12 max-lg:hidden" />
-          <div className="pl-4 max-lg:hidden">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="mt-2 h-3 w-32" />
-          </div>
-          <Skeleton className="ml-4 h-4 w-24 max-lg:hidden" />
-          <Skeleton className="rounded-tanaw-md ml-auto h-10 w-28 max-lg:hidden" />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

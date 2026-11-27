@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
-import { ViewSkeleton } from "@/shared/ui-kit/patterns/ViewSkeleton";
+import { PortalRouteSkeleton } from "@/app/layouts/portal/PortalRouteSkeleton";
+import { getPortalTopbarThemeClasses } from "@/app/layouts/portal/portalTopbarTheme";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { legacyPortalRedirects, routes } from "./routes";
@@ -153,11 +154,35 @@ function LegacyRedirect({ to }: { to: string }) {
   return <Navigate to={query ? `${path}?${query}` : path} replace />;
 }
 
-/** Before the session is known or a screen's code arrives: a quiet page outline on the green wash. */
+const PORTAL_ROOTS = [routes.it.root, routes.admin.root, routes.staff.root];
+
+/**
+ * Before the session is known or a screen's code arrives. A portal address gets the portal's own
+ * frame (the topbar band, then the page outline in AccountLayout's padding) in that page's shape.
+ * Sign-in and account pages get their stage's plain background, which is how they open anyway
+ * (their content fades in once the photo is ready), so no portal outline flashes before them.
+ */
 function RouteLoadingFallback() {
+  const { pathname } = useLocation();
+  const label = "Loading TANAW workspace…";
+  const isPortal = PORTAL_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
+
+  if (!isPortal) {
+    return <div role="status" aria-label={label} aria-busy="true" className="min-h-svh bg-(--tanaw-bg)" />;
+  }
+
+  const resolvedTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const isSettings = pathname.split("/")[2] === "settings";
   return (
-    <div className="tanaw-portal-content min-h-svh bg-(--tanaw-page) px-8 pt-12 max-xl:px-6 max-sm:px-4 max-sm:pt-8">
-      <ViewSkeleton label="Loading TANAW workspace…" className="mx-auto max-w-420" />
+    <div className="flex min-h-svh flex-col bg-(--tanaw-page-bg)">
+      <div aria-hidden="true" className={`h-22 shrink-0 max-sm:h-18 ${getPortalTopbarThemeClasses(resolvedTheme).frame}`} />
+      {isSettings ? (
+        <PortalRouteSkeleton pathname={pathname} label={label} className="flex-1" />
+      ) : (
+        <div className="tanaw-portal-content flex-1 px-[clamp(1.5rem,4vw,4.5rem)] pt-9 pb-14 max-sm:px-4 max-sm:pt-6 max-sm:pb-8">
+          <PortalRouteSkeleton pathname={pathname} label={label} className="mx-auto max-w-420" />
+        </div>
+      )}
     </div>
   );
 }

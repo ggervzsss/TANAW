@@ -184,6 +184,12 @@ export function ITEnterprisesPage() {
 function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; figures: EnterpriseFigures; onShowAttention: () => void }) {
   const cell = "min-w-0 px-6 py-4.5 first:pl-0 max-lg:px-0 max-lg:py-4";
   const note = "mt-2 block text-[13px] text-(--tanaw-text-muted)";
+  // A note line holds its height while the figures load, so the strip does not grow when they arrive.
+  const noteSkeleton = (
+    <span className="flex h-5 items-center">
+      <Skeleton className="h-3 w-40 max-w-full" />
+    </span>
+  );
   const value = (main: number, of?: number) =>
     isLoading ? (
       <Skeleton className="mt-2.5 h-9 w-20" />
@@ -200,14 +206,14 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
         <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Registered enterprises</dt>
         <dd>
           {value(figures.total)}
-          <span className={note}>{isLoading ? " " : registeredNote(figures)}</span>
+          <span className={note}>{isLoading ? noteSkeleton : registeredNote(figures)}</span>
         </dd>
       </div>
       <div className={cell}>
         <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Desktop apps sending data</dt>
         <dd>
           {value(figures.appsSending, figures.appsTotal)}
-          <span className={note}>{isLoading ? " " : appsNote(figures)}</span>
+          <span className={note}>{isLoading ? noteSkeleton : appsNote(figures)}</span>
         </dd>
       </div>
       <div className={cell}>
@@ -215,7 +221,7 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
         <dd>
           {value(figures.camerasCounting, figures.camerasTotal)}
           <span className={cn(note, "flex flex-wrap items-center gap-x-2.5 gap-y-1")}>
-            {isLoading ? " " : camerasNote(figures)}
+            {isLoading ? noteSkeleton : camerasNote(figures)}
             {!isLoading && figures.attention > 0 && (
               <button
                 type="button"
@@ -260,13 +266,20 @@ function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: Enterprise
         <tbody>
           {isLoading
             ? Array.from({ length: 5 }, (_, index) => (
-                <tr key={index}>
-                  {Array.from({ length: 5 }, (__, cellIndex) => (
+                <tr key={index} className="align-top">
+                  {Array.from({ length: 4 }, (__, cellIndex) => (
                     <td key={cellIndex} className={cn("px-4 py-4", cellIndex === 0 && "pl-3")}>
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="mt-2 h-3 w-1/2" />
+                      <span className={cn("flex items-center", cellIndex === 0 ? "h-6" : "h-5")}>
+                        <Skeleton className={cellIndex === 0 ? "h-4 w-3/4" : "h-3.5 w-2/3"} />
+                      </span>
+                      <span className="mt-0.5 flex h-5 items-center">
+                        <Skeleton className="h-3 w-1/2" />
+                      </span>
                     </td>
                   ))}
+                  <td className="py-4 pr-3 pl-4">
+                    <span className="block min-h-10" />
+                  </td>
                 </tr>
               ))
             : rows.map((row) => <EnterpriseTableRow key={row.id} row={row} formats={formats} />)}

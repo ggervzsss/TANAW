@@ -3,6 +3,7 @@ import { mkdtemp, rm, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FakeMlSidecar } from "./support/fake-ml-sidecar";
+import { openReportMonth } from "../support/reports";
 
 test("renders the Figma Create Reports arrangement in the actual desktop renderer", async ({ playwright }, testInfo) => {
   test.setTimeout(90_000);
@@ -238,7 +239,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(preview).toBeVisible();
     await expect(preview.locator(".var1-document-information dd").first()).toHaveText("October 2026");
     await page.keyboard.press("Escape");
-    await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+    await openReportMonth(page, "October 2026");
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
     await expect(page.getByRole("button", { name: /Selected day: October 1, 2026/ })).toBeVisible();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("5");

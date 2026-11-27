@@ -70,8 +70,16 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await page.getByLabel("Camera Username", { exact: true }).fill("draft-user");
   await page.getByLabel("Camera Password", { exact: true }).fill("draft-secret");
+  // While the connection is tested, its fields hold their values.
+  let releaseSettingsTest = () => {};
+  state.holdTest(new Promise<void>((resolve) => (releaseSettingsTest = resolve)));
   await page.getByRole("button", { name: "Test Camera Connection", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Testing connection…", exact: true })).toBeDisabled();
+  for (const label of ["Camera IP Address", "Camera Username", "Camera Password"]) await expect(page.getByLabel(label, { exact: true })).not.toBeEditable();
+  state.holdTest(null);
+  releaseSettingsTest();
   await expect(page.getByText("Camera connection verified with these settings.", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("Camera Username", { exact: true })).toBeEditable();
   expect(state.requests.find((value) => value.path === "/camera/test")!.body).toMatchObject({ camera_id: 1, username: "draft-user", password: "draft-secret" });
   expect(state.profiles()[0].name).toBe("Tapo Camera");
   await page.getByRole("tab", { name: "Display", exact: true }).click();
@@ -214,7 +222,14 @@ test("Add Camera keeps the reference form and verifies connection before persist
   await expect(connection.getByText("Camera storage unavailable")).toBeVisible();
   expect(state.profiles()).toHaveLength(2);
   state.setFailWrite(false);
+  // While the camera is tested and added, the connection fields cannot change.
+  let releaseAddTest = () => {};
+  state.holdTest(new Promise<void>((resolve) => (releaseAddTest = resolve)));
   await connection.getByRole("button", { name: "Test & Add Camera" }).click();
+  await expect(connection.getByRole("button", { name: "Testing Camera…" })).toBeDisabled();
+  for (const label of ["Camera IP Address", "Camera Username", "Camera Password"]) await expect(connection.getByLabel(label, { exact: false })).not.toBeEditable();
+  state.holdTest(null);
+  releaseAddTest();
   await expect(connection).toHaveCount(0);
   await expect.poll(() => state.profiles().length).toBe(3);
   expect(state.profiles()[2]).toMatchObject({ name: "Gate Camera", zone: "", analysisMode: "open_space" });

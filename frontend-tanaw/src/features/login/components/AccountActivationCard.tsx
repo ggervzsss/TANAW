@@ -38,12 +38,17 @@ function ValidatingState() {
     <div className="tanaw-auth-state" aria-live="polite" aria-busy="true">
       <h2 className="tanaw-auth-state__title">Checking your activation link</h2>
       <p className="tanaw-auth-state__copy">Please wait while TANAW verifies that this link is valid and unused.</p>
-      <div className="tanaw-auth-state__skeleton" aria-hidden="true">
-        <Skeleton className="block h-4 w-2/5" />
-        <Skeleton className="mt-2 block h-12 w-full" />
-        <Skeleton className="block h-4 w-2/5" />
-        <Skeleton className="mt-2 block h-12 w-full" />
-        <Skeleton className="mt-3 block h-12 w-full" />
+      {/* The password form's shape: two labelled 52px fields, 16px apart, then the 48px action. */}
+      <div className="mt-6 grid gap-4" aria-hidden="true">
+        {[0, 1].map((field) => (
+          <span key={field} className="block">
+            <span className="mb-2 flex h-[1.225rem] items-center">
+              <Skeleton className="h-4 w-2/5" />
+            </span>
+            <Skeleton className="h-13 w-full" />
+          </span>
+        ))}
+        <Skeleton className="mt-2 h-12 w-full" />
       </div>
     </div>
   );

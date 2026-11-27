@@ -2,7 +2,8 @@ import { MotionConfig } from "motion/react";
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { matchPath, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../features/login/stores/auth-store";
-import { ViewSkeleton } from "../../ui-kit/patterns/ViewSkeleton";
+import { enterpriseFrameClassNames, enterpriseViewForPath } from "../layouts/enterprise-frame";
+import { EnterpriseViewSkeleton } from "../layouts/EnterpriseViewSkeleton";
 import { routePaths } from "./routePaths";
 
 const LoginPage = lazy(() =>
@@ -191,8 +192,9 @@ export function AppRouter() {
 
 /**
  * Shown while the session is checked or route code loads. Only a signed-in user on a workspace
- * route sees the app frame in outline; while the session is unknown, or on the sign-in route, a
- * plain page stands in, so the sign-in screen is never preceded by a workspace topbar it lacks.
+ * route sees the app frame in outline, with the page that route opens sketched in the same frame
+ * the workspace uses; while the session is unknown, or on the sign-in route, a plain page stands
+ * in, so the sign-in screen is never preceded by a workspace topbar it lacks.
  */
 function RouteLoadingFallback() {
   const { pathname } = useLocation();
@@ -203,16 +205,25 @@ function RouteLoadingFallback() {
     return <div role="status" aria-label="Loading TANAW" aria-busy="true" className="h-svh bg-(--tanaw-page)" />;
   }
 
-  // The page colour shows at once; the topbar band and outline wait with the skeleton screen's
-  // short delay, so a quick load goes straight to the real page without a flash.
+  const view = enterpriseViewForPath(pathname);
+  const frame = enterpriseFrameClassNames(view);
+  // The page colour shows at once; the topbar band and the page outline wait with the skeleton
+  // screen's short delay, so a quick load goes straight to the real page without a flash.
   return (
-    <div className="h-svh overflow-hidden bg-(--tanaw-page)">
-      <div className="tanaw-skeleton-screen flex h-full flex-col">
-        <div aria-hidden="true" className="h-(--tanaw-topbar-height) shrink-0 bg-(image:--tanaw-topbar-gradient)" />
-        <div className="min-h-0 flex-1 p-8 max-xl:p-6 max-sm:p-4">
-          <ViewSkeleton variant="dashboard" label="Loading TANAW workspace" className="max-w-470 animate-none" />
-        </div>
-      </div>
+    <div className="enterprise-shell flex h-svh flex-col overflow-hidden bg-[#eef5f0] dark:bg-(--enterprise-app-bg)">
+      {/* The topbar's own band: its 72px bar and hairline, in its light and dark colours. */}
+      <div aria-hidden="true" className="enterprise-topbar tanaw-skeleton-screen box-content h-18 shrink-0" />
+      <main className={frame.main}>
+        {view === "settings" ? (
+          <EnterpriseViewSkeleton view={view} />
+        ) : (
+          <div className={frame.content}>
+            <div className={frame.page}>
+              <EnterpriseViewSkeleton view={view} />
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

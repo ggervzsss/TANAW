@@ -2,6 +2,7 @@ import { ArrowRight, Check, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ReportRecord } from "../../../types/enterprise";
 import { routePaths } from "../../../app/router/routePaths";
+import { ReportListLoading } from "./DashboardSkeleton";
 
 type LedgerProps = {
   reports: ReportRecord[];
@@ -41,19 +42,7 @@ export function SubmissionLedgerPreview({ reports, enterpriseName, loading = fal
         </Link>
       </div>
       {loading ? (
-        <div className="dash-report-loading" aria-busy="true" aria-label="Loading recent reports">
-          {[0].map((row) => (
-            <div key={row} className="dash-report-row dash-report-row-skeleton">
-              <span className="dash-report-name">
-                <span className="design-skeleton dash-report-icon" />
-                <span className="design-skeleton dash-line-skeleton" style={{ width: "70%" }} />
-              </span>
-              <span className="design-skeleton dash-line-skeleton" />
-              <span className="design-skeleton dash-line-skeleton" />
-              <span className="design-skeleton dash-line-skeleton" style={{ marginLeft: "auto", width: "60%" }} />
-            </div>
-          ))}
-        </div>
+        <ReportListLoading label="Loading recent reports" />
       ) : entries.length ? (
         <>
           <div className="dash-report-columns" aria-hidden="true">

@@ -4,9 +4,10 @@ type CameraIpAddressFieldProps = {
   error?: string;
   host: string;
   onHostChange: (host: string) => void;
+  readOnly?: boolean;
 };
 
-export function CameraIpAddressField({ error, host, onHostChange }: CameraIpAddressFieldProps) {
+export function CameraIpAddressField({ error, host, onHostChange, readOnly = false }: CameraIpAddressFieldProps) {
   return (
     <div className="min-w-0">
       <label htmlFor="camera-ip-host" className="mb-1 block text-[10px] font-bold text-gray-500 uppercase dark:text-slate-300">
@@ -16,6 +17,7 @@ export function CameraIpAddressField({ error, host, onHostChange }: CameraIpAddr
         id="camera-ip-host"
         type="text"
         value={host}
+        readOnly={readOnly}
         onChange={(event) => onHostChange(normalizeIpv4Input(event.target.value))}
         placeholder="192.168.1.9"
         autoComplete="off"

@@ -58,8 +58,12 @@ export function SettingsTab(props: SettingsTabProps) {
         {[0, 1, 2, 3].map((index) => (
           <div key={index} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-12 gap-y-4 border-b border-(--tanaw-border-soft) pb-7 max-lg:grid-cols-1 ${index === 0 ? "pt-2" : "pt-7"}`}>
             <div>
-              <Skeleton className="h-4.5 w-40" />
-              <Skeleton className="mt-2.5 h-3 w-4/5" />
+              <span className="flex h-6.5 items-center">
+                <Skeleton className="h-4.5 w-40" />
+              </span>
+              <span className="mt-1 flex h-5 items-center">
+                <Skeleton className="h-3.5 w-4/5" />
+              </span>
             </div>
             <Skeleton className="rounded-tanaw-md h-10 w-full max-w-sm" />
           </div>

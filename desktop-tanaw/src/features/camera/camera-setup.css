@@ -338,9 +338,10 @@
   justify-self: center;
   border-radius: 12px;
 }
+/* Same rhythm as an entry's name, zone and status line, so the rows keep their height. */
 .camera-list-placeholder-copy {
   display: grid;
-  gap: 8px;
+  gap: 3px;
 }
 .camera-list[data-compact="true"] .camera-list-placeholder-copy {
   display: none;
@@ -826,7 +827,7 @@ html.dark .camera-live-metrics {
   font-weight: 600;
   line-height: 1.3;
 }
-.camera-metric-label button {
+.camera-metric-label :is(button, .camera-metric-label-icon) {
   margin-inline-start: 6px;
   padding: 2px;
   border-radius: 6px;
@@ -865,18 +866,24 @@ html.dark .camera-live-metrics {
   font-size: 0.75rem;
   line-height: 1.45;
 }
+/* Each placeholder fills the line box of the text it stands for, so tiles keep their height. */
 .camera-metric-skeleton {
   width: 60%;
   height: var(--metric-figure);
+  margin-bottom: calc(var(--metric-figure) * 0.1);
   border-radius: 8px;
 }
 .camera-metric-skeleton-detail {
   width: 64%;
   height: 12px;
+  margin-block: calc((0.75rem * 1.45 - 12px) / 2);
   border-radius: 6px;
 }
-.camera-metric--placeholder .tanaw-skeleton-text {
-  width: 60%;
+.camera-metric-label-icon {
+  display: inline-block;
+  color: color-mix(in srgb, var(--metric-ink) 72%, transparent);
+  line-height: 0;
+  vertical-align: -3px;
 }
 @media (prefers-reduced-motion: reduce) {
   .camera-metric {
@@ -1477,9 +1484,14 @@ html.dark .camera-live-metrics {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+/* Five placeholder lines on the result's line rhythm, so the box keeps its height when it fills. */
 .camera-diagnostics--loading {
-  padding-block: 18px;
+  --diagnostics-line: calc(0.8125rem * 1.8);
+  padding-block: calc(14px + (var(--diagnostics-line) - 12px) / 2);
   border-style: dashed;
+}
+.camera-diagnostics--loading .tanaw-skeleton-text {
+  gap: calc(var(--diagnostics-line) - 12px);
 }
 
 /* Service status inside Maintenance › Service diagnostics and controls. */
@@ -1711,6 +1723,14 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 }
 .camera-add-dialog #camera-password {
   padding-inline-end: 48px;
+}
+/* While a connection is tested or saved, the fields hold their values: quieter and not editable. */
+:is(.camera-add-dialog, .camera-settings) input[readonly] {
+  cursor: default;
+  opacity: 0.68;
+}
+:is(.camera-add-dialog, .camera-settings) input[readonly]:focus {
+  border-color: var(--camera-border, var(--tanaw-control-border));
 }
 .camera-add-dropdown [role="option"] {
   font-size: 1rem;

@@ -1,9 +1,8 @@
 import { type Dispatch, type SetStateAction } from "react";
-import { CalendarDays, Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
+import { Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { VisitorDetails } from "./VisitorDetails";
 import { ReportDayPicker } from "./ReportDayPicker";
@@ -12,7 +11,6 @@ import { useSelectedReportDay } from "../hooks/useSelectedReportDay";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
 import { SupplementaryNotes } from "./SupplementaryNotes";
-import { CountingDetails } from "./CountingDetails";
 
 type Props = {
   enterpriseName: string;
@@ -26,6 +24,9 @@ type Props = {
   isReadOnly: boolean;
   isPeriodChanging: boolean;
   metricsError: string | null;
+  /** The months Tourism Period can switch to, oldest first. */
+  months: string[];
+  onSelectPeriod: (period: string) => void;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
@@ -48,6 +49,8 @@ export function ReportDraftPanel({
   isReadOnly,
   isPeriodChanging,
   metricsError,
+  months,
+  onSelectPeriod,
   metrics,
   notes,
   period,
@@ -93,16 +96,17 @@ export function ReportDraftPanel({
             </div>
             <div>
               <dt>Tourism Period</dt>
-              {/* Daily reports pick the day Visitor Details shows here; older monthly reports show the month. */}
+              {/* The month to report on, and for daily reports the day Visitor Details shows. */}
               <dd>
-                {dailyDay ? (
-                  <ReportDayPicker days={days} selectedDate={dailyDay.day.date} onSelect={dailyDay.select} />
-                ) : (
-                  <>
-                    <CalendarDays aria-hidden="true" />
-                    <span>{formatReportingPeriodLabel(period)}</span>
-                  </>
-                )}
+                <ReportDayPicker
+                  period={period}
+                  months={months}
+                  days={days}
+                  selectedDate={dailyDay?.day.date ?? null}
+                  isLoading={isPeriodChanging}
+                  onSelect={dailyDay?.select}
+                  onSelectMonth={onSelectPeriod}
+                />
               </dd>
             </div>
           </dl>
@@ -197,9 +201,8 @@ export function ReportDraftPanel({
       {/* Supporting workflows stay behind one disclosure so the form fits one screen. */}
       <div className="report-supporting-controls">
         <details>
-          <summary>Report details, notes and camera evidence</summary>
+          <summary>Report notes and audit trail</summary>
           <div className="report-supporting-content">
-            <CountingDetails metrics={metrics} />
             <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
             <ReportAuditTrail activeReport={activeReport} />
           </div>

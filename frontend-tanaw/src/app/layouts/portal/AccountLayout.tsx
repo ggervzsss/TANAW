@@ -7,10 +7,10 @@ import { scheduleAuthorizedRoutePreload } from "@/app/routers/routeModules";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeaderProvider } from "@/shared/components/layout";
 import { usePageEnter } from "@/shared/ui-kit/lib/page-enter";
-import { ViewSkeleton } from "@/shared/ui-kit/patterns/ViewSkeleton";
 import { currentUserQueryKey, getCurrentUser } from "@/shared/services/accountService";
 import type { UserRole } from "@/shared/types/role.types";
 import { createPageStateKey, readPageState, writePageState } from "@/shared/utils/pageState";
+import { PortalRouteSkeleton } from "./PortalRouteSkeleton";
 import { PortalTopbar } from "./PortalTopbar";
 import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
 
@@ -123,7 +123,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   }, [navigate, role]);
 
   const outlet = (
-    <Suspense fallback={<DestinationShellFallback padded={isSettings} />}>
+    <Suspense fallback={<PortalRouteSkeleton pathname={pathname} label="Preparing workspace..." />}>
       <Outlet context={theme} />
     </Suspense>
   );
@@ -149,11 +149,6 @@ export function AccountLayout({ role }: AccountLayoutProps) {
       </div>
     </section>
   );
-}
-
-/** While a page's code loads: an outline of a typical page, shown only if the load takes a beat. */
-function DestinationShellFallback({ padded }: { padded: boolean }) {
-  return <ViewSkeleton label="Preparing workspace..." className={padded ? "px-[clamp(1.25rem,3vw,3rem)] py-8" : undefined} />;
 }
 
 function isScrollPosition(value: unknown): value is { mainTop: number; windowTop: number } {

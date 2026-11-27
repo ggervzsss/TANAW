@@ -7,7 +7,6 @@ import { downloadDotReportPdf, type DotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 import { VAR1_COLUMN_WEIGHTS, VAR1_NOTE, VAR1_RESIDENCES, VAR1_SEX_COLUMNS, var1DailyCells, var1DataNotes, var1Days, var1MonthlyCells } from "../model/var1";
 import { useReportPreviewZoom, REPORT_PAPER_WIDTH } from "../hooks/useReportPreviewZoom";
-import { CountingDetails } from "./CountingDetails";
 
 type Props = {
   demo: DemoBreakdown;
@@ -115,11 +114,6 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, o
                 <Var1ReportDocument report={report} />
               </div>
             </div>
-            <details className="var1-supporting-details">
-              <summary>Report details and camera evidence</summary>
-              <CountingDetails metrics={metrics} />
-              {notes && <p>{notes}</p>}
-            </details>
           </div>
           <footer className="var1-viewer-footer">
             <div className="var1-zoom-controls">

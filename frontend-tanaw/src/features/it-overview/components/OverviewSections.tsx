@@ -28,6 +28,7 @@ function Section({
   errorText,
   onRetry,
   empty,
+  stateLine = false,
   children,
 }: {
   id: string;
@@ -40,11 +41,13 @@ function Section({
   errorText: string;
   onRetry: () => void;
   empty: string | null;
+  /** Rows carry a fourth line (the request state), so the loading rows do too. */
+  stateLine?: boolean;
   children: ReactNode;
 }) {
   const titleId = `${id}-title`;
   let body: ReactNode = children;
-  if (isLoading) body = <SectionSkeleton label={`Loading ${title.toLowerCase()}`} />;
+  if (isLoading) body = <SectionSkeleton label={`Loading ${title.toLowerCase()}`} stateLine={stateLine} />;
   else if (isError)
     body = (
       <div className="flex flex-wrap items-center gap-3 pt-4">
@@ -98,18 +101,32 @@ function SectionMessage({ children }: { children: ReactNode }) {
   return <p className="mt-4 mb-0 text-sm text-(--tanaw-text-secondary)">{children}</p>;
 }
 
-/** Three rows in the shape of the list while it loads. */
-function SectionSkeleton({ label }: { label: string }) {
+/**
+ * Three rows in the shape of the list while it loads: each bar sits in its text line's own height
+ * (meta, title, place and, for requests, the state line), beside a button-sized block.
+ */
+function SectionSkeleton({ label, stateLine }: { label: string; stateLine: boolean }) {
   return (
     <div role="status" aria-label={label} className="it-overview__skeleton">
       {[0, 1, 2].map((index) => (
         <div key={index} className={rowClass}>
           <div className="min-w-0">
-            <Skeleton className="h-3 w-40" />
-            <Skeleton className="mt-2.5 h-4 w-3/4" />
-            <Skeleton className="mt-2 h-3 w-1/2" />
+            <span className="flex h-5 items-center">
+              <Skeleton className="h-3 w-40" />
+            </span>
+            <span className="mt-1 flex h-6 items-center">
+              <Skeleton className="h-4 w-3/4" />
+            </span>
+            <span className="mt-0.5 flex h-5 items-center">
+              <Skeleton className="h-3.5 w-1/2" />
+            </span>
+            {stateLine && (
+              <span className="mt-1.5 flex h-5 items-center">
+                <Skeleton className="h-3 w-24" />
+              </span>
+            )}
           </div>
-          <Skeleton className="rounded-tanaw-md h-9 w-24 max-sm:hidden" />
+          <Skeleton className="rounded-tanaw-md h-10.5 w-28 max-sm:hidden" />
         </div>
       ))}
     </div>
@@ -144,6 +161,7 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
       errorText="Requests could not be loaded."
       onRetry={section.refetch}
       empty={shown.length === 0 ? "No requests are waiting for IT." : null}
+      stateLine
     >
       <ul className="m-0 list-none p-0">
         {shown.map((row) => (

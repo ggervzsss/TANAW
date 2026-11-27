@@ -101,20 +101,35 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
           <div role="status" aria-label="Loading activity" aria-busy="true">
             {[0, 1, 2, 3, 4].map((index) => (
               <div key={index} className={cn(ROW_GRID, "items-start border-b border-(--tanaw-border-soft) px-3 py-3.5")}>
-                <span className="max-lg:hidden">
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="mt-2 h-3 w-12" />
+                {/* When, activity, by and type, each bar in its text line's height; on phones they stack under the activity. */}
+                <span className="max-lg:order-2 max-lg:col-start-1">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3.5 w-16" />
+                  </span>
+                  <span className="flex h-5 items-center max-lg:hidden">
+                    <Skeleton className="h-3 w-12" />
+                  </span>
                 </span>
-                <span>
-                  <Skeleton className="h-4 w-3/5" />
-                  <Skeleton className="mt-2 h-3 w-4/5" />
+                <span className="max-lg:order-1 max-lg:col-start-1">
+                  <span className="flex h-5.5 items-center">
+                    <Skeleton className="h-4 w-3/5" />
+                  </span>
+                  <span className="mt-0.5 flex h-5 items-center">
+                    <Skeleton className="h-3 w-4/5" />
+                  </span>
                 </span>
-                <span className="max-lg:hidden">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="mt-2 h-3 w-16" />
+                <span className="max-lg:order-3 max-lg:col-start-1">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3.5 w-24" />
+                  </span>
+                  <span className="flex h-5 items-center max-lg:hidden">
+                    <Skeleton className="h-3 w-16" />
+                  </span>
                 </span>
-                <Skeleton className="h-3.5 w-20 max-lg:hidden" />
-                <span />
+                <span className="flex h-5 items-center max-lg:order-4 max-lg:col-start-1">
+                  <Skeleton className="h-3.5 w-20" />
+                </span>
+                <span className="max-lg:col-start-2 max-lg:row-start-1" />
               </div>
             ))}
           </div>

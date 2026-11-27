@@ -67,19 +67,31 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
       )}
 
       {isLoading ? (
-        <div role="status" aria-label="Loading the email log" aria-busy="true" className="mt-4">
+        <div role="status" aria-label="Loading the email log" aria-busy="true" className="mt-3.5">
           <Skeleton className="h-9 w-full rounded-[10px]" />
           {[0, 1, 2, 3].map((index) => (
-            <div key={index} className="grid grid-cols-[16%_30%_20%_minmax(0,1fr)] border-b border-(--tanaw-border-soft) py-3.5">
-              <Skeleton className="ml-3 h-4 w-24" />
-              <span className="px-4">
-                <Skeleton className="h-4 w-4/5" />
-                <Skeleton className="mt-2 h-3 w-1/2" />
+            <div key={index} className="grid grid-cols-[16%_30%_20%_minmax(0,1fr)] items-start border-b border-(--tanaw-border-soft) py-3.5">
+              <span className="flex h-5 items-center pr-4 pl-3">
+                <Skeleton className="h-3.5 w-24" />
               </span>
-              <Skeleton className="mx-4 h-4 w-28" />
               <span className="px-4">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="mt-2 h-3 w-36" />
+                <span className="flex h-5 items-center">
+                  <Skeleton className="h-3.5 w-4/5" />
+                </span>
+                <span className="mt-0.5 flex h-5 items-center">
+                  <Skeleton className="h-3 w-1/2" />
+                </span>
+              </span>
+              <span className="flex h-5 items-center px-4">
+                <Skeleton className="h-3.5 w-28" />
+              </span>
+              <span className="px-4">
+                <span className="flex h-5 items-center">
+                  <Skeleton className="h-3.5 w-20" />
+                </span>
+                <span className="mt-0.5 flex h-5 items-center">
+                  <Skeleton className="h-3 w-36" />
+                </span>
               </span>
             </div>
           ))}

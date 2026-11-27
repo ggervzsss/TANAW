@@ -1,26 +1,44 @@
-import { Skeleton } from "@/shared/ui-kit";
+import type { ReactNode } from "react";
+import { Skeleton, cn } from "@/shared/ui-kit";
+
+/** One column of the table that is loading, as its header declares it. */
+export type StaffTableSkeletonColumn = {
+  /** The column's real header, shown while the rows load. */
+  header: ReactNode;
+  /** The header and cell class of the real column ("tanaw-num", "tanaw-hide-sm"). */
+  className?: string;
+  /** The placeholder's width ("w-24"); ignored for a status pill. */
+  width?: string;
+  /** The cell holds a StatusPill. */
+  pill?: boolean;
+};
 
 type StaffTableSkeletonProps = {
   /** Read by screen readers while the table loads. */
   label: string;
-  /** Column widths of the table that is loading, as fractions of a cell ("w-3/4"). */
-  cells: readonly string[];
+  columns: readonly StaffTableSkeletonColumn[];
+  /** The first cell has a second, 13px line under its name (an enterprise's barangay). */
+  subline?: boolean;
   rows?: number;
 };
 
-/** A report table's rows in their own shape, with the shared calm shimmer, while the reports load. */
-export function StaffTableSkeleton({ label, cells, rows = 5 }: StaffTableSkeletonProps) {
+/**
+ * A report table's rows in their own shape, with the shared calm shimmer, while the reports load:
+ * the real column headers, the same columns hidden on narrow screens, and each bar in a box of its
+ * line's height so the rows that replace it keep their place.
+ */
+export function StaffTableSkeleton({ label, columns, subline = false, rows = 5 }: StaffTableSkeletonProps) {
   return (
-    <div className="tanaw-staff-rise">
+    <div className="tanaw-staff-rise overflow-x-auto">
       <p role="status" className="sr-only">
         {label}
       </p>
       <table className="tanaw-staff-table" aria-hidden="true">
         <thead>
           <tr>
-            {cells.map((_, index) => (
-              <th key={index} scope="col">
-                {" "}
+            {columns.map((column, index) => (
+              <th key={index} scope="col" className={column.className}>
+                {column.header}
               </th>
             ))}
           </tr>
@@ -28,12 +46,25 @@ export function StaffTableSkeleton({ label, cells, rows = 5 }: StaffTableSkeleto
         <tbody>
           {Array.from({ length: rows }, (_, row) => (
             <tr key={row} data-skeleton="">
-              {cells.map((width, index) => (
-                <td key={index}>
-                  <Skeleton className={`h-4 ${width} ${index === cells.length - 1 ? "ml-auto" : ""}`} />
-                  {index === 0 && <Skeleton className="mt-2 h-3 w-1/3" />}
-                </td>
-              ))}
+              {columns.map((column, index) => {
+                const end = column.className?.includes("tanaw-num") || index === columns.length - 1;
+                return (
+                  <td key={index} className={column.className}>
+                    {column.pill ? (
+                      <Skeleton shape="pill" className="h-6.5 w-24" />
+                    ) : (
+                      <span className={cn("flex h-[1.5em] items-center", end && "justify-end")}>
+                        <Skeleton className={cn("h-4", column.width ?? "w-20")} />
+                      </span>
+                    )}
+                    {index === 0 && subline && (
+                      <span className="mt-0.5 flex h-[1.21875rem] items-center">
+                        <Skeleton className="h-3 w-1/3" />
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

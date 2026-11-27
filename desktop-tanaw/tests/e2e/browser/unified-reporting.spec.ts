@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
+import { openReportMonth } from "../support/reports";
 
 const parkClassification = { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" };
 
@@ -175,12 +176,12 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await row.click();
     await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
+    // Previewing a report in Reports History leaves Create Reports on its own month.
     await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
-    await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
-    const basis = page.getByRole("region", { name: "Establishment counting basis" });
-    await expect(basis).toContainText("One establishment total from both camera modes");
-    await expect(basis).toContainText("someone returning on another day can contribute again");
-    await expect(basis).toContainText(mode === "open_space" ? "Not measured" : "4");
+    await expect(page.getByRole("button", { name: /Selected day: November/ })).toBeVisible();
+    await openReportMonth(page, "October 2026");
+    await expect(page.getByText("Report notes and audit trail", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Establishment counting basis" })).toHaveCount(0);
     await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
     // TANAW fills This City; visitors entered for other origins are deducted from it.
     await expect(page.getByRole("button", { name: /Selected day: October 10, 2026/ })).toBeVisible();
@@ -219,8 +220,9 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await savedRow.getByRole("button", { name: /View/ }).click();
     const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
     await expect(preview.getByText("411 - Parks", { exact: true })).toBeVisible();
-    await preview.getByText("Report details and camera evidence", { exact: true }).click();
-    await expect(preview.getByRole("region", { name: "Establishment counting basis" })).toContainText(mode === "open_space" ? "Not measured" : "4");
+    // The form shows the report alone, without the counting basis or camera evidence.
+    await expect(preview.getByText("Report details and camera evidence", { exact: true })).toHaveCount(0);
+    await expect(preview.getByRole("region", { name: "Establishment counting basis" })).toHaveCount(0);
     const downloadEvent = page.waitForEvent("download");
     await preview.getByRole("button", { name: /Download/ }).click();
     const download = await downloadEvent;
@@ -243,7 +245,7 @@ test("a submitted month is complete and offers no way to submit it again", async
   await page.locator("tbody tr").filter({ hasText: "REP-FIXTURE" }).click();
   await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+  await openReportMonth(page, "October 2026");
   await expect(page.locator(".report-workflow-status")).toHaveText("Submitted · REP-FIXTURE");
   await expect(page.getByRole("button", { name: /Submit Report/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Resubmit/ })).toHaveCount(0);
@@ -263,7 +265,7 @@ test("a report TANAW refuses shows the backend's reason", async ({ page }) => {
   state.refuseUpload(ONE_REPORT_PER_MONTH);
   await page.locator("tbody tr").filter({ hasText: "October 2026" }).click();
   await page.keyboard.press("Escape");
-  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+  await openReportMonth(page, "October 2026");
   await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
   await page.getByRole("button", { name: "Submit Report", exact: true }).click();
   await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
@@ -284,7 +286,7 @@ test("reports validation, failed saving and confirmed upload without duplicate f
   await page.keyboard.press("Escape");
   // A saved draft whose origins add up to more than the day's 2 visitors (after a recount) blocks submitting.
   state.seedDraftOrigins({ "2026-10-10": { otherCity: { male: 3, female: 0 } } });
-  await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
+  await openReportMonth(page, "October 2026");
   const submit = page.getByRole("button", { name: "Submit Report", exact: true });
   const success = page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" });
   const warning = page.locator(".tanaw-toast--warning");

@@ -65,10 +65,10 @@ export function PersistentIssueNotice({ issue }: { issue: PersistentIssue }) {
     <div
       role={isError ? "alert" : "status"}
       aria-live={isError ? "assertive" : "polite"}
-      className={`animate-in slide-in-from-right-5 fade-in flex items-start gap-3 rounded-xl border border-l-4 bg-white/97 px-3.5 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.22)] backdrop-blur dark:bg-slate-900/97 ${
+      className={`animate-in slide-in-from-right-5 fade-in flex items-start gap-3 rounded-xl border bg-white/97 px-3.5 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.22)] backdrop-blur dark:bg-slate-900/97 ${
         isError
-          ? "border-red-200 border-l-red-600 text-red-950 dark:border-red-400/25 dark:border-l-red-400 dark:text-red-100"
-          : "border-amber-200 border-l-amber-500 text-amber-950 dark:border-amber-300/25 dark:border-l-amber-300 dark:text-amber-100"
+          ? "border-red-200 text-red-950 dark:border-red-400/25 dark:text-red-100"
+          : "border-amber-200 text-amber-950 dark:border-amber-300/25 dark:text-amber-100"
       }`}
     >
       <Icon

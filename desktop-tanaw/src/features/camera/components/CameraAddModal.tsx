@@ -73,6 +73,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 aria-required="true"
                 aria-invalid={Boolean(shownErrors.name)}
                 maxLength={120}
+                readOnly={isValidating}
                 value={newCam.name}
                 onChange={(event) => onChange({ ...newCam, name: event.target.value })}
               />
@@ -83,6 +84,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 value={newCam.cameraBrand ?? "tapo"}
                 ariaLabel="Camera brand / type"
                 menuClassName="camera-add-dropdown"
+                disabled={isValidating}
                 options={CAMERA_BRANDS}
                 onChange={(brand) =>
                   onChange({ ...newCam, ...updateCameraConnection(newCam, { cameraBrand: brand as CameraFormValues["cameraBrand"] }), cameraHost: newCam.cameraHost })
@@ -90,7 +92,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               />
             </Field>
             <Field id="camera-zone" label="Camera Location (optional)" error={shownErrors.zone}>
-              <input id="camera-zone" maxLength={120} value={newCam.zone} placeholder="Enter the location of your camera" onChange={(event) => onChange({ ...newCam, zone: event.target.value })} />
+              <input id="camera-zone" maxLength={120} readOnly={isValidating} value={newCam.zone} placeholder="Enter the location of your camera" onChange={(event) => onChange({ ...newCam, zone: event.target.value })} />
               <small>Example: Main Gate, Lobby, or Park</small>
             </Field>
             <Field label={CAMERA_MODE_LABEL} required>
@@ -98,6 +100,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 reportsDismissal
                 ariaLabel={CAMERA_MODE_LABEL}
                 menuClassName="camera-add-dropdown"
+                disabled={isValidating}
                 value={newCam.analysisMode ?? "entrance_exit"}
                 options={CAMERA_MODE_OPTIONS}
                 onChange={(mode) => onChange({ ...newCam, analysisMode: mode as CameraFormValues["analysisMode"] })}
@@ -113,6 +116,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 value={newCam}
                 hostError={shownErrors.cameraHost ?? duplicateIpError}
                 streamError={shownErrors.rtsp}
+                readOnly={isValidating}
                 onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "" })}
               />
             </div>
@@ -124,12 +128,13 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 aria-required="true"
                 aria-invalid={Boolean(shownErrors.username)}
                 value={newCam.username}
+                readOnly={isValidating}
                 onChange={(event) => onChange({ ...newCam, username: event.target.value })}
               />
             </Field>
             <Field id="camera-password" label="Camera Password" required error={shownErrors.password}>
               <PasswordVisibilityInput id="camera-password" variant="modal" autoComplete="new-password" ariaRequired
-                hasError={Boolean(shownErrors.password)} value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} />
+                hasError={Boolean(shownErrors.password)} readOnly={isValidating} value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} />
             </Field>
             <p className="design-note">The camera is added only after its connection is verified. Credentials are kept in the desktop's secure credential store.</p>
           </div>

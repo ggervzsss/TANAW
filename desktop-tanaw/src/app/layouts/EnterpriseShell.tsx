@@ -23,7 +23,8 @@ import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { ThemedEnterpriseTopbar } from "./ThemedEnterpriseTopbar";
 import { usePageEnter } from "../../ui-kit/lib/page-enter";
-import { ViewSkeleton, type ViewSkeletonVariant } from "../../ui-kit/patterns/ViewSkeleton";
+import { enterpriseFrameClassNames } from "./enterprise-frame";
+import { EnterpriseViewSkeleton } from "./EnterpriseViewSkeleton";
 import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
 import {
   CameraManagementView,
@@ -249,6 +250,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
+  const frame = enterpriseFrameClassNames(activeView);
   const criticalToasts = notifications.filter((notification) => notification.type === "critical" && !notification.read && !dismissedCriticalIds.has(notification.id));
 
   const markNotificationsRead = (notificationsToMark: EnterpriseNotification[]) => {
@@ -287,18 +289,14 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
       />
 
-      <main ref={mainRef} className={activeView === "settings" ? "tanaw-settings-page overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"}>
+      <main ref={mainRef} className={frame.main}>
         {activeView === "settings" ? (
-          <Suspense fallback={<EnterpriseViewLoadingFallback view="settings" />}>
+          <Suspense fallback={<EnterpriseViewSkeleton view="settings" />}>
             {user?.role === "enterprise" && <GeneralSettingsView />}
           </Suspense>
         ) : (
-          <div
-            ref={contentScrollRef}
-            data-form-scroll-container
-            className={`enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
-          >
-            <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
+          <div ref={contentScrollRef} data-form-scroll-container className={frame.content}>
+            <div className={frame.page}>
               {!mlContextReady && (activeView === "dashboard" || activeView === "cameras" || activeView === "reports") && (
                 <CameraServiceStartupCard
                   error={mlContextError}
@@ -307,7 +305,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
                   onResetLocalData={resetLocalData}
                 />
               )}
-              <Suspense fallback={<EnterpriseViewLoadingFallback view={activeView} />}>
+              <Suspense fallback={<EnterpriseViewSkeleton view={activeView} />}>
                 {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
                 {activeView === "cameras" && mlContextReady && (
                   <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
@@ -344,24 +342,6 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
       />
     </div>
   );
-}
-
-const viewSkeletons: Record<EnterpriseView, { variant: ViewSkeletonVariant; label: string }> = {
-  dashboard: { variant: "dashboard", label: "Loading dashboard" },
-  cameras: { variant: "cameras", label: "Loading camera setup" },
-  reports: { variant: "reports", label: "Loading reports" },
-  notifications: { variant: "list", label: "Loading notifications" },
-  help: { variant: "help", label: "Loading Help Center" },
-  profile: { variant: "settings", label: "Loading settings" },
-  security: { variant: "settings", label: "Loading settings" },
-  tickets: { variant: "settings", label: "Loading settings" },
-  settings: { variant: "settings", label: "Loading settings" },
-};
-
-/** A skeleton in the shape of the page that is loading, so the layout never jumps when it arrives. */
-function EnterpriseViewLoadingFallback({ view }: { view: EnterpriseView }) {
-  const { variant, label } = viewSkeletons[view];
-  return <ViewSkeleton variant={variant} label={label} />;
 }
 
 function getEnterpriseCameraStorageKey(user: ReturnType<typeof useAuthStore.getState>["user"]) {

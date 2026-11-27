@@ -24,6 +24,7 @@ import {
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
 import { syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
+import { reportMonthRows } from "../utils/report-ledger";
 import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useOriginsDraft } from "./useOriginsDraft";
@@ -46,6 +47,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitting = useRef(false);
+  const draftNotes = useRef(new Map<string, string>());
   const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
   // A submitted month is done: an enterprise sends one report per month, and it cannot be replaced.
@@ -79,18 +81,29 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     [activeReport, period, currentReportingPeriod, demo, origins, data.currentMetrics, data.pendingPeriodCounts, notes, reportsHistory],
   );
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  // The months the Tourism Period picker switches between, oldest first.
+  const monthRows = useMemo(() => reportMonthRows(ledgerRows), [ledgerRows]);
+  const months = useMemo(() => monthRows.map((row) => row.report.period ?? row.report.date), [monthRows]);
 
-  const handleSelectLedgerRow = (row: ReportLedgerRow) => {
+  /** Opens a reporting month in Create Reports: its submitted report read-only, else its draft. */
+  const openMonth = (row: ReportLedgerRow) => {
     if (submitting.current) return;
     pendingOperation.current = null;
     setPreviewReport(null);
     const nextReportId = row.kind === "history" ? row.report.id : null;
     const nextPeriod = row.report.period ?? row.report.date ?? getCurrentReportingPeriod();
+    // Notes typed on a draft month wait for it while another month is open.
+    if (!isReadOnly) draftNotes.current.set(demographicDraftKey, notes);
     setActiveReportId(nextReportId);
     setPeriod(nextPeriod);
-    setNotes(row.kind === "history" ? (row.report.notes ?? "") : "");
+    setNotes(row.kind === "history" ? (row.report.notes ?? "") : (draftNotes.current.get(getDemographicDraftKey(nextReportId, nextPeriod)) ?? ""));
     // Another report loads its own draft. Clearing the open one would save the blank and delete its draft.
     if (getDemographicDraftKey(nextReportId, nextPeriod) !== demographicDraftKey) setOrigins(row.kind === "history" ? (row.report.origins ?? {}) : {});
+  };
+  const handleSelectPeriod = (next: string) => {
+    if (isSameReportingMonth(next, period)) return;
+    const row = monthRows.find((item) => isSameReportingMonth(item.report.period ?? item.report.date, next));
+    if (row) openMonth(row);
   };
   const handlePreviewReport = (report: ReportRecord) =>
     setPreviewReport({
@@ -237,12 +250,13 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     executeSubmit,
     handleDownloadReport,
     handlePreviewReport,
-    handleSelectLedgerRow,
+    handleSelectPeriod,
     hasDailyOrigins,
     isPeriodChanging: (!activeReport && data.loading) || isHydrating,
     isReadOnly,
     isSubmitting,
     ledgerRows,
+    months,
     notes,
     period,
     origins,

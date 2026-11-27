@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReportLedgerRow } from "../../../../../../src/features/reports/components/ReportLedgerTable";
-import { sortReportLedgerRows } from "../../../../../../src/features/reports/utils/report-ledger";
+import { reportMonthRows, sortReportLedgerRows } from "../../../../../../src/features/reports/utils/report-ledger";
 
 describe("sortReportLedgerRows", () => {
   it("orders current, submitted, pending, and consolidated reports by newest period", () => {
@@ -15,6 +15,20 @@ describe("sortReportLedgerRows", () => {
 
     expect(sortReportLedgerRows(rows).map((item) => item.key)).toEqual(["current-july", "history-june", "pending-may", "pending-april", "pending-march", "history-february"]);
     expect(rows[0]?.key).toBe("pending-march");
+  });
+});
+
+describe("reportMonthRows", () => {
+  it("lists each reporting month once, oldest first, preferring the live month and then its submitted report", () => {
+    const rows = [
+      row("current-november", "current", "November 2026"),
+      row("pending-october", "pending", "October 2026"),
+      row("history-october", "history", "October 2026"),
+      row("pending-august", "pending", "August 2026"),
+      row("history-june", "history", "June 2026"),
+    ];
+
+    expect(reportMonthRows(rows).map((item) => item.key)).toEqual(["history-june", "pending-august", "history-october", "current-november"]);
   });
 });
 

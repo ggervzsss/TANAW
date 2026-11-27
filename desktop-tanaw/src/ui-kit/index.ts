@@ -13,7 +13,7 @@ export { Dialog, type DialogProps, type DialogSize } from "./components/Dialog";
 export { ExpandableText, type ExpandableTextProps } from "./components/ExpandableText";
 export { ModalPortal, type ModalPortalProps } from "./components/ModalPortal";
 export { Select, type SelectOption, type SelectProps } from "./components/Select";
-export { Skeleton, SkeletonText, Spinner, type SkeletonProps, type SkeletonTextProps, type SpinnerProps } from "./components/Spinner";
+export { Skeleton, SkeletonLine, SkeletonText, Spinner, type SkeletonLineProps, type SkeletonProps, type SkeletonTextProps, type SpinnerProps } from "./components/Spinner";
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Tooltip, type TooltipProps } from "./components/Tooltip";
 

@@ -10,6 +10,7 @@ type PasswordVisibilityInputProps = {
   onBlur?: () => void;
   onChange: (value: string) => void;
   placeholder?: string;
+  readOnly?: boolean;
   value: string;
   variant?: "compact" | "modal";
 };
@@ -23,6 +24,7 @@ export function PasswordVisibilityInput({
   onBlur,
   onChange,
   placeholder,
+  readOnly = false,
   value,
   variant = "compact",
 }: PasswordVisibilityInputProps) {
@@ -43,6 +45,7 @@ export function PasswordVisibilityInput({
         id={id}
         type={isVisible ? "text" : "password"}
         value={value}
+        readOnly={readOnly}
         onBlur={onBlur}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

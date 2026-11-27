@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { SystemLog } from "@/shared/types";
 import { Skeleton, cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
-import { activityKind, activityKindChipLabels, activityTitle, actorRoleLabel, formatActivityDate, formatActivityTime } from "../model/recentActivity";
+import { ACTIVITY_PAGE_SIZE, activityKind, activityKindChipLabels, activityTitle, actorRoleLabel, formatActivityDate, formatActivityTime } from "../model/recentActivity";
 
 const chipClass = "inline-flex min-h-6 items-center rounded-tanaw-sm px-2 text-xs leading-tight font-semibold whitespace-nowrap";
 
@@ -92,28 +92,39 @@ export function RecentActivityList({
   );
 }
 
-/** Rows in the shape of the activity list while the records load. */
+/** A skeleton bar in a box of its line's height, so a loading row is as tall as the row it stands in for. */
+function SkeletonLine({ height, bar }: { height: string; bar: string }) {
+  return (
+    <span className={cn("flex items-center", height)}>
+      <Skeleton className={bar} />
+    </span>
+  );
+}
+
+/** A page of rows (ACTIVITY_PAGE_SIZE) in the shape of the activity list while the records load. */
 export function RecentActivitySkeleton() {
   return (
     <div role="status" aria-label="Loading activity">
       <div aria-hidden="true">
-        {[0, 1, 2, 3, 4, 5].map((index) => (
-          <span key={index} className={cn(columns, "border-b border-(--tanaw-border-soft) px-3 py-4")}>
-            <span className="block">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="mt-2 h-3 w-16" />
-            </span>
-            <span className="block">
-              <Skeleton className="h-3.5 w-40" />
-              <Skeleton shape="pill" className="mt-2 h-5 w-20" />
-            </span>
-            <span className="block">
-              <Skeleton className="h-3.5 w-28" />
-              <Skeleton className="mt-2 h-3 w-16" />
-            </span>
-            <span className="block">
-              <Skeleton className="h-3.5 w-full" />
-              <Skeleton className="mt-2 h-3.5 w-3/4" />
+        {Array.from({ length: ACTIVITY_PAGE_SIZE }, (_, index) => (
+          <span key={index} className="block border-b border-(--tanaw-border-soft) py-0.5">
+            <span className={cn(columns, "px-3 py-4")}>
+              <span className="block">
+                <SkeletonLine height="h-5" bar="h-3.5 w-24" />
+                <SkeletonLine height="h-5" bar="h-3 w-16" />
+              </span>
+              <span className="block">
+                <SkeletonLine height="h-5" bar="h-3.5 w-40" />
+                <Skeleton className="mt-1.5 h-6 w-20 rounded-tanaw-sm" />
+              </span>
+              <span className="block">
+                <SkeletonLine height="h-5" bar="h-3.5 w-28" />
+                <SkeletonLine height="h-[19.5px]" bar="h-3 w-16" />
+              </span>
+              <span className="block">
+                <SkeletonLine height="h-5.25" bar="h-3.5 w-full" />
+                <SkeletonLine height="h-5.25" bar="h-3.5 w-3/4" />
+              </span>
             </span>
           </span>
         ))}

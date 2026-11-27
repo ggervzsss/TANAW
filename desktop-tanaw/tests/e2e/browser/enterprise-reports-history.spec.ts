@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { mlResponse, mockMlRequest, switchTheme } from "./support/preload";
 import { signIn, defaultEnterpriseUser } from "./support/session";
 import { token } from "../support/theme-and-filters";
+import { openReportMonth } from "../support/reports";
 
 test("keeps the modern Reports workspace dense, rounded, and fully interactive", async ({ page }) => {
   // About sixty steps across both themes, three viewports and the report preview; a busy full
@@ -54,7 +55,7 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
         body: JSON.stringify([
           {
             report_id: "REP-202607",
-            period: "2026-07",
+            period: "July 2026",
             submitted_at: "2026-08-01T01:00:00Z",
             entries: 140,
             exits: 90,
@@ -91,7 +92,7 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   expect(await page.locator(".report-create-card").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe(raised);
   await page.keyboard.press("Escape");
   await expect(calendar).toBeHidden();
-  await page.getByText("Report details, notes and camera evidence", { exact: true }).click();
+  await page.getByText("Report notes and audit trail", { exact: true }).click();
   const notes = page.getByPlaceholder("Add notes regarding events, closures, or demographic estimates...");
   await notes.fill("Updated report workspace notes");
   await expect(notes).toHaveValue("Updated report workspace notes");
@@ -120,10 +121,21 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
 
   await switchTheme(page, "light");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
+  // Viewing a report in Reports History leaves Create Reports on the draft being edited.
   await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
-  // A report submitted before daily entry shows its monthly origins, without a date picker.
+  await expect(notes).toHaveValue("Updated report workspace notes");
+  await expect(page.getByRole("button", { name: /^Selected day: / })).toBeVisible();
+  await openReportMonth(page, "July 2026");
+  // A report submitted before daily entry shows its monthly origins; its picker switches months only.
   await expect(page.getByRole("table", { name: "Monthly visitor origins" })).toBeVisible();
-  await expect(page.locator(".report-day-picker")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Selected month: July 2026/ })).toBeVisible();
+  await page.locator(".report-day-picker > button").click();
+  await expect(page.getByRole("group", { name: /^Days of / })).toHaveCount(0);
+  // Back on the live month, the notes typed on its draft are still there.
+  await page.getByRole("button", { name: /^Next month, / }).click();
+  await expect(page.getByRole("group", { name: /^Days of / })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notes).toHaveValue("Updated report workspace notes");
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await page.setViewportSize({ width: 1100, height: 760 });
   await expect(workspace).toBeVisible();

@@ -187,30 +187,39 @@ export function AdminEnterpriseReportsPage() {
   );
 }
 
-/** The report list in its own shape while it loads: the column grid with quiet placeholder rows. */
+/**
+ * The report list in its own shape while it loads: the real column headings, then one page of rows
+ * with each bar in the box of the line it stands for (14px text at 1.5, 13px notes, 26px pills).
+ */
 function ReportListSkeleton() {
   return (
     <div className="mt-3.5 overflow-x-hidden" aria-hidden="true">
       <div className="min-w-225">
-        <div className="tanaw-er-cols border-b border-(--tanaw-border-soft) px-3 py-3.5">
-          {[40, 70, 60, 64, 60].map((width, index) => (
-            <span key={index} className="block" style={{ width: `${width}%` }}>
-              <Skeleton className="h-3 w-full" />
-            </span>
-          ))}
+        <div className="tanaw-er-cols tanaw-er-head border-b border-(--tanaw-border-soft) px-3 py-3">
+          <span>Enterprise</span>
+          <span>Sent on</span>
+          <span>Submission</span>
+          <span>Staff review</span>
+          <span>Reviewed by</span>
           <span />
         </div>
-        {Array.from({ length: 6 }, (_, index) => (
-          <div key={index} className="tanaw-er-cols border-b border-(--tanaw-border-soft) px-3 py-4">
-            <span className="block">
-              <Skeleton className="h-4 w-44" />
-              <Skeleton className="mt-2 h-3 w-32" />
-            </span>
-            <Skeleton className="h-3.5 w-16" />
-            <Skeleton shape="pill" className="h-6 w-24" />
-            <Skeleton shape="pill" className="h-6 w-24" />
-            <Skeleton className="h-3.5 w-24" />
-            <span />
+        {Array.from({ length: PAGE_SIZE }, (_, index) => (
+          <div key={index} className="tanaw-er-item">
+            <div className="tanaw-er-cols px-3 py-3.5">
+              <span className="block">
+                <span className="flex h-5.25 items-center">
+                  <Skeleton className="h-3.5 w-44" />
+                </span>
+                <span className="mt-0.5 flex h-[19.5px] items-center">
+                  <Skeleton className="h-3 w-32" />
+                </span>
+              </span>
+              <Skeleton className="h-3.5 w-16" />
+              <Skeleton shape="pill" className="h-6.5 w-24" />
+              <Skeleton shape="pill" className="h-6.5 w-24" />
+              <Skeleton className="h-3.5 w-24" />
+              <span />
+            </div>
           </div>
         ))}
       </div>

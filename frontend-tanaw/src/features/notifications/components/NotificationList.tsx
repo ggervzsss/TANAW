@@ -69,18 +69,29 @@ export function NotificationRow({ notification, onOpen, compact = false }: { not
   );
 }
 
-/** Rows in the shape of notifications while they load. */
-export function NotificationSkeleton({ rows = 4, label = "Loading notifications" }: { rows?: number; label?: string }) {
+/**
+ * Rows in the shape of notifications while they load: the same row padding and disc as
+ * NotificationRow (compact in the topbar menu), with each bar in a box of its line's height.
+ */
+export function NotificationSkeleton({ rows = 4, label = "Loading notifications", compact = false }: { rows?: number; label?: string; compact?: boolean }) {
   return (
     <div role="status" aria-label={label}>
       <div aria-hidden="true">
         {Array.from({ length: rows }, (_, index) => (
-          <span key={index} className="flex gap-3 border-b border-(--tanaw-border-soft) px-4 py-4 last:border-b-0">
-            <Skeleton shape="circle" className="h-10 w-10 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="mt-2 h-3.5 w-11/12" />
-              <Skeleton className="mt-2.5 h-3 w-32" />
+          <span key={index} className="block border-b border-(--tanaw-border-soft) py-0.5 last:border-b-0">
+            <span className={cn("flex gap-3", compact ? "px-3 py-3" : "px-4 py-4")}>
+              <Skeleton shape="circle" className={cn("mt-0.5 shrink-0", compact ? "h-9 w-9" : "h-10 w-10")} />
+              <span className="min-w-0 flex-1">
+                <span className="flex h-[1.203rem] items-center">
+                  <Skeleton className="h-3.5 w-3/5" />
+                </span>
+                <span className="mt-1 flex h-[1.32rem] items-center">
+                  <Skeleton className="h-3 w-11/12" />
+                </span>
+                <span className="mt-2 flex h-5 items-center">
+                  <Skeleton className="h-3 w-32" />
+                </span>
+              </span>
             </span>
           </span>
         ))}

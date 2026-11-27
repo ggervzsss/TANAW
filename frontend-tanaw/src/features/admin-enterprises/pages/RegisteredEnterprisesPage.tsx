@@ -302,25 +302,42 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
         </thead>
         <tbody>
           {isLoading
-            ? Array.from({ length: 5 }, (_, index) => (
+            ? // One page of rows, each bar in the box of the line it stands for (16px name line 24px tall, 14px text 20px, 13px notes 19.5px).
+              Array.from({ length: PAGE_SIZE }, (_, index) => (
                 <tr key={index}>
                   <td className={cell}>
-                    <Skeleton className="h-4 w-44" label={index === 0 ? "Loading enterprises" : undefined} />
-                    <Skeleton className="mt-2 h-3 w-60 max-w-full" />
+                    <span className="flex h-6 items-center">
+                      <Skeleton className="h-4 w-44" label={index === 0 ? "Loading enterprises" : undefined} />
+                    </span>
+                    <span className="mt-0.5 flex h-[19.5px] items-center">
+                      <Skeleton className="h-3 w-60 max-w-full" />
+                    </span>
                   </td>
                   <td className={cell}>
-                    <Skeleton className="h-3.5 w-20" />
+                    <span className="flex h-5 items-center">
+                      <Skeleton className="h-3.5 w-20" />
+                    </span>
                   </td>
                   <td className={cell}>
-                    <Skeleton className="h-3.5 w-14" />
+                    <span className="flex h-5 items-center">
+                      <Skeleton className="h-3.5 w-14" />
+                    </span>
                   </td>
                   <td className={cell}>
-                    <Skeleton className="h-3.5 w-32" />
-                    <Skeleton className="mt-2 h-3 w-20" />
+                    <span className="flex h-5 items-center">
+                      <Skeleton className="h-3.5 w-32" />
+                    </span>
+                    <span className="mt-0.5 flex h-[19.5px] items-center">
+                      <Skeleton className="h-3 w-20" />
+                    </span>
                   </td>
                   <td className={cell}>
-                    <Skeleton className="h-3.5 w-20" />
-                    <Skeleton className="mt-2 h-3 w-28" />
+                    <span className="flex h-5 items-center">
+                      <Skeleton className="h-3.5 w-20" />
+                    </span>
+                    <span className="mt-1 flex h-[19.5px] items-center">
+                      <Skeleton className="h-3 w-28" />
+                    </span>
                   </td>
                   <td className={cell} />
                 </tr>

@@ -76,7 +76,7 @@ export function PortalNotificationDropdown({
             <div className="max-h-112 overflow-y-auto p-1.5">
               {notifications.length === 0 ? (
                 isLoading ? (
-                  <NotificationSkeleton rows={3} />
+                  <NotificationSkeleton rows={3} compact />
                 ) : (
                   <NotificationEmptyState compact />
                 )

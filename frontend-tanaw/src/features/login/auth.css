@@ -1067,12 +1067,6 @@ html.dark .tanaw-auth-brand-logo {
   color: var(--tanaw-text-secondary);
 }
 
-.tanaw-auth-state__skeleton {
-  display: grid;
-  gap: 8px;
-  margin-top: 24px;
-}
-
 .tanaw-auth-note {
   display: flex;
   align-items: flex-start;

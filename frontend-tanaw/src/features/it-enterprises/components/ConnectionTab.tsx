@@ -93,20 +93,7 @@ function CamerasToday({ row, formats }: { row: EnterpriseRow; formats: DisplayFo
       </div>
       <div className="mt-2 border-t border-(--tanaw-border-soft)">
         {today.isLoading ? (
-          <div role="status" aria-label="Loading cameras">
-            {[0, 1].map((index) => (
-              <div key={index} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2.2fr)] items-center gap-x-7 gap-y-2.5 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
-                <div>
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="mt-2 h-3 w-24" />
-                </div>
-                <div>
-                  <Skeleton className="h-5.5 w-full" />
-                  <Skeleton className="mt-2.5 h-3 w-2/3" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <CameraRowsSkeleton />
         ) : today.isError ? (
           <Alert
             tone="warning"
@@ -125,6 +112,43 @@ function CamerasToday({ row, formats }: { row: EnterpriseRow; formats: DisplayFo
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Camera rows in their own shape while today's record loads: name, kind and state beside the hour
+ * strip, its time marks and the note, each bar in its text line's own height.
+ */
+export function CameraRowsSkeleton() {
+  return (
+    <div role="status" aria-label="Loading cameras">
+      {[0, 1].map((index) => (
+        <div key={index} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2.2fr)] items-center gap-x-7 gap-y-2.5 border-b border-(--tanaw-border-soft) py-4 max-lg:grid-cols-1">
+          <div>
+            <span className="flex h-6 items-center">
+              <Skeleton className="h-4 w-32" />
+            </span>
+            <span className="mt-0.5 flex h-5 items-center">
+              <Skeleton className="h-3 w-24" />
+            </span>
+            <span className="mt-1.5 flex h-5 items-center">
+              <Skeleton className="h-3.5 w-28" />
+            </span>
+          </div>
+          <div>
+            <Skeleton className="h-5.5 w-full" />
+            <span aria-hidden="true" className="mt-1 flex h-4 items-center justify-between">
+              <Skeleton className="h-2.5 w-8" />
+              <Skeleton className="h-2.5 w-8" />
+              <Skeleton className="h-2.5 w-8" />
+            </span>
+            <span className="mt-1.5 flex h-5 items-center">
+              <Skeleton className="h-3 w-2/3" />
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -178,9 +202,16 @@ function RequestsFromPlace({ row, formats }: { row: EnterpriseRow; formats: Disp
         <div role="status" aria-label="Loading requests" className="mt-2.5 border-t border-(--tanaw-border-soft)">
           {[0, 1].map((index) => (
             <div key={index} className="border-b border-(--tanaw-border-soft) py-3.5">
-              <Skeleton className="h-3 w-40" />
-              <Skeleton className="mt-2.5 h-4 w-3/4" />
-              <Skeleton className="mt-2 h-3 w-24" />
+              <span className="flex h-5 items-center justify-between gap-3">
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-3 w-12" />
+              </span>
+              <span className="mt-1 flex h-6 items-center">
+                <Skeleton className="h-4 w-3/4" />
+              </span>
+              <span className="mt-0.5 flex h-5 items-center">
+                <Skeleton className="h-3.5 w-24" />
+              </span>
             </div>
           ))}
         </div>
