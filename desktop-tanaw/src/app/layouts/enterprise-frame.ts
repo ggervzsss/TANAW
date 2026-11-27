@@ -10,7 +10,7 @@ import { routePaths } from "../router/routePaths";
 export function enterpriseFrameClassNames(view: EnterpriseView) {
   return {
     main: view === "settings" ? "tanaw-settings-page overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden",
-    content: `enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${view === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`,
+    content: `enterprise-content flex-1 transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${view === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "enterprise-page-scroller overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`,
     page: `mx-auto max-w-470 ${view === "cameras" ? "h-full min-h-0" : ""}`,
   };
 }

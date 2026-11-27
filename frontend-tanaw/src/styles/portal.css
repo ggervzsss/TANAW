@@ -35,6 +35,22 @@
   }
 }
 
+/*
+ * The page scroller keeps the room its scrollbar takes, so a page never slides sideways as it
+ * starts or stops scrolling. While skeletons stand in for content the bar stays hidden: a
+ * placeholder list can be taller than what arrives, and a bar that shows and then vanishes reads
+ * as a glitch. The colours stay set in both states, so the bar keeps one width.
+ */
+.tanaw-portal-content {
+  scrollbar-color: var(--tanaw-control-border-hover) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+:is(.tanaw-portal-content, [data-page-scroller]):has(.tanaw-skeleton) {
+  scrollbar-color: transparent transparent;
+}
+
 /* ---------- Page titles ---------- */
 
 /* Bai Jamjuree 700, tight tracking; the civic line signs it from below. */

@@ -34,6 +34,18 @@
 .enterprise-shell .enterprise-content:has(.dash)::before {
   display: none;
 }
+/*
+ * The page scroller keeps the room its scrollbar takes, so a page never slides sideways as it
+ * starts or stops scrolling. While skeletons stand in for content the bar stays hidden: a
+ * placeholder list can be taller than what arrives, and a bar that shows and then vanishes reads
+ * as a glitch. The bar keeps the app's thin style in both states, so its width never changes.
+ */
+.enterprise-shell .enterprise-page-scroller {
+  scrollbar-gutter: stable;
+}
+.enterprise-shell .enterprise-page-scroller:has(.tanaw-skeleton) {
+  scrollbar-color: transparent transparent;
+}
 .enterprise-topbar {
   box-shadow: none;
 }
