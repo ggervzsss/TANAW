@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReturned, newerReport, reportDueDate, reportVersion, returnedNote, reviewStatus, submissionNote, submissionStatus } from "@/features/reports/model/reportStatuses";
+import { reportDueDate, reviewStatus, submissionNote, submissionStatus } from "@/features/reports/model/reportStatuses";
 import type { IntakeReport } from "@/shared/types";
 
 function report(overrides: Partial<IntakeReport> = {}): IntakeReport {
@@ -38,37 +38,5 @@ describe("staff review status", () => {
     expect(reviewStatus({ status: "Pending Review" })).toBe("Reviewing");
     expect(reviewStatus({ status: "Ready to Consolidate" })).toBe("Consolidated");
     expect(reviewStatus({ status: "Consolidated" })).toBe("Consolidated");
-  });
-});
-
-describe("returned reports", () => {
-  const returned = report({ status: "Returned", returnedAt: "2026-11-12T10:00:00+08:00", returnedBy: "Maria Santos", returnedReason: "Recount the visitor origins." });
-
-  it("count as awaiting correction, not submitted, and show Returned in staff review", () => {
-    expect(submissionStatus(returned, "October", 2026, new Date(2026, 10, 30))).toBe("Awaiting correction");
-    expect(reviewStatus(returned)).toBe("Returned");
-    expect(isReturned(returned)).toBe(true);
-    expect(isReturned(report())).toBe(false);
-    expect(isReturned(undefined)).toBe(false);
-  });
-
-  it("note when they were returned, and who returned them and why", () => {
-    expect(submissionNote(returned, "October", 2026, new Date(2026, 10, 20))).toBe("Returned Nov 12");
-    expect(returnedNote(returned)).toBe("Returned on Nov 12 by Maria Santos: Recount the visitor origins.");
-    expect(returnedNote({ returnedAt: null, returnedBy: null, returnedReason: null })).toBe("Returned.");
-  });
-});
-
-describe("report versions", () => {
-  it("prefer the higher version, then the one sent later", () => {
-    const first = report({ id: "v1", version: 1, submittedAt: "2026-11-20T09:00:00+08:00" });
-    const second = report({ id: "v2", version: 2, submittedAt: "2026-11-14T09:00:00+08:00" });
-    expect(newerReport(first, second).id).toBe("v2");
-    expect(newerReport(second, first).id).toBe("v2");
-    expect(newerReport(undefined, first).id).toBe("v1");
-    const resent = report({ id: "later", version: 1, submittedAt: "2026-11-21T09:00:00+08:00" });
-    expect(newerReport(first, resent).id).toBe("later");
-    // A report without a version is a first report.
-    expect(reportVersion({ version: undefined as unknown as number })).toBe(1);
   });
 });

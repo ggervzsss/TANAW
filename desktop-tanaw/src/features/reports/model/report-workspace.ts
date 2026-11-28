@@ -11,7 +11,7 @@ import { sortReportLedgerRows } from "../utils/report-ledger";
 import type { ReportLedgerRow } from "./report-ledger";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import { getCurrentReportingPeriod, getReportingPeriodSubmissionError } from "./reporting-calendar";
-import { correctionSource, isReopenedReport, isReturnedReport, isUploadRejected, reportReference } from "./report-lifecycle";
+import { correctionSource, isReopenedReport, isUploadRejected, reportReference } from "./report-lifecycle";
 
 export type PreparedReportCounts = {
   period: string;
@@ -48,9 +48,9 @@ export function validateReportDraft(
   }
   const allocationError = dailyOriginsError(days) ?? validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
-  // A version reopened for correction no longer holds its month.
+  // A refused report reopened to be fixed no longer holds its month.
   if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft" && !isReopenedReport(report))) {
-    return `A report for ${period} has already been sent. If something is wrong, LGU Staff can return it to you for correction.`;
+    return `A report for ${period} has already been submitted. An enterprise sends one report per reporting month, and a submitted report cannot be replaced.`;
   }
   return null;
 }
@@ -140,7 +140,7 @@ export function buildLedgerRows({
   pendingCounts: PreparedReportCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
-  // A month whose report was reopened for correction waits for its corrected version again.
+  // A month whose refused report was reopened waits for the fixed report again.
   const reportedPeriods = new Set(reportsHistory.filter((report) => !isReopenedReport(report)).map((report) => reportingMonthKey(report.period ?? report.date)));
   const pendingPeriods = new Set<string>();
   const rows: ReportLedgerRow[] = [
@@ -175,7 +175,7 @@ export function buildLedgerRows({
     rows.push({
       key: draftLedgerKey(counts.period),
       kind: "pending",
-      // Until the correction is edited, it starts from the reopened version's origins.
+      // Until the fix is edited, it starts from the refused report's origins.
       report: reportFromPendingCounts(corrects && !counts.origins ? { ...counts, origins: corrects.origins } : counts),
       reportLabel: corrects ? "Correction" : "Pending Submission",
       reportDescription: corrects ? `Correcting ${reportReference(corrects)}` : "Recorded establishment counts",
@@ -197,16 +197,14 @@ export function buildLedgerRows({
   return sortReportLedgerRows(rows);
 }
 
-/** The status Reports History shows for a sent version. */
+/** The status Reports History shows for a sent report. */
 export function historyStatusLabel(report: ReportRecord) {
-  if (isReturnedReport(report)) return "Returned";
   if (isUploadRejected(report)) return "Not accepted";
   return report.status;
 }
 
-/** The line under a version in Reports History: Staff's or TANAW's reason, else its upload state. */
+/** The line under a report in Reports History: TANAW's reason for refusing it, else its upload state. */
 function historyDescription(report: ReportRecord) {
-  if (isReturnedReport(report)) return report.returnedReason ? `Returned: ${report.returnedReason}` : "Returned for correction";
   if (isUploadRejected(report)) return report.rejectionReason ? `Not accepted by TANAW: ${report.rejectionReason}` : "Not accepted by TANAW";
   return report.syncStatus ? `Online copy: ${uploadStatusLabel(report.syncStatus)}` : "Saved report";
 }
@@ -239,15 +237,11 @@ export function historyLedgerKey(reportId: string) {
 
 export function reportFromLocalSubmission(submission: LocalReportSubmissionRecord, timeFormat: SystemTimeFormat): ReportRecord {
   const payload = submission.payload;
-  // A version reopened because Staff returned it reads as returned, even before TANAW is reached.
-  const returned = submission.reopen_reason === "returned";
-  const payloadStatus = returned ? "Returned" : typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
+  const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
   const metrics = metricsFromLocalSubmission(submission);
 
   return {
-    ...(typeof submission.version === "number" ? { version: submission.version } : {}),
-    ...(returned ? { reviewStatus: "Returned" as const } : {}),
     ...(submission.rejection_reason ? { rejectionReason: submission.rejection_reason } : {}),
     ...(submission.reopened_at ? { reopenedAt: submission.reopened_at } : {}),
     id: submission.report_id,
@@ -302,8 +296,7 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
 
 export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFormat: SystemTimeFormat): ReportRecord {
   const peak = report.metrics.peak == null ? null : nonNegativeInteger(report.metrics.peak);
-  const status = report.status === "Consolidated" ? "Consolidated" : report.status === "Returned" ? "Returned" : "Submitted";
-  const returned = report.status === "Returned";
+  const status = report.status === "Consolidated" ? "Consolidated" : "Submitted";
   const auditTrail: NonNullable<ReportRecord["auditTrail"]> = [
     {
       time: formatAuditTime(report.submittedAt, timeFormat),
@@ -311,12 +304,9 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
       actor: status === "Consolidated" ? "LGU Staff" : "Enterprise User",
     },
   ];
-  if (returned) auditTrail.push({ time: formatAuditTime(report.returnedAt ?? report.submittedAt, timeFormat), action: "Returned for correction", actor: report.returnedBy || "LGU Staff" });
   // Keys TANAW did not send stay off the record, so a merge keeps what this computer knows.
   return {
     reviewStatus: report.status,
-    ...(typeof report.version === "number" ? { version: report.version } : {}),
-    ...(returned ? { returnedReason: report.returnedReason ?? null, returnedAt: report.returnedAt ?? null, returnedBy: report.returnedBy ?? null } : {}),
     id: report.code,
     reference: report.code,
     attractionType: formatReportAttraction(report.attraction?.code, report.attractionDescription),
@@ -345,10 +335,8 @@ export function mergeReportHistory(localReports: ReportRecord[], cloudReports: R
     reportsById.set(report.id, report);
   }
 
-  for (const cloudReport of cloudReports) {
-    // A correction's code in TANAW is this computer's reference plus "-vN"; it is the same report.
-    const id = localReportId(cloudReport.id, reportsById);
-    const report = { ...cloudReport, id };
+  for (const report of cloudReports) {
+    const id = report.id;
     const localReport = reportsById.get(id);
     if (!localReport) {
       reportsById.set(id, report);
@@ -360,7 +348,7 @@ export function mergeReportHistory(localReports: ReportRecord[], cloudReports: R
         ...report,
         ...localReport,
         remarks: report.remarks ?? localReport.remarks,
-        // TANAW holds this version, so its review state, version number and code are current.
+        // TANAW holds this report, so its review state and code are current.
         ...cloudReview(report),
       });
       continue;
@@ -384,35 +372,21 @@ function cloudReview(report: ReportRecord): Partial<ReportRecord> {
     status: report.status,
     ...(report.reference ? { reference: report.reference } : {}),
     ...(report.reviewStatus ? { reviewStatus: report.reviewStatus } : {}),
-    ...(report.version !== undefined ? { version: report.version } : {}),
-    ...(report.returnedReason !== undefined ? { returnedReason: report.returnedReason, returnedAt: report.returnedAt, returnedBy: report.returnedBy } : {}),
   };
 }
 
 /**
- * Applies TANAW's latest copy of some reports (for example, one month's versions) to the reports
- * already shown: their review state and version update, and versions not shown yet are added.
+ * Applies TANAW's latest copy of some reports (for example, one month's report) to the reports
+ * already shown: their review state updates, and reports not shown yet are added.
  */
 export function applyCloudReview(current: ReportRecord[], cloudReports: ReportRecord[]) {
   const reportsById = new Map(current.map((report) => [report.id, report]));
-  for (const cloudReport of cloudReports) {
-    const id = localReportId(cloudReport.id, reportsById);
-    const report = { ...cloudReport, id };
+  for (const report of cloudReports) {
+    const id = report.id;
     const shown = reportsById.get(id);
     reportsById.set(id, shown ? { ...shown, ...cloudReview(report), remarks: report.remarks ?? shown.remarks } : report);
   }
   return sortReports(Array.from(reportsById.values()));
-}
-
-/**
- * The reference this computer saved a report under, for TANAW's code of it. TANAW stores a
- * correction (version 2 and later) as the desktop reference with "-vN" added; the report keeps
- * this computer's reference as its id, and shows TANAW's code.
- */
-export function localReportId(cloudCode: string, known: { has: (id: string) => boolean }) {
-  if (known.has(cloudCode)) return cloudCode;
-  const base = cloudCode.replace(/-v\d+$/, "");
-  return base !== cloudCode && known.has(base) ? base : cloudCode;
 }
 
 function isPendingLocalReport(report: ReportRecord) {
@@ -485,7 +459,7 @@ function auditTrailFromPayload(value: unknown): ReportRecord["auditTrail"] | und
 }
 
 function isReportStatus(value: string) {
-  return ["Submitted", "Consolidated", "Returned", "Draft"].includes(value);
+  return ["Submitted", "Consolidated", "Draft"].includes(value);
 }
 
 function formatAuditTime(value: string, timeFormat: SystemTimeFormat) {

@@ -1005,7 +1005,7 @@
   }
 }
 
-/* ---- Report lifecycle: the sent confirmation under the title, and returned or refused notices */
+/* ---- Report lifecycle: the sent confirmation under the title, and refused-upload notices */
 .report-information-left > header .report-status-line {
   display: flex;
   flex-wrap: wrap;
@@ -1038,10 +1038,6 @@
   background: var(--tanaw-success-bg);
   color: var(--tanaw-success-text);
 }
-.report-review-pill[data-tone="returned"] {
-  background: var(--tanaw-warning-bg);
-  color: var(--tanaw-warning-text);
-}
 .report-review-pill[data-tone="rejected"] {
   background: var(--tanaw-danger-bg);
   color: var(--tanaw-danger-text);
@@ -1057,22 +1053,15 @@
   gap: 4px 14px;
   margin-top: 16px;
   padding: 16px 20px;
-  border: 1px solid var(--tanaw-warning-line);
+  border: 1px solid var(--tanaw-danger-line);
   border-radius: var(--radius-tanaw-lg);
-  background: var(--tanaw-warning-surface);
-  animation: reports-panel-rise 240ms var(--reports-ease);
-}
-.report-lifecycle-banner[data-tone="rejected"] {
-  border-color: var(--tanaw-danger-line);
   background: var(--tanaw-danger-surface);
+  animation: reports-panel-rise 240ms var(--reports-ease);
 }
 .report-lifecycle-icon {
   width: 22px;
   height: 22px;
   margin-top: 1px;
-  color: var(--tanaw-warning-text);
-}
-.report-lifecycle-banner[data-tone="rejected"] .report-lifecycle-icon {
   color: var(--tanaw-danger-text);
 }
 .report-lifecycle-body {
@@ -1086,13 +1075,10 @@
   font-size: var(--text-base);
   line-height: 24px;
   font-weight: 650;
-  color: var(--tanaw-warning-text);
+  color: var(--tanaw-danger-text);
   overflow-wrap: anywhere;
   border-radius: 6px;
   outline-offset: 2px;
-}
-.report-lifecycle-banner[data-tone="rejected"] h3 {
-  color: var(--tanaw-danger-text);
 }
 .report-lifecycle-body > p {
   margin: 4px 0 0;
@@ -1157,19 +1143,14 @@
   align-items: center;
   gap: 8px 12px;
   padding: 8px 8px 8px 14px;
-  border: 1px solid var(--tanaw-warning-line);
+  border: 1px solid var(--tanaw-danger-line);
   border-radius: 12px;
-  background: var(--tanaw-warning-surface);
+  background: var(--tanaw-danger-surface);
   font-size: var(--text-sm);
   line-height: 20px;
   font-weight: 600;
-  color: var(--tanaw-warning-text);
-  animation: reports-panel-rise 240ms var(--reports-ease);
-}
-.report-attention-list li[data-tone="rejected"] {
-  border-color: var(--tanaw-danger-line);
-  background: var(--tanaw-danger-surface);
   color: var(--tanaw-danger-text);
+  animation: reports-panel-rise 240ms var(--reports-ease);
 }
 .report-attention-list li > svg {
   flex: 0 0 auto;
@@ -1654,10 +1635,6 @@
   background: var(--tanaw-success-bg);
   color: var(--tanaw-success-text);
 }
-.report-status[data-tone="returned"] {
-  background: var(--tanaw-warning-bg);
-  color: var(--tanaw-warning-text);
-}
 .report-status[data-tone="rejected"] {
   background: var(--tanaw-danger-bg);
   color: var(--tanaw-danger-text);
@@ -1667,10 +1644,6 @@
   max-width: 100%;
   font-size: 12px;
   line-height: 16px;
-  color: var(--reports-muted);
-}
-.report-history-version {
-  font-size: 12px;
   color: var(--reports-muted);
 }
 .report-upload-state {

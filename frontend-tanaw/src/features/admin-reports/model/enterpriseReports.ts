@@ -1,7 +1,5 @@
 import {
   formatShortDate,
-  isReturned,
-  newerReport,
   reportDueDate,
   reportSentAt,
   reviewStatus,
@@ -41,15 +39,12 @@ export type EnterpriseReportProfile = {
   firstMonth: MonthKey | null;
 };
 
-/** One enterprise's report status for one month, from its latest report version. */
+/** One enterprise's report status for one month. */
 export type ReportMonthEntry = {
   key: string;
   month: MonthKey;
   period: string;
-  /** The latest version; a returned one stays here until its corrected version arrives. */
   report: IntakeReport | undefined;
-  /** Every version of the month's report, newest first (more than one after a return). */
-  versions: readonly IntakeReport[];
   reportCode: string | null;
   sentAt: Date | null;
   dueAt: Date;
@@ -65,12 +60,11 @@ export type SubmissionFilter = "all" | SubmissionStatus;
 
 export type ReportRowFilters = { query: string; enterpriseId: string; submission: SubmissionFilter };
 
-export const SUBMIT_LOG_ACTION = "Submit Enterprise Report";
-export const RETURN_LOG_ACTION = "Return Enterprise Report";
 /** Report actions in the activity log that record a staff review decision, by the action name the backend writes. */
-export const REVIEW_LOG_ACTIONS = new Set(["Report Ready to Consolidate", "Report Consolidated", RETURN_LOG_ACTION]);
+export const REVIEW_LOG_ACTIONS = new Set(["Report Ready to Consolidate", "Report Consolidated"]);
+export const SUBMIT_LOG_ACTION = "Submit Enterprise Report";
 
-const SUBMISSION_ORDER: Record<SubmissionStatus, number> = { Missing: 0, "Awaiting correction": 1, Pending: 2, Submitted: 3 };
+const SUBMISSION_ORDER: Record<SubmissionStatus, number> = { Missing: 0, Pending: 1, Submitted: 2 };
 
 /** "6, all monitoring", "6, 4 monitoring", "None set up", or null without a camera summary. */
 export function cameraSummary(enterprise: Pick<MapEnterprise, "cameraMonitoring"> | undefined) {
@@ -131,32 +125,22 @@ export function isRegisteredBy(profile: Pick<EnterpriseReportProfile, "firstMont
   return !profile.firstMonth || monthOrdinal(profile.firstMonth) <= monthOrdinal(month);
 }
 
-/** Each enterprise's report versions per month, newest first. */
-export type ReportIndex = Map<string, IntakeReport[]>;
+export type ReportIndex = Map<string, IntakeReport>;
 
 function reportIndexKey(enterpriseId: string, month: MonthKey) {
   return `${enterpriseId}|${monthKeyId(month)}`;
 }
 
-/** Newer version first; for the same version, the one sent later. */
-function compareNewestFirst(left: IntakeReport, right: IntakeReport) {
-  if (left === right) return 0;
-  return newerReport(left, right) === right ? 1 : -1;
-}
-
-/**
- * Each enterprise's report versions per month, newest first. The first one is the month's report:
- * a corrected version replaces the returned one before it.
- */
+/** Each enterprise's report per month; when a month somehow has two, the most recently sent one. */
 export function indexReports(reports: readonly IntakeReport[]): ReportIndex {
   const index: ReportIndex = new Map();
   for (const report of reports) {
     const month = reportMonthOf(report);
     if (!month) continue;
     const key = reportIndexKey(report.enterpriseId, month);
-    index.set(key, [...(index.get(key) ?? []), report]);
+    const current = index.get(key);
+    if (!current || (reportSentAt(report)?.getTime() ?? 0) > (reportSentAt(current)?.getTime() ?? 0)) index.set(key, report);
   }
-  for (const versions of index.values()) versions.sort(compareNewestFirst);
   return index;
 }
 
@@ -185,28 +169,24 @@ export function reviewersByReport(logs: readonly SystemLog[], finalReports: read
 }
 
 export function buildMonthEntry(enterpriseId: string, month: MonthKey, reports: ReportIndex, reviewers: Map<string, string>, today: Date): ReportMonthEntry {
-  const versions = reports.get(reportIndexKey(enterpriseId, month)) ?? [];
-  const report = versions[0];
+  const report = reports.get(reportIndexKey(enterpriseId, month));
   const name = monthName(month);
-  // A returned report names who returned it, even before the activity log has loaded.
-  const returnedBy = isReturned(report) ? report?.returnedBy?.trim() || null : null;
   return {
     key: monthKeyId(month),
     month,
     period: periodLabel(month),
     report,
-    versions,
     reportCode: report?.code ?? null,
     sentAt: report ? reportSentAt(report) : null,
     dueAt: reportDueDate(name, month.year),
     submission: submissionStatus(report, name, month.year, today),
     submissionNote: submissionNote(report, name, month.year, today),
     review: reviewStatus(report),
-    reviewedBy: report ? (returnedBy ?? reviewers.get(report.id) ?? null) : null,
+    reviewedBy: report ? (reviewers.get(report.id) ?? null) : null,
   };
 }
 
-/** One row per enterprise registered by the month, sorted Missing, Awaiting correction, Pending, then Submitted, then by name. */
+/** One row per enterprise registered by the month, sorted Missing, Pending, then Submitted, then by name. */
 export function buildReportRows(
   profiles: readonly EnterpriseReportProfile[],
   reports: ReportIndex,
@@ -253,20 +233,17 @@ export function historyMonths(profile: Pick<EnterpriseReportProfile, "firstMonth
 export type YearSummary = {
   year: number;
   submitted: number;
-  /** Months already due or already sent: submitted, awaiting correction, plus missing. */
+  /** Months already due or already sent: submitted plus missing. */
   due: number;
   pending: ReportMonthEntry[];
   missing: ReportMonthEntry[];
-  /** Months whose report was returned and whose corrected version has not arrived yet. */
-  awaitingCorrection: ReportMonthEntry[];
 };
 
 export function summarizeYear(year: number, entries: readonly ReportMonthEntry[]): YearSummary {
   const submitted = entries.filter((entry) => entry.submission === "Submitted").length;
   const missing = entries.filter((entry) => entry.submission === "Missing");
   const pending = entries.filter((entry) => entry.submission === "Pending");
-  const awaitingCorrection = entries.filter((entry) => entry.submission === "Awaiting correction");
-  return { year, submitted, due: submitted + awaitingCorrection.length + missing.length, pending, missing, awaitingCorrection };
+  return { year, submitted, due: submitted + missing.length, pending, missing };
 }
 
 /** "9 of 10 submitted", or "None due yet" for a year with nothing due. */
@@ -280,22 +257,13 @@ export function pendingNote(summary: YearSummary) {
   return summary.pending.map((entry) => `${monthName(entry.month)}, due ${formatShortDate(entry.dueAt)}`).join("; ");
 }
 
-/** "July, August" in month order. */
-function monthList(entries: readonly ReportMonthEntry[]) {
-  return [...entries]
+/** "July, August", or "None in 2025". */
+export function missingNote(summary: YearSummary) {
+  if (summary.missing.length === 0) return `None in ${summary.year}`;
+  return [...summary.missing]
     .sort((left, right) => monthOrdinal(left.month) - monthOrdinal(right.month))
     .map((entry) => monthName(entry.month))
     .join(", ");
-}
-
-/** "July, August", or "None in 2025". */
-export function missingNote(summary: YearSummary) {
-  return summary.missing.length === 0 ? `None in ${summary.year}` : monthList(summary.missing);
-}
-
-/** "October", or "None in 2025". */
-export function awaitingCorrectionNote(summary: YearSummary) {
-  return summary.awaitingCorrection.length === 0 ? `None in ${summary.year}` : monthList(summary.awaitingCorrection);
 }
 
 /** The months shown before "Show all": six, or all when the opened month is further back. */

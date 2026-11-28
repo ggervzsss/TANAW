@@ -10,7 +10,7 @@ import { formatPhilippineDateTime } from "../../../utils/date-time";
 import { formatReportingPeriodLabel, reportingMonthKey } from "../utils/reporting-period";
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { uploadStatusLabel } from "../model/report-workspace";
-import { isReopenedReport, isReturnedReport, isUploadRejected, reportReference, reportVersion, versionLabel } from "../model/report-lifecycle";
+import { isReopenedReport, isUploadRejected, reportReference } from "../model/report-lifecycle";
 
 export type { ReportLedgerRow } from "../model/report-ledger";
 type Props = {
@@ -132,13 +132,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
                   }}
                 >
                   <td className="report-history-id-cell" title={row.reportDescription}>
-                    <ExpandableText
-                      primary={row.kind === "history" ? reportReference(report) : report.id}
-                      secondary={row.kind === "history" ? (versionLabel(reportVersion(report)) ?? undefined) : undefined}
-                      ariaLabel="report name and description"
-                      className="report-history-id"
-                      secondaryClassName="report-history-version"
-                    />
+                    <ExpandableText primary={row.kind === "history" ? reportReference(report) : report.id} ariaLabel="report name and description" className="report-history-id" />
                   </td>
                   <td>{formatReportingPeriodLabel(report.period ?? report.date)}</td>
                   <td className="report-history-count">{report.unique.toLocaleString()}</td>
@@ -146,7 +140,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
                     <span className="report-status" data-tone={statusTone(row)}>
                       {row.statusLabel}
                     </span>
-                    {/* Staff's or TANAW's reason stays with the version it applies to. */}
+                    {/* TANAW's reason stays with the report it refused. */}
                     {row.kind === "history" && statusReason(report) ? (
                       <ExpandableText primary={statusReason(report)!} ariaLabel="reason" className="report-status-reason" />
                     ) : (
@@ -222,7 +216,6 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
 }
 
 function statusTone(row: ReportLedgerRow) {
-  if (row.kind === "history" && isReturnedReport(row.report)) return "returned";
   if (row.kind === "history" && isUploadRejected(row.report)) return "rejected";
   if (row.kind === "pending" || row.statusLabel === "Pending Submission") return "pending";
   if (row.report.status === "Submitted") return "submitted";
@@ -230,9 +223,9 @@ function statusTone(row: ReportLedgerRow) {
   return "draft";
 }
 
-/** Why Staff returned a version, or TANAW refused it; and that a correction replaced it. */
+/** Why TANAW refused a report, and that a fixed report replaced it. */
 function statusReason(report: ReportRecord) {
-  const reason = isReturnedReport(report) ? report.returnedReason : isUploadRejected(report) ? (report.rejectionReason ?? "No reason given") : null;
-  if (!reason) return null;
-  return isReopenedReport(report) ? `${reason} · Reopened for correction` : reason;
+  if (!isUploadRejected(report)) return null;
+  const reason = report.rejectionReason ?? "No reason given";
+  return isReopenedReport(report) ? `${reason} · Reopened to fix` : reason;
 }

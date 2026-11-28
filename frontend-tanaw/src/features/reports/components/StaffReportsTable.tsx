@@ -14,8 +14,7 @@ type StaffReportsTableProps = {
 
 /**
  * One row per enterprise for the month. A row with a report opens it when clicked anywhere; a row
- * without one offers its reminder. A returned report does both: it opens with the reason, and its
- * Remind asks for the corrected version.
+ * without one offers its reminder.
  */
 export function StaffReportsTable({ rows, emptyMessage, remindingId, wasReminded, onOpen, onRemind }: StaffReportsTableProps) {
   return (

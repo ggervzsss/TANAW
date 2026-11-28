@@ -1021,8 +1021,8 @@ export interface paths {
         };
         /**
          * List Desktop Report Submissions
-         * @description The calling enterprise's own report versions, newest first: whether each was accepted,
-         *     returned for correction (with the reason) or consolidated.
+         * @description The calling enterprise's own reports, newest first: whether each waits for staff review,
+         *     was accepted, or is in a consolidated report.
          */
         get: operations["list_desktop_report_submissions_operational_desktop_report_submissions_get"];
         put?: never;
@@ -1256,27 +1256,6 @@ export interface paths {
         get: operations["list_intake_report_submissions_operational_reports_intake_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/operational/reports/intake/{report_id}/return": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Return Intake Report
-         * @description Returns a waiting or accepted report to its enterprise for correction. The enterprise is
-         *     notified with the reason and can send a corrected version of the period's report.
-         */
-        post: operations["return_intake_report_operational_reports_intake__report_id__return_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3048,30 +3027,13 @@ export interface components {
             } | null;
             /** Period */
             period: string;
-            /**
-             * Previousversionid
-             * @description The id of the returned version this one replaces (version 2+).
-             */
-            previousVersionId?: string | null;
             /** Remarks */
             remarks?: string | null;
-            /** Returnedat */
-            returnedAt?: string | null;
-            /**
-             * Returnedby
-             * @description Display name of the Staff or Admin user who returned it.
-             */
-            returnedBy?: string | null;
-            /**
-             * Returnedreason
-             * @description Why LGU staff returned this version for correction.
-             */
-            returnedReason?: string | null;
             /**
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Consolidated" | "Returned";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
             /** Submitted */
             submitted: string;
             /**
@@ -3079,11 +3041,6 @@ export interface components {
              * Format: date-time
              */
             submittedAt: string;
-            /**
-             * Version
-             * @description 1 for the first report of a period; each corrected report after a return adds one.
-             */
-            version: number;
         };
         /** LeadAdminNameUpdate */
         LeadAdminNameUpdate: {
@@ -3369,14 +3326,6 @@ export interface components {
              */
             thisProvUnspecified: number;
         };
-        /** ReportReturnRequest */
-        ReportReturnRequest: {
-            /**
-             * Reason
-             * @description What the enterprise needs to correct, shown to it in the desktop app.
-             */
-            reason: string;
-        };
         /** ReportStatusUpdate */
         ReportStatusUpdate: {
             /** Remarks */
@@ -3385,7 +3334,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Consolidated" | "Returned";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
         };
         /** RequestAttachmentCreate */
         RequestAttachmentCreate: {
@@ -6396,41 +6345,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeReportSummary"][];
-                };
-            };
-        };
-    };
-    return_intake_report_operational_reports_intake__report_id__return_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                report_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReportReturnRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeReportSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

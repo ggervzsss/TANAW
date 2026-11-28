@@ -11,7 +11,6 @@ const banner = (report: ReportRecord | null, reports: ReportRecord[]) =>
     <ReportLifecycleBanner
       lifecycle={reportLifecycle(report, reports, "October 2026")}
       reports={reports}
-      timeFormat="12-hour"
       reopeningReportId={null}
       reopenIssue={null}
       onCorrect={() => undefined}
@@ -27,26 +26,25 @@ describe("report lifecycle", () => {
     expect(banner(sent, [sent])).toBe("");
   });
 
-  it("shows who returned the report and why, with one way to correct it", () => {
-    const returned = { ...sent, status: "Returned", reviewStatus: "Returned" as const, returnedBy: "Ana Cruz", returnedAt: "2026-11-05T02:00:00Z", returnedReason: "Foreign visitors look too high." };
-    const markup = banner(returned, [returned]);
-    expect(markup).toContain("Returned for correction by Ana Cruz on Nov 5, 2026");
-    expect(markup).toContain("<blockquote>Foreign visitors look too high.</blockquote>");
-    expect(markup).toContain("Correct and send again");
-    // While it is corrected, the reason stays in view without the button.
-    const correcting = banner(null, [{ ...returned, reopenedAt: "2026-11-06T00:00:00Z" }]);
-    expect(correcting).toContain("You are correcting the October 2026 report");
-    expect(correcting).toContain("Foreign visitors look too high.");
-    expect(correcting).toContain("version 2");
-    expect(correcting).not.toContain("Correct and send again");
+  it("offers no way to reopen a report TANAW accepted, whatever Staff's review says", () => {
+    const accepted = { ...sent, reviewStatus: "Ready to Consolidate" as const };
+    expect(banner(accepted, [accepted])).toBe("");
+    const markup = renderToStaticMarkup(<ReportStatusLine lifecycle={reportLifecycle(accepted, [accepted], "October 2026")} timeFormat="12-hour" />);
+    expect(markup).toContain("Accepted by Staff");
+    expect(markup).not.toContain("Version");
   });
 
   it("explains a refused upload with TANAW's message, a fix and a way to ask IT", () => {
     const refused = { ...sent, syncStatus: "upload_rejected", rejectionReason: "Totals do not match the counts." };
     const markup = banner(refused, [refused]);
     expect(markup).toContain("TANAW did not accept this report");
-    expect(markup).toContain("Totals do not match the counts.");
+    expect(markup).toContain("<blockquote>Totals do not match the counts.</blockquote>");
     expect(markup.indexOf("Fix and send again")).toBeLessThan(markup.indexOf("Ask IT for help"));
+    // While it is fixed, TANAW's reason stays in view without the button.
+    const fixing = banner(null, [{ ...refused, reopenedAt: "2026-11-06T00:00:00Z" }]);
+    expect(fixing).toContain("You are fixing the October 2026 report TANAW did not accept");
+    expect(fixing).toContain("Totals do not match the counts.");
+    expect(fixing).not.toContain("Fix and send again");
   });
 
   it("keeps a submit blocker beside the button instead of in a toast", () => {

@@ -23,7 +23,7 @@ import {
   reportSubmissionIssue,
   type ReportSubmissionIssue,
 } from "../model/report-workspace";
-import { canReopenReport, correctionCause, correctionSource, reportLifecycle, reportsNeedingAction } from "../model/report-lifecycle";
+import { canReopenReport, correctionSource, reportLifecycle, reportsNeedingAction } from "../model/report-lifecycle";
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
 import { syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
@@ -59,8 +59,8 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const draftNotes = useRef(new Map<string, string>());
   const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
-  // A sent version is read-only. If Staff return it, or TANAW refuses it, the person reopens the
-  // month to send a corrected version.
+  // A sent report is read-only. If TANAW refuses it, the person reopens the month to fix it and
+  // send it again; a report TANAW accepted is final.
   const isReadOnly = activeReport ? activeReport.status !== "Draft" : false;
   const attractionType = isReadOnly ? activeReport?.attractionType : currentAttractionType;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
@@ -92,7 +92,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   );
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
   const lifecycle = useMemo(() => reportLifecycle(activeReport, reportsHistory, period), [activeReport, reportsHistory, period]);
-  // Returned or refused reports of other months, so they are found from whichever month is open.
+  // Refused reports of other months, so they are found from whichever month is open.
   const reportsAwaitingAction = useMemo(() => reportsNeedingAction(reportsHistory).filter((report) => !isSameReportingMonth(report.period ?? report.date, period)), [reportsHistory, period]);
   // The months the Tourism Period picker switches between, oldest first.
   const monthRows = useMemo(() => reportMonthRows(ledgerRows), [ledgerRows]);
@@ -110,7 +110,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     if (!isReadOnly) draftNotes.current.set(demographicDraftKey, notes);
     setActiveReportId(nextReportId);
     setPeriod(nextPeriod);
-    // A month being corrected starts from the notes of the version it corrects.
+    // A month being fixed starts from the notes of the refused report.
     setNotes(
       row.kind === "history" ? (row.report.notes ?? "") : (draftNotes.current.get(getDemographicDraftKey(nextReportId, nextPeriod)) ?? correctionSource(reportsHistory, nextPeriod)?.notes ?? ""),
     );
@@ -240,7 +240,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       // TANAW's reason and a way to fix it. A toast adds only that the send just finished.
       if (cloudResult.status === "confirmed") {
         setReportsHistory((current) => upsertReport(current, { ...report, syncStatus: "synced" }));
-        // TANAW gives a correction its own code ("-v2"); the panel shows it once known.
         notifySuccess(lifecycle.kind === "correcting" ? "Corrected report sent." : `Report sent. Reference ${reference}.`, toastId);
       } else {
         if (cloudResult.status === "rejected") {
@@ -260,7 +259,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       setStatusAnnouncement((value) => value + 1);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
-      // TANAW numbers the version and starts its review; show that as soon as it is known.
+      // TANAW starts its review; show that as soon as it is known.
       if (cloudResult.status === "confirmed") void data.refreshMonthReview(period);
     } catch (issue) {
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
@@ -274,9 +273,9 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   };
 
   /**
-   * Reopens a month's report for correction after Staff returned it or TANAW refused it: the
-   * version stays in Reports History, and the month opens as an editable draft that starts from
-   * its figures. Nothing is sent until the person sends the corrected report.
+   * Reopens a month's report TANAW refused: it stays in Reports History, and the month opens as
+   * an editable draft that starts from its figures. Nothing is sent until the person sends the
+   * fixed report.
    */
   const reopenForCorrection = async (report: ReportRecord) => {
     if (submitting.current || reopeningReportId || !canReopenReport(report, reportsHistory)) return;
@@ -285,7 +284,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     setReopenIssue(null);
     try {
       const status = await getMlServiceStatus();
-      const record = await reopenLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, report.id, correctionCause(report));
+      const record = await reopenLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, report.id);
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       const nextPeriod = report.period ?? report.date;
       setReportsHistory((current) => upsertReport(current, { ...report, reopenedAt: record.reopened_at ?? new Date().toISOString() }));

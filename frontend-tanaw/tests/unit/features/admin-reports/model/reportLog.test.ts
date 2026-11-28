@@ -19,7 +19,6 @@ const intake: IntakeReport = {
   submittedAt: "2026-11-01T08:30:00",
   status: "Consolidated",
   code: "RPT-2026-10-001",
-  version: 1,
   metrics: { entry: null, exit: null, unique: 10, peak: null },
 };
 
@@ -64,32 +63,6 @@ describe("buildReportLog", () => {
     expect(events[1].detail).toBe("Maria Santos marked it ready for the city summary. Totals checked.");
     expect(events[2].detail).toBe("San Pedro Public Market sent RPT-2026-10-001.");
     expect(events.slice(1).every((event) => event.tone === "earlier")).toBe(true);
-  });
-
-  it("follows a returned report through its corrected version, newest first", () => {
-    const first: IntakeReport = { ...intake, id: "r-oct", status: "Returned", returnedBy: "Maria Santos", returnedReason: "Recount Oct 31.", returnedAt: "2026-11-03T10:00:00" };
-    const corrected: IntakeReport = { ...intake, id: "r-oct-v2", status: "Pending Review", code: "RPT-2026-10-001-v2", version: 2, previousVersionId: "r-oct", submittedAt: "2026-11-05T09:00:00" };
-    const events = buildReportLog(
-      entryFor([first, corrected]),
-      "San Pedro Public Market",
-      [
-        log("Submit Enterprise Report", "San Pedro Public Market", "2026-11-01T08:30:00"),
-        { ...log("Return Enterprise Report", "Ana Reyes", "2026-11-03T10:00:00", { reason: "Recount Oct 31 and Nov 1." }), sourceId: "r-oct" },
-      ],
-      [],
-    );
-    expect(events.map((event) => [event.title, event.when, event.detail])).toEqual([
-      ["Corrected report submitted", "Nov 5, 9:00 AM", "San Pedro Public Market sent RPT-2026-10-001-v2 (version 2)."],
-      ["Returned for correction", "Nov 3, 10:00 AM", "Ana Reyes returned RPT-2026-10-001: Recount Oct 31 and Nov 1."],
-      ["Report submitted", "Nov 1, 8:30 AM", "San Pedro Public Market sent RPT-2026-10-001."],
-    ]);
-    expect(events.map((event) => event.tone)).toEqual(["submitted", "earlier", "earlier"]);
-  });
-
-  it("leads with the return, from the report itself, while the correction has not arrived", () => {
-    const returned: IntakeReport = { ...intake, status: "Returned", returnedBy: "Maria Santos", returnedReason: "Recount Oct 31.", returnedAt: "2026-11-03T10:00:00" };
-    const [latest] = buildReportLog(entryFor([returned]), "San Pedro Public Market", [], []);
-    expect(latest).toEqual({ id: "r-oct-returned", title: "Returned for correction", when: "Nov 3, 10:00 AM", detail: "Maria Santos returned RPT-2026-10-001: Recount Oct 31.", tone: "pending" });
   });
 
   it("shows the passed due date for a missing month", () => {

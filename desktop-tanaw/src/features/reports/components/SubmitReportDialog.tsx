@@ -2,7 +2,7 @@ import { Send } from "lucide-react";
 import { Alert, Button, Dialog } from "../../../ui-kit";
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import type { ReportDay } from "../model/daily-origins";
-import { originSplit, reportDayCoverage, submitDialogTitle, versionLabel } from "../model/report-lifecycle";
+import { originSplit, reportDayCoverage, submitDialogTitle } from "../model/report-lifecycle";
 import type { ReportSubmissionIssue } from "../model/report-workspace";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
 
@@ -11,8 +11,8 @@ type SubmitReportDialogProps = {
   metrics: Metrics;
   demo: DemoBreakdown;
   days: ReportDay[];
-  /** Set when the month's draft corrects a returned or refused version. */
-  correction?: { version: number; previousId: string } | null;
+  /** Set when the month's draft fixes a report TANAW refused. */
+  correction?: { previousId: string } | null;
   isSubmitting: boolean;
   /** Why the last attempt failed; shown above the actions. */
   issue?: ReportSubmissionIssue | null;
@@ -27,7 +27,6 @@ type SubmitReportDialogProps = {
 export function SubmitReportDialog({ period, metrics, demo, days, correction = null, isSubmitting, issue = null, onCancel, onConfirm }: SubmitReportDialogProps) {
   const origins = originSplit(demo);
   const coverage = reportDayCoverage(days);
-  const version = correction ? versionLabel(correction.version) : null;
   const originRows: Array<[string, number]> = [
     ["This city", origins.thisCity],
     ["Other cities in the province", origins.otherCities],
@@ -38,7 +37,7 @@ export function SubmitReportDialog({ period, metrics, demo, days, correction = n
     <Dialog
       size="sm"
       title={submitDialogTitle(period, Boolean(correction))}
-      description={correction ? `It corrects ${correction.previousId}${version ? ` and goes as ${version.toLowerCase()}` : ""}.` : undefined}
+      description={correction ? `It replaces ${correction.previousId}, which TANAW did not accept.` : undefined}
       onClose={onCancel}
       dismissible={!isSubmitting}
       closeOnBackdrop={!isSubmitting}
@@ -87,14 +86,8 @@ export function SubmitReportDialog({ period, metrics, demo, days, correction = n
             </dd>
           </div>
         )}
-        {version && (
-          <div>
-            <dt>Version</dt>
-            <dd>{version}</dd>
-          </div>
-        )}
       </dl>
-      <p className="report-submit-copy">After you send it, you can't edit this report. If something is wrong, LGU Staff can return it to you for correction.</p>
+      <p className="report-submit-copy">After you send it, you can't edit this report. Once TANAW accepts it, it can't be replaced, so check the figures first.</p>
       <p className="report-submit-copy">
         <strong>What happens next:</strong> Staff in the City Tourism Office will review it.
       </p>

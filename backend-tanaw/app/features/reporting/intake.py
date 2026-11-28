@@ -1,6 +1,6 @@
 import json
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -15,13 +15,11 @@ from app.features.reporting.errors import (
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
 )
-from app.features.reporting.models import REPORT_RETURNED_STATUS, EnterpriseReportSubmission
+from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.policies import (
     duplicate_report_period_message,
     validate_new_report_submission,
-    validate_report_return,
     validate_report_review_transition,
-    versioned_report_code,
 )
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
@@ -54,40 +52,26 @@ async def ingest_report_submission(
     snapshot = (payload.payload or {}).get("counting")
     if snapshot is not None and snapshot.get("enterprise_id") != profile.enterprise_id:
         raise InvalidReportWorkflowError("The counting snapshot belongs to another establishment.")
-    latest = await db.scalar(
-        select(EnterpriseReportSubmission)
-        .where(
+    existing_report_id = await db.scalar(
+        select(EnterpriseReportSubmission.id).where(
             EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
             EnterpriseReportSubmission.period == payload.period,
         )
-        .order_by(EnterpriseReportSubmission.version.desc())
-        .limit(1)
     )
-    validate_new_report_submission(
-        payload.period, latest_review_status=latest.review_status if latest else None
-    )
-    version = latest.version + 1 if latest else 1
-    report_code = versioned_report_code(payload.reportId, version)
-    period_of_reused_code = await db.scalar(
-        select(EnterpriseReportSubmission.period).where(
+    validate_new_report_submission(payload.period, period_has_report=existing_report_id is not None)
+    report_with_reused_id = await db.scalar(
+        select(EnterpriseReportSubmission.id).where(
             EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
-            EnterpriseReportSubmission.report_id == report_code,
+            EnterpriseReportSubmission.report_id == payload.reportId,
         )
     )
-    if period_of_reused_code is not None and period_of_reused_code != payload.period:
+    if report_with_reused_id is not None:
         raise InvalidReportWorkflowError(
             "An existing report ID cannot be moved to a different reporting period."
         )
-    if period_of_reused_code is not None:
-        raise InvalidReportWorkflowError(
-            f"Report ID {report_code} is already used by an earlier version of this report. "
-            "Send the corrected report with a new report ID."
-        )
 
     report = EnterpriseReportSubmission(
-        report_id=report_code,
-        version=version,
-        previous_version_id=latest.id if latest else None,
+        report_id=payload.reportId,
         enterprise_profile_id=profile.account_id,
         enterprise_name=profile.enterprise_name,
         attraction_code=profile.attraction_code,
@@ -133,12 +117,11 @@ async def list_intake_reports(
     *,
     period: str | None = None,
 ) -> list[IntakeReportSummary]:
-    """Every report version, newest first. Enterprise accounts see only their own reports."""
+    """Every report, newest first. Enterprise accounts see only their own reports."""
     statement = (
         select(EnterpriseReportSubmission)
         .order_by(
             EnterpriseReportSubmission.submitted_at.desc(),
-            EnterpriseReportSubmission.version.desc(),
             EnterpriseReportSubmission.id.asc(),
         )
         .limit(limit)
@@ -167,29 +150,10 @@ async def update_report_status(
     return to_intake_report_summary(report)
 
 
-async def return_report(
-    db: AsyncSession, report_id: str, *, reason: str, returned_by: str
-) -> IntakeReportSummary | None:
-    """Returns a waiting or accepted report to its enterprise for correction. It leaves every
-    consolidation count until the enterprise sends a corrected version."""
-    report = await find_report_for_update(db, report_id)
-    if report is None:
-        return None
-
-    validate_report_return(report.review_status)
-    report.review_status = REPORT_RETURNED_STATUS
-    report.returned_reason = reason
-    report.returned_at = datetime.now(UTC)
-    report.returned_by = returned_by
-    await db.flush()
-    await db.refresh(report)
-    return to_intake_report_summary(report)
-
-
 async def find_report_for_update(
     db: AsyncSession, report_id: str
 ) -> EnterpriseReportSubmission | None:
-    """A report version by its id, or else by its report code, locked for a review decision."""
+    """A report by its id, or else by its report code, locked for a review decision."""
     for column in (EnterpriseReportSubmission.id, EnterpriseReportSubmission.report_id):
         report = (
             await db.scalars(
@@ -230,11 +194,6 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
         },
         payload=payload,
         demographics=report_demographics_from_payload(payload, report.unique_count),
-        version=report.version,
-        returnedReason=report.returned_reason,
-        returnedAt=report.returned_at,
-        returnedBy=report.returned_by,
-        previousVersionId=report.previous_version_id,
     )
 
 

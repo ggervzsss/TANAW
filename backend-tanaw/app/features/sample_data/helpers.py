@@ -89,20 +89,6 @@ def should_skip_target_report(
 REPORTING_MONTH_PENDING_INDEXES = frozenset({1, 2, 4})
 # An enterprise (by position) that has not sent its reporting-month report at all.
 MISSING_REPORT_ENTERPRISE_INDEX = 9
-# Reporting-month reports staff returned for correction, by enterprise position, with the reason
-# staff gave. The corrected report from CORRECTED_REPORT_ENTERPRISE_INDEX has arrived as version 2
-# and waits for staff; the other returned report is still awaiting its correction.
-RETURNED_REPORT_REASONS = {
-    2: (
-        "The foreign visitor figures look swapped between male and female. Please check them "
-        "against the camera log and send the report again."
-    ),
-    3: (
-        "The visitor origins for the last week add up to more than that week's unique visitors. "
-        "Please recount This Province and Other Provinces, then send the corrected report."
-    ),
-}
-CORRECTED_REPORT_ENTERPRISE_INDEX = 2
 
 
 def seeded_review_status(
@@ -122,15 +108,6 @@ def seeded_review_status(
         )
     open_months = {add_months(current_month, offset) for offset in range(-4, -1)}
     return "Ready to Consolidate" if month_start in open_months else "Consolidated"
-
-
-def sample_return_reason(
-    month_start: datetime, current_month: datetime, enterprise_index: int
-) -> str | None:
-    """Why staff returned this enterprise's report for correction, or None when they did not."""
-    if month_start != add_months(current_month, -1):
-        return None
-    return RETURNED_REPORT_REASONS.get(enterprise_index)
 
 
 def affected_row_count(result: Any) -> int:

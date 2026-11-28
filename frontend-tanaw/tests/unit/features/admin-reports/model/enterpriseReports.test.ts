@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccountSummary, FinalReport, IntakeReport, MapEnterprise, ReportEnterprise, SystemLog } from "@/shared/types";
 import {
-  awaitingCorrectionNote,
   buildEnterpriseProfiles,
   buildMonthEntry,
   buildReportRows,
@@ -40,7 +39,6 @@ function report(enterpriseId: string, month: string, year: number, overrides: Pa
     submittedAt: `${year}-${String(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(month) + 2).padStart(2, "0")}-03T09:00:00`,
     status: "Pending Review",
     code: `RPT-${enterpriseId}-${month}`,
-    version: 1,
     metrics: { entry: null, exit: null, unique: 10, peak: null },
     ...overrides,
   };
@@ -168,48 +166,6 @@ describe("buildReportRows", () => {
   });
 });
 
-describe("returned reports", () => {
-  const profiles = buildEnterpriseProfiles(
-    [enterprise("returned", "Aplaya Resort"), enterprise("corrected", "Bayside Park"), enterprise("missing", "Cuyab Museum"), enterprise("pending", "Dela Paz Hall")],
-    ["returned", "corrected", "missing", "pending"].map((id) => account(id, "2025-01-01T08:00:00")),
-    [],
-    [],
-  );
-  const returnedFields = { status: "Returned" as const, returnedBy: "Maria Santos", returnedReason: "Recount Oct 31.", returnedAt: "2026-11-12T10:00:00" };
-  const reports = indexReports([
-    report("returned", "October", 2026, returnedFields),
-    report("corrected", "October", 2026, { ...returnedFields, id: "corrected-v1" }),
-    report("corrected", "October", 2026, { id: "corrected-v2", code: "RPT-corrected-October-v2", version: 2, previousVersionId: "corrected-v1", submittedAt: "2026-11-14T09:00:00" }),
-    report("pending", "October", 2026, { status: "Ready to Consolidate" }),
-  ]);
-
-  it("shows a returned latest version as Awaiting correction and Returned, by whoever returned it", () => {
-    const rows = buildReportRows(profiles, reports, new Map(), october, today);
-    expect(rows.map((row) => [row.enterprise.id, row.entry.submission, row.entry.review])).toEqual([
-      ["missing", "Missing", "Waiting"],
-      ["returned", "Awaiting correction", "Returned"],
-      ["corrected", "Submitted", "Reviewing"],
-      ["pending", "Submitted", "Consolidated"],
-    ]);
-    expect(rows[1].entry).toMatchObject({ reviewedBy: "Maria Santos", submissionNote: "Returned Nov 12" });
-    expect(filterReportRows(rows, { query: "", enterpriseId: "all", submission: "Awaiting correction" }).map((row) => row.enterprise.id)).toEqual(["returned"]);
-  });
-
-  it("keeps every version of a month, newest first, with the corrected one as the month's report", () => {
-    const entry = buildMonthEntry("corrected", october, reports, new Map(), today);
-    expect(entry.versions.map((version) => version.id)).toEqual(["corrected-v2", "corrected-v1"]);
-    expect(entry).toMatchObject({ reportCode: "RPT-corrected-October-v2", report: { id: "corrected-v2" } });
-  });
-
-  it("names the staff member who returned a report from the activity log", () => {
-    const reviewers = reviewersByReport(
-      [{ id: "return-log", timestamp: "2026-11-12T10:00:00", group: "Reports", severity: "Warning", actor: "Ana Reyes", actorRole: "LGU Staff", action: "Return Enterprise Report", target: "", summary: "", sourceId: "corrected-v1" }],
-      [],
-    );
-    expect(reviewers.get("corrected-v1")).toBe("Ana Reyes");
-  });
-});
-
 describe("reviewersByReport", () => {
   const finalReport = { id: "FR-2026-10", generatedOn: "2026-11-20", preparedBy: "Jose Cruz", sources: [{ id: "r1" }, { id: "r2" }] } as unknown as FinalReport;
   const log = (sourceId: string, actor: string, action: string, timestamp: string): SystemLog => ({
@@ -264,20 +220,6 @@ describe("report history", () => {
     expect(pendingNote(empty)).toBe("None in 2025");
     expect(missingNote(empty)).toBe("None in 2025");
     expect(yearOptionNote(empty)).toBe("None due yet");
-  });
-
-  it("counts a returned month as due and awaiting correction, not submitted", () => {
-    const reports = indexReports([
-      report("market", "September", 2026),
-      report("market", "October", 2026, { status: "Returned", returnedBy: "Maria Santos", returnedReason: "Recount Oct 31.", returnedAt: "2026-11-12T10:00:00" }),
-    ]);
-    const entries = historyMonths({ firstMonth: { year: 2026, monthIndex: 8 } }, 2026, today).map((month) => buildMonthEntry("market", month, reports, new Map(), today));
-    const summary = summarizeYear(2026, entries);
-    expect(summary).toMatchObject({ submitted: 1, due: 2 });
-    expect(summary.awaitingCorrection.map((entry) => entry.period)).toEqual(["October 2026"]);
-    expect(awaitingCorrectionNote(summary)).toBe("October");
-    expect(awaitingCorrectionNote(summarizeYear(2025, []))).toBe("None in 2025");
-    expect(yearOptionNote(summary)).toBe("1 of 2 submitted");
   });
 
   it("shows every month when the opened month is beyond the first six", () => {

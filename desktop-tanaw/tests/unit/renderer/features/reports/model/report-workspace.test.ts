@@ -3,7 +3,6 @@ import {
   applyCloudReview,
   buildLedgerRows,
   emptyDemo,
-  localReportId,
   mergeReportHistory,
   reportFromCloudSubmission,
   reportFromLocalSubmission,
@@ -70,7 +69,7 @@ describe("pending report rows", () => {
   });
 });
 
-const ONE_REPORT_PER_MONTH = "A report for October 2026 has already been sent. If something is wrong, LGU Staff can return it to you for correction.";
+const ONE_REPORT_PER_MONTH = "A report for October 2026 has already been submitted. An enterprise sends one report per reporting month, and a submitted report cannot be replaced.";
 
 describe("one report per month", () => {
   const submitted = { id: "REP-OCT", date: "October 2026", period: "October 2026", status: "Submitted", entries: 2, unique: 2 } as ReportRecord;
@@ -80,7 +79,7 @@ describe("one report per month", () => {
     const metrics = { entries: 2, exits: 2, peak: 1, unique: 0 };
     expect(validateReportDraft(metrics, emptyDemo(), [], "October 2026", [submitted], null, options)).toBe(ONE_REPORT_PER_MONTH);
     expect(validateReportDraft(metrics, emptyDemo(), [], "November 2026", [submitted], null, options)).toBeNull();
-    // A version reopened for correction gives the month back to its draft.
+    // A refused report reopened to be fixed gives the month back to its draft.
     expect(validateReportDraft(metrics, emptyDemo(), [], "October 2026", [{ ...submitted, reopenedAt: "2026-11-06T00:00:00Z" }], null, options)).toBeNull();
   });
 
@@ -106,7 +105,7 @@ describe("one report per month", () => {
         },
         "12-hour",
       ).status;
-    expect([cloud("Pending Review"), cloud("Ready to Consolidate"), cloud("Consolidated"), cloud("Returned")]).toEqual(["Submitted", "Submitted", "Consolidated", "Returned"]);
+    expect([cloud("Pending Review"), cloud("Ready to Consolidate"), cloud("Consolidated")]).toEqual(["Submitted", "Submitted", "Consolidated"]);
   });
 });
 
@@ -128,20 +127,15 @@ const intake = (changes: Partial<EnterpriseIntakeReport> = {}): EnterpriseIntake
   ...changes,
 });
 
-describe("returned reports and their corrections", () => {
-  it("carry TANAW's version, who returned them, when and why", () => {
-    const returned = reportFromCloudSubmission(
-      intake({ status: "Returned", version: 1, returnedReason: "Check the foreign visitors.", returnedBy: "Ana Cruz", returnedAt: "2026-11-05T02:00:00Z" }),
-      "12-hour",
-    );
-    expect(returned).toMatchObject({ status: "Returned", reviewStatus: "Returned", version: 1, returnedReason: "Check the foreign visitors.", returnedBy: "Ana Cruz" });
-    expect(returned.auditTrail?.at(-1)).toMatchObject({ action: "Returned for correction", actor: "Ana Cruz" });
-    // Fields TANAW did not send stay off the record.
-    expect("returnedReason" in reportFromCloudSubmission(intake(), "12-hour")).toBe(false);
-    expect("version" in reportFromCloudSubmission(intake(), "12-hour")).toBe(false);
+describe("TANAW's review state and refused reports", () => {
+  it("carry Staff's review state, and nothing about returns or versions", () => {
+    const accepted = reportFromCloudSubmission(intake({ status: "Ready to Consolidate" }), "12-hour");
+    expect(accepted).toMatchObject({ status: "Submitted", reviewStatus: "Ready to Consolidate", reference: "REP-OCT" });
+    expect(accepted.auditTrail).toEqual([expect.objectContaining({ action: "Report Submitted", actor: "Enterprise User" })]);
+    for (const key of ["version", "returnedReason", "returnedAt", "returnedBy"]) expect(key in accepted).toBe(false);
   });
 
-  it("keep this computer's reopened state when TANAW's copy arrives", () => {
+  it("keep this computer's reopened state of a report TANAW refused", () => {
     const local = reportFromLocalSubmission(
       {
         report_id: "REP-OCT",
@@ -154,46 +148,47 @@ describe("returned reports and their corrections", () => {
         unique_count: 2,
         notes: null,
         payload: { status: "Submitted" },
-        sync_status: "synced",
-        synced_at: "2026-11-02T02:01:00Z",
-        version: 1,
+        sync_status: "upload_rejected",
+        synced_at: null,
+        rejection_reason: "Totals do not match.",
         reopened_at: "2026-11-06T00:00:00Z",
-        reopen_reason: "returned",
         camera_breakdown: [],
       },
       "12-hour",
     );
-    expect(local).toMatchObject({ status: "Returned", reviewStatus: "Returned", version: 1, reopenedAt: "2026-11-06T00:00:00Z" });
-    const cloud = reportFromCloudSubmission(intake({ status: "Returned", version: 1, returnedReason: "Check the foreign visitors." }), "12-hour");
-    const [merged] = mergeReportHistory([local], [cloud]);
-    expect(merged).toMatchObject({ reopenedAt: "2026-11-06T00:00:00Z", returnedReason: "Check the foreign visitors.", status: "Returned" });
+    expect(local).toMatchObject({ status: "Submitted", syncStatus: "upload_rejected", rejectionReason: "Totals do not match.", reopenedAt: "2026-11-06T00:00:00Z" });
+    expect("reviewStatus" in local).toBe(false);
+    expect("version" in local).toBe(false);
   });
 
-  it("match a correction to TANAW's '-vN' code, keep this computer's id and show TANAW's code", () => {
-    expect(localReportId("REP-FIX-v2", new Set(["REP-FIX"]))).toBe("REP-FIX");
-    expect(localReportId("REP-FIX-v2", new Set(["REP-FIX-v2"]))).toBe("REP-FIX-v2");
-    expect(localReportId("REP-OTHER-v2", new Set(["REP-FIX"]))).toBe("REP-OTHER-v2");
-    const local = { id: "REP-FIX", date: "October 2026", period: "October 2026", status: "Submitted", entries: 2, unique: 2, syncStatus: "synced", version: 2, notes: "local" };
-    const cloud = reportFromCloudSubmission(intake({ code: "REP-FIX-v2", version: 2, status: "Ready to Consolidate" }), "12-hour");
+  it("match TANAW's copy to this computer's report by its code", () => {
+    const local = { id: "REP-OCT", date: "October 2026", period: "October 2026", status: "Submitted", entries: 2, unique: 2, syncStatus: "synced", notes: "local" };
+    const cloud = reportFromCloudSubmission(intake({ status: "Ready to Consolidate" }), "12-hour");
     const merged = mergeReportHistory([local], [cloud]);
     expect(merged).toHaveLength(1);
-    expect(merged[0]).toMatchObject({ id: "REP-FIX", reference: "REP-FIX-v2", reviewStatus: "Ready to Consolidate", version: 2 });
-    expect(applyCloudReview([local], [cloud])).toEqual([expect.objectContaining({ id: "REP-FIX", reference: "REP-FIX-v2" })]);
+    expect(merged[0]).toMatchObject({ id: "REP-OCT", reference: "REP-OCT", reviewStatus: "Ready to Consolidate" });
   });
 
   it("apply one month's review state from TANAW to the reports shown", () => {
     const shown = reportFromCloudSubmission(intake(), "12-hour");
-    const accepted = reportFromCloudSubmission(intake({ status: "Ready to Consolidate", version: 1 }), "12-hour");
-    const second = reportFromCloudSubmission(intake({ id: "cloud-2", code: "REP-OCT-2", version: 2, submittedAt: "2026-11-07T00:00:00Z" }), "12-hour");
-    const applied = applyCloudReview([{ ...shown, notes: "kept" }], [accepted, second]);
-    expect(applied.map((item) => item.id)).toEqual(["REP-OCT-2", "REP-OCT"]);
-    expect(applied[1]).toMatchObject({ reviewStatus: "Ready to Consolidate", version: 1, notes: "kept" });
+    const accepted = reportFromCloudSubmission(intake({ status: "Ready to Consolidate" }), "12-hour");
+    const fixed = reportFromCloudSubmission(intake({ id: "cloud-2", code: "REP-OCT-FIX", submittedAt: "2026-11-07T00:00:00Z" }), "12-hour");
+    const applied = applyCloudReview([{ ...shown, notes: "kept" }], [accepted, fixed]);
+    expect(applied.map((item) => item.id)).toEqual(["REP-OCT-FIX", "REP-OCT"]);
+    expect(applied[1]).toMatchObject({ reviewStatus: "Ready to Consolidate", notes: "kept" });
   });
 
-  it("list the month's correction as its draft, ahead of the version it replaces", () => {
+  it("list the month's fix as its draft, ahead of the refused report it replaces", () => {
     const counting = { days: [day("2026-10-10", 2, 1)] } as unknown as EstablishmentSummary;
-    const reopened = {
-      ...reportFromCloudSubmission(intake({ status: "Returned", returnedReason: "Too many foreign visitors." }), "12-hour"),
+    const reopened: ReportRecord = {
+      id: "REP-OCT",
+      date: "October 2026",
+      period: "October 2026",
+      status: "Submitted",
+      entries: 2,
+      unique: 2,
+      syncStatus: "upload_rejected",
+      rejectionReason: "Too many foreign visitors.",
       reopenedAt: "2026-11-06T00:00:00Z",
       origins: { "2026-10-10": origins(1) },
     };
@@ -209,10 +204,10 @@ describe("returned reports and their corrections", () => {
     const october = rows.filter((row) => row.report.period === "October 2026");
     expect(october.map((row) => [row.kind, row.statusLabel])).toEqual([
       ["pending", "Being corrected"],
-      ["history", "Returned"],
+      ["history", "Not accepted"],
     ]);
     expect(october[0].report.origins).toEqual(reopened.origins);
-    expect(october[1].reportDescription).toBe("Returned: Too many foreign visitors.");
+    expect(october[1].reportDescription).toBe("Not accepted by TANAW: Too many foreign visitors.");
   });
 });
 

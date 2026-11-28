@@ -6,11 +6,10 @@ import type { ReportReviewStatus } from "../../../types/enterprise";
 type ApiIntakeReport = ApiSchemas["IntakeReportSummary"];
 
 /**
- * A report this establishment sent, as TANAW holds it (`IntakeReportSummary`). Each correction
- * Staff ask for is a new version of the month's report, linked to the one before it. The figures
- * this app reads are typed; `version` stays optional because an older TANAW server sends none.
+ * A report this establishment sent, as TANAW holds it (`IntakeReportSummary`): one per reporting
+ * month, never replaced once TANAW accepts it. The figures this app reads are typed.
  */
-export type EnterpriseIntakeReport = Omit<ApiIntakeReport, "attraction" | "metrics" | "version" | "status" | "remarks" | "notes"> & {
+export type EnterpriseIntakeReport = Omit<ApiIntakeReport, "attraction" | "metrics" | "status" | "remarks" | "notes"> & {
   attraction?: ApiIntakeReport["attraction"];
   status: ReportReviewStatus;
   remarks: string | null;
@@ -21,7 +20,6 @@ export type EnterpriseIntakeReport = Omit<ApiIntakeReport, "attraction" | "metri
     unique: number;
     peak: string | number | null;
   };
-  version?: ApiIntakeReport["version"];
 };
 
 export type EnterpriseFinalReport = {
@@ -42,9 +40,8 @@ export async function listEnterpriseReportHistory() {
 }
 
 /**
- * This establishment's own reports in TANAW, newest first, with each version and its review
- * state; `period` narrows it to one month. Until a TANAW server offers this list, the older
- * report list stands in, without versions.
+ * This establishment's own reports in TANAW, newest first, with their review state; `period`
+ * narrows it to one month. Until a TANAW server offers this list, the older report list stands in.
  */
 export async function listEnterpriseReportSubmissions(period?: string) {
   try {

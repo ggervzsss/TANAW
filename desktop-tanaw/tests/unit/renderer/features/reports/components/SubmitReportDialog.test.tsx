@@ -40,7 +40,8 @@ describe("SubmitReportDialog", () => {
     for (const text of ["Reporting period", "Visitors counted", "1,234", "This city", "1,000", "Other cities in the province", "120", "Other provinces", "100", "Foreign", "14"])
       expect(markup).toContain(text);
     expect(markup).toContain("3 days · 2 with visitors counted");
-    expect(markup).toContain("After you send it, you can&#x27;t edit this report. If something is wrong, LGU Staff can return it to you for correction.");
+    expect(markup).toContain("After you send it, you can&#x27;t edit this report. Once TANAW accepts it, it can&#x27;t be replaced, so check the figures first.");
+    expect(markup).not.toContain("return it");
     expect(markup).toContain("Staff in the City Tourism Office will review it.");
     // Cancel comes first and takes focus; the one primary action sends.
     expect(markup.indexOf("Cancel")).toBeLessThan(markup.indexOf("Send report"));
@@ -49,11 +50,11 @@ describe("SubmitReportDialog", () => {
     for (const old of ["bg-white", "#111827", "#121c31", "border-t-4"]) expect(markup).not.toContain(old);
   });
 
-  it("names a correction and the version it will be sent as", () => {
-    const markup = render({ correction: { version: 2, previousId: "REP-OCT-1" } });
+  it("names the refused report a fix replaces", () => {
+    const markup = render({ correction: { previousId: "REP-OCT-1" } });
     expect(markup).toContain("Send the corrected October 2026 report?");
-    expect(markup).toContain("It corrects REP-OCT-1 and goes as version 2.");
-    expect(markup).toContain("Version 2");
+    expect(markup).toContain("It replaces REP-OCT-1, which TANAW did not accept.");
+    expect(markup).not.toContain("Version");
   });
 
   it("cannot be dismissed while sending, and shows why the last attempt failed", () => {

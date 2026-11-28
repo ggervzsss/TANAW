@@ -112,7 +112,6 @@ const ACTION_TITLES: Record<string, string> = {
   "Report Pending Review": "Report Set to Pending Review",
   "Report Ready to Consolidate": "Report Review Completed",
   "Report Consolidated": "Report Consolidated",
-  "Return Enterprise Report": "Report Returned for Correction",
   "Generate Final Report": "Consolidated Report Generated",
   "Notify Enterprise": "Message Sent to Enterprise",
   // Requests
@@ -327,14 +326,6 @@ function reportFields(log: SystemLog): ActivityField[] {
       const review = reviewStatus({ status: stored as "Pending Review" | "Ready to Consolidate" | "Consolidated" });
       fields.push({ label: "Staff review", value: review, tone: reviewTone[review] });
     }
-  }
-  if (log.action === "Return Enterprise Report") {
-    const review = reviewStatus({ status: "Returned" });
-    fields.push({ label: "Staff review", value: review, tone: reviewTone[review] });
-    const version = metaNumber(log, "version");
-    if (version !== null && version > 1) fields.push({ label: "Version", value: String(version) });
-    const reason = metaString(log, "reason");
-    if (reason) fields.push({ label: "Reason", value: reason });
   }
   if (log.action.startsWith("Final Report ")) fields.push({ label: "Status", value: log.action.slice("Final Report ".length) });
   const unique = metaNumber(log, "uniqueCount");

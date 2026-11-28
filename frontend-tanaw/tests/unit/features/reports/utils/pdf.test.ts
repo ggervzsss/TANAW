@@ -15,7 +15,6 @@ const intakeReport: IntakeReport = {
   submitted: "2026-05-31T10:15:00Z",
   status: "Ready to Consolidate",
   code: "REP-260501",
-  version: 1,
   remarks: "Monthly visitor count submitted for LGU review.",
   metrics: { entry: 598, exit: 571, peak: "54", unique: 377 },
 };

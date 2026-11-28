@@ -206,8 +206,7 @@
   max-width: 100%;
 }
 
-/* The year's figures (three, or four with a report awaiting correction): an open strip split by
-   hairlines, not tiles. */
+/* The year's three figures: an open strip split by hairlines, not tiles. */
 .tanaw-er-figures {
   display: grid;
   grid-auto-columns: minmax(0, 1fr);

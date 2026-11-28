@@ -51,17 +51,6 @@ def report_metrics(snapshot: dict[str, Any]) -> dict[str, int | None]:
     }
 
 
-def next_report_version(latest: Any) -> int:
-    """The version a new report for a month takes, given the month's latest earlier version.
-
-    A version Staff returned for correction counts, so its correction is the next version. A
-    version TANAW never accepted (its upload was refused) does not, so its fix keeps the number.
-    """
-    if latest is None:
-        return 1
-    return int(latest["version"]) + (1 if latest["reopen_reason"] == "returned" else 0)
-
-
 class EstablishmentReportRepository:
     def __init__(self, database: LocalDatabase) -> None:
         self.database = database
@@ -139,20 +128,13 @@ class EstablishmentReportRepository:
                     )
                 response: dict[str, Any] = json.loads(retried["response_json"])
                 return response
-            # A month holds one live report. A version reopened for correction (Staff returned it,
-            # or TANAW did not accept its upload) gives way to the corrected version.
+            # A month holds one live report, and TANAW never replaces one it accepted. Only a
+            # report TANAW refused, once reopened to be fixed, gives way to the fixed report.
             if db.execute(
                 "select 1 from report_submissions where period=? and reopened_at is null",
                 (period,),
             ).fetchone():
                 raise ValueError(one_report_per_month_error(period))
-            version = next_report_version(
-                db.execute(
-                    "select version,reopen_reason from report_submissions where period=? "
-                    "order by version desc, submitted_at desc limit 1",
-                    (period,),
-                ).fetchone()
-            )
             if db.execute(
                 "select 1 from report_submissions where report_id=?", (report_id,)
             ).fetchone():
@@ -218,14 +200,13 @@ class EstablishmentReportRepository:
             submitted_at = now.astimezone(UTC).isoformat()
             db.execute(
                 """insert into report_submissions (
-                    report_id,submission_id,period,version,submitted_at,entries,exits,
+                    report_id,submission_id,period,submitted_at,entries,exits,
                     peak_occupancy,unique_count,notes,payload_json,sync_status)
-                    values (?,?,?,?,?,?,?,?,?,?,?,'pending_cloud_sync')""",
+                    values (?,?,?,?,?,?,?,?,?,?,'pending_cloud_sync')""",
                 (
                     report_id,
                     request_id,
                     period,
-                    version,
                     submitted_at,
                     authoritative["entries"],
                     authoritative["exits"],
@@ -237,7 +218,7 @@ class EstablishmentReportRepository:
             )
             # Raw doorway events are supporting evidence, not the reporting baseline.
             # Consume only the selected local calendar month; area records remain separate.
-            # Evidence held by a version reopened for correction moves to the new version.
+            # Evidence held by a refused report reopened for fixing moves to the fixed report.
             db.execute(
                 "update count_events set submitted_report_id=? where (submitted_report_id is null "
                 "or submitted_report_id in (select report_id from report_submissions "
@@ -254,7 +235,6 @@ class EstablishmentReportRepository:
                 "report_id": report_id,
                 "submission_id": request_id,
                 "period": period,
-                "version": version,
                 "submitted_at": submitted_at,
                 "sync_status": "pending_cloud_sync",
                 "payload": supplied,

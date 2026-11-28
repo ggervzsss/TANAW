@@ -1,10 +1,10 @@
 import type { ReportLedgerRow } from "../components/ReportLedgerTable";
-import { compareVersions, isReopenedReport } from "../model/report-lifecycle";
+import { compareMonthReports, isReopenedReport } from "../model/report-lifecycle";
 import { reportingMonthKey, reportingMonthSortValue } from "./reporting-period";
 
 /**
  * Within a month: the live month first, then its sent report, then a month still waiting for its
- * report (or a correction in progress), then the versions a correction replaced.
+ * report (or a fix in progress), then the refused reports a fix replaced.
  */
 function rowRank(row: ReportLedgerRow) {
   if (row.kind === "current") return 0;
@@ -21,15 +21,15 @@ export function sortReportLedgerRows(rows: ReportLedgerRow[]) {
     if (periodDifference !== 0) return periodDifference;
     const rankDifference = rowRank(first) - rowRank(second);
     if (rankDifference !== 0) return rankDifference;
-    // Versions of one month: the newest first.
-    return first.kind === "history" && second.kind === "history" ? compareVersions(second.report, first.report) : 0;
+    // Reports of one month: the newest first.
+    return first.kind === "history" && second.kind === "history" ? compareMonthReports(second.report, first.report) : 0;
   });
 }
 
 /**
  * The months Create Reports can switch between, oldest first: one row per reporting month, taking
  * the live month first, then a sent report, then a month still waiting for its report (a month
- * being corrected opens its draft, not the version it replaces).
+ * being fixed opens its draft, not the refused report it replaces).
  */
 export function reportMonthRows(rows: ReportLedgerRow[]) {
   const months = new Map<string, ReportLedgerRow>();

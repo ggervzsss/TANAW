@@ -1,4 +1,3 @@
-import { isReturned, newerReport } from "@/features/reports/model/reportStatuses";
 import type { IntakeReport, VisitorInsights } from "@/shared/types";
 import { parseIsoDate, toIsoDate, type DateRange } from "@/shared/ui-kit/lib/dateRange";
 
@@ -12,8 +11,7 @@ import { parseIsoDate, toIsoDate, type DateRange } from "@/shared/ui-kit/lib/dat
  *            each day the camera history covers (estimatedUniqueCount). A day without updates shows
  *            an empty slot, never 0.
  *   Monthly  submitted monthly reports (/operational/reports/intake) for the months the range
- *            touches: the unique visitors each month's latest report version states. Months without
- *            a report, or whose report was returned for correction, are left out.
+ *            touches: the unique visitors each report states. Months without a report are left out.
  */
 
 export type TrendPeriod = "hourly" | "daily" | "monthly";
@@ -121,21 +119,15 @@ export function monthlyTrend(reports: readonly IntakeReport[], enterpriseId: str
   const totals = new Map<number, { month: number; year: number; value: number }>();
   const first = range ? monthIndexOf(range.start) : -Infinity;
   const last = range ? monthIndexOf(range.end) : Infinity;
-  // A month's latest version replaces any returned one before it.
-  const latest = new Map<number, IntakeReport>();
   for (const report of reports) {
     if (report.enterpriseId !== enterpriseId) continue;
     const period = periodOf(report);
-    if (!period) continue;
+    const value = report.metrics.unique;
+    if (!period || typeof value !== "number") continue;
     const key = period.year * 12 + period.month;
     if (key < first || key > last) continue;
-    latest.set(key, newerReport(latest.get(key), report));
-  }
-  for (const [key, report] of latest) {
-    const period = periodOf(report);
-    const value = report.metrics.unique;
-    if (!period || typeof value !== "number" || isReturned(report)) continue;
-    totals.set(key, { ...period, value });
+    // One report per enterprise and month; keep the larger figure if a duplicate ever appears.
+    totals.set(key, { ...period, value: Math.max(value, totals.get(key)?.value ?? 0) });
   }
   const bars = [...totals.entries()]
     .sort(([a], [b]) => a - b)

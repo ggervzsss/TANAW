@@ -17,7 +17,6 @@ import {
   type LocalMetricsHistory,
   type LocalMetricsSummary,
   type LocalReportDraft,
-  type LocalReportReopenReason,
   type LocalReportSubmission,
   type LocalReportSubmissionRecord,
   type MlCameraStates,
@@ -276,12 +275,12 @@ export async function markLocalReportUploadRejected(baseUrl: string, reportId: s
 }
 
 /**
- * Reopens a month's saved report for correction, after Staff returned it or TANAW refused its
- * upload. The version stays saved as history, and the month opens as a draft again. Nothing is
- * sent until the person sends the corrected report.
+ * Reopens a saved report TANAW refused, so the month can be fixed and sent again. The refused
+ * report stays saved as history, and the month opens as a draft again. Nothing is sent until the
+ * person sends the fixed report.
  */
-export async function reopenLocalReportSubmission(baseUrl: string, reportId: string, reason: LocalReportReopenReason): Promise<LocalReportSubmissionRecord> {
-  const record = await requestJson<LocalReportSubmissionRecord>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }, 5000);
+export async function reopenLocalReportSubmission(baseUrl: string, reportId: string): Promise<LocalReportSubmissionRecord> {
+  const record = await requestJson<LocalReportSubmissionRecord>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/reopen`, { method: "POST" }, 5000);
   notifyLocalDataChanged();
   return record;
 }

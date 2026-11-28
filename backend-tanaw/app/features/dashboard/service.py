@@ -4,19 +4,11 @@ from app.features.accounts.models import Account
 from app.features.monitoring.schemas import OperationalSummary
 from app.features.monitoring.telemetry import list_latest_telemetry
 from app.features.reporting.intake import list_intake_reports
-from app.features.reporting.models import REPORT_RETURNED_STATUS
-from app.features.reporting.policies import latest_report_versions
 
 
 async def get_operational_summary(db: AsyncSession, account: Account | None) -> OperationalSummary:
     latest = await list_latest_telemetry(db, account)
-    # One report per enterprise and period: its latest version, unless that was returned for
-    # correction and the enterprise has not sent the corrected one yet.
-    reports = [
-        report
-        for report in latest_report_versions(await list_intake_reports(db, account))
-        if report.status != REPORT_RETURNED_STATUS
-    ]
+    reports = await list_intake_reports(db, account)
     last_sync_at = max((item.receivedAt for item in latest), default=None)
     entries = [item.entries for item in latest if item.entries is not None]
     exits = [item.exits for item in latest if item.exits is not None]

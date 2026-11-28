@@ -170,26 +170,6 @@ describe("Activity details", () => {
     expect(filterRecentActivity([update], { type: "accounts", query: "", range: november })).toEqual([]);
   });
 
-  it("names a returned report and shows why it was returned", () => {
-    const returned = log({
-      id: "returned",
-      group: "Reports",
-      severity: "Warning",
-      action: "Return Enterprise Report",
-      actorRole: "LGU Staff",
-      target: "Daisy Resort",
-      metadata: { enterpriseId: "ENT-4", period: "October 2026", version: 2, reason: "Recount the visitor origins." },
-    });
-    expect(activityTitle(returned)).toBe("Report Returned for Correction");
-    expect(activityDetailFields(returned)).toEqual([
-      { label: "Enterprise", value: "Daisy Resort" },
-      { label: "Period", value: "October 2026" },
-      { label: "Staff review", value: "Returned", tone: "pending" },
-      { label: "Version", value: "2" },
-      { label: "Reason", value: "Recount the visitor origins." },
-    ]);
-  });
-
   it("names the new request and password reset actions", () => {
     expect(activityTitle(log({ id: "start", action: "Start Request" }))).toBe("Request Started");
     expect(activityTitle(log({ id: "reset", action: "Send Password Reset" }))).toBe("Password Reset Email Sent");

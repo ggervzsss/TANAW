@@ -69,7 +69,6 @@ SCHEMA_STATEMENTS = (
         report_id text primary key,
         submission_id text not null unique,
         period text not null,
-        version integer not null default 1 check (version >= 1),
         submitted_at text not null,
         entries integer,
         exits integer,
@@ -81,11 +80,11 @@ SCHEMA_STATEMENTS = (
         synced_at text,
         raw_purged_at text,
         rejection_reason text,
-        reopened_at text,
-        reopen_reason text check (reopen_reason in ('returned', 'upload_rejected'))
+        reopened_at text
     )
     """,
-    # A month holds one live report; a version reopened for correction no longer holds it.
+    # A month holds one live report. A report TANAW refused, once reopened to be fixed and sent
+    # again, stays saved as history and no longer holds the month.
     """
     create unique index idx_report_submissions_live_period
         on report_submissions(period) where reopened_at is null

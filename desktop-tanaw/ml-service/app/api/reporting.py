@@ -12,7 +12,6 @@ from app.config.report_config import (
     ReportDraftRequest,
     ReportDraftResponse,
     ReportRawDataPurgeResponse,
-    ReportReopenRequest,
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
     ReportSubmissionResponse,
@@ -144,15 +143,15 @@ def mark_local_report_upload_rejected(
     response_model=ReportSubmissionRecordResponse,
 )
 def reopen_local_report_submission(
-    report_id: str, payload: ReportReopenRequest, request: Request
+    report_id: str, request: Request
 ) -> ReportSubmissionRecordResponse:
-    """Reopen a month's report for correction after Staff returned it or TANAW refused it.
+    """Reopen a report TANAW refused, so the person can fix it and send it again.
 
-    The person chooses this; nothing is sent until they send the corrected report.
+    The person chooses this; nothing is sent until they send the fixed report.
     """
     try:
         return ReportSubmissionRecordResponse(
-            **registry(request).reopen_report_submission(report_id, payload.reason)
+            **registry(request).reopen_report_submission(report_id)
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

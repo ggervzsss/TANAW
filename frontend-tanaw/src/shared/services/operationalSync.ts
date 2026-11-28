@@ -31,14 +31,6 @@ export async function updateIntakeReportStatus(reportId: string, payload: Update
   return response.data;
 }
 
-export type ReturnReportPayload = ApiSchemas["ReportReturnRequest"];
-
-/** Returns a waiting or accepted report to its enterprise for correction, with the reason it will see. */
-export async function returnIntakeReport(reportId: string, payload: ReturnReportPayload) {
-  const response = await apiClient.post<IntakeReport>(`/operational/reports/intake/${encodeURIComponent(reportId)}/return`, payload);
-  return response.data;
-}
-
 export async function listFinalReports({ signal }: { signal?: AbortSignal } = {}) {
   const pageSize = 500;
   const reports = new Map<string, FinalReport>();

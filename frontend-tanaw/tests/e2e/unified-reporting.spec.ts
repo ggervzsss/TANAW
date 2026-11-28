@@ -87,10 +87,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
   await expect(page.getByText("Reports for October 2026, due November 10. Accept each submitted report, then generate the consolidated report.")).toBeVisible();
   const generate = page.getByRole("button", { name: "Generate consolidated report", exact: true });
-  const status = page.locator("#staff-reports-status");
   await expect(generate).toBeDisabled();
-  await expect(generate).toHaveAttribute("aria-describedby", "staff-reports-status");
-  await expect(status).toHaveText("0 of 1 received report consolidated. Generate once it is.");
   await page.getByRole("combobox", { name: "Submission" }).click();
   await expect(page.getByRole("option", { name: "Missing", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -132,7 +129,6 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(intakeDialog).toBeHidden();
   await expect(page).not.toHaveURL(/report=/);
   await expect(page.getByRole("row", { name: /Park/ }).getByText("Consolidated", { exact: true })).toBeVisible();
-  await expect(status).toHaveText("The received report is consolidated. Ready to generate.");
 
   await page.getByRole("button", { name: "View the report from Park" }).click();
   await expect(intakeDialog.getByRole("button", { name: "Accept report" })).toHaveCount(0);

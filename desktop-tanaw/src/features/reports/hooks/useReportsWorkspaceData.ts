@@ -137,7 +137,7 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
     }
   }, [enterpriseId, setReportsHistory, timeFormat]);
 
-  /** Reads one month's versions and review state from TANAW, for example right after a send. */
+  /** Reads one month's report and review state from TANAW, for example right after a send. */
   const refreshMonthReview = useCallback(
     async (reportPeriod: string) => {
       try {
@@ -152,7 +152,7 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
     [enterpriseId, setReportsHistory, timeFormat],
   );
 
-  // Staff returning, accepting or consolidating a report reaches this computer as a notification
+  // Staff accepting or consolidating a report reaches this computer as a notification
   // or a report event; the review state shown here follows it without waiting for the next poll.
   useRealtimeEvent((event) => {
     if (event.event_type.startsWith("report.") || event.event_type === "notification.created") void refreshLocalReports();

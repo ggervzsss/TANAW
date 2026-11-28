@@ -36,7 +36,7 @@ type Props = {
   onReview: () => void;
   setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
   setNotes: Dispatch<SetStateAction<string>>;
-  /** Where the month's report stands once sent: waiting, returned, refused or being corrected. */
+  /** Where the month's report stands once sent: waiting, refused by TANAW, or being fixed. */
   lifecycle: ReportLifecycle;
   reports: ReportRecord[];
   timeFormat: SystemTimeFormat;
@@ -46,7 +46,7 @@ type Props = {
   onAskForHelp: (report: ReportRecord) => void;
   /** Changes when a send or reopen ends; focus then moves to the report's new status. */
   statusAnnouncement: number;
-  /** Other months whose report was returned or refused, and how to open one. */
+  /** Other months whose report TANAW refused, and how to open one. */
   reportsAwaitingAction: ReportRecord[];
   onOpenReportMonth: (report: ReportRecord) => void;
 };
@@ -111,7 +111,6 @@ export function ReportDraftPanel({
       <ReportLifecycleBanner
         lifecycle={lifecycle}
         reports={reports}
-        timeFormat={timeFormat}
         reopeningReportId={reopeningReportId}
         reopenIssue={reopenIssue}
         onCorrect={onCorrect}

@@ -17,7 +17,6 @@ const PAGE_SIZE = 10;
 const SUBMISSION_OPTIONS = [
   ["all", "All statuses"],
   ["Submitted", "Submitted"],
-  ["Awaiting correction", "Awaiting correction"],
   ["Pending", "Pending"],
   ["Missing", "Missing"],
 ] as const satisfies readonly (readonly [SubmissionFilter, string])[];

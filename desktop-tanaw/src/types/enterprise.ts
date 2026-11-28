@@ -60,19 +60,13 @@ export type ReportRecord = {
   notes?: string;
   auditTrail?: AuditEntry[];
   remarks?: string | null;
-  /** The month's report version: 1, then one more for each correction Staff asked for. */
-  version?: number;
-  /** TANAW's code for the report, shown to people; a correction's code ends in "-vN". Else `id`. */
+  /** TANAW's code for the report, shown to people, once known. Else `id`. */
   reference?: string;
   /** Staff's review state in TANAW, once known. */
   reviewStatus?: ReportReviewStatus;
-  /** Why Staff returned the report for correction, who did, and when. */
-  returnedReason?: string | null;
-  returnedAt?: string | null;
-  returnedBy?: string | null;
   /** TANAW's reason for refusing the upload, kept on this computer. */
   rejectionReason?: string | null;
-  /** When this version was reopened for correction; the month then waits for a corrected version. */
+  /** When this refused report was reopened to be fixed; the month then waits for the fixed report. */
   reopenedAt?: string | null;
 };
 

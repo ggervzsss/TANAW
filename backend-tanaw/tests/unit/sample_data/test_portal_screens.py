@@ -12,13 +12,10 @@ from app.features.activity_logs.models import ActivityLog
 from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
 from app.features.monitoring.schemas import DesktopCameraMonitoringSummary
 from app.features.reporting.models import EnterpriseReportSubmission
-from app.features.reporting.policies import RETURN_REPORT_ACTION
-from app.features.reporting.schemas import ReportReturnRequest
 from app.features.requests.models import Request, RequestMessage
 from app.features.sample_data.activity import create_request_and_user_activity
 from app.features.sample_data.definitions import REPORTING_STAFF_NAME
-from app.features.sample_data.helpers import CORRECTED_REPORT_ENTERPRISE_INDEX, sample_return_reason
-from app.features.sample_data.report_workflow import create_activity_logs, return_sample_report
+from app.features.sample_data.report_workflow import create_activity_logs
 from app.features.sample_data.visitors import (
     PARTIAL_CAMERA_ENTERPRISE_INDEX,
     create_admin_visitor_history,
@@ -111,78 +108,6 @@ async def test_report_logs_follow_the_live_workflow_and_link_to_the_report() -> 
     assert review.activity_group == "Reports"
     assert review.severity == "Success"
     assert all(log.timestamp <= GENERATED_AT for log in logs)
-
-
-@pytest.mark.asyncio
-async def test_returned_reports_log_the_return_and_the_corrected_version() -> None:
-    reason = "The visitor origins do not add up. Please recount them."
-    returned = _report("returned", "Pending Review", datetime(2026, 11, 4, 2, tzinfo=UTC))
-    returned.version = 1
-    awaiting = _report("awaiting", "Ready to Consolidate", datetime(2026, 11, 5, 2, tzinfo=UTC))
-    awaiting.version = 1
-
-    corrected = return_sample_report(returned, reason, GENERATED_AT, send_correction=True)
-    assert return_sample_report(awaiting, reason, GENERATED_AT, send_correction=False) is None
-
-    assert corrected is not None
-    corrected.enterprise_profile = returned.enterprise_profile
-    for report in (returned, awaiting):
-        assert report.review_status == "Returned"
-        assert report.returned_reason == reason
-        assert report.returned_by == REPORTING_STAFF_NAME
-    assert returned.returned_at == datetime(2026, 11, 5, 2, tzinfo=UTC)
-    assert (
-        corrected.version,
-        corrected.previous_version_id,
-        corrected.report_id,
-        corrected.period,
-        corrected.review_status,
-        corrected.submitted_at,
-    ) == (
-        2,
-        "returned-id",
-        "REP-RETURNED-v2",
-        "October 2026",
-        "Pending Review",
-        datetime(2026, 11, 6, 2, tzinfo=UTC),
-    )
-
-    db = MagicMock()
-    db.flush = AsyncMock()
-    await create_activity_logs(db, {"reports": [returned, awaiting, corrected]}, [], GENERATED_AT)
-
-    logs: list[ActivityLog] = db.add_all.call_args.args[0]
-    by_report: dict[str, list[str]] = {}
-    for log in sorted(logs, key=lambda item: item.timestamp):
-        by_report.setdefault(log.source_id or "", []).append(log.action)
-    assert by_report == {
-        "returned-id": ["Submit Enterprise Report", RETURN_REPORT_ACTION],
-        "awaiting-id": ["Submit Enterprise Report", RETURN_REPORT_ACTION],
-        corrected.id: ["Submit Enterprise Report"],
-    }
-    returned_log = next(
-        log for log in logs if log.action == RETURN_REPORT_ACTION and log.source_id == "returned-id"
-    )
-    assert returned_log.severity == "Warning"
-    assert returned_log.summary.endswith(f"for October 2026: {reason}")
-    assert json.loads(returned_log.metadata_json or "{}")["reason"] == reason
-
-
-def test_return_reasons_are_valid_and_only_for_the_reporting_month() -> None:
-    current_month = datetime(2026, 11, 1, tzinfo=UTC)
-    reporting_month = datetime(2026, 10, 1, tzinfo=UTC)
-    returned_positions = [
-        index
-        for index in range(10)
-        if sample_return_reason(reporting_month, current_month, index) is not None
-    ]
-
-    assert returned_positions == [CORRECTED_REPORT_ENTERPRISE_INDEX, 3]
-    assert sample_return_reason(datetime(2026, 9, 1, tzinfo=UTC), current_month, 3) is None
-    for index in returned_positions:
-        reason = sample_return_reason(reporting_month, current_month, index)
-        assert reason is not None
-        assert ReportReturnRequest(reason=reason).reason == reason
 
 
 @pytest.mark.asyncio

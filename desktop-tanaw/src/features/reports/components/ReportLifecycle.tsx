@@ -1,10 +1,10 @@
 import { useId } from "react";
-import { AlertTriangle, LifeBuoy, PencilLine, XCircle } from "lucide-react";
+import { LifeBuoy, PencilLine, XCircle } from "lucide-react";
 import { Button } from "../../../ui-kit";
 import type { ReportRecord } from "../../../types/enterprise";
 import type { SystemTimeFormat } from "../../../utils/date-time";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
-import { canReopenReport, isReturnedReport, reportReference, returnedHeadline, reportVersion, reviewState, sentConfirmationText, versionLabel, type ReportLifecycle } from "../model/report-lifecycle";
+import { canReopenReport, reportReference, reviewState, sentConfirmationText, type ReportLifecycle } from "../model/report-lifecycle";
 
 const DRAFT_SUBTITLE = "Create and manage your monthly tourism reports.";
 
@@ -15,10 +15,9 @@ const DRAFT_SUBTITLE = "Create and manage your monthly tourism reports.";
 export function ReportStatusLine({ lifecycle, timeFormat }: { lifecycle: ReportLifecycle; timeFormat: SystemTimeFormat }) {
   if (lifecycle.kind === "draft") return <p>{DRAFT_SUBTITLE}</p>;
   if (lifecycle.kind === "correcting") {
-    const text = ["Draft", versionLabel(lifecycle.version), `Corrects ${reportReference(lifecycle.previous)}`].filter(Boolean).join(" · ");
     return (
       <p className="report-status-line" data-lifecycle-focus tabIndex={-1}>
-        <span className="report-status-line-text">{text}</span>
+        <span className="report-status-line-text">{`Draft · Fixes ${reportReference(lifecycle.previous)}`}</span>
       </p>
     );
   }
@@ -36,7 +35,6 @@ export function ReportStatusLine({ lifecycle, timeFormat }: { lifecycle: ReportL
 type BannerProps = {
   lifecycle: ReportLifecycle;
   reports: ReportRecord[];
-  timeFormat: SystemTimeFormat;
   /** The report being reopened right now, if any. */
   reopeningReportId: string | null;
   reopenIssue: string | null;
@@ -45,40 +43,11 @@ type BannerProps = {
 };
 
 /**
- * What a returned or refused report needs, at the top of the report: who returned it and why, or
- * TANAW's reason for refusing it, and the way forward. While the month is corrected, the reason
- * stays in view above the draft.
+ * What a report TANAW refused needs, at the top of the report: TANAW's reason for refusing it and
+ * the way forward. While the month is fixed, the reason stays in view above the draft.
  */
-export function ReportLifecycleBanner({ lifecycle, reports, timeFormat, reopeningReportId, reopenIssue, onCorrect, onAskForHelp }: BannerProps) {
+export function ReportLifecycleBanner({ lifecycle, reports, reopeningReportId, reopenIssue, onCorrect, onAskForHelp }: BannerProps) {
   const headingId = useId();
-  if (lifecycle.kind === "returned") {
-    const report = lifecycle.report;
-    const canCorrect = canReopenReport(report, reports);
-    return (
-      <section className="report-lifecycle-banner" data-tone="returned" aria-labelledby={headingId}>
-        <AlertTriangle className="report-lifecycle-icon" aria-hidden="true" />
-        <div className="report-lifecycle-body">
-          <h3 id={headingId} data-lifecycle-focus tabIndex={-1}>
-            {returnedHeadline(report, timeFormat)}
-          </h3>
-          <Reason text={report.returnedReason} label="Staff's reason" missing="Staff did not add a reason. Call the City Tourism Office if you are not sure what to change." />
-          <p className="report-lifecycle-meta">{referenceLine(report)}</p>
-          {reopenIssue && (
-            <p className="report-lifecycle-issue" role="alert">
-              {reopenIssue}
-            </p>
-          )}
-        </div>
-        {canCorrect && (
-          <div className="report-lifecycle-actions">
-            <Button leadingIcon={<PencilLine size={16} aria-hidden="true" />} loading={reopeningReportId === report.id} onClick={() => onCorrect(report)}>
-              Correct and send again
-            </Button>
-          </div>
-        )}
-      </section>
-    );
-  }
   if (lifecycle.kind === "upload_rejected") {
     const report = lifecycle.report;
     const canFix = canReopenReport(report, reports);
@@ -91,7 +60,7 @@ export function ReportLifecycleBanner({ lifecycle, reports, timeFormat, reopenin
           </h3>
           <p>It is saved on this computer, but LGU Staff have not received it. TANAW will not try to send it again on its own.</p>
           <Reason text={report.rejectionReason} label="Message from TANAW" missing="TANAW did not say why." />
-          <p className="report-lifecycle-meta">{referenceLine(report)}</p>
+          <p className="report-lifecycle-meta">{`Reference ${reportReference(report)}`}</p>
           {reopenIssue && (
             <p className="report-lifecycle-issue" role="alert">
               {reopenIssue}
@@ -112,26 +81,18 @@ export function ReportLifecycleBanner({ lifecycle, reports, timeFormat, reopenin
     );
   }
   if (lifecycle.kind === "correcting") {
-    const { previous, cause, version } = lifecycle;
+    const { previous } = lifecycle;
     const month = formatReportingPeriodLabel(previous.period ?? previous.date);
-    const returned = cause === "returned";
     return (
-      <section className="report-lifecycle-banner" data-tone={returned ? "returned" : "rejected"} data-state="correcting" aria-labelledby={headingId}>
+      <section className="report-lifecycle-banner" data-tone="rejected" data-state="correcting" aria-labelledby={headingId}>
         <PencilLine className="report-lifecycle-icon" aria-hidden="true" />
         <div className="report-lifecycle-body">
           <h3 id={headingId} data-lifecycle-focus tabIndex={-1}>
-            {returned ? `You are correcting the ${month} report` : `You are fixing the ${month} report TANAW did not accept`}
+            {`You are fixing the ${month} report TANAW did not accept`}
           </h3>
-          <p>{returned ? `${returnedHeadline(previous, timeFormat)}.` : `TANAW did not accept ${reportReference(previous)}.`}</p>
-          {returned ? (
-            <Reason text={previous.returnedReason} label="Staff's reason" missing="Staff did not add a reason." />
-          ) : (
-            <Reason text={previous.rejectionReason} label="Message from TANAW" missing="TANAW did not say why." />
-          )}
-          <p className="report-lifecycle-meta">
-            {`It starts from ${reportReference(previous)}'s figures. When it is right, submit it again`}
-            {versionLabel(version) ? `; it will be sent as version ${version}.` : "."}
-          </p>
+          <p>{`TANAW did not accept ${reportReference(previous)}.`}</p>
+          <Reason text={previous.rejectionReason} label="Message from TANAW" missing="TANAW did not say why." />
+          <p className="report-lifecycle-meta">{`It starts from ${reportReference(previous)}'s figures. When it is right, submit it again.`}</p>
         </div>
       </section>
     );
@@ -140,8 +101,8 @@ export function ReportLifecycleBanner({ lifecycle, reports, timeFormat, reopenin
 }
 
 /**
- * Other months whose report waits on the person (returned, or refused by TANAW), so a returned
- * report is found from whichever month is open.
+ * Other months whose report TANAW refused, so a refused report is found from whichever month is
+ * open.
  */
 export function ReportsNeedingAction({ reports, onOpen }: { reports: ReportRecord[]; onOpen: (report: ReportRecord) => void }) {
   if (!reports.length) return null;
@@ -149,11 +110,10 @@ export function ReportsNeedingAction({ reports, onOpen }: { reports: ReportRecor
     <ul className="report-attention-list" aria-label="Reports that need your attention">
       {reports.map((report) => {
         const month = formatReportingPeriodLabel(report.period ?? report.date);
-        const returned = isReturnedReport(report);
         return (
-          <li key={report.id} data-tone={returned ? "returned" : "rejected"}>
-            {returned ? <AlertTriangle aria-hidden="true" /> : <XCircle aria-hidden="true" />}
-            <span>{returned ? `Your ${month} report was returned for correction.` : `TANAW did not accept your ${month} report.`}</span>
+          <li key={report.id} data-tone="rejected">
+            <XCircle aria-hidden="true" />
+            <span>{`TANAW did not accept your ${month} report.`}</span>
             <Button variant="secondary" size="sm" onClick={() => onOpen(report)}>
               Open {month}
             </Button>
@@ -173,8 +133,4 @@ function Reason({ text, label, missing }: { text: string | null | undefined; lab
       <blockquote>{reason}</blockquote>
     </figure>
   );
-}
-
-function referenceLine(report: ReportRecord) {
-  return [`Reference ${reportReference(report)}`, versionLabel(reportVersion(report))].filter(Boolean).join(" · ");
 }

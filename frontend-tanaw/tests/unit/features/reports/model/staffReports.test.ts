@@ -17,7 +17,6 @@ import {
   staffReportRows,
   staffReportsCaption,
   staffReportsProgress,
-  staffReportsSummary,
   type StaffReportRow,
 } from "@/features/reports/model/staffReports";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
@@ -92,11 +91,17 @@ describe("staff report rows", () => {
     expect([...rows].sort(compareStaffReportRows).map((item) => item.name)).toEqual(["Acme Hall", "Daisy Resort", "City Plaza", "Balon ni Lolo", "Echo Mall", "Acacia Park"]);
   });
 
-  it("keeps a report from an enterprise that is no longer registered, and uses its newest report", () => {
-    const reports = [report("x", "Pending Review", { enterprise: "Old Museum", barangay: "Nueva" }), report("a", "Consolidated", { id: "older", submittedAt: "2026-11-02T09:00:00+08:00" }), report("a", "Pending Review", { id: "newer" })];
+  it("keeps a report from an enterprise that is no longer registered", () => {
+    const reports = [report("x", "Pending Review", { enterprise: "Old Museum", barangay: "Nueva" }), report("a", "Consolidated")];
     const rows = staffReportRows([enterprise("a", "Acacia Park")], reports, october, afterDue);
     expect(rows.find((row) => row.enterpriseId === "x")).toMatchObject({ name: "Old Museum", barangay: "Nueva", action: "review" });
-    expect(rows.find((row) => row.enterpriseId === "a")?.report?.id).toBe("newer");
+    expect(rows.find((row) => row.enterpriseId === "a")).toMatchObject({ report: { id: "r-a" }, submission: "Submitted", review: "Consolidated", action: "view", remind: false });
+  });
+
+  it("offers Remind only to enterprises that have not sent their report", () => {
+    const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Ready to Consolidate"), report("c", "Consolidated")], october, afterDue);
+    expect(rows.filter((row) => row.remind).map((row) => row.enterpriseId)).toEqual(["d", "e"]);
+    expect(rows.filter((row) => row.remind).every((row) => row.action === "remind" && row.review === "Waiting")).toBe(true);
   });
 });
 
@@ -125,12 +130,11 @@ describe("staff report filters", () => {
     const options = staffReportFilterOptions(rows);
     expect(options.submission).toEqual([
       { value: "all", label: "All submissions" },
-      { value: "Submitted", label: "Submitted" },
-      { value: "Awaiting correction", label: "Awaiting correction" },
-      { value: "Pending", label: "Pending" },
       { value: "Missing", label: "Missing" },
+      { value: "Pending", label: "Pending" },
+      { value: "Submitted", label: "Submitted" },
     ]);
-    expect(options.review.map(({ label }) => label)).toEqual(["All reviews", "Waiting", "Reviewing", "Returned", "Consolidated"]);
+    expect(options.review.map(({ label }) => label)).toEqual(["All reviews", "Waiting", "Reviewing", "Consolidated"]);
     expect(options.barangay.map(({ value, label }) => [value, label])).toEqual([
       ["all", "All barangays"],
       ["Landayan", "Landayan"],
@@ -182,87 +186,49 @@ describe("generating the consolidated report", () => {
     const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Pending Review"), report("c", "Ready to Consolidate")], october, afterDue);
     const progress = staffReportsProgress(rows);
     expect(progress).toMatchObject({ received: 3, consolidated: 1, reviewing: 2, waiting: 2, readyReportIds: ["r-c"], canGenerate: false, generated: false });
-    expect(staffReportsSummary(progress, october)).toBe("1 of 3 received reports consolidated. Generate once all 3 are.");
   });
 
   it("is ready once every received report is accepted, even when some enterprises have not sent one", () => {
     const rows = staffReportRows(enterprises, [report("a", "Ready to Consolidate"), report("b", "Consolidated")], october, beforeDue);
     const progress = staffReportsProgress(rows);
     expect(progress).toMatchObject({ canGenerate: true, readyReportIds: ["r-a"] });
-    expect(staffReportsSummary(progress, october)).toBe("All 2 received reports are consolidated. Ready to generate.");
+    expect(progress.notSent.map((row) => row.enterpriseId)).toEqual(["c", "d", "e"]);
   });
 
   it("has nothing to generate when every received report is already in a monthly report, or none arrived", () => {
     const done = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [report("a", "Consolidated")], october, afterDue));
     expect(done).toMatchObject({ canGenerate: false, generated: true });
-    expect(staffReportsSummary(done, october)).toBe("The consolidated report for this month has been generated.");
 
     const none = staffReportsProgress(staffReportRows([enterprise("d", "Daisy Resort")], [], october, afterDue));
-    expect(none.canGenerate).toBe(false);
-    expect(staffReportsSummary(none, october)).toBe("No October 2026 reports received yet.");
+    expect(none).toMatchObject({ received: 0, canGenerate: false, generated: false });
   });
 });
 
-describe("reports returned for correction", () => {
-  const reason = "The visitor origins for Oct 28 to 31 do not add up.";
-  const returned = (enterpriseId: string, overrides: Partial<IntakeReport> = {}) =>
-    report(enterpriseId, "Returned", { returnedReason: reason, returnedAt: "2026-11-12T10:00:00+08:00", returnedBy: "Maria Santos", ...overrides });
-
-  it("shows a returned report as Awaiting correction and Returned, opens it read only and offers Remind", () => {
-    const rows = staffReportRows(enterprises, [returned("a"), report("b", "Pending Review"), report("c", "Ready to Consolidate")], october, afterDue);
-    const acacia = rows.find((row) => row.enterpriseId === "a");
-    expect(acacia).toMatchObject({ submission: "Awaiting correction", review: "Returned", action: "view", remind: true, sent: "Nov 9", note: "Returned Nov 12" });
-    expect(rows.find((row) => row.enterpriseId === "b")).toMatchObject({ action: "review", remind: false });
-    expect(rows.find((row) => row.enterpriseId === "d")).toMatchObject({ action: "remind", remind: true });
-    // After Missing, before Pending and Submitted.
-    expect(rows.map((row) => row.submission)).toEqual(["Missing", "Missing", "Awaiting correction", "Submitted", "Submitted"]);
+describe("the three report statuses", () => {
+  it("uses only Missing, Pending and Submitted, and Waiting, Reviewing and Consolidated", () => {
+    const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Ready to Consolidate"), report("c", "Consolidated")], october, afterDue);
+    expect(new Set(rows.map((row) => row.submission))).toEqual(new Set(["Missing", "Submitted"]));
+    expect(new Set(rows.map((row) => row.review))).toEqual(new Set(["Waiting", "Reviewing", "Consolidated"]));
+    const before = staffReportRows(enterprises, [], october, beforeDue);
+    expect(new Set(before.map((row) => row.submission))).toEqual(new Set(["Pending"]));
   });
 
-  it("uses the corrected version once it arrives, as a normal submitted report", () => {
-    const corrected = report("a", "Pending Review", { id: "r-a-2", code: "RPT-2026-10-a-v2", version: 2, previousVersionId: "r-a", submittedAt: "2026-11-14T09:00:00+08:00" });
-    // A newer version wins even when the older one somehow carries a later sent time.
-    const rows = staffReportRows(enterprises, [returned("a", { version: 1, submittedAt: "2026-11-20T09:00:00+08:00" }), corrected], october, afterDue);
-    expect(rows.find((row) => row.enterpriseId === "a")).toMatchObject({ report: { id: "r-a-2" }, submission: "Submitted", review: "Reviewing", action: "review", remind: false, note: null });
+  it("keeps the status filters in the address and ignores statuses that no longer exist", () => {
+    const filters = parseStaffReportFilters(new URLSearchParams("submission=pending&review=consolidated"));
+    expect(filters).toMatchObject({ submission: "Pending", review: "Consolidated" });
+    expect(staffReportFilterParams(filters)).toMatchObject({ submission: "pending", review: "consolidated" });
+    expect(parseStaffReportFilters(new URLSearchParams("submission=awaiting-correction&review=returned"))).toMatchObject({ submission: "all", review: "all" });
   });
 
-  it("leaves a returned report out of the received count and the consolidated report, without blocking it", () => {
-    const rows = staffReportRows(enterprises, [returned("a"), report("b", "Ready to Consolidate"), report("c", "Consolidated")], october, afterDue);
-    const progress = staffReportsProgress(rows);
-    expect(progress).toMatchObject({ received: 2, consolidated: 2, reviewing: 0, waiting: 2, readyReportIds: ["r-b"], canGenerate: true });
-    expect(progress.awaitingCorrection.map((row) => row.enterpriseId)).toEqual(["a"]);
-    expect(progress.notSent.map((row) => row.enterpriseId)).toEqual(["d", "e"]);
-    expect(staffReportsSummary(progress, october)).toBe("All 2 received reports are consolidated. Ready to generate. 1 returned report is awaiting correction.");
-    expect(generateConfirmMessage("October 2026", progress)).toBe(
-      "Combine the 1 accepted report into the October 2026 monthly report (VAR 2M). 2 enterprises have not sent a report and will not be included. 1 returned report is awaiting correction and will not be included.",
+  it("names the enterprises left out of the consolidated report", () => {
+    expect(generateConfirmMessage("October 2026", { readyReportIds: ["r-a", "r-b"], notSent: [] })).toBe("Combine the 2 accepted reports into the October 2026 monthly report (VAR 2M).");
+    const rows = staffReportRows(enterprises, [report("a", "Ready to Consolidate"), report("b", "Consolidated")], october, afterDue);
+    expect(generateConfirmMessage("October 2026", staffReportsProgress(rows))).toBe(
+      "Combine the 1 accepted report into the October 2026 monthly report (VAR 2M). 3 enterprises have not sent a report and will not be included.",
     );
-
-    const onlyReturned = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [returned("a")], october, afterDue));
-    expect(onlyReturned).toMatchObject({ received: 0, canGenerate: false, generated: false });
-    expect(staffReportsSummary(onlyReturned, october)).toBe("No October 2026 reports received yet. 1 returned report is awaiting correction.");
   });
 
-  it("keeps the generate message unchanged when nothing was returned", () => {
-    expect(generateConfirmMessage("October 2026", { readyReportIds: ["r-a", "r-b"], notSent: [], awaitingCorrection: [] })).toBe("Combine the 2 accepted reports into the October 2026 monthly report (VAR 2M).");
-  });
-
-  it("filters by Awaiting correction and Returned and keeps them in the address", () => {
-    const rows = staffReportRows(enterprises, [returned("a"), report("b", "Pending Review")], october, afterDue);
-    const names = (filters: Partial<typeof EMPTY_STAFF_REPORT_FILTERS>) => filterStaffReportRows(rows, { ...EMPTY_STAFF_REPORT_FILTERS, ...filters }).map((row) => row.name);
-    expect(names({ submission: "Awaiting correction" })).toEqual(["Acacia Park"]);
-    expect(names({ review: "Returned" })).toEqual(["Acacia Park"]);
-    const filters = parseStaffReportFilters(new URLSearchParams("submission=awaiting-correction&review=returned"));
-    expect(filters).toMatchObject({ submission: "Awaiting correction", review: "Returned" });
-    expect(staffReportFilterParams(filters)).toMatchObject({ submission: "awaiting-correction", review: "returned" });
-    expect(parseStaffReportFilters(new URLSearchParams("submission=Awaiting+correction")).submission).toBe("Awaiting correction");
-  });
-
-  it("reminds a returned report's enterprise to send the corrected version, with the reason", () => {
-    const [awaiting] = staffReportRows([enterprise("a", "Acacia Park")], [returned("a")], october, afterDue);
-    expect(staffReminder(awaiting, "October 2026", "Nov 10")).toEqual({
-      title: "Corrected report reminder",
-      message: `Please send the corrected October 2026 report. It was returned for correction: ${reason}`,
-      severity: "Warning",
-    });
+  it("reminds an enterprise to send its report, before or after the due date", () => {
     const [missing] = staffReportRows([enterprise("d", "Daisy Resort")], [], october, afterDue);
     expect(staffReminder(missing, "October 2026", "Nov 10")).toEqual({ title: "Monthly report reminder", message: "Please send your October 2026 monthly report. It was due Nov 10.", severity: "Warning" });
     const [pending] = staffReportRows([enterprise("d", "Daisy Resort")], [], october, beforeDue);

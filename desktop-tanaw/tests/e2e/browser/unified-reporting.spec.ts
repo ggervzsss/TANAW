@@ -51,7 +51,6 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
     submittedAt: fixture.submitted_at,
     status: "Pending Review",
     code: fixture.report_id,
-    version: 1,
     metrics: { entry: fixture.entries, exit: fixture.exits, peak: fixture.peak_occupancy, unique: fixture.unique_count },
     payload: fixture.payload,
     remarks: null,
@@ -258,8 +257,8 @@ test("a submitted month is complete and offers no way to submit it again", async
   await expect(page.locator(".report-status-line")).toContainText("Waiting for Staff review");
   await expect(page.getByRole("button", { name: /Submit Report/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Resubmit/ })).toHaveCount(0);
-  // Only a report Staff returned can be corrected.
-  await expect(page.getByRole("button", { name: "Correct and send again" })).toHaveCount(0);
+  // A report TANAW accepted is final: nothing reopens it.
+  await expect(page.getByRole("button", { name: "Fix and send again" })).toHaveCount(0);
 
   // The month no longer appears as a period waiting for a report.
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();

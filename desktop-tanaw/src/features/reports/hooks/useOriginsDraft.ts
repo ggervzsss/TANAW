@@ -57,7 +57,7 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
         }
       }
       if (cancelled) return;
-      // A month being corrected starts from the origins of the version it corrects.
+      // A month being fixed starts from the origins of the refused report.
       const report = activeReportId ? reportsHistoryRef.current.find((item) => item.id === activeReportId) : correctionSource(reportsHistoryRef.current, period);
       const loadedOrigins = stored ?? report?.origins ?? {};
       hydratedOrigins.current = loadedOrigins;

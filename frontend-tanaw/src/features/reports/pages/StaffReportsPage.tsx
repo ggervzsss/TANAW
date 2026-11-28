@@ -1,12 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { Button, MonthPicker, PortalPageHeader, type PickerMonth } from "@/shared/ui-kit";
-import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import type { IntakeReport } from "@/shared/types";
 import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
-import { ReturnReportDialog } from "../components/ReturnReportDialog";
 import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
 import { StaffTableSkeleton, type StaffTableSkeletonColumn } from "../components/StaffTableSkeleton";
@@ -21,12 +18,9 @@ import {
   parseStaffReportFilters,
   staffReportFilterParams,
   staffReportsCaption,
-  staffReportsSummary,
   type StaffReportFilters,
   type StaffReportRow,
 } from "../model/staffReports";
-
-const STATUS_ID = "staff-reports-status";
 
 /** The columns of StaffReportsTable, for its loading rows. */
 const STAFF_REPORT_COLUMNS: readonly StaffTableSkeletonColumn[] = [
@@ -57,12 +51,10 @@ export function StaffReportsPage() {
   const filters = useMemo(() => parseStaffReportFilters(params), [params]);
   const reportId = params.get("report");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [returning, setReturning] = useState<IntakeReport | null>(null);
   const data = useStaffReports(month, today);
   const { progress } = data;
   const monthLabel = formatReportingMonth(month);
   const openReport = reportId ? data.reports.find((report) => report.id === reportId) : undefined;
-  const previousVersion = openReport?.previousVersionId ? data.reports.find((report) => report.id === openReport.previousVersionId) : undefined;
   const visibleRows = filterStaffReportRows(data.rows, filters);
   const filtered = hasStaffReportFilters(filters);
   // Any month from the oldest report up to the newest (at least the current reporting month).
@@ -80,7 +72,6 @@ export function StaffReportsPage() {
   const changeFilters = (patch: Partial<StaffReportFilters>) => updateParams(staffReportFilterParams({ ...filters, ...patch }));
   const clearFilters = () => updateParams(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS));
   const canGenerate = progress.canGenerate && !data.isLoading && !data.isError;
-  const summary = data.isError ? "Reports could not be loaded." : data.isLoading ? "Loading reports…" : staffReportsSummary(progress, month);
 
   return (
     <>
@@ -102,7 +93,7 @@ export function StaffReportsPage() {
             />
             {/* On a phone, Generate rides in a bar along the foot of the screen once it can be pressed (reports.css). */}
             <div className="tanaw-staff-generate" data-ready={canGenerate || undefined}>
-              <Button aria-describedby={STATUS_ID} disabled={!canGenerate} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
+              <Button disabled={!canGenerate} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
                 Generate consolidated report
               </Button>
             </div>
@@ -112,24 +103,13 @@ export function StaffReportsPage() {
 
       <StaffReportsFilters rows={data.rows} filters={filters} onChange={changeFilters} />
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 text-sm">
+      <div className="mt-4 text-sm">
         <p role="status" className="flex flex-wrap items-center gap-x-3 font-semibold text-(--tanaw-text) tabular-nums">
           {data.isLoading || data.isError ? null : filtered ? `Showing ${visibleRows.length} of ${data.rows.length} enterprises` : `${data.rows.length} ${data.rows.length === 1 ? "enterprise" : "enterprises"}`}
           {filtered && (
             <button type="button" onClick={clearFilters} className="rounded-sm font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)">
               Clear filters
             </button>
-          )}
-        </p>
-        <p id={STATUS_ID} className="text-(--tanaw-text-secondary)">
-          {summary}
-          {progress.generated && !data.isLoading && !data.isError && (
-            <>
-              {" "}
-              <Link to={`${routes.staff.consolidatedReports}?year=${month.year}`} className="font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline">
-                Open consolidated reports
-              </Link>
-            </>
           )}
         </p>
       </div>
@@ -157,36 +137,9 @@ export function StaffReportsPage() {
         <EnterpriseReportDialog
           key={openReport.id}
           report={openReport}
-          previousVersion={previousVersion}
           isUpdating={data.accept.isPending}
           onClose={closeReport}
           onAccept={(report) => data.accept.mutate(report, { onSuccess: closeReport })}
-          onReturn={(report) => {
-            data.returnReport.reset();
-            setReturning(report);
-          }}
-        />
-      )}
-
-      {returning && (
-        <ReturnReportDialog
-          key={returning.id}
-          report={returning}
-          isPending={data.returnReport.isPending}
-          error={data.returnReport.isError ? getApiErrorMessage(data.returnReport.error, "The report could not be returned. Check the connection and try again.") : null}
-          onDismissError={() => data.returnReport.reset()}
-          onCancel={() => setReturning(null)}
-          onSubmit={(reason) =>
-            data.returnReport.mutate(
-              { report: returning, reason },
-              {
-                onSuccess: () => {
-                  setReturning(null);
-                  closeReport();
-                },
-              },
-            )
-          }
         />
       )}
 

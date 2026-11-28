@@ -242,8 +242,8 @@ class SessionStore:
     ) -> bool:
         return self._data_store.mark_report_upload_rejected(report_id, submission_id, reason)
 
-    def reopen_report_submission(self, report_id: str, reason: str) -> dict[str, Any]:
-        return self._data_store.reopen_report_submission(report_id, reason)
+    def reopen_report_submission(self, report_id: str) -> dict[str, Any]:
+        return self._data_store.reopen_report_submission(report_id)
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
         return self._data_store.purge_report_raw_events(report_id)

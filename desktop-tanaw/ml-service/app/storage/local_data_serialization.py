@@ -249,10 +249,8 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "sync_status": row["sync_status"],
         "synced_at": row["synced_at"],
         "raw_purged_at": row["raw_purged_at"],
-        "version": _safe_int(row["version"]) or 1,
         "rejection_reason": row["rejection_reason"],
         "reopened_at": row["reopened_at"],
-        "reopen_reason": row["reopen_reason"],
     }
 
 

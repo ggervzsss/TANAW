@@ -107,7 +107,7 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
           metrics={displayedMetrics}
           demo={demo}
           days={days}
-          correction={lifecycle.kind === "correcting" ? { version: lifecycle.version, previousId: reportReference(lifecycle.previous) } : null}
+          correction={lifecycle.kind === "correcting" ? { previousId: reportReference(lifecycle.previous) } : null}
           isSubmitting={isSubmitting}
           issue={submitIssue}
           onCancel={closeSubmitDialog}

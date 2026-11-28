@@ -69,8 +69,7 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
 
   // The opened month, not the expanded row, sets the header: expanding other months does not change it.
   const viewed = useMemo(() => buildMonthEntry(profile.id, viewedMonth, reportIndex, reviewers, today), [profile.id, reportIndex, reviewers, today, viewedMonth]);
-  // Contact details show once the month's report was sent, including one returned for correction.
-  const showContact = viewed.submission === "Submitted" || viewed.submission === "Awaiting correction";
+  const showContact = viewed.submission === "Submitted";
 
   const chooseYear = (value: number) => {
     setYear(value);
