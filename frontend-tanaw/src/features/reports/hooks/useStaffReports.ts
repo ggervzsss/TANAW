@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/app/hooks/useOperationalSync";
-import { createFinalReport, listReportEnterprises, notifyEnterprise, updateIntakeReportStatus } from "@/shared/services/reporting";
+import { createFinalReport, listReportEnterprises, notifyEnterprise, returnIntakeReport, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, IntakeReport, ReportEnterprise } from "@/shared/types";
 import { formatShortDate, reportDueDate } from "../model/reportStatuses";
 import { formatReportingMonth, type ReportingMonth } from "../model/reportingMonth";
-import { reminderFailedMessage, reminderSentMessage, staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
+import { reminderFailedMessage, reminderSentMessage, staffReminder, staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
 
 const EMPTY_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_REPORTS: IntakeReport[] = [];
@@ -24,8 +24,9 @@ export function apiErrorMessage(error: unknown, fallback: string) {
 }
 
 /**
- * Enterprise reports for one month, with the accept, reminder and generate actions. Staff accept a
- * submitted report; TANAW does not return reports to the enterprise.
+ * Enterprise reports for one month, with the accept, return, reminder and generate actions. Staff
+ * accept a submitted report or return it to the enterprise for correction; the enterprise then sends
+ * a corrected version from the desktop app, which arrives as the month's next report version.
  */
 export function useStaffReports(month: ReportingMonth, today: Date) {
   const queryClient = useQueryClient();
@@ -49,6 +50,18 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
     onError: (error) => toast.error(apiErrorMessage(error, "The report could not be updated. Refresh the list and try again.")),
   });
 
+  // The return dialog shows a failure next to the reason, which it keeps, so there is no error toast.
+  // A refused return (say the report was consolidated meanwhile) refreshes the list.
+  const returnReport = useMutation({
+    mutationFn: ({ report, reason }: { report: IntakeReport; reason: string }) => returnIntakeReport(report.id, { reason }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current = []) => current.map((report) => (report.id === updated.id ? updated : report)));
+      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
+      toast.success(`Report returned to ${updated.enterprise}.`);
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey }),
+  });
+
   const generate = useMutation({
     mutationFn: () => createFinalReport({ reportIds: progress.readyReportIds, preparedBy }),
     onSuccess: (finalReport) => {
@@ -64,13 +77,13 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
 
   const remind = useMutation({
     mutationFn: (row: StaffReportRow) => {
-      const due = formatShortDate(reportDueDate(month.month, month.year));
+      const reminder = staffReminder(row, monthLabel, formatShortDate(reportDueDate(month.month, month.year)));
       return notifyEnterprise({
         enterpriseId: row.enterpriseId,
-        title: "Monthly report reminder",
-        message: row.submission === "Missing" ? `Please send your ${monthLabel} monthly report. It was due ${due}.` : `Please send your ${monthLabel} monthly report by ${due}.`,
+        title: reminder.title,
+        message: reminder.message,
         type: "Staff Follow-up",
-        severity: row.submission === "Missing" ? "Warning" : "Info",
+        severity: reminder.severity,
         sourceType: "Reports",
         sourceId: row.enterpriseId,
       });
@@ -93,6 +106,7 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
     isLoading: enterprisesQuery.isLoading || reportsQuery.isLoading,
     isError: enterprisesQuery.isError || reportsQuery.isError,
     accept,
+    returnReport,
     generate,
     remind,
     wasReminded: (row: StaffReportRow) => remindedIds.has(`${row.enterpriseId}:${monthLabel}`),

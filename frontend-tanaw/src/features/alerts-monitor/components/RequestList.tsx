@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import type { Request } from "@/shared/services/requests";
-import { formatRequestTime, requestMarker, requestPlace, statusLabels, statusTextClass, type RequestDayGroup } from "../model";
+import { formatRequestTime, progressTextClass, requestCategory, requestMarker, requestPlace, requestProgressState, type RequestDayGroup } from "../model";
 import "../requests.css";
 
 /** The chosen-row highlight's glide: the app's 150–260ms ease-out. */
@@ -75,13 +75,14 @@ function RequestListItem({
   glide: Transition;
 }) {
   const time = formatRequestTime(request.createdAt, timeFormat);
+  const progress = requestProgressState(request);
   return (
     <li className="tanaw-requests-item">
       {selected && <motion.span layoutId="admin-request-selection" aria-hidden="true" className="tanaw-requests-selection" transition={glide} />}
-      <button type="button" aria-current={selected ? "true" : undefined} onClick={() => onSelect(request)} className="tanaw-requests-row">
+      <button type="button" data-request-id={request.id} aria-current={selected ? "true" : undefined} onClick={() => onSelect(request)} className="tanaw-requests-row">
         <span className="flex justify-between gap-3 text-[13px] text-(--tanaw-text-secondary)">
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            {request.group}
+            {requestCategory(request)}
             {marker && <span className="font-semibold text-(--tanaw-accent-ink)">{marker}</span>}
           </span>
           {time && (
@@ -92,7 +93,7 @@ function RequestListItem({
         </span>
         <span className={cn("mt-1 block text-[0.96875rem] leading-snug", marker ? "font-bold" : "font-semibold", selected && "text-(--tanaw-accent-ink)")}>{request.title}</span>
         <span className="mt-0.5 block text-sm text-(--tanaw-text-secondary)">{requestPlace(request)}</span>
-        <span className={cn("mt-2 block text-[13px] font-semibold", statusTextClass[request.status])}>{statusLabels[request.status]}</span>
+        <span className={cn("mt-2 block text-[13px] font-semibold", progressTextClass[progress])}>{progress}</span>
       </button>
     </li>
   );

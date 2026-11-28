@@ -22,7 +22,7 @@ const portalToastContainerStyle: CSSProperties = {
 };
 
 const authToastContainerStyle: CSSProperties = {
-  top: "clamp(16px, 3svh, 28px)",
+  top: "max(clamp(16px, 3svh, 28px), calc(env(safe-area-inset-top) + 12px))",
   left: "max(16px, env(safe-area-inset-left))",
   right: "max(16px, env(safe-area-inset-right))",
 };
@@ -132,7 +132,13 @@ function TanawToast({ toast: item, offset, onHeight, onPause, onResume }: TanawT
 
   return (
     <div ref={slotRef} className="tanaw-toast-slot" style={{ translate: `0 ${offset}px` }}>
-      <div className={className} style={item.style} onMouseEnter={onPause} onMouseLeave={onResume}>
+      <div
+        className={className}
+        style={item.style}
+        // A resting mouse pauses the timers; a finger tapping the toast (say, to dismiss it) does not.
+        onPointerEnter={(event) => event.pointerType === "mouse" && onPause()}
+        onPointerLeave={(event) => event.pointerType === "mouse" && onResume()}
+      >
         <span className="tanaw-toast__icon" aria-hidden="true">
           {resolveToastIcon(item)}
         </span>

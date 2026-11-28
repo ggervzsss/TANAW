@@ -1,7 +1,7 @@
 import { Menu, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import toast from "react-hot-toast/headless";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
@@ -9,15 +9,15 @@ import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
 import { TANAW_LOGO } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
-import { AlertsButton } from "@/features/live-alerts";
+import { AlertsButton, useCameraAlertToasts } from "@/features/live-alerts";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
 import { getRoleHelpPath, getRoleSettingsPath, isRoleSettingsPath } from "@/app/routers/roleRoutes";
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";
 import { TopbarAccount } from "@/shared/ui-kit/patterns/TopbarAccount";
-import type { ResolvedTheme } from "@/shared/utils/theme";
-import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
+import type { ResolvedTheme, ThemePreference } from "@/shared/utils/theme";
+import { DesktopPortalNavigation, PortalNavigationSheet } from "./PortalNavigation";
 import { useNavigationBadges } from "./hooks/useNavigationBadges";
 import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";
 import "./portal-topbar-glass.css";
@@ -32,14 +32,17 @@ type PortalTopbarProps = {
   role: UserRole;
   showDevLog?: boolean;
   resolvedTheme: ResolvedTheme;
+  /** The chosen theme and how to change it, for the theme switch in the phone menu. */
+  theme?: ThemePreference;
+  onThemeChange?: (theme: ThemePreference) => void;
 };
 
 export function PortalBrand({ role }: { role: UserRole }) {
   return (
     <div className="flex shrink-0 items-center gap-4">
-      <div className="flex items-center gap-4 max-[360px]:gap-1.5 max-sm:min-h-11 max-sm:gap-2">
+      <div className="flex items-center gap-4 max-sm:min-h-11 max-sm:gap-2.5">
         <img src={TANAW_LOGO} alt="" className="size-12 shrink-0 rounded-full bg-white object-cover shadow-[0_0_0_2px_rgb(255_255_255/0.35),0_8px_20px_rgb(0_0_0/0.24)] max-sm:size-9" />
-        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-base">TANAW</span>
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-xl">TANAW</span>
       </div>
       <span className="h-9 w-px bg-white/18 max-sm:hidden" aria-hidden="true" />
       <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
@@ -49,18 +52,27 @@ export function PortalBrand({ role }: { role: UserRole }) {
   );
 }
 
-export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: PortalTopbarProps) {
+export function PortalTopbar({ role, resolvedTheme, theme = "system", onThemeChange, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const { pathname, search, hash, state } = useLocation();
   const queryClient = useQueryClient();
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [menuPathname, setMenuPathname] = useState(pathname);
+  const menuSheetId = useId();
+  // Any change of page (a link, a notification, Back) closes the menu.
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
+    setShowMobileNav(false);
+  }
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
+  // The Admin hears about a camera that stops counting while signed in, beside the alerts button.
+  useCameraAlertToasts({ enabled: role === "admin", dashboardPath: routes.admin.dashboard });
 
   useEffect(() => {
     document.title = unreadCount > 0 ? `(${unreadCount > 99 ? "99+" : unreadCount}) TANAW Portal` : "TANAW Portal";
@@ -143,6 +155,17 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [openMenuId, showMobileNav, showNotifications]);
 
+  // Widening the window to the desktop topbar puts the links back in the bar.
+  useEffect(() => {
+    if (!showMobileNav) return undefined;
+    const desktop = window.matchMedia("(min-width: 80rem)");
+    const close = () => {
+      if (desktop.matches) setShowMobileNav(false);
+    };
+    desktop.addEventListener("change", close);
+    return () => desktop.removeEventListener("change", close);
+  }, [showMobileNav]);
+
   const navigation = useMemo(() => getPortalNavigation(role, showDevLog), [role, showDevLog]);
   const topbarItems = useMemo(() => getTopbarEntries(role, navigation), [navigation, role]);
   const navigationBadges = useNavigationBadges(role);
@@ -155,6 +178,8 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
   const settingsPath = getRoleSettingsPath(role);
   const helpPath = getRoleHelpPath(role);
   const inSettings = isRoleSettingsPath(role, pathname);
+  const accountIdentity = { name: authUser?.displayName ?? "TANAW User", email: authUser?.email, image: authUser?.displayImageDataUrl, role: roleAccessLabel[role] };
+  const activeAction = inSettings ? "settings" : pathname === helpPath || pathname.startsWith(helpPath + "/") ? "help" : undefined;
   const openSettings = (profile = false) => {
     navigate(profile ? settingsPath + "/profile" : settingsPath, {
       state: inSettings ? state : { returnTo: pathname + search + hash },
@@ -163,7 +188,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
-      <div data-topbar-theme={resolvedTheme} className={`portal-topbar relative overflow-visible ${topbarThemeClasses.frame}`} onPointerMove={followPointer}>
+      <div data-topbar-theme={resolvedTheme} className={`portal-topbar relative overflow-visible pt-[env(safe-area-inset-top)] ${topbarThemeClasses.frame}`} onPointerMove={followPointer}>
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] max-lg:w-[76%]">
           <div
             data-topbar-image="day"
@@ -184,7 +209,7 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
         <div className="portal-topbar__edge portal-topbar__edge--bottom" aria-hidden="true" />
 
         <div
-          className={`relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:gap-1 max-sm:px-2 ${role === "admin" ? "xl:max-[1340px]:gap-3 xl:max-[1340px]:px-5" : ""}`}
+          className={`relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-16 max-sm:gap-2 max-sm:pr-[max(1rem,env(safe-area-inset-right))] max-sm:pl-[max(1rem,env(safe-area-inset-left))]${role === "admin" ? "xl:max-[1340px]:gap-3 xl:max-[1340px]:px-5" : ""}`}
         >
           <PortalBrand role={role} />
 
@@ -193,15 +218,6 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
           <div ref={navMenuRef} className="hidden xl:block">
             <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} badges={navigationBadges} />
           </div>
-
-          <button
-            type="button"
-            aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
-            onClick={() => setShowMobileNav((current) => !current)}
-            className={`tanaw-topbar-compact-control flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${topbarIconButton}`}
-          >
-            {showMobileNav ? <X size={18} /> : <Menu size={18} />}
-          </button>
 
           <div className="relative ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1">
             {role === "admin" && (
@@ -227,25 +243,64 @@ export function PortalTopbar({ role, resolvedTheme, showDevLog = false }: Portal
             </div>
             )}
 
-            <TopbarAccount
-              account={{ name: authUser?.displayName ?? "TANAW User", email: authUser?.email, image: authUser?.displayImageDataUrl, role: roleAccessLabel[role] }}
-              activeAction={inSettings ? "settings" : pathname === helpPath || pathname.startsWith(helpPath + "/") ? "help" : undefined}
-              onEditProfile={() => openSettings(true)}
-              onSettings={() => openSettings()}
-              onHelp={() => navigate(helpPath)}
-              onSignOut={handleLogout}
-              onOpen={() => {
+            {/* On phones the account lives at the foot of the menu sheet. */}
+            <div className="max-sm:hidden">
+              <TopbarAccount
+                account={accountIdentity}
+                activeAction={activeAction}
+                onEditProfile={() => openSettings(true)}
+                onSettings={() => openSettings()}
+                onHelp={() => navigate(helpPath)}
+                onSignOut={handleLogout}
+                onOpen={() => {
+                  setShowNotifications(false);
+                  setOpenMenuId(null);
+                  setShowMobileNav(false);
+                }}
+              />
+            </div>
+
+            {/* Below the desktop breakpoint the pages open from here, at the thumb's side of the bar. */}
+            <button
+              type="button"
+              aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
+              aria-expanded={showMobileNav}
+              aria-haspopup="dialog"
+              aria-controls={showMobileNav ? menuSheetId : undefined}
+              onClick={() => {
                 setShowNotifications(false);
                 setOpenMenuId(null);
-                setShowMobileNav(false);
+                setShowMobileNav((current) => !current);
               }}
-            />
+              className={`tanaw-topbar-compact-control flex h-11 w-11 shrink-0 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${topbarIconButton}`}
+            >
+              {showMobileNav ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+            </button>
           </div>
         </div>
       </div>
 
       <AnimatePresence>
-        {showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} pathname={pathname} role={role} badges={navigationBadges} onNavigate={() => setShowMobileNav(false)} />}
+        {showMobileNav && (
+          <PortalNavigationSheet
+            id={menuSheetId}
+            entries={topbarItems}
+            pathname={pathname}
+            role={role}
+            badges={navigationBadges}
+            onClose={() => setShowMobileNav(false)}
+            account={{
+              identity: accountIdentity,
+              activeAction,
+              theme,
+              onTheme: (next) => onThemeChange?.(next),
+              onEditProfile: () => openSettings(true),
+              onSettings: () => openSettings(),
+              onHelp: () => navigate(helpPath),
+              onSignOut: handleLogout,
+            }}
+          />
+        )}
       </AnimatePresence>
     </div>
   );

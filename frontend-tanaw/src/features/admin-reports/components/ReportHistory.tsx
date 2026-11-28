@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef } from "react";
 import { formatShortDate, reviewTone, submissionTone } from "@/features/reports/model/reportStatuses";
 import { SegmentedControl, Select, StatusPill, cn } from "@/shared/ui-kit";
 import type { FinalReport, SystemLog } from "@/shared/types";
-import { HISTORY_PREVIEW_MONTHS, missingNote, pendingNote, yearOptionNote, type ReportMonthEntry, type YearSummary } from "../model/enterpriseReports";
+import { awaitingCorrectionNote, HISTORY_PREVIEW_MONTHS, missingNote, pendingNote, yearOptionNote, type ReportMonthEntry, type YearSummary } from "../model/enterpriseReports";
 import { buildReportLog } from "../model/reportLog";
 
 /** Up to this many years show as one row of choices; more use a dropdown. */
@@ -98,6 +98,18 @@ export function ReportHistory({
       note: missingNote(summary),
       color: summary.missing.length > 0 ? "text-(--tanaw-st-missing)" : undefined,
     },
+    // Only a year with a returned report shows this one, so the figures still add up to "of the reports due".
+    ...(summary.awaitingCorrection.length > 0
+      ? [
+          {
+            label: "Awaiting correction",
+            sub: "returned, corrected report not sent yet",
+            value: String(summary.awaitingCorrection.length),
+            note: awaitingCorrectionNote(summary),
+            color: "text-(--tanaw-st-pending)",
+          },
+        ]
+      : []),
   ];
 
   return (

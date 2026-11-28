@@ -1,20 +1,18 @@
-import type { ApiSchemas } from "../../../contracts/api";
+import { isAxiosError } from "axios";
+import { apiPaths, type ApiSchemas } from "../../../contracts/api";
 import { staffApi } from "../../../lib/axios";
+import type { ReportReviewStatus } from "../../../types/enterprise";
 
-export type EnterpriseIntakeReport = {
-  id: string;
-  enterpriseId: string;
-  enterprise: string;
-  category: string;
-  attraction?: ApiSchemas["AttractionClassification"];
-  attractionDescription?: string | null;
-  barangay: string;
-  month: string;
-  period: string;
-  submitted: string;
-  submittedAt: string;
-  status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
-  code: string;
+type ApiIntakeReport = ApiSchemas["IntakeReportSummary"];
+
+/**
+ * A report this establishment sent, as TANAW holds it (`IntakeReportSummary`). Each correction
+ * Staff ask for is a new version of the month's report, linked to the one before it. The figures
+ * this app reads are typed; `version` stays optional because an older TANAW server sends none.
+ */
+export type EnterpriseIntakeReport = Omit<ApiIntakeReport, "attraction" | "metrics" | "version" | "status" | "remarks" | "notes"> & {
+  attraction?: ApiIntakeReport["attraction"];
+  status: ReportReviewStatus;
   remarks: string | null;
   notes: string | null;
   metrics: {
@@ -23,7 +21,7 @@ export type EnterpriseIntakeReport = {
     unique: number;
     peak: string | number | null;
   };
-  payload?: Record<string, unknown> | null;
+  version?: ApiIntakeReport["version"];
 };
 
 export type EnterpriseFinalReport = {
@@ -41,6 +39,23 @@ export type EnterpriseFinalReport = {
 export async function listEnterpriseReportHistory() {
   const response = await staffApi.get<EnterpriseIntakeReport[]>("/operational/reports/intake");
   return response.data;
+}
+
+/**
+ * This establishment's own reports in TANAW, newest first, with each version and its review
+ * state; `period` narrows it to one month. Until a TANAW server offers this list, the older
+ * report list stands in, without versions.
+ */
+export async function listEnterpriseReportSubmissions(period?: string) {
+  try {
+    const response = await staffApi.get<EnterpriseIntakeReport[]>(apiPaths.desktopReportSubmissions, period ? { params: { period } } : undefined);
+    return response.data;
+  } catch (error) {
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    if (status !== 404 && status !== 405) throw error;
+    const reports = await listEnterpriseReportHistory();
+    return period ? reports.filter((report) => report.period === period) : reports;
+  }
 }
 
 export async function listEnterpriseFinalReports() {

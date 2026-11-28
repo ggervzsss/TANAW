@@ -5,6 +5,7 @@ from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -83,6 +84,19 @@ class Account(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The sign-in before the latest one, shown to the owner so an unexpected sign-in stands out.
+    previous_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Two-step verification (authenticator app). The seeds are random values the authenticator
+    # key is derived from with the server secret (auth/secret_values.py); the key is never stored.
+    totp_secret_seed: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_pending_secret_seed: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The last accepted code's time step: a code is accepted once (RFC 6238, section 5.2).
+    totp_last_used_step: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # A JSON list of keyed hashes of the unused one-time recovery codes.
+    totp_recovery_code_hashes: Mapped[str | None] = mapped_column(Text, nullable=True)
     deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deactivated_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     enterprise_profile: Mapped[EnterpriseProfile | None] = relationship(

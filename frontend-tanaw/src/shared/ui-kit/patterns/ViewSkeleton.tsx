@@ -472,10 +472,11 @@ function OverviewOutline({ lede }: { lede: 0 | 1 | 2 }) {
 
 /** General Settings: the washed header band (back, title, lede), the section rail, then a section. */
 function SettingsOutline({ rows }: { rows: number }) {
-  const gutter = "px-[clamp(1.25rem,3vw,3rem)]";
+  // Phones: 16px gutters and the sections as one row of pills, as on the settings page.
+  const gutter = "px-[clamp(1.25rem,3vw,3rem)] max-sm:px-4";
   return (
     <div className="min-h-full bg-(--tanaw-surface)">
-      <div className={cn("border-b border-(--tanaw-border-soft) pt-3 pb-[1.6rem]", gutter)}>
+      <div className={cn("border-b border-(--tanaw-border-soft) pt-3 pb-[1.6rem] max-sm:pt-2 max-sm:pb-5", gutter)}>
         <Skeleton shape="pill" className="h-9 w-20" />
         <div className="mt-[0.35rem] font-display text-[clamp(1.75rem,1.2rem+1.4vw,2.25rem)] leading-[1.15]">
           <Skeleton className="inline-block h-[0.85em] w-64 max-w-full align-middle" />
@@ -484,9 +485,9 @@ function SettingsOutline({ rows }: { rows: number }) {
         <Line box="mt-[0.6rem] h-[22.5px]" bar="h-3.5 w-80 max-w-full" />
       </div>
       <div className="grid min-[60rem]:grid-cols-[clamp(15rem,19%,18rem)_minmax(0,1fr)]">
-        <div className={cn("grid content-start gap-1 border-b border-(--tanaw-border-soft) py-4 max-[60rem]:grid-cols-2 min-[60rem]:border-r min-[60rem]:border-b-0 min-[60rem]:py-[1.6rem] min-[60rem]:pr-4", gutter)}>
+        <div className={cn("grid content-start gap-1 border-b border-(--tanaw-border-soft) py-4 max-[60rem]:grid-cols-2 max-sm:flex max-sm:gap-1.5 max-sm:overflow-hidden max-sm:py-3 min-[60rem]:border-r min-[60rem]:border-b-0 min-[60rem]:py-[1.6rem] min-[60rem]:pr-4", gutter)}>
           {Array.from({ length: 3 }, (_, index) => (
-            <span key={index} className="flex min-h-11 items-center gap-3 px-[0.85rem] py-2">
+            <span key={index} className="flex min-h-11 shrink-0 items-center gap-3 px-[0.85rem] py-2 max-sm:gap-2">
               <Skeleton className="size-5 shrink-0" />
               <Skeleton className="h-3.5 w-24" />
             </span>

@@ -12,9 +12,11 @@ from app.features.notifications.service import STAFF_REPORT_SUBMITTED_NOTIFICATI
 from app.features.reporting.counting import complete_sum
 from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import (
+    REPORT_RETURNED_STATUS,
     EnterpriseReportSubmission,
     FinalReport,
 )
+from app.features.reporting.policies import RETURN_REPORT_ACTION, versioned_report_code
 from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import (
     SAMPLE_CAMERA_PREFIX,
@@ -26,17 +28,21 @@ from app.features.sample_data.definitions import (
     REPORTING_STAFF_NAME,
 )
 from app.features.sample_data.helpers import (
+    CORRECTED_REPORT_ENTERPRISE_INDEX,
     MISSING_REPORT_ENTERPRISE_INDEX,
     add_months,
     last_reported_day,
     latest_capture_time,
     month_starts,
     period_label,
+    sample_return_reason,
     sample_submitted_at,
     sample_uuid,
     seeded_review_status,
     should_skip_target_report,
 )
+
+CORRECTED_REPORT_NOTES = "Corrected the visitor figures staff asked about."
 
 
 async def create_operational_history(
@@ -199,6 +205,17 @@ async def create_operational_history(
             )
             db.add(report)
             reports.append(report)
+            return_reason = sample_return_reason(month_start, current_month, enterprise_index)
+            if return_reason is not None:
+                corrected = return_sample_report(
+                    report,
+                    return_reason,
+                    range_end,
+                    send_correction=enterprise_index == CORRECTED_REPORT_ENTERPRISE_INDEX,
+                )
+                if corrected is not None:
+                    db.add(corrected)
+                    reports.append(corrected)
 
     staff_notification_reports = prepare_staff_notification_reports(
         reports, add_months(current_month, -1)
@@ -214,6 +231,53 @@ async def create_operational_history(
         "telemetry": telemetry,
         "targetPreparedReportCounts": target_prepared_counts,
     }
+
+
+def return_sample_report(
+    report: EnterpriseReportSubmission,
+    reason: str,
+    range_end: datetime,
+    *,
+    send_correction: bool,
+) -> EnterpriseReportSubmission | None:
+    """Marks a sample report returned for correction a day after it arrived. With send_correction,
+    also returns the enterprise's corrected version 2, sent a day later and waiting for staff, when
+    that day has come."""
+    returned_at = min(report.submitted_at + timedelta(days=1), range_end)
+    report.review_status = REPORT_RETURNED_STATUS
+    report.returned_reason = reason
+    report.returned_at = returned_at
+    report.returned_by = REPORTING_STAFF_NAME
+    corrected_at = returned_at + timedelta(days=1)
+    if not send_correction or corrected_at > range_end:
+        return None
+
+    payload = json.loads(report.payload_json or "{}")
+    payload["notes"] = CORRECTED_REPORT_NOTES
+    return EnterpriseReportSubmission(
+        id=sample_uuid("report", report.enterprise_profile_id, report.period, "version-2"),
+        report_id=versioned_report_code(report.report_id, 2),
+        version=2,
+        previous_version_id=report.id,
+        enterprise_profile_id=report.enterprise_profile_id,
+        enterprise_name=report.enterprise_name,
+        attraction_code=report.attraction_code,
+        attraction_description=report.attraction_description,
+        barangay=report.barangay,
+        period=report.period,
+        month=report.month,
+        submitted_at=corrected_at,
+        entries=report.entries,
+        exits=report.exits,
+        peak_occupancy=report.peak_occupancy,
+        unique_count=report.unique_count,
+        status="Submitted",
+        review_status="Pending Review",
+        notes=CORRECTED_REPORT_NOTES,
+        remarks=None,
+        sync_status="synced",
+        payload_json=json.dumps(payload, sort_keys=True),
+    )
 
 
 def prepare_staff_notification_reports(
@@ -315,6 +379,8 @@ async def create_activity_logs(
         reviewed_at = max(submitted_at, min(submitted_at + timedelta(days=1), range_end))
         if report.review_status in {"Ready to Consolidate", "Consolidated"}:
             logs.append(_review_log(report, "Ready to Consolidate", reviewed_at, None))
+        if report.returned_at is not None:
+            logs.append(_return_log(report, report.returned_at))
     db.add_all(logs)
     count = len(logs)
     for final_report in final_reports:
@@ -358,6 +424,33 @@ def _submission_log(report: EnterpriseReportSubmission, at: datetime) -> Activit
                 "enterpriseId": report.enterprise_profile.enterprise_id,
                 "period": report.period,
                 "uniqueCount": report.unique_count,
+            },
+            sort_keys=True,
+        ),
+    )
+
+
+def _return_log(report: EnterpriseReportSubmission, at: datetime) -> ActivityLog:
+    return ActivityLog(
+        id=sample_uuid("activity-return", report.id),
+        timestamp=at,
+        activity_group="Reports",
+        severity="Warning",
+        actor=REPORTING_STAFF_NAME,
+        actor_role="LGU Staff",
+        action=RETURN_REPORT_ACTION,
+        target=report.enterprise_name,
+        summary=(
+            f"{REPORTING_STAFF_NAME} returned {report.report_id} from {report.enterprise_name} "
+            f"for {report.period}: {report.returned_reason}"
+        ),
+        source_id=report.id,
+        metadata_json=json.dumps(
+            {
+                "enterpriseId": report.enterprise_profile.enterprise_id,
+                "period": report.period,
+                "version": report.version,
+                "reason": report.returned_reason,
             },
             sort_keys=True,
         ),

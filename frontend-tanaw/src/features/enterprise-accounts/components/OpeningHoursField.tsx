@@ -4,6 +4,8 @@ import { MAX_PERIODS_PER_DAY, WEEKDAYS, dayHours, setDayHours, weekdayLabels, ty
 
 /** The kit's soft tinted field, compact for a row of times. */
 const control = cn(controlClassName, "rounded-tanaw-sm h-9 w-auto px-2.5 tabular-nums");
+/** On phones each time takes half the row, at a full thumb's height. */
+const timeOnPhone = "max-sm:h-11 max-sm:min-w-0 max-sm:flex-1 max-sm:text-base";
 
 /**
  * Opening hours, day by day: closed, open 24 hours, or one or more opening periods. TANAW only
@@ -22,14 +24,14 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
           const entry = dayHours(value, day);
           const periods = entry.periods ?? [];
           return (
-            <div key={day} className="grid gap-2 py-2.5 sm:grid-cols-[7rem_10rem_minmax(0,1fr)] sm:items-center">
+            <div key={day} className="grid gap-2 py-2.5 max-sm:grid-cols-[minmax(0,1fr)_minmax(0,10.5rem)] max-sm:items-center max-sm:gap-y-2.5 max-sm:py-3.5 sm:grid-cols-[7rem_10rem_minmax(0,1fr)] sm:items-center">
               <span className="text-sm font-semibold text-(--tanaw-text)">{weekdayLabels[day]}</span>
               <span className="group relative flex items-center">
                 <select
                   aria-label={`${weekdayLabels[day]} hours`}
                   value={entry.mode}
                   onChange={(event) => update(day, event.target.value as DayMode)}
-                  className={cn(control, "w-full cursor-pointer appearance-none pr-8 font-medium")}
+                  className={cn(control, "w-full cursor-pointer appearance-none pr-8 font-medium max-sm:h-11 max-sm:text-base")}
                 >
                   <option value="hours">Open</option>
                   <option value="open24h">Open 24 hours</option>
@@ -42,9 +44,9 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                 />
               </span>
               {entry.mode === "hours" ? (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 max-sm:col-span-2">
                   {periods.map((period, index) => (
-                    <span key={index} className="inline-flex items-center gap-1.5">
+                    <span key={index} className="inline-flex items-center gap-1.5 max-sm:flex max-sm:w-full max-sm:gap-2">
                       <input
                         type="time"
                         aria-label={`${weekdayLabels[day]} opening time ${index + 1}`}
@@ -56,7 +58,7 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                             periods.map((item, at) => (at === index ? { ...item, open: event.target.value } : item)),
                           )
                         }
-                        className={control}
+                        className={cn(control, timeOnPhone)}
                       />
                       <span className="text-(--tanaw-text-muted)">to</span>
                       <input
@@ -70,7 +72,7 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                             periods.map((item, at) => (at === index ? { ...item, close: event.target.value } : item)),
                           )
                         }
-                        className={control}
+                        className={cn(control, timeOnPhone)}
                       />
                       {periods.length > 1 && (
                         <button
@@ -83,7 +85,7 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                               periods.filter((_, at) => at !== index),
                             )
                           }
-                          className="ease-tanaw-out rounded-full p-1 text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-tonal-danger) hover:text-(--tanaw-danger) active:scale-90 motion-reduce:transition-none"
+                          className="ease-tanaw-out flex shrink-0 items-center justify-center rounded-full p-1 text-(--tanaw-text-muted) max-sm:size-11 pointer-coarse:size-11 transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-tonal-danger) hover:text-(--tanaw-danger) active:scale-90 motion-reduce:transition-none"
                         >
                           <X size={14} aria-hidden="true" />
                         </button>
@@ -94,7 +96,7 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                     <button
                       type="button"
                       onClick={() => update(day, "hours", [...periods, { open: "13:00", close: "17:00" }])}
-                      className="group/add rounded-tanaw-sm ease-tanaw-out -mx-1.5 inline-flex min-h-8 items-center gap-1 px-1.5 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-colors duration-200 hover:bg-(--tanaw-control-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+                      className="group/add rounded-tanaw-sm ease-tanaw-out -mx-1.5 inline-flex min-h-8 items-center max-sm:min-h-11 pointer-coarse:min-h-11 gap-1 px-1.5 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-colors duration-200 hover:bg-(--tanaw-control-bg) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
                     >
                       <Plus size={13} aria-hidden="true" className="ease-tanaw-out transition-transform duration-200 group-hover/add:rotate-90 motion-reduce:transition-none" />
                       Add a break
@@ -102,7 +104,7 @@ export function OpeningHoursField({ value, onChange, error }: { value: OpeningHo
                   )}
                 </div>
               ) : (
-                <span className="text-sm text-(--tanaw-text-secondary)">{entry.mode === "closed" ? "Closed all day" : "Open all day"}</span>
+                <span className="text-sm text-(--tanaw-text-secondary) max-sm:hidden">{entry.mode === "closed" ? "Closed all day" : "Open all day"}</span>
               )}
             </div>
           );

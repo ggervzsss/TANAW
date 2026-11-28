@@ -89,6 +89,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("previous_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("totp_secret_seed", sa.String(length=64), nullable=True),
+        sa.Column("totp_pending_secret_seed", sa.String(length=64), nullable=True),
+        sa.Column("totp_enabled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("totp_last_used_step", sa.BigInteger(), nullable=True),
+        sa.Column("totp_recovery_code_hashes", sa.Text(), nullable=True),
         sa.Column("deactivated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deactivated_by_name", sa.String(length=120), nullable=True),
         sa.PrimaryKeyConstraint("id"),
@@ -755,6 +761,11 @@ def upgrade() -> None:
         sa.Column("remarks", sa.Text(), nullable=True),
         sa.Column("sync_status", sa.String(length=60), nullable=True),
         sa.Column("payload_json", sa.Text(), nullable=True),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column("previous_version_id", sa.String(length=36), nullable=True),
+        sa.Column("returned_reason", sa.Text(), nullable=True),
+        sa.Column("returned_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("returned_by", sa.String(length=120), nullable=True),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -767,11 +778,30 @@ def upgrade() -> None:
             name="fk_enterprise_report_submissions_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
+        sa.ForeignKeyConstraint(
+            ["previous_version_id"],
+            ["enterprise_report_submissions.id"],
+            name="fk_enterprise_report_submissions_previous_version_id",
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "enterprise_profile_id", "report_id", name="uq_enterprise_report_submission"
         ),
-        sa.UniqueConstraint("enterprise_profile_id", "period", name="uq_enterprise_report_period"),
+        sa.UniqueConstraint(
+            "enterprise_profile_id",
+            "period",
+            "version",
+            name="uq_enterprise_report_period_version",
+        ),
+    )
+    # At most one live (not returned) version per enterprise and period.
+    op.create_index(
+        "uq_enterprise_report_period_live",
+        "enterprise_report_submissions",
+        ["enterprise_profile_id", "period"],
+        unique=True,
+        postgresql_where=sa.text("review_status <> 'Returned'"),
     )
     op.create_index(
         op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
@@ -1583,6 +1613,11 @@ def downgrade() -> None:
     op.drop_index(
         op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
         table_name="enterprise_report_submissions",
+    )
+    op.drop_index(
+        "uq_enterprise_report_period_live",
+        table_name="enterprise_report_submissions",
+        postgresql_where=sa.text("review_status <> 'Returned'"),
     )
     op.drop_table("enterprise_report_submissions")
     op.drop_index(op.f("ix_email_delivery_attempts_status"), table_name="email_delivery_attempts")

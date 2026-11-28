@@ -223,3 +223,47 @@
     animation: none;
   }
 }
+
+/* A record that opens keeps its chevron in the top right corner when the rows stack. */
+.it-personnel__row-chevron {
+  position: absolute;
+  top: 1.25rem;
+  right: 12px;
+}
+
+/* Phones: the role choices run in one line that scrolls sideways, edge to edge. */
+@media (max-width: 639px) {
+  .it-personnel__roles {
+    flex-wrap: nowrap;
+    width: calc(100% + 2rem);
+    max-width: none;
+    margin-inline: -1rem;
+    padding: 2px 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .it-personnel__roles::-webkit-scrollbar {
+    display: none;
+  }
+
+  .it-personnel__row > :first-child {
+    padding-right: 1.75rem;
+  }
+
+  .it-personnel-dialog :is(input, textarea, select) {
+    font-size: 1rem;
+  }
+
+  #personnel-search {
+    font-size: 1rem;
+  }
+}
+
+/* Touch screens: role choices take a full thumb's height. */
+@media (pointer: coarse) {
+  .it-personnel__roles [role="radio"] {
+    min-height: 2.75rem;
+  }
+}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from calendar import month_abbr, month_name, monthrange
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -185,6 +185,9 @@ class ReportCameraTotalResponse(BaseModel):
 class ReportSubmissionResponse(BaseModel):
     report_id: str
     submission_id: str
+    # The month's report version on this computer: 1, then one more for each correction Staff
+    # asked for. TANAW's own version number is authoritative once the report reaches it.
+    version: int = Field(default=1, ge=1)
     submitted_at: str
     sync_status: str
     period: str
@@ -240,7 +243,23 @@ class ReportSubmissionRecordResponse(BaseModel):
     sync_status: str
     synced_at: str | None = None
     raw_purged_at: str | None = None
+    version: int = Field(default=1, ge=1)
+    # TANAW's reason for refusing the upload, when it gave one.
+    rejection_reason: str | None = None
+    # Set once the version is reopened for correction; it then stays saved as history.
+    reopened_at: str | None = None
+    reopen_reason: Literal["returned", "upload_rejected"] | None = None
     camera_breakdown: list[ReportCameraTotalResponse] = Field(default_factory=list)
+
+
+class ReportUploadRejectedRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class ReportReopenRequest(BaseModel):
+    """Why the report is reopened: Staff returned it, or TANAW refused its upload."""
+
+    reason: Literal["returned", "upload_rejected"]
 
 
 class ReportRawDataPurgeResponse(BaseModel):

@@ -272,6 +272,7 @@ export type LocalReportSubmission = {
   counting: import("./establishment.types").EstablishmentSummary;
   report_id: string;
   submission_id: string;
+  version?: number;
   submitted_at: string;
   sync_status: string;
   camera_breakdown: LocalReportCameraTotal[];
@@ -301,8 +302,18 @@ export type LocalReportSubmissionRecord = {
   sync_status: string;
   synced_at: string | null;
   raw_purged_at?: string | null;
+  /** The month's report version on this computer; TANAW's own number wins once it is known. */
+  version?: number;
+  /** TANAW's reason for refusing the upload, when it gave one. */
+  rejection_reason?: string | null;
+  /** Set once this version was reopened for correction; it stays saved as history. */
+  reopened_at?: string | null;
+  reopen_reason?: LocalReportReopenReason | null;
   camera_breakdown: LocalReportCameraTotal[];
 };
+
+/** Why a saved report was reopened: Staff returned it, or TANAW refused its upload. */
+export type LocalReportReopenReason = "returned" | "upload_rejected";
 
 export type LocalReportDraft = {
   draft_key: string;

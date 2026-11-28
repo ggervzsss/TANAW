@@ -100,6 +100,12 @@ class AuthUser(BaseModel):
     displayImageDataUrl: str | None = None
     buildingCapacity: int = 100
     openingHours: OpeningHours | None = None
+    status: str | None = None
+    isActivated: bool | None = None
+    # True or False for LGU accounts; None for enterprise accounts, which cannot turn it on.
+    twoFactorEnabled: bool | None = None
+    # The sign-in before the current one, or the current one when there is no earlier sign-in.
+    lastSignInAt: datetime | None = None
 
 
 class LguAccountCreate(BaseModel):

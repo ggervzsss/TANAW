@@ -69,7 +69,8 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
 
   // The opened month, not the expanded row, sets the header: expanding other months does not change it.
   const viewed = useMemo(() => buildMonthEntry(profile.id, viewedMonth, reportIndex, reviewers, today), [profile.id, reportIndex, reviewers, today, viewedMonth]);
-  const showContact = viewed.submission === "Submitted";
+  // Contact details show once the month's report was sent, including one returned for correction.
+  const showContact = viewed.submission === "Submitted" || viewed.submission === "Awaiting correction";
 
   const chooseYear = (value: number) => {
     setYear(value);
@@ -92,7 +93,7 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
   return (
     <ModalPortal lockScroll>
       <motion.div
-        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6 max-md:p-0!"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -109,11 +110,12 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
           aria-describedby={subtitleId}
           tabIndex={-1}
           {...dialogIn}
-          className="tanaw-dialog relative my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-230 flex-col overflow-hidden rounded-tanaw-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-dialog outline-none sm:max-h-[calc(100dvh-3rem)]"
+          // Phones: a full-screen sheet, so the months and their logs get the whole screen.
+          className="tanaw-dialog relative my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-230 flex-col overflow-hidden rounded-tanaw-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-dialog outline-none sm:max-h-[calc(100dvh-3rem)] max-md:my-0 max-md:h-dvh max-md:max-h-dvh! max-md:rounded-none max-md:border-0"
         >
           <header
             data-scrolled={scrolled || undefined}
-            className="flex shrink-0 items-start justify-between gap-5 border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-sm:px-5 max-sm:pt-5 max-sm:pb-4"
+            className="flex shrink-0 items-start justify-between gap-5 border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-md:gap-3 max-md:px-4 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-4"
           >
             <div className="min-w-0">
               <h2 id={titleId} className="font-display text-2xl leading-tight font-bold tracking-[-0.015em] wrap-break-word max-sm:text-xl">
@@ -140,7 +142,7 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
               type="button"
               aria-label="Close report details"
               onClick={onClose}
-              className="-mt-0.5 -mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
+              className="-mt-0.5 -mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full max-md:-mt-1.5 max-md:size-11 text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
             >
               <X size={18} aria-hidden="true" />
             </button>
@@ -148,7 +150,7 @@ export function EnterpriseReportModal({ profile, viewedMonth, reportIndex, revie
 
           <div
             onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
-            className="tanaw-er-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5 max-sm:pb-5"
+            className="tanaw-er-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-md:px-4 max-md:pb-[max(1.25rem,env(safe-area-inset-bottom))]"
           >
             <dl className="tanaw-er-facts m-0 border-t border-(--tanaw-border-soft) pt-4">
               {facts.map((fact) => (

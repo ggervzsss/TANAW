@@ -117,11 +117,11 @@ export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSeg
     >
       <div className="tanaw-unified-metrics__accent absolute inset-x-0 top-0 z-20 h-px" aria-hidden="true" data-metrics-accent />
       <div
-        className="tanaw-unified-metrics__scroller overflow-x-auto py-2 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--tanaw-focus-ring)"
+        className="tanaw-unified-metrics__scroller overflow-x-auto py-2 max-sm:py-0 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--tanaw-focus-ring)"
         tabIndex={0}
         aria-label={`${ariaLabel}; scroll horizontally for additional metrics when needed`}
       >
-        <ul className={grid ? "grid min-w-0 grid-cols-1 items-stretch sm:grid-cols-2 xl:grid-cols-4" : "flex min-w-max items-stretch"} role="list">
+        <ul className={grid ? "grid min-w-0 grid-cols-2 items-stretch max-[22.5rem]:grid-cols-1 xl:grid-cols-4" : "tanaw-metric-row flex min-w-max items-stretch"} role="list">
           {metrics.map((metric, index) => (
             <Fragment key={metric.id}>
               {index > 0 && grid === false && <MetricDivider />}
@@ -131,7 +131,7 @@ export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSeg
           {controlSegment && (
             <>
               {metrics.length > 0 && <MetricDivider />}
-              <li className="flex min-w-60 flex-1 basis-60">
+              <li className="tanaw-metric-control flex min-w-60 flex-1 basis-60">
                 <div className="tanaw-unified-metrics__segment group relative flex min-h-40 w-full flex-col justify-between overflow-hidden px-6 py-6 sm:px-7 sm:py-7">
                   <span className="tanaw-unified-metrics__hover pointer-events-none absolute inset-0" aria-hidden="true" />
                   <div className="relative z-10">
@@ -152,7 +152,7 @@ export function MetricStrip({ metrics, ariaLabel = "Summary metrics", controlSeg
 function MetricDivider() {
   return (
     <li
-      className="my-5 w-px shrink-0 self-stretch bg-linear-to-b from-transparent via-(--tanaw-border) to-transparent opacity-80"
+      className="my-5 w-px shrink-0 self-stretch max-sm:hidden bg-linear-to-b from-transparent via-(--tanaw-border) to-transparent opacity-80"
       aria-hidden="true"
       role="presentation"
       data-metric-divider
@@ -182,7 +182,7 @@ function MetricSegment({ metric, labelId, grid }: { metric: Metric; labelId: str
             </div>
           ) : (
             <p
-              className={`tanaw-unified-metrics__value mt-3 max-w-full text-4xl leading-none font-semibold tracking-tight text-(--tanaw-text) tabular-nums sm:text-[2.5rem] ${metric.emphasizeValue ? tone.value : ""}`}
+              className={`tanaw-unified-metrics__value mt-3 max-w-full text-4xl leading-none max-sm:text-[1.75rem] font-semibold tracking-tight text-(--tanaw-text) tabular-nums sm:text-[2.5rem] ${metric.emphasizeValue ? tone.value : ""}`}
               aria-labelledby={labelId}
               title={metric.valueTitle}
             >
@@ -204,12 +204,12 @@ function MetricSegment({ metric, labelId, grid }: { metric: Metric; labelId: str
   );
   const segmentClassName = cn(
     "tanaw-unified-metrics__segment group relative flex min-h-40 w-full flex-1 overflow-hidden text-left",
-    grid ? "min-w-0 px-5 py-7" : "min-w-52 basis-52 px-6 py-6 sm:min-w-56 sm:basis-56 sm:px-7 sm:py-7",
+    grid ? "min-w-0 px-5 py-7 max-sm:min-h-0 max-sm:px-4 max-sm:py-5" : "min-w-52 basis-52 px-6 py-6 max-sm:min-h-0 max-sm:min-w-0 max-sm:basis-auto max-sm:px-4 max-sm:py-5 sm:min-w-56 sm:basis-56 sm:px-7 sm:py-7",
     interactiveClassName,
   );
 
   return (
-    <li className={grid ? "flex min-w-0 border-r border-b border-(--tanaw-border-soft)" : "flex min-w-52 flex-1 basis-52 sm:min-w-56 sm:basis-56"} data-metric-segment={metric.id} data-testid={metric.testId}>
+    <li className={grid ? "flex min-w-0 border-r border-b border-(--tanaw-border-soft)" : "tanaw-metric-cell flex min-w-52 flex-1 basis-52 sm:min-w-56 sm:basis-56"} data-metric-segment={metric.id} data-testid={metric.testId}>
       {metric.href ? (
         <a href={metric.href} className={segmentClassName} aria-label={metric.ariaLabel}>
           {content}

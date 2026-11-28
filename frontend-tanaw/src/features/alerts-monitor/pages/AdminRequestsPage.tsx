@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { PhoneFilterSheet } from "@/features/admin-enterprises/components/PhoneFilterSheet";
+import { usePhoneWidth } from "@/features/admin-enterprises/hooks/useMediaQuery";
 import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { routes } from "@/app/routers/routes";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -9,15 +12,15 @@ import type { Request } from "@/shared/services/requests";
 import { useAdminRequests, useRequestDetail, useRequestReadMarks } from "../hooks";
 import {
   REQUEST_PARAM,
+  categoryFilterOptions,
   countUnread,
   filterRequests,
   findLinkedRequest,
-  groupFilterOptions,
   groupRequestsByDay,
   hasActiveFilters,
   initialRequestFilters,
   isRequestFilters,
-  statusFilterOptions,
+  progressFilterOptions,
   unreadLabel,
   type RequestFilters,
 } from "../model";
@@ -36,7 +39,7 @@ export function AdminRequestsPage() {
     initialValue: initialRequestFilters,
     isValid: isRequestFilters,
     namespace: "admin-requests-filters",
-    version: 2,
+    version: 3,
   });
 
   const visible = useMemo(() => filterRequests(requests, filters), [filters, requests]);
@@ -45,15 +48,51 @@ export function AdminRequestsPage() {
   const linkMissing = searchParams.has(REQUEST_PARAM) && !linked && !isLoading;
   const selected = linked ?? visible[0] ?? null;
   const unread = countUnread(requests);
-  const statusOptions = useMemo(() => statusFilterOptions(requests), [requests]);
   const detailQuery = useRequestDetail(selected);
-  const { markAllRead } = useRequestReadMarks(selected, !isLoading);
+  // Only a request the Admin picked (a click or a link) is marked read, so its New mark is never
+  // cleared unseen when the page opens on it by default.
+  const { markAllRead } = useRequestReadMarks(linked ?? null, !isLoading);
+
+  // Phones show the list, and a chosen request as its own screen with a Back button. A tap there is a
+  // step in history, so the phone's own back gesture returns to the list too.
+  const phone = usePhoneWidth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const phoneView = searchParams.has(REQUEST_PARAM) ? "detail" : "list";
+  const lastOpened = useRef<string | null>(null);
 
   const select = (request: Request) => {
     const next = new URLSearchParams(searchParams);
     next.set(REQUEST_PARAM, request.id);
+    lastOpened.current = request.id;
+    if (phone) {
+      setSearchParams(next, { state: { fromRequestList: true } });
+      scrollPageToTop();
+    } else setSearchParams(next, { replace: true });
+  };
+
+  const backToList = () => {
+    if ((location.state as { fromRequestList?: boolean } | null)?.fromRequestList) {
+      navigate(-1);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    lastOpened.current = next.get(REQUEST_PARAM);
+    next.delete(REQUEST_PARAM);
     setSearchParams(next, { replace: true });
   };
+
+  // Back on a phone: return to the request just read, in the list.
+  useEffect(() => {
+    if (!phone || phoneView !== "list" || !lastOpened.current) return;
+    const id = lastOpened.current;
+    lastOpened.current = null;
+    requestAnimationFrame(() => {
+      const row = Array.from(document.querySelectorAll<HTMLElement>("[data-request-id]")).find((element) => element.dataset.requestId === id);
+      row?.scrollIntoView({ block: "center" });
+      row?.focus({ preventScroll: true });
+    });
+  }, [phone, phoneView]);
 
   const updateFilters = (patch: Partial<RequestFilters>) => setFilters((current) => ({ ...current, ...patch }));
   const clearFilters = () => setFilters(initialRequestFilters);
@@ -63,44 +102,39 @@ export function AdminRequestsPage() {
     : `${requests.length} ${requests.length === 1 ? "request" : "requests"}, newest first.`;
 
   return (
-    <div className="w-full pb-14">
-      <PortalPageHeader
-        back={{ to: routes.admin.dashboard, label: "Dashboard" }}
-        title="Requests"
-        description="What people asked IT for: help, and account changes that need IT's approval. IT handles them; you can add a note for IT."
-        actions={
-          <div className="flex items-center gap-4">
-            <p role="status" className="text-sm font-semibold text-(--tanaw-text)">
-              {isLoading ? "Checking requests" : unreadLabel(unread)}
-            </p>
-            <Button variant="link" size="sm" className="text-sm font-semibold" disabled={unread === 0} onClick={markAllRead}>
-              Mark all as read
-            </Button>
-          </div>
-        }
-      />
+    <div className="tanaw-requests-page w-full pb-14" data-phone-view={phoneView}>
+      <div className="tanaw-requests-page__list-only">
+        <PortalPageHeader
+          back={{ to: routes.admin.dashboard, label: "Dashboard" }}
+          title="Requests"
+          description="What people asked IT for: help, and account changes that need IT's approval. IT handles them; you can add a note for IT."
+          actions={
+            <div className="flex items-center gap-4">
+              <p role="status" className="text-sm font-semibold text-(--tanaw-text)">
+                {isLoading ? "Checking requests" : unreadLabel(unread)}
+              </p>
+              <Button variant="link" size="sm" className="text-sm font-semibold" disabled={unread === 0} onClick={markAllRead}>
+                Mark all as read
+              </Button>
+            </div>
+          }
+        />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_15rem_13rem] items-end gap-3 max-[980px]:grid-cols-1">
-        <div>
-          <label htmlFor="requests-search" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
-            Search
-          </label>
+        <div className="grid grid-cols-[minmax(0,1fr)_15rem_13rem] items-center gap-3 max-[980px]:grid-cols-1 max-md:grid-cols-[minmax(0,1fr)_auto]">
           <SearchField id="requests-search" label="Search" value={filters.query} onChange={(query) => updateFilters({ query })} placeholder="Place, request or reference number" />
+          <PhoneFilterSheet
+            noun="requests"
+            activeCount={(filters.category !== initialRequestFilters.category ? 1 : 0) + (filters.progress !== initialRequestFilters.progress ? 1 : 0)}
+            onClear={() => updateFilters({ category: initialRequestFilters.category, progress: initialRequestFilters.progress })}
+            resultLabel={isLoading ? undefined : summary}
+          >
+            {/* In the phone sheet the dropdowns carry visible labels; beside the search they need none. */}
+            <Select label={phone ? "Type" : undefined} ariaLabel="Type" value={filters.category} options={categoryFilterOptions} onChange={(category) => updateFilters({ category: category as RequestFilters["category"] })} />
+            <Select label={phone ? "Progress" : undefined} ariaLabel="Progress" value={filters.progress} options={progressFilterOptions} onChange={(progress) => updateFilters({ progress: progress as RequestFilters["progress"] })} />
+          </PhoneFilterSheet>
         </div>
-        <div>
-          <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
-            Type
-          </span>
-          <Select ariaLabel="Type" value={filters.group} options={groupFilterOptions} onChange={(group) => updateFilters({ group: group as RequestFilters["group"] })} />
-        </div>
-        <div>
-          <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
-            Status
-          </span>
-          <Select ariaLabel="Status" value={filters.status} options={statusOptions} onChange={(status) => updateFilters({ status: status as RequestFilters["status"] })} />
-        </div>
+        <p className="mt-3 text-[13px] text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : summary}</p>
       </div>
-      <p className="mt-3 text-[13px] text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : summary}</p>
 
       {isError && (
         <Alert
@@ -115,15 +149,20 @@ export function AdminRequestsPage() {
         />
       )}
 
-      <div className="mt-4 grid grid-cols-[26rem_minmax(0,1fr)] items-start gap-x-10 gap-y-6 border-t border-(--tanaw-border-soft) pt-4 max-[980px]:grid-cols-1">
+      <div className="tanaw-requests-page__panes mt-4 grid grid-cols-[26rem_minmax(0,1fr)] items-start gap-x-10 gap-y-6 border-t border-(--tanaw-border-soft) pt-4 max-[980px]:grid-cols-1">
         <RequestList
           groups={groups}
-          selectedId={selected?.id ?? null}
+          // On a phone's list screen no request is open, so none is marked as chosen.
+          selectedId={phone && phoneView === "list" ? null : (selected?.id ?? null)}
           timeFormat={timeFormat}
           onSelect={select}
           empty={<ListEmptyState isLoading={isLoading} filtered={filtered} onClear={clearFilters} />}
         />
-        <div className="sticky top-4 min-w-0 max-[980px]:static">
+        <div className="tanaw-requests-page__detail sticky top-4 min-w-0 max-[980px]:static">
+          <button type="button" onClick={backToList} className="tanaw-requests-back">
+            <ArrowLeft size={18} aria-hidden="true" />
+            All requests
+          </button>
           {linkMissing && (
             <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />
           )}
@@ -182,7 +221,7 @@ function ListEmptyState({ isLoading, filtered, onClear }: { isLoading: boolean; 
   return (
     <div className="px-4 py-6">
       <p className="font-bold">No requests match these filters.</p>
-      <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Try another group or status, or clear the search.</p>
+      <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Try another type or progress, or clear the search.</p>
       <Button variant="link" size="sm" className="mt-1.5 text-sm font-semibold" onClick={onClear}>
         Clear filters
       </Button>
@@ -251,4 +290,12 @@ function DetailSkeleton() {
       </span>
     </div>
   );
+}
+
+/** Brings a phone's request screen into view from the top, wherever the list was scrolled. */
+function scrollPageToTop() {
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLElement>("[data-page-scroller]")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  });
 }

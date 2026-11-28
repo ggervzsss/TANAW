@@ -824,6 +824,51 @@ html.dark .tanaw-auth-brand-logo {
   animation: tanaw-auth-rise 240ms var(--ease-tanaw-out) both;
 }
 
+/* ---------------------------------------------------------------- Two-step verification */
+
+/* The code step replaces the password step in the same panel: a section heading, one line of
+   guidance, one field, the primary action and a way back. */
+.tanaw-auth-two-factor__intro {
+  margin-bottom: 20px;
+}
+
+.tanaw-auth-two-factor__title {
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--tanaw-text);
+}
+
+.tanaw-auth-two-factor__line {
+  margin-top: 4px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--tanaw-text-secondary);
+}
+
+/* Codes read digit by digit: tabular figures and a little air between characters. */
+.tanaw-auth-two-factor__input {
+  font-size: 1.0625rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.16em;
+}
+
+.tanaw-auth-two-factor__back {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+.tanaw-auth-two-factor .tanaw-auth-link:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.tanaw-auth-link--back:hover > svg {
+  translate: -2px 0;
+}
+
 /* Help one step away: an open row under a hairline, not a tile. */
 .tanaw-auth-support-row {
   display: flex;
@@ -1857,6 +1902,7 @@ html.dark .tanaw-auth-dialog-backdrop {
   .tanaw-auth-check input:active,
   .tanaw-auth-link:active,
   .tanaw-auth-link:hover > svg,
+  .tanaw-auth-link--back:hover > svg,
   .tanaw-auth-theme-toggle:active,
   .tanaw-auth-theme-toggle:hover .tanaw-auth-theme-toggle__icon,
   .tanaw-auth-dialog__close:hover,
@@ -1912,5 +1958,70 @@ html.dark .tanaw-auth-dialog-backdrop {
   .tanaw-auth-primary-action::after,
   .tanaw-auth-card::after {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Phones */
+
+/*
+ * Phones: the theme toggle clears the status bar and is a full 44px press; the glass pane leaves
+ * room for it above; on the narrowest phones (under 360px) the brand and the remember row tighten.
+ * The recovery and support dialogs rise from the bottom edge as sheets, like the portal dialogs.
+ */
+@media (max-width: 639px) {
+  .tanaw-auth-theme-toggle {
+    top: max(16px, calc(env(safe-area-inset-top) + 8px));
+    right: max(16px, env(safe-area-inset-right));
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .tanaw-auth-shell {
+    padding: calc(env(safe-area-inset-top) + 4.25rem) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .tanaw-auth-dialog-backdrop {
+    align-items: flex-end;
+    padding: max(12px, env(safe-area-inset-top)) 0 0;
+  }
+
+  .tanaw-auth-dialog {
+    max-width: none;
+    max-height: calc(100svh - max(12px, env(safe-area-inset-top)));
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 24px 24px 0 0;
+  }
+
+  .tanaw-auth-dialog__close {
+    width: 44px;
+    height: 44px;
+    margin: -8px -10px 0 0;
+  }
+}
+
+@media (max-width: 359px) {
+  .tanaw-auth-card__body {
+    padding-inline: 20px;
+  }
+
+  .tanaw-auth-card-header {
+    gap: 12px;
+  }
+
+  .tanaw-auth-brand-logo {
+    width: 3.25rem;
+  }
+
+  .tanaw-auth-brand-title {
+    font-size: 1.5rem;
+  }
+
+  .tanaw-auth-control-gap {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .tanaw-auth-check {
+    white-space: nowrap;
   }
 }

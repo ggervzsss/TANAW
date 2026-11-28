@@ -1,3 +1,4 @@
+import { MoveHorizontal } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   attractionLabel,
@@ -43,12 +44,23 @@ function useNarrowSheet() {
   return useSyncExternalStore(subscribeToSheetWidth, readSheetWidth);
 }
 
-/** VAR2M.xlsx, "VAR 2M LGU Month Report", B1:R18. */
+/**
+ * VAR2M.xlsx, "VAR 2M LGU Month Report", B1:R18. Under 768px the residence groups stack as small
+ * tables; from there up the official table keeps its DOT layout and, where the dialog is narrower
+ * than the form (tablets), scrolls sideways inside its own frame under a hint.
+ */
 export function Var2mSheet({ form, label = "Tourism Attraction Visitor Record VAR 2M" }: { form: Var2mForm; label?: string }) {
   const narrow = useNarrowSheet();
 
   return (
-    <article className="tanaw-var-sheet" data-var-form="VAR 2M">
+    <>
+      {!narrow && (
+        <p className="tanaw-var-scroll-hint">
+          <MoveHorizontal size={16} aria-hidden="true" />
+          Scroll the form sideways to see every column.
+        </p>
+      )}
+      <article className="tanaw-var-sheet" data-var-form="VAR 2M">
       <header className="tanaw-var-heading">
         <span className="tanaw-var-code">VAR 2</span>
         <h2>{VAR_TITLE}</h2>
@@ -58,14 +70,22 @@ export function Var2mSheet({ form, label = "Tourism Attraction Visitor Record VA
         <SheetField label="Month/Year:" value={form.period} />
         <SheetField label="Name of Municipality:" value={form.municipality} />
       </dl>
-      {narrow ? <CompactMonthlyTables form={form} /> : <MonthlyTable form={form} label={label} />}
+      {narrow ? (
+        <CompactMonthlyTables form={form} />
+      ) : (
+        // Focusable so the frame can be scrolled from the keyboard when the form overflows it.
+        <div className="tanaw-var-scroll" role="region" aria-label={`${label}, full form`} tabIndex={0}>
+          <MonthlyTable form={form} label={label} />
+        </div>
+      )}
       <p className="tanaw-var-note">{VAR_NOTE}</p>
       {form.notes.map((note) => (
         <p key={note} className="tanaw-var-data-note">
           {note}
         </p>
       ))}
-    </article>
+      </article>
+    </>
   );
 }
 

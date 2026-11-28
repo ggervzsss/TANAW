@@ -24,6 +24,7 @@ import {
   type EnterpriseRow,
   type SortDirection,
 } from "../model/enterpriseDirectory";
+import { PhoneFilterSheet } from "../components/PhoneFilterSheet";
 import "../adminEnterprises.css";
 
 const PAGE_SIZE = 10;
@@ -94,28 +95,40 @@ export function RegisteredEnterprisesPage() {
             </p>
           )}
 
-          <form role="search" aria-label="Filter enterprises" className="mt-6 grid grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))] gap-3 max-xl:grid-cols-3 max-md:grid-cols-1" onSubmit={(event) => event.preventDefault()}>
+          <form
+            role="search"
+            aria-label="Filter enterprises"
+            className="mt-6 grid grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))] gap-3 max-xl:grid-cols-3 max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-end"
+            onSubmit={(event) => event.preventDefault()}
+          >
             <div className="min-w-0 max-xl:col-span-3 max-md:col-span-1">
               <label htmlFor="enterprise-search" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
                 Search
               </label>
               <SearchField id="enterprise-search" value={filters.search} onChange={(search) => update({ search }, { page: 1 })} placeholder="Enterprise, category or barangay" label="Search enterprises" />
             </div>
-            <Select label="Barangay" value={filters.barangay} onChange={(barangay) => update({ barangay }, { page: 1 })} options={[[ALL, "All barangays"], ...barangays.map((value) => [value, value] as const)]} searchable />
-            <Select
-              label="Attraction type"
-              value={filters.attractionType}
-              onChange={(attractionType) => update({ attractionType }, { page: 1 })}
-              options={[[ALL, "All types"], ...ATTRACTION_TYPES.map((value) => [value, value] as const)]}
-            />
-            <Select
-              label="Attraction category"
-              value={filters.attractionCategory}
-              onChange={(attractionCategory) => update({ attractionCategory }, { page: 1 })}
-              options={[[ALL, "All categories"], ...categories.map((value) => [value, value] as const)]}
-              searchable
-            />
-            <Select label="Camera status" value={filters.camera} onChange={(camera) => update({ camera: camera as CameraFilter }, { page: 1 })} options={CAMERA_FILTER_OPTIONS} />
+            <PhoneFilterSheet
+              noun="enterprises"
+              activeCount={activeSelectCount(filters)}
+              onClear={() => update({ ...DEFAULT_FILTERS, search: filters.search }, { page: 1 })}
+              resultLabel={directory.isLoading ? undefined : resultLine(filtered.length, directory.rows.length, filters)}
+            >
+              <Select label="Barangay" value={filters.barangay} onChange={(barangay) => update({ barangay }, { page: 1 })} options={[[ALL, "All barangays"], ...barangays.map((value) => [value, value] as const)]} searchable />
+              <Select
+                label="Attraction type"
+                value={filters.attractionType}
+                onChange={(attractionType) => update({ attractionType }, { page: 1 })}
+                options={[[ALL, "All types"], ...ATTRACTION_TYPES.map((value) => [value, value] as const)]}
+              />
+              <Select
+                label="Attraction category"
+                value={filters.attractionCategory}
+                onChange={(attractionCategory) => update({ attractionCategory }, { page: 1 })}
+                options={[[ALL, "All categories"], ...categories.map((value) => [value, value] as const)]}
+                searchable
+              />
+              <Select label="Camera status" value={filters.camera} onChange={(camera) => update({ camera: camera as CameraFilter }, { page: 1 })} options={CAMERA_FILTER_OPTIONS} />
+            </PhoneFilterSheet>
           </form>
 
           <div className="mt-3 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2">
@@ -172,6 +185,11 @@ export function RegisteredEnterprisesPage() {
   );
 }
 
+/** The dropdown filters that differ from their defaults; the search and the attention chip show on the page. */
+function activeSelectCount(filters: EnterpriseFilters) {
+  return [filters.barangay !== ALL, filters.attractionType !== ALL, filters.attractionCategory !== ALL, filters.camera !== DEFAULT_FILTERS.camera].filter(Boolean).length;
+}
+
 function Header({ updatedAt, now, isLoading }: { updatedAt: number; now: Date; isLoading: boolean }) {
   const status = isLoading || !updatedAt ? "Loading camera status" : `Camera status is live. Last update ${minutesAgo(updatedAt, now.getTime())}.`;
   return (
@@ -207,31 +225,32 @@ function FigureStrip({
   attention: number;
   onShowAttention: () => void;
 }) {
-  const cell = "min-w-0 px-6 py-4 first:pl-0 max-md:px-0 max-md:py-4";
+  // Phones: the two counts side by side, Needs attention on a full row under them.
+  const cell = "min-w-0 border-(--tanaw-border-soft) px-6 py-4 first:pl-0 max-md:py-3.5";
   const value = (content: ReactNode, className?: string) =>
     isLoading ? (
-      <Skeleton className="mt-3 h-9 w-16" />
+      <Skeleton className="mt-3 h-9 w-16 max-md:mt-2 max-md:h-7.5" />
     ) : (
-      <div className={cn("ae-fade mt-3 font-display text-4xl leading-none font-bold text-(--tanaw-text) tabular-nums", className)}>{content}</div>
+      <div className={cn("ae-fade mt-3 font-display text-4xl leading-none font-bold text-(--tanaw-text) tabular-nums max-md:mt-2 max-md:text-[1.875rem]", className)}>{content}</div>
     );
-  const note = "mt-2 block text-[13px] text-(--tanaw-text-muted)";
+  const note = "mt-2 block text-[13px] text-(--tanaw-text-muted) max-md:mt-1.5";
   return (
-    <dl className="grid grid-cols-3 border-y border-(--tanaw-border-soft) max-md:grid-cols-1 [&>div+div]:border-l [&>div+div]:border-(--tanaw-border-soft) max-md:[&>div+div]:border-t max-md:[&>div+div]:border-l-0">
-      <div className={cell}>
+    <dl className="grid grid-cols-3 border-y border-(--tanaw-border-soft) max-md:grid-cols-2">
+      <div className={cn(cell, "max-md:pr-4")}>
         <dt className="text-sm font-semibold text-(--tanaw-text)">Registered enterprises</dt>
         <dd>
           {value(enterprises.toLocaleString("en-US"))}
           <span className={note}>Active enterprise accounts monitored by TANAW</span>
         </dd>
       </div>
-      <div className={cell}>
+      <div className={cn(cell, "border-l max-md:pr-0 max-md:pl-4")}>
         <dt className="text-sm font-semibold text-(--tanaw-text)">Listed cameras</dt>
         <dd>
           {value(cameras.toLocaleString("en-US"))}
           <span className={note}>{isLoading ? " " : camerasNote}</span>
         </dd>
       </div>
-      <div className={cell}>
+      <div className={cn(cell, "border-l max-md:col-span-2 max-md:border-t max-md:border-l-0 max-md:px-0")}>
         <dt className="text-sm font-semibold text-(--tanaw-text)">Needs attention</dt>
         <dd>
           {value(attention.toLocaleString("en-US"), attention > 0 ? "text-(--tanaw-danger)" : undefined)}
@@ -273,7 +292,7 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
   const cell = "px-4 py-4 align-top first:pl-3 last:pr-3";
   return (
     <div className="mt-2 overflow-x-auto">
-      <table className="ae-table w-full min-w-240 text-sm text-(--tanaw-text)">
+      <table className="ae-table ae-table--stack w-full text-sm text-(--tanaw-text) min-[60rem]:min-w-240">
         <caption className="sr-only">Registered enterprises with their attraction classification and camera status</caption>
         <thead>
           <tr>
@@ -350,20 +369,24 @@ function EnterpriseTable({ rows, isLoading, sort, onSort, empty, listSearch }: {
                     </Link>
                     <span className="mt-0.5 line-clamp-2 block text-[13px] text-(--tanaw-text-secondary)">{[row.portfolio, row.address].filter(Boolean).join(". ") || "No address on record"}</span>
                   </th>
-                  <td className={cell}>{row.barangay}</td>
-                  <td className={cn(cell, "tabular-nums")}>{row.attractionCode ?? "—"}</td>
-                  <td className={cell}>
+                  <td className={cell} data-cell="barangay" data-label="Barangay">
+                    {row.barangay}
+                  </td>
+                  <td className={cn(cell, "tabular-nums")} data-cell="code" data-label="Attraction code">
+                    {row.attractionCode ?? "—"}
+                  </td>
+                  <td className={cell} data-cell="category" data-label="Category">
                     <span className="block">{row.attractionCategory}</span>
                     {row.attractionType && <span className="mt-0.5 block text-[13px] text-(--tanaw-text-muted)">{row.attractionType}</span>}
                   </td>
-                  <td className={cell}>
+                  <td className={cell} data-cell="cameras">
                     <span className="block font-semibold tabular-nums">{row.camera.cameraCount === null ? "Cameras unknown" : plural(row.camera.cameraCount, "camera")}</span>
                     <span className={cn("mt-1 flex items-start gap-1.5 text-[13px] font-semibold", statusColor[row.camera.state])}>
                       <span className="mt-0.5 shrink-0">{statusIcon[row.camera.state]}</span>
                       {row.camera.label}
                     </span>
                   </td>
-                  <td className={cn(cell, "w-10 text-right align-middle")}>
+                  <td className={cn(cell, "w-10 text-right align-middle")} data-cell="chevron">
                     <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                   </td>
                 </tr>

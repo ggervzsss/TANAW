@@ -12,9 +12,11 @@ from app.config.report_config import (
     ReportDraftRequest,
     ReportDraftResponse,
     ReportRawDataPurgeResponse,
+    ReportReopenRequest,
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
     ReportSubmissionResponse,
+    ReportUploadRejectedRequest,
     SamplePrepareRequest,
     SamplePrepareResponse,
     SyncMarkResponse,
@@ -120,12 +122,42 @@ def mark_local_report_synced(
     response_model=SyncMarkResponse,
 )
 def mark_local_report_upload_rejected(
-    report_id: str, submission_id: str, request: Request
+    report_id: str,
+    submission_id: str,
+    request: Request,
+    payload: ReportUploadRejectedRequest | None = None,
 ) -> SyncMarkResponse:
-    """Stop retrying a submission the backend refused; the report stays saved on this device."""
+    """Stop retrying a submission the backend refused; the report stays saved on this device.
+
+    The backend's reason, when given, is kept so the person can see what to fix.
+    """
+    reason = payload.reason if payload else None
     return SyncMarkResponse(
-        updated=1 if registry(request).mark_report_upload_rejected(report_id, submission_id) else 0
+        updated=1
+        if registry(request).mark_report_upload_rejected(report_id, submission_id, reason)
+        else 0
     )
+
+
+@router.post(
+    "/reports/local/{report_id}/reopen",
+    response_model=ReportSubmissionRecordResponse,
+)
+def reopen_local_report_submission(
+    report_id: str, payload: ReportReopenRequest, request: Request
+) -> ReportSubmissionRecordResponse:
+    """Reopen a month's report for correction after Staff returned it or TANAW refused it.
+
+    The person chooses this; nothing is sent until they send the corrected report.
+    """
+    try:
+        return ReportSubmissionRecordResponse(
+            **registry(request).reopen_report_submission(report_id, payload.reason)
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)

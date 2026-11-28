@@ -25,6 +25,7 @@ import {
 } from "../model/enterpriseRange";
 import { busiestDay, busiestHour, dailyTrend, formatCount, hourlyTrend, monthlyTrend, trendNote, type Trend, type TrendPeriod } from "../model/enterpriseTrend";
 import { readVisitorRanking } from "@/features/admin-dashboard/model/mostVisited";
+import { HoursAndClosures, HoursAndClosuresSkeleton } from "../components/HoursAndClosures";
 import { TrendChart } from "../components/TrendChart";
 import "../adminEnterprises.css";
 
@@ -201,16 +202,18 @@ function EnterpriseDetails({ row, now, back }: { row: EnterpriseRow; now: Date; 
 
         <MonitoredLocations row={row} locations={locations} live={live} />
       </div>
+
+      <HoursAndClosures row={row} now={now} />
     </div>
   );
 }
 
-/** The page below its header while the enterprise loads: four figures, the trend and the camera list, at their real line heights. */
+/** The page below its header while the enterprise loads: four figures, the trend, the camera list, and the hours and closures, at their real line heights. */
 function DetailsSkeleton() {
   return (
     <div role="status" aria-label="Loading enterprise">
       <div aria-hidden="true">
-        <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2 max-sm:grid-cols-1">
+        <div className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2">
           {[0, 1, 2, 3].map((index) => (
             <div key={index} className={figureRuleClass(index)}>
               <span className="flex h-5 items-center">
@@ -219,7 +222,7 @@ function DetailsSkeleton() {
               <span className="flex h-[19.5px] items-center">
                 <Skeleton className="h-3 w-32" />
               </span>
-              <Skeleton className="mt-3 h-8.5 w-20" />
+              <Skeleton className="mt-3 h-8.5 w-20 max-sm:mt-2 max-sm:h-7" />
               <span className="mt-2 flex h-[19.5px] items-center">
                 <Skeleton className="h-3 w-28" />
               </span>
@@ -245,6 +248,7 @@ function DetailsSkeleton() {
             </span>
           </div>
         </div>
+        <HoursAndClosuresSkeleton />
       </div>
       <span className="sr-only">Loading enterprise</span>
     </div>
@@ -397,7 +401,7 @@ function Figures({
   const occupancy = map?.totalLiveOccupancy;
 
   return (
-    <dl className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2 max-sm:grid-cols-1">
+    <dl className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2">
       <Figure index={0} title="Cameras" sub="online right now" now={!live} value={camerasValue} valueClass={camerasShort ? "text-(--tanaw-st-missing)" : undefined} note={camerasNote} noteClass={camerasShort || camera.state === "offline" ? "font-semibold text-(--tanaw-st-missing)" : undefined} />
       {total === null ? (
         <Figure index={1} title="Visitors today" sub="estimated unique visitors" value={visitorsValue} note={visitorsNote} />
@@ -433,12 +437,13 @@ function Busiest({ oneDay, history, phrase, trend, loading, failed }: { oneDay: 
   );
 }
 
-/** Rules between the four figures: one row of four, two rows of two at 1100px, one column on phones. */
+/** Rules between the four figures: one row of four, then two rows of two from 1100px down to phones. */
 function figureRuleClass(index: number) {
   return cn(
-    "border-(--tanaw-border-soft) px-6 py-4 max-sm:border-l-0 max-sm:px-0",
-    index === 0 ? "pl-0" : "border-l max-sm:border-t",
-    index === 2 && "max-[1100px]:border-l-0 max-[1100px]:pl-0",
+    "border-(--tanaw-border-soft) px-6 py-4 max-sm:py-3.5",
+    index === 0 ? "pl-0 max-sm:pr-4" : "border-l",
+    index % 2 === 1 && "max-sm:pr-0 max-sm:pl-4",
+    index === 2 && "max-[1100px]:border-l-0 max-[1100px]:pl-0 max-sm:pr-4",
     index >= 2 && "max-[1100px]:border-t",
   );
 }
@@ -473,7 +478,7 @@ function Figure({
         <span className="block text-[13px] text-(--tanaw-text-muted)">{sub}</span>
       </dt>
       <dd>
-        <div className={cn("mt-3 font-display text-[2.125rem] leading-none font-bold text-(--tanaw-text) tabular-nums", valueClass)}>{value}</div>
+        <div className={cn("mt-3 font-display text-[2.125rem] leading-none font-bold text-(--tanaw-text) tabular-nums max-sm:mt-2 max-sm:text-[1.75rem]", valueClass)}>{value}</div>
         {note && <p className={cn("mt-2 text-[13px] text-(--tanaw-text-muted)", noteClass)}>{note}</p>}
       </dd>
     </div>

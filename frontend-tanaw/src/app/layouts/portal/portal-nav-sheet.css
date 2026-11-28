@@ -1,0 +1,230 @@
+/*
+ * The portal menu below the desktop breakpoint (under 1280px wide), where the topbar has no room
+ * for its links. The menu button opens a sheet that hangs from the topbar: on phones it fills the
+ * screen below the bar; on tablets it is a 24rem panel along the right edge over a soft scrim.
+ *
+ * It keeps the default UI style: the page surface frosted over the content, the Civic Green wash
+ * at the top, rows split by air rather than boxes, and Civic Green only for the current page.
+ * The role's pages come first; on phones the account (profile, settings, help, theme, sign out)
+ * sits at the foot of the sheet, where a thumb reaches it.
+ */
+
+.tanaw-nav-sheet-scrim {
+  position: fixed;
+  inset: var(--tanaw-topbar-height) 0 0;
+  z-index: 990;
+  background: var(--tanaw-scrim);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  backdrop-filter: blur(6px) saturate(1.05);
+}
+
+.tanaw-nav-sheet {
+  position: fixed;
+  inset: var(--tanaw-topbar-height) 0 0;
+  z-index: 995;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  border-top: 1px solid var(--tanaw-border-soft);
+  background:
+    var(--tanaw-top-wash) top / 100% 22rem no-repeat,
+    color-mix(in srgb, var(--tanaw-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+  color: var(--tanaw-text);
+  outline: none;
+}
+
+@media (width >= 40rem) {
+  .tanaw-nav-sheet {
+    left: auto;
+    width: min(24rem, 100%);
+    border-left: 1px solid var(--tanaw-border-soft);
+    box-shadow: var(--shadow-tanaw-dialog);
+  }
+}
+
+/* The desktop topbar shows its own links. */
+@media (width >= 80rem) {
+  .tanaw-nav-sheet,
+  .tanaw-nav-sheet-scrim {
+    display: none;
+  }
+}
+
+.tanaw-nav-sheet__caption {
+  margin: 0 0 0.5rem 0.5rem;
+  color: var(--tanaw-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.tanaw-nav-sheet__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+/* A destination: an icon in a round seal, the page name at 16px, and its count when it has one. */
+.tanaw-nav-sheet__link {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: 3.25rem;
+  padding: 0.375rem 0.75rem 0.375rem 0.5rem;
+  border-radius: var(--radius-tanaw-md);
+  color: var(--tanaw-text-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: start;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 160ms var(--ease-tanaw-out),
+    color 160ms var(--ease-tanaw-out),
+    scale 120ms var(--ease-tanaw-out);
+}
+
+.tanaw-nav-sheet__link > svg:last-child:not(:first-child) {
+  margin-inline-start: auto;
+  color: var(--tanaw-text-muted);
+}
+
+.tanaw-nav-sheet__seal {
+  display: grid;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text-secondary);
+  transition:
+    background-color 160ms var(--ease-tanaw-out),
+    color 160ms var(--ease-tanaw-out);
+}
+
+.tanaw-nav-sheet__label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.tanaw-nav-sheet__link:active {
+  scale: 0.99;
+  background: var(--tanaw-interactive-pressed-bg);
+}
+
+@media (hover: hover) {
+  .tanaw-nav-sheet__link:hover:not([aria-current]) {
+    background: var(--tanaw-control-hover);
+    color: var(--tanaw-text);
+  }
+}
+
+.tanaw-nav-sheet__link:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-nav-sheet__link[aria-current] {
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+
+.tanaw-nav-sheet__link[aria-current] .tanaw-nav-sheet__seal {
+  background: var(--tanaw-action);
+  color: var(--tanaw-on-action);
+}
+
+.tanaw-nav-sheet__link--danger {
+  color: var(--tanaw-danger);
+}
+
+.tanaw-nav-sheet__link--danger .tanaw-nav-sheet__seal {
+  background: var(--tanaw-tonal-danger);
+  color: var(--tanaw-danger);
+}
+
+/* ---------- Account, at the foot of the sheet on phones ---------- */
+
+.tanaw-nav-sheet__account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.25rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+@media (width >= 40rem) {
+  .tanaw-nav-sheet__account {
+    display: none;
+  }
+}
+
+.tanaw-nav-sheet__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.25rem 0.5rem 0.75rem;
+}
+
+.tanaw-nav-sheet__identity-name {
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tanaw-nav-sheet__identity-detail {
+  overflow: hidden;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tanaw-nav-sheet__identity-role {
+  color: var(--tanaw-accent-ink);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.tanaw-nav-sheet__theme {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.75rem;
+}
+
+.tanaw-nav-sheet__theme-label {
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-nav-sheet__link,
+  .tanaw-nav-sheet__seal {
+    transition: none;
+  }
+
+  .tanaw-nav-sheet__link:active {
+    scale: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .tanaw-nav-sheet__link[aria-current] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

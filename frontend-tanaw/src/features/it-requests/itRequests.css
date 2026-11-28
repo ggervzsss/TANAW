@@ -110,3 +110,75 @@
     animation: none;
   }
 }
+
+/*
+ * Narrow screens: the reply box docks at the bottom of the request screen, above the home
+ * indicator, and stays put while the request scrolls under it (a spacer after it keeps the end of
+ * the request clear). It lines up with the page gutter. Quick replies run in one line that scrolls
+ * sideways rather than wrapping. The request fades in without moving, so the dock never shifts.
+ */
+@media (max-width: 980px) and (prefers-reduced-motion: no-preference) {
+  .it-requests__detail {
+    animation-name: it-requests-fade;
+  }
+}
+
+@media (max-width: 980px) {
+  .it-requests__composer {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    margin: 0;
+    padding: 0.75rem clamp(1.5rem, 4vw, 4.5rem) max(0.75rem, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--tanaw-border-soft);
+    background: color-mix(in srgb, var(--tanaw-page) 94%, transparent);
+    box-shadow: 0 -10px 28px -18px rgb(2 20 8 / 0.35);
+    backdrop-filter: blur(12px) saturate(1.2);
+  }
+
+  .dark .it-requests__composer {
+    box-shadow: 0 -12px 30px -16px rgb(0 0 0 / 0.6);
+  }
+
+  .it-requests__quick {
+    flex-wrap: nowrap;
+    margin-inline: calc(-1 * clamp(1.5rem, 4vw, 4.5rem));
+    padding: 4px clamp(1.5rem, 4vw, 4.5rem);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .it-requests__quick::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .it-requests__composer {
+    padding-inline: 1rem;
+  }
+
+  .it-requests__quick {
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+  }
+}
+
+@keyframes it-requests-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Phones: the search field uses 16px text so the browser does not zoom into it. */
+@media (max-width: 639px) {
+  #it-requests-search {
+    font-size: 1rem;
+  }
+}

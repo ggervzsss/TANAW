@@ -4,7 +4,18 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Sequence, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Sequence,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,7 +25,17 @@ if TYPE_CHECKING:
     from app.features.accounts.models import EnterpriseProfile
 
 
+REPORT_RETURNED_STATUS = "Returned"
+
+
 class EnterpriseReportSubmission(Base):
+    """One version of an enterprise's monthly report.
+
+    An enterprise sends one report per period. Staff can return it for correction; the enterprise
+    then sends a new version (version + 1, linked to the returned one). Every version but the latest
+    is Returned, so at most one version per period is ever live.
+    """
+
     __tablename__ = "enterprise_report_submissions"
     __table_args__ = (
         UniqueConstraint(
@@ -25,7 +46,15 @@ class EnterpriseReportSubmission(Base):
         UniqueConstraint(
             "enterprise_profile_id",
             "period",
-            name="uq_enterprise_report_period",
+            "version",
+            name="uq_enterprise_report_period_version",
+        ),
+        Index(
+            "uq_enterprise_report_period_live",
+            "enterprise_profile_id",
+            "period",
+            unique=True,
+            postgresql_where=text(f"review_status <> '{REPORT_RETURNED_STATUS}'"),
         ),
     )
 
@@ -63,6 +92,19 @@ class EnterpriseReportSubmission(Base):
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     sync_status: Mapped[str | None] = mapped_column(String(60), nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    previous_version_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_report_submissions.id",
+            name="fk_enterprise_report_submissions_previous_version_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    returned_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    returned_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

@@ -23,7 +23,8 @@ export type MonthPickerProps = {
 
 /**
  * Chooses one whole month from a dropdown showing a year of months, with arrows to change the year.
- * A choice applies at once; there is no day calendar or Apply.
+ * A choice applies at once; there is no day calendar or Apply. On phones the dropdown rises from the
+ * bottom edge as a sheet (Controls.css, .tanaw-picker-panel).
  */
 export function MonthPicker({ value, onChange, label, hideLabel = false, min, max, highlight, highlightLabel, align = "right", className }: MonthPickerProps) {
   const [open, setOpen] = useState(false);
@@ -101,7 +102,7 @@ export function MonthPicker({ value, onChange, label, hideLabel = false, min, ma
           ref={panelRef}
           role="dialog"
           aria-label={`Choose the ${label.toLowerCase()}`}
-          className={cn("shadow-tanaw-dialog absolute top-full z-1100", align === "right" ? "right-0" : "left-0", "tanaw-enter mt-2 w-72 rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text)")}
+          className={cn("shadow-tanaw-dialog absolute top-full z-1100", align === "right" ? "right-0" : "left-0", "tanaw-picker-panel tanaw-enter mt-2 w-72 rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text)")}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.stopPropagation();
@@ -135,7 +136,7 @@ export function MonthPicker({ value, onChange, label, hideLabel = false, min, ma
                   title={marked ? highlightLabel : undefined}
                   onClick={() => choose(month)}
                   className={cn(
-                    "relative h-10 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:opacity-60",
+                    "relative h-10 rounded-lg text-sm font-semibold transition-colors pointer-coarse:h-12 disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:opacity-60",
                     selected ? "bg-(--tanaw-action) text-(--tanaw-on-action)" : "hover:bg-(--tanaw-control-hover) disabled:hover:bg-transparent",
                   )}
                 >
@@ -158,4 +159,4 @@ export function MonthPicker({ value, onChange, label, hideLabel = false, min, ma
 }
 
 const navButtonClass =
-  "grid size-8.5 place-items-center rounded-[9px] border border-(--tanaw-border) text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
+  "grid size-8.5 place-items-center rounded-[9px] pointer-coarse:size-11 border border-(--tanaw-border) text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";

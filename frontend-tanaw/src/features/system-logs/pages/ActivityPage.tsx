@@ -1,22 +1,26 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
+import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { SystemLog } from "@/shared/types";
 import { Alert, DateRangePicker, Pagination, PortalPageHeader, SearchField, Select, formatRangeText, monthRange, type DateRange } from "@/shared/ui-kit";
+import { BusyEnterpriseRows } from "../components/BusyEnterpriseRows";
 import { RecentActivityDrawer } from "../components/RecentActivityDrawer";
 import { RecentActivityList, RecentActivitySkeleton } from "../components/RecentActivityList";
 import "../components/recentActivity.css";
 import { useActivityLogs } from "../hooks/useActivityLogs";
+import { busyPinnedLabel, pinnedBusyAlerts, pinnedForPage, rangeIncludes } from "../model/busyEnterprises";
 import {
   ACTIVITY_PARAM,
+  activityEmptyMessage,
   activityPageOf,
   activitySummaryParts,
-  activityTypeLabel,
   activityTypeOptions,
   filterRecentActivity,
   paginateActivity,
   parseActivityType,
+  philippineDay,
   type ActivityTypeFilter,
 } from "../model/recentActivity";
 
@@ -25,12 +29,16 @@ const linkButton = "font-semibold text-(--tanaw-accent-ink) underline-offset-2 h
 const PAGE_TITLE = "Recent Activity";
 
 /**
- * Admin Recent Activity: every record, newest first, in six groups. Selecting a row opens its
- * details in a drawer. IT reads the same records on the System screen.
+ * Admin Recent Activity: every record, newest first, in seven groups. Selecting a row opens its
+ * details in a drawer. Above the records on the first page, one amber row stays pinned for each
+ * place that is busier than usual right now, until it is back to usual; it opens the place on the
+ * Dashboard map. IT reads the same records on the System screen.
  */
 export function ActivityPage() {
   const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading, isError, refetch } = useActivityLogs();
+  // The same live alerts as the topbar alert icon: one cache, refreshed by realtime events.
+  const { alerts } = useAlerts();
   const [now] = useState(() => new Date());
   const [type, setType] = useState<ActivityTypeFilter>("all");
   const [query, setQuery] = useState("");
@@ -47,6 +55,9 @@ export function ActivityPage() {
   const summary = activitySummaryParts(activities, type, query);
   const rangeText = formatRangeText(range);
   const filtered = type !== "all" || Boolean(query.trim());
+  const today = philippineDay(now.toISOString());
+  const pinned = useMemo(() => pinnedBusyAlerts(alerts, { type, query, range }, today), [alerts, type, query, range, today]);
+  const pinnedLabel = busyPinnedLabel(pinned.length);
 
   const setSelected = (id: string | null) =>
     setSearchParams(
@@ -99,11 +110,7 @@ export function ActivityPage() {
     setSelected(null);
   };
 
-  const emptyMessage = isLoading
-    ? "Loading activity."
-    : filtered
-      ? `No ${type === "all" ? "activity" : activityTypeLabel(type).toLowerCase()} ${query.trim() ? `matching “${query.trim()}” ` : ""}for ${rangeText}.`
-      : `No activity recorded for ${rangeText}.`;
+  const emptyMessage = isLoading ? "Loading activity." : activityEmptyMessage({ type, query, rangeText, noneBusyNow: rangeIncludes(range, today) && pinned.length === 0 });
 
   return (
     <div className="tanaw-recent-activity pb-14">
@@ -119,7 +126,7 @@ export function ActivityPage() {
           ariaLabel="Activity type"
           value={type}
           onChange={changeType}
-          options={activityTypeOptions.map((option) => ({ value: option.value, label: option.label, meta: option.meta }))}
+          options={activityTypeOptions.map((option) => ({ value: option.value, label: option.label, description: option.description }))}
           className="[&_.tanaw-select-trigger]:min-h-11"
         />
         <DateRangePicker value={range} onChange={changeRange} variant="field" ariaLabel={`Choose a date range for ${PAGE_TITLE}`} today={now} />
@@ -127,7 +134,8 @@ export function ActivityPage() {
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[13px] text-(--tanaw-text-secondary)">
         <p role="status" className="tabular-nums">
-          <span className="font-semibold text-(--tanaw-text)">{summary.label}</span> · {isLoading ? "Loading records" : summary.count} · {rangeText}
+          <span className="font-semibold text-(--tanaw-text)">{summary.label}</span> · {isLoading ? "Loading records" : summary.count}
+          {pinnedLabel && ` · ${pinnedLabel}`} · {rangeText}
         </p>
         {filtered && (
           <button type="button" onClick={showAll} className={linkButton}>
@@ -154,6 +162,7 @@ export function ActivityPage() {
           rows={paged.rows}
           selectedId={selected?.id ?? null}
           timeFormat={timeFormat}
+          pinned={<BusyEnterpriseRows alerts={pinnedForPage(pinned, paged.page)} dashboardPath={routes.admin.dashboard} timeFormat={timeFormat} />}
           onSelect={(log: SystemLog) => setSelected(log.id)}
           empty={
             isLoading ? (

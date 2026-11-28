@@ -1,4 +1,4 @@
-import { type CSSProperties, type FocusEvent, type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, type FocusEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 
@@ -126,11 +126,27 @@ export function Tooltip({ align = "right", ariaLabel = "More information", child
         )
       : null;
 
+  // A tap on a touch screen toggles the bubble (the click below) and a tap anywhere else closes
+  // it; only a mouse opens it by resting on the trigger, so lifting a finger does not close it.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const closeOnOutsideTap = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      if (!triggerRef.current?.contains(event.target as Node)) closeTooltip();
+    };
+    document.addEventListener("pointerdown", closeOnOutsideTap);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideTap);
+  }, [closeTooltip, isOpen]);
+
   const sharedHandlers = {
     onBlur: handleBlur,
     onFocus: () => scheduleOpen(FOCUS_DELAY_MS),
-    onPointerEnter: () => scheduleOpen(HOVER_DELAY_MS),
-    onPointerLeave: closeTooltip,
+    onPointerEnter: (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType === "mouse") scheduleOpen(HOVER_DELAY_MS);
+    },
+    onPointerLeave: (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType === "mouse") closeTooltip();
+    },
   };
 
   if (focusable) {

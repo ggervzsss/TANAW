@@ -29,7 +29,12 @@ describe("request timeline", () => {
     expect(handledByLabel(handler)).toBe("Carlo Mendoza, IT");
     expect(requestStatusNote(item, handler, () => "1:10 PM")).toBe("Carlo Mendoza from IT started on this at 1:10 PM.");
     expect(handledByLabel({ name: null })).toBe("IT team");
-    expect(requestStatusNote(request({ id: "new" }), { name: null, at: null }, () => "")).toBe("Sent to IT. IT is working on this.");
+    expect(requestStatusNote(request({ id: "new" }), { name: null, at: null }, () => "")).toBe("Sent to IT. Nobody in IT has opened it yet.");
+    expect(requestStatusNote(request({ id: "seen", seenByIt: true }), { name: null, at: null }, () => "")).toBe("IT has seen this. Nobody has started on it yet.");
+    // The summary names the handler before the timeline has loaded.
+    expect(requestStatusNote(request({ id: "taken", seenByIt: true, handledBy: { accountId: "it-1", name: "Carlo Mendoza" } }), { name: null, at: null }, () => "")).toBe(
+      "Carlo Mendoza from IT is working on this.",
+    );
   });
 
   it("describes an account change and whether the new email is verified", () => {
@@ -40,6 +45,7 @@ describe("request timeline", () => {
     });
     expect(accountChangeSentence(change)).toBe("Business email from old@example.com to new@example.com. The new address is not verified yet, so IT can't approve it.");
     expect(requestStatusNote(change, { name: null, at: null }, () => "")).toBe("Waiting for IT to approve this change.");
+    expect(requestStatusNote({ ...change, seenByIt: true }, { name: null, at: null }, () => "")).toBe("IT has seen this change but has not decided on it yet.");
     expect(requestStatusNote({ ...change, status: "Resolved" }, { name: "Carlo Mendoza", at: null }, () => "")).toBe("Carlo Mendoza from IT resolved this without approving the change.");
   });
 });

@@ -16,6 +16,8 @@ const clickableRowClass = "tanaw-row-link";
 const titleClass = "mt-1 block text-[0.96875rem] font-semibold text-(--tanaw-text)";
 const placeClass = "mt-0.5 block text-sm text-(--tanaw-text-secondary)";
 const stateClass = "mt-1.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold";
+/** A row's action: a full thumb's height on touch screens, and the row's full width on phones. */
+const rowActionClass = "pointer-coarse:min-h-11 max-sm:w-full";
 
 function Section({
   id,
@@ -85,7 +87,7 @@ function SectionLink({ to, children }: { to: string; children: string }) {
   return (
     <Link
       to={to}
-      className="group rounded-tanaw-sm ease-tanaw-out inline-flex min-h-9 items-center gap-1 text-sm font-semibold whitespace-nowrap text-(--tanaw-accent-ink) no-underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+      className="group rounded-tanaw-sm ease-tanaw-out inline-flex min-h-9 items-center pointer-coarse:min-h-11 gap-1 text-sm font-semibold whitespace-nowrap text-(--tanaw-accent-ink) no-underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
     >
       {children}
       <ChevronRight
@@ -167,11 +169,14 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
         {shown.map((row) => (
           <li key={row.id} onClick={openRowFromClick} className={cn(rowClass, clickableRowClass)}>
             <div className="min-w-0">
-              <span className={metaClass}>
-                <span>{row.group}</span>
-                <Sep />
-                <span>{row.when}</span>
-                <span className="ml-auto text-(--tanaw-text-muted) tabular-nums">{row.code}</span>
+              {/* The code keeps its own corner, so it never jumps when the type and time wrap. */}
+              <span className="flex items-start justify-between gap-3">
+                <span className={metaClass}>
+                  <span>{row.group}</span>
+                  <Sep />
+                  <span>{row.when}</span>
+                </span>
+                <span className="shrink-0 text-[0.8125rem] whitespace-nowrap text-(--tanaw-text-muted) tabular-nums">{row.code}</span>
               </span>
               <Link data-row-primary to={row.href} className={titleClass}>
                 {row.title}
@@ -184,11 +189,11 @@ export function RequestsSection({ overview }: { overview: ItOverview }) {
             </div>
             <div className={cn("flex items-center gap-4", !row.canStart && "max-sm:hidden")}>
               {row.canStart && (
-                <Button onClick={() => section.start(row)} loading={section.startingId === row.id} disabled={section.startingId !== null}>
+                <Button className={rowActionClass} onClick={() => section.start(row)} loading={section.startingId === row.id} disabled={section.startingId !== null}>
                   Start on it<Hidden> ({row.code})</Hidden>
                 </Button>
               )}
-              <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
+              <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron max-sm:hidden" />
             </div>
           </li>
         ))}
@@ -300,7 +305,7 @@ export function AccountsSection({ overview }: { overview: ItOverview }) {
               ) : section.resentIds.has(row.id) ? (
                 <DoneNote>Sent again</DoneNote>
               ) : (
-                <Button variant="secondary" onClick={() => section.resend(row)} loading={section.resendingId === row.id} disabled={section.resendingId !== null}>
+                <Button variant="secondary" className={rowActionClass} onClick={() => section.resend(row)} loading={section.resendingId === row.id} disabled={section.resendingId !== null}>
                   {row.action.label}
                   <Hidden> to {row.name}</Hidden>
                 </Button>
@@ -344,7 +349,7 @@ export function EmailsSection({ overview }: { overview: ItOverview }) {
             </div>
             <div className={cn(!row.canRetry && "max-sm:hidden")}>
               {row.canRetry && (
-                <Button variant="secondary" onClick={() => section.retry(row)} loading={section.retryingId === row.id} disabled={section.retryingId !== null}>
+                <Button variant="secondary" className={rowActionClass} onClick={() => section.retry(row)} loading={section.retryingId === row.id} disabled={section.retryingId !== null}>
                   Try again<Hidden> for {row.to}</Hidden>
                 </Button>
               )}

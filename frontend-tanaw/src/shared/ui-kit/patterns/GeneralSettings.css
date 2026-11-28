@@ -162,12 +162,14 @@
   flex: none;
   transition: translate var(--tanaw-duration-fast) var(--settings-ease);
 }
-.tanaw-settings-link:hover:not([aria-current]) {
-  background: var(--tanaw-control-hover);
-  color: var(--tanaw-text);
-}
-.tanaw-settings-link:hover > svg {
-  translate: 1px 0;
+@media (hover: hover) {
+  .tanaw-settings-link:hover:not([aria-current]) {
+    background: var(--tanaw-control-hover);
+    color: var(--tanaw-text);
+  }
+  .tanaw-settings-link:hover > svg {
+    translate: 1px 0;
+  }
 }
 .tanaw-settings-link:active:not([aria-current]) {
   background: var(--tanaw-interactive-pressed-bg);
@@ -1099,11 +1101,63 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (width < 38rem) {
+/*
+ * Phones: 16px gutters, and the sections become one row of pills that scrolls sideways (its cut-off
+ * edge fades, the current section stays in view). The save bar spans the width with its buttons
+ * side by side, clear of the home indicator.
+ */
+@media (width < 40rem) {
+  .tanaw-settings-workspace {
+    --settings-gutter: 1rem;
+    --settings-flow: 1.5rem;
+  }
+  .tanaw-settings-header {
+    padding-top: 0.5rem;
+    padding-bottom: 1.25rem;
+  }
+  .tanaw-settings-rail {
+    display: flex;
+    gap: 0.375rem;
+    overflow-x: auto;
+    padding-block: 0.75rem;
+    scroll-padding-inline: var(--settings-gutter);
+  }
   .tanaw-settings-link {
+    flex: none;
     gap: 0.5rem;
-    padding-inline: 0.6rem;
-    overflow-wrap: anywhere;
+    padding-inline: 0.9rem 1rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .tanaw-settings-link-highlight {
+    border-radius: 999px;
+  }
+  .tanaw-settings-link-highlight::before {
+    display: none;
+  }
+  .tanaw-settings-panel-header {
+    padding-top: 1.25rem;
+  }
+  .tanaw-settings-panel-header h2 {
+    font-size: 1.25rem;
+  }
+  .tanaw-settings-group-actions {
+    justify-content: flex-start;
+  }
+  .tanaw-settings-actions {
+    padding-bottom: max(0.85rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+  }
+  .tanaw-settings-action-buttons {
+    flex: 1 1 100%;
+  }
+  .tanaw-settings-action-buttons > * {
+    flex: 1 1 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .tanaw-settings-return {
+    min-height: 2.75rem;
   }
 }
 
@@ -1150,6 +1204,10 @@ body:has(.tanaw-settings-actions[data-visible="true"]) .tanaw-connection-notice 
   .tanaw-settings-rail {
     overflow: auto;
     overscroll-behavior: contain;
+  }
+  /* The rail scrolls up and down here, with the usual thin bar (the phone row hides its bar). */
+  .tanaw-settings-rail.tanaw-scroll-x {
+    scrollbar-width: thin;
   }
   .tanaw-settings-panel {
     scrollbar-gutter: stable;

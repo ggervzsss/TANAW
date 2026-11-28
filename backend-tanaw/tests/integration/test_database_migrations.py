@@ -55,7 +55,7 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 25
+    assert len(relationships) == 26
     assert {
         ("enterprise_profiles", ("account_id",), ("accounts.id",)),
         (
@@ -67,6 +67,11 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
             "enterprise_report_submissions",
             ("enterprise_profile_id",),
             ("enterprise_profiles.account_id",),
+        ),
+        (
+            "enterprise_report_submissions",
+            ("previous_version_id",),
+            ("enterprise_report_submissions.id",),
         ),
         (
             "enterprise_telemetry_snapshots",
@@ -138,9 +143,20 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
     }
     assert (
         "enterprise_report_submissions",
-        "uq_enterprise_report_period",
-        ("enterprise_profile_id", "period"),
+        "uq_enterprise_report_period_version",
+        ("enterprise_profile_id", "period", "version"),
     ) in unique_constraints
+    # Returned versions stay on record; only one version per period may be live.
+    report_indexes = {
+        str(index.name): index
+        for index in Base.metadata.tables["enterprise_report_submissions"].indexes
+    }
+    live_period = report_indexes["uq_enterprise_report_period_live"]
+    assert live_period.unique
+    assert [column.name for column in live_period.columns] == ["enterprise_profile_id", "period"]
+    assert str(live_period.dialect_options["postgresql"]["where"]) == (
+        "review_status <> 'Returned'"
+    )
     assert (
         "final_report_sources",
         "uq_final_report_source_intake",

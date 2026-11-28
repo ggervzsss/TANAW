@@ -943,22 +943,331 @@
   cursor: not-allowed;
   box-shadow: none;
 }
-.report-workflow-status {
-  position: relative;
-  min-width: 0;
-  height: 54px;
-  overflow: auto;
-  overflow-wrap: anywhere;
+/* What still blocks Submit Report, beside the button rather than in a passing toast. */
+.report-submit-action {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report-submit-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
-  border: 0;
   border-radius: 12px;
-  background: var(--tanaw-selected-bg);
-  scrollbar-width: thin;
-  scrollbar-color: var(--tanaw-control-border-hover) transparent;
+  background: var(--tanaw-danger-surface);
+  color: var(--reports-missing-text);
   font-size: 0.8125rem;
-  line-height: 19px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.report-submit-note[data-tone="loading"] {
+  background: var(--tanaw-surface-inset);
   color: var(--tanaw-text-secondary);
+}
+.report-submit-note > svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+.report-submit-note p {
   margin: 0;
+  min-width: 0;
+}
+.report-submit-note .reports-text-button {
+  font-size: inherit;
+  color: inherit;
+  text-decoration-color: currentcolor;
+}
+.report-submit-note-spin {
+  animation: report-note-spin 900ms linear infinite;
+}
+.report-submit-note[data-attention] {
+  animation: report-note-attention 420ms var(--reports-ease);
+}
+@keyframes report-note-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes report-note-attention {
+  0% {
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0);
+    translate: 0 -2px;
+  }
+  45% {
+    box-shadow: 0 0 0 4px rgb(220 38 38 / 0.16);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0);
+    translate: 0 0;
+  }
+}
+
+/* ---- Report lifecycle: the sent confirmation under the title, and returned or refused notices */
+.report-information-left > header .report-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-width: 0;
+  color: var(--tanaw-text-secondary);
+  border-radius: 6px;
+  outline-offset: 2px;
+}
+.report-status-line-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.report-review-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--tanaw-info-bg);
+  color: var(--tanaw-info-text);
+}
+.report-review-pill:is([data-tone="accepted"], [data-tone="consolidated"]) {
+  background: var(--tanaw-success-bg);
+  color: var(--tanaw-success-text);
+}
+.report-review-pill[data-tone="returned"] {
+  background: var(--tanaw-warning-bg);
+  color: var(--tanaw-warning-text);
+}
+.report-review-pill[data-tone="rejected"] {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger-text);
+}
+.report-review-pill[data-tone="pending"] {
+  background: var(--tanaw-neutral-bg);
+  color: var(--tanaw-neutral-text);
+}
+.report-lifecycle-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 14px;
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--tanaw-warning-line);
+  border-radius: var(--radius-tanaw-lg);
+  background: var(--tanaw-warning-surface);
+  animation: reports-panel-rise 240ms var(--reports-ease);
+}
+.report-lifecycle-banner[data-tone="rejected"] {
+  border-color: var(--tanaw-danger-line);
+  background: var(--tanaw-danger-surface);
+}
+.report-lifecycle-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  color: var(--tanaw-warning-text);
+}
+.report-lifecycle-banner[data-tone="rejected"] .report-lifecycle-icon {
+  color: var(--tanaw-danger-text);
+}
+.report-lifecycle-body {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: 21px;
+  color: var(--tanaw-text-secondary);
+}
+.report-lifecycle-body h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 24px;
+  font-weight: 650;
+  color: var(--tanaw-warning-text);
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+  outline-offset: 2px;
+}
+.report-lifecycle-banner[data-tone="rejected"] h3 {
+  color: var(--tanaw-danger-text);
+}
+.report-lifecycle-body > p {
+  margin: 4px 0 0;
+  max-width: 75ch;
+}
+.report-lifecycle-reason {
+  margin: 10px 0 0;
+  max-width: 75ch;
+}
+.report-lifecycle-reason figcaption {
+  font-size: 0.8125rem;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--tanaw-text-secondary);
+}
+.report-lifecycle-reason blockquote {
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--tanaw-border-soft);
+  border-radius: 12px;
+  background: var(--tanaw-surface);
+  color: var(--tanaw-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  quotes: "\201C" "\201D";
+}
+.report-lifecycle-reason blockquote::before {
+  content: open-quote;
+}
+.report-lifecycle-reason blockquote::after {
+  content: close-quote;
+}
+.report-lifecycle-body > .report-lifecycle-meta {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  line-height: 18px;
+  color: var(--tanaw-text-muted);
+  overflow-wrap: anywhere;
+}
+.report-lifecycle-body > .report-lifecycle-issue {
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--tanaw-danger-text);
+}
+.report-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-self: center;
+}
+.report-attention-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.report-attention-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--tanaw-warning-line);
+  border-radius: 12px;
+  background: var(--tanaw-warning-surface);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--tanaw-warning-text);
+  animation: reports-panel-rise 240ms var(--reports-ease);
+}
+.report-attention-list li[data-tone="rejected"] {
+  border-color: var(--tanaw-danger-line);
+  background: var(--tanaw-danger-surface);
+  color: var(--tanaw-danger-text);
+}
+.report-attention-list li > svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+.report-attention-list li > span {
+  flex: 1 1 16rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1000px) {
+  .report-lifecycle-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .report-lifecycle-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+}
+
+/* ---- Submit dialog (portalled, so not scoped to the workspace) */
+.report-submit-summary {
+  margin: 0;
+  padding: 4px 16px;
+  border-radius: 12px;
+  background: var(--tanaw-surface-inset);
+}
+.report-submit-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+.report-submit-summary > div:first-child {
+  border-top: 0;
+}
+.report-submit-summary dt {
+  flex: 0 1 auto;
+  font-size: 0.8125rem;
+  line-height: 20px;
+  color: var(--tanaw-text-muted);
+}
+.report-submit-summary dd {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--tanaw-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.report-submit-summary > .report-submit-origins {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.report-submit-origins dd {
+  text-align: left;
+}
+.report-submit-origins ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+}
+.report-submit-origins li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-weight: 500;
+  color: var(--tanaw-text-secondary);
+}
+.report-submit-origins li > span:last-child {
+  font-weight: 600;
+  color: var(--tanaw-text);
+}
+.report-submit-copy {
+  margin: 16px 0 0;
+  font-size: var(--text-sm);
+  line-height: 21px;
+  color: var(--tanaw-text-secondary);
+}
+.report-submit-copy + .report-submit-copy {
+  margin-top: 8px;
+}
+.report-submit-copy strong {
+  font-weight: 650;
+  color: var(--tanaw-text);
+}
+.report-submit-issue {
+  margin-top: 16px;
 }
 .reports-text-button {
   font-size: var(--text-sm);
@@ -1345,6 +1654,25 @@
   background: var(--tanaw-success-bg);
   color: var(--tanaw-success-text);
 }
+.report-status[data-tone="returned"] {
+  background: var(--tanaw-warning-bg);
+  color: var(--tanaw-warning-text);
+}
+.report-status[data-tone="rejected"] {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger-text);
+}
+.report-status-reason {
+  margin-top: 2px;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--reports-muted);
+}
+.report-history-version {
+  font-size: 12px;
+  color: var(--reports-muted);
+}
 .report-upload-state {
   display: block;
   margin-top: 2px;
@@ -1470,10 +1798,6 @@
 }
 :root.dark .enterprise-shell .tanaw-reports-workspace .reports-button:hover:not(:disabled, [aria-disabled="true"], .reports-primary) {
   background: var(--tanaw-control-hover);
-}
-:root.dark .enterprise-shell .tanaw-reports-workspace .report-workflow-status {
-  background: var(--tanaw-selected-bg);
-  color: var(--tanaw-text-secondary);
 }
 :root.dark .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] {
   background: var(--tanaw-selected-bg);
@@ -1838,6 +2162,10 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .report-submit-note,
+  .report-submit-note-spin {
+    animation: none !important;
+  }
   .tanaw-var1-viewer * {
     animation: none !important;
     transition: none !important;
@@ -1975,11 +2303,7 @@
   .report-workflow-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .report-workflow-status {
-    position: static;
-    grid-column: 1 / -1;
-    max-height: none;
+    align-items: start;
   }
 }
 @media (max-width: 760px) {

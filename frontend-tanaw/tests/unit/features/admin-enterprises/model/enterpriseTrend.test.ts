@@ -33,6 +33,7 @@ function report(enterpriseId: string, period: string, unique: number): IntakeRep
     submitted: "",
     status: "Pending Review",
     code: "R-1",
+    version: 1,
     metrics: { entry: null, exit: null, unique, peak: null },
   };
 }
@@ -116,6 +117,17 @@ describe("monthly trend", () => {
     expect(trend.bars.map((bar) => bar.fullLabel)).toEqual(["December 2025", "September 2026", "October 2026"]);
     expect(trend.bars.map((bar) => bar.axisLabel)).toEqual(["Dec", "Sep", "Oct"]);
     expect(trendNote(trend)).toBe("Busiest: October 2026 · 259,600 visitors");
+  });
+
+  it("charts a month's latest version and leaves out a report awaiting correction", () => {
+    const returned = { ...report("ENT-1", "October 2026", 900), status: "Returned" as const };
+    const corrected = { ...report("ENT-1", "October 2026", 850), id: "ENT-1-October-v2", version: 2 };
+    const awaiting = { ...report("ENT-1", "September 2026", 700), status: "Returned" as const };
+    const trend = monthlyTrend([corrected, returned, awaiting, report("ENT-1", "August 2026", 600)], "ENT-1");
+    expect(trend.bars.map((bar) => [bar.fullLabel, bar.value])).toEqual([
+      ["August 2026", 600],
+      ["October 2026", 850],
+    ]);
   });
 
   it("keeps only the most recent months", () => {

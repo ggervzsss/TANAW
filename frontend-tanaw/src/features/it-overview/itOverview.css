@@ -199,19 +199,36 @@
   }
 }
 
+/*
+ * Phones keep the figures two by two, so all four read in one glance above the lists, and the
+ * connection problems list never takes more than about two thirds of the screen.
+ */
 @media (max-width: 640px) {
-  .it-overview__figures {
-    grid-template-columns: minmax(0, 1fr);
+  .it-overview__figure {
+    padding: 0.875rem 1rem;
   }
 
-  .it-overview__figure,
+  .it-overview__figure:nth-child(odd) {
+    padding-left: 0;
+  }
+
   .it-overview__figure:nth-child(even) {
-    padding-inline: 0;
-    border-left: 0;
+    padding-right: 0;
   }
 
-  .it-overview__figure + .it-overview__figure {
-    border-left: 0;
-    border-top: 1px solid var(--tanaw-border-soft);
+  .it-overview__value {
+    font-size: 2rem;
+  }
+
+  .it-overview__sections {
+    margin-top: 2rem;
+  }
+
+  .it-overview__column > section {
+    padding-bottom: 2.25rem;
+  }
+
+  .it-overview__scroll {
+    max-height: min(26rem, 62dvh);
   }
 }

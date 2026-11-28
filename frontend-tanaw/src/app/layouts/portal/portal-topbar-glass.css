@@ -51,12 +51,15 @@
   bottom: 0;
 }
 
-.portal-topbar:hover .portal-topbar__edge--top {
-  opacity: 1;
-}
+/* Pointer-only: on touch screens a tap would leave the streak lit. */
+@media (hover: hover) {
+  .portal-topbar:hover .portal-topbar__edge--top {
+    opacity: 1;
+  }
 
-.portal-topbar:hover .portal-topbar__edge--bottom {
-  opacity: 0.9;
+  .portal-topbar:hover .portal-topbar__edge--bottom {
+    opacity: 0.9;
+  }
 }
 
 /* Round controls (bell, alerts, menu, account): glass rim, inner highlight, and a sweep of light on hover. */
@@ -76,9 +79,11 @@
     transform 200ms ease;
 }
 
-.portal-topbar .tanaw-topbar-compact-control:hover,
-.portal-topbar .tanaw-account-control:hover {
-  background-position: -60% 0;
+@media (hover: hover) {
+  .portal-topbar .tanaw-topbar-compact-control:hover,
+  .portal-topbar .tanaw-account-control:hover {
+    background-position: -60% 0;
+  }
 }
 
 .portal-topbar [aria-expanded="true"].tanaw-topbar-compact-control {

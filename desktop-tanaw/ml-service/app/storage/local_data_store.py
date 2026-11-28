@@ -25,9 +25,13 @@ from app.storage.local_data_serialization import (
 )
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.camera_repository import CameraRepository
+from app.storage.repositories.establishment_report_repository import next_report_version
 from app.storage.repositories.occupancy_event_repository import OccupancyEventRepository
 from app.storage.repositories.report_draft_repository import ReportDraftRepository
 from app.storage.repositories.visitor_identity_repository import VisitorIdentityRepository
+
+# Why a saved report was reopened for correction: Staff returned it, or TANAW refused its upload.
+REOPEN_REASONS = frozenset({"returned", "upload_rejected"})
 
 
 class LocalDataStore:
@@ -489,9 +493,11 @@ class LocalDataStore:
         submitted_at = _utc_now()
         submission_id = str(uuid4())
         summary = self.metrics_summary(include_submitted=False)
-        # An enterprise sends one report per reporting month, and it cannot be replaced.
-        if self._report_submission_for_period(period) is not None:
+        # A month holds one live report; a version reopened for correction gives way to the next.
+        latest = self._report_submission_for_period(period)
+        if latest is not None and latest["reopened_at"] is None:
             raise ValueError(one_report_per_month_error(period))
+        version = next_report_version(latest)
         if self._report_submission(report_id) is not None:
             raise ValueError(f"Report {report_id} has already been submitted.")
         if metrics is not None:
@@ -516,6 +522,7 @@ class LocalDataStore:
                     report_id,
                     submission_id,
                     period,
+                    version,
                     submitted_at,
                     entries,
                     exits,
@@ -525,12 +532,13 @@ class LocalDataStore:
                     payload_json,
                     sync_status
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     report_id,
                     submission_id,
                     period,
+                    version,
                     submitted_at,
                     summary["entries"],
                     summary["exits"],
@@ -584,6 +592,7 @@ class LocalDataStore:
             **summary,
             "report_id": report_id,
             "submission_id": submission_id,
+            "version": version,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
             "camera_breakdown": camera_breakdown,
@@ -641,18 +650,67 @@ class LocalDataStore:
             )
         return result.rowcount > 0
 
-    def mark_report_upload_rejected(self, report_id: str, submission_id: str) -> bool:
-        """The backend refused this submission, so it is kept here and not uploaded again."""
+    def mark_report_upload_rejected(
+        self, report_id: str, submission_id: str, reason: str | None = None
+    ) -> bool:
+        """The backend refused this submission, so it is kept here and not uploaded again.
+
+        The backend's reason is kept so the person can see what to fix.
+        """
+        reason = (reason or "").strip()[:2000] or None
         with self._connection() as connection:
             result = connection.execute(
                 """
                 update report_submissions
-                set sync_status = 'upload_rejected'
+                set sync_status = 'upload_rejected',
+                    rejection_reason = coalesce(?, rejection_reason)
                 where report_id = ? and submission_id = ? and sync_status != 'synced'
                 """,
-                (report_id, submission_id),
+                (reason, report_id, submission_id),
             )
         return result.rowcount > 0
+
+    def reopen_report_submission(self, report_id: str, reason: str) -> dict[str, Any]:
+        """Reopen a month's latest report for correction, so a corrected version can be sent.
+
+        Only Staff returning a report TANAW received (`returned`), or TANAW refusing its upload
+        (`upload_rejected`), reopens it. The version stays saved as history; reopening it again
+        changes nothing. A returned report reached TANAW, so it is recorded as delivered even if
+        this computer missed the confirmation, and it is never uploaded again.
+        """
+        if reason not in REOPEN_REASONS:
+            raise ValueError("A report reopens only when Staff return it or TANAW refuses it.")
+        with self._database.transaction() as connection:
+            row = connection.execute(
+                "select period, sync_status, reopened_at from report_submissions "
+                "where report_id = ?",
+                (report_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError(f"Report {report_id} is not saved on this computer.")
+            # Only a month's live version can be reopened: an earlier version already was.
+            if row["reopened_at"] is None:
+                refused = row["sync_status"] == "upload_rejected"
+                if reason == "returned" and refused:
+                    raise ValueError(
+                        "TANAW did not accept this report, so Staff could not return it. "
+                        "Fix it and send it again instead."
+                    )
+                if reason == "upload_rejected" and not refused:
+                    raise ValueError(
+                        "Only a report TANAW did not accept can be fixed and sent again."
+                    )
+                now = _utc_now()
+                connection.execute(
+                    "update report_submissions set reopened_at = ?, reopen_reason = ?, "
+                    "sync_status = case when ? = 'returned' then 'synced' else sync_status end, "
+                    "synced_at = case when ? = 'returned' then coalesce(synced_at, ?) "
+                    "else synced_at end where report_id = ?",
+                    (now, reason, reason, reason, now, report_id),
+                )
+        reopened = self._report_submission(report_id)
+        assert reopened is not None
+        return reopened
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
         purged_at = _utc_now()
@@ -715,7 +773,11 @@ class LocalDataStore:
                     payload_json,
                     sync_status,
                     synced_at,
-                    raw_purged_at
+                    raw_purged_at,
+                    version,
+                    rejection_reason,
+                    reopened_at,
+                    reopen_reason
                 from report_submissions
                 where report_id = ?
                 """,
@@ -746,10 +808,14 @@ class LocalDataStore:
                     payload_json,
                     sync_status,
                     synced_at,
-                    raw_purged_at
+                    raw_purged_at,
+                    version,
+                    rejection_reason,
+                    reopened_at,
+                    reopen_reason
                 from report_submissions
                 where period = ?
-                order by submitted_at desc
+                order by reopened_at is null desc, version desc, submitted_at desc
                 limit 1
                 """,
                 (period,),
@@ -779,7 +845,11 @@ class LocalDataStore:
                     payload_json,
                     sync_status,
                     synced_at,
-                    raw_purged_at
+                    raw_purged_at,
+                    version,
+                    rejection_reason,
+                    reopened_at,
+                    reopen_reason
                 from report_submissions
                 order by submitted_at desc
                 limit ?

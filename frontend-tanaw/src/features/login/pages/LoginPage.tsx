@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
-import { AuthBrandHeader, AuthHero, AuthStageLayout, LoginForm } from "../components";
+import { AuthBrandHeader, AuthHero, AuthStageLayout, LoginForm, TwoFactorLoginForm } from "../components";
 import { useLogin } from "../hooks";
 
 function SampaguitaIcon({ className = "" }: { className?: string }) {
@@ -21,7 +21,7 @@ function SampaguitaIcon({ className = "" }: { className?: string }) {
 export function LoginPage() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const { clearLoginMessage, handleLoginSubmit, lockoutSeconds, loginMessage } = useLogin();
+  const { cancelTwoFactor, clearLoginMessage, clearTwoFactorMessage, handleLoginSubmit, lockoutSeconds, loginMessage, submitTwoFactor, twoFactorMessage, twoFactorPending } = useLogin();
 
   useEffect(() => {
     if (user?.role === "enterprise") {
@@ -54,7 +54,19 @@ export function LoginPage() {
       }
     >
       <AuthBrandHeader subtitle="San Pedro Tourism Management" />
-      <LoginForm authMessage={loginMessage} lockoutSeconds={lockoutSeconds} onAuthMessageClear={clearLoginMessage} onSubmit={handleLoginSubmit} />
+      <LoginForm authMessage={loginMessage} lockoutSeconds={lockoutSeconds} onAuthMessageClear={clearLoginMessage} onSubmit={handleLoginSubmit} hidden={twoFactorPending} />
+      {twoFactorPending ? (
+        <TwoFactorLoginForm
+          message={twoFactorMessage}
+          lockoutSeconds={lockoutSeconds}
+          onSubmit={submitTwoFactor}
+          onMessageClear={clearTwoFactorMessage}
+          onBack={() => {
+            cancelTwoFactor();
+            window.requestAnimationFrame(() => document.getElementById("login-password")?.focus());
+          }}
+        />
+      ) : null}
     </AuthStageLayout>
   );
 }

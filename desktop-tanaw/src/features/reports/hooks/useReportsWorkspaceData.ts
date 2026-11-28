@@ -13,8 +13,17 @@ import {
 import { useAuthStore } from "../../login/stores/auth-store";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import { originsFromPayload } from "../model/daily-origins";
-import { countingFromPayload, getDemographicDraftKey, mergeReportHistory, reportFromCloudSubmission, reportFromLocalSubmission, type PreparedReportCounts } from "../model/report-workspace";
-import { listEnterpriseReportHistory } from "../services/report-history";
+import { useRealtimeEvent } from "../../realtime/realtime-context";
+import {
+  applyCloudReview,
+  countingFromPayload,
+  getDemographicDraftKey,
+  mergeReportHistory,
+  reportFromCloudSubmission,
+  reportFromLocalSubmission,
+  type PreparedReportCounts,
+} from "../model/report-workspace";
+import { listEnterpriseReportSubmissions } from "../services/report-history";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 
 function metricsFromEstablishment(summary: EstablishmentSummary): Metrics {
@@ -109,9 +118,9 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
         })
       )
         throw new Error("Saved report data belongs to another establishment.");
-      let cloud: Awaited<ReturnType<typeof listEnterpriseReportHistory>> = [];
+      let cloud: Awaited<ReturnType<typeof listEnterpriseReportSubmissions>> = [];
       try {
-        cloud = await listEnterpriseReportHistory();
+        cloud = await listEnterpriseReportSubmissions();
       } catch {
         /* Local snapshots remain available offline. */
       }
@@ -127,6 +136,27 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
       if (sequence === ledgerSequence.current && useAuthStore.getState().user?.enterpriseId === enterpriseId) setLedgerError(error instanceof Error ? error.message : "Unable to load saved reports.");
     }
   }, [enterpriseId, setReportsHistory, timeFormat]);
+
+  /** Reads one month's versions and review state from TANAW, for example right after a send. */
+  const refreshMonthReview = useCallback(
+    async (reportPeriod: string) => {
+      try {
+        const cloud = await listEnterpriseReportSubmissions(reportPeriod);
+        if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+        const reports = cloud.filter((item) => !enterpriseId || item.enterpriseId === enterpriseId).map((item) => reportFromCloudSubmission(item, timeFormat));
+        setReportsHistory((current) => applyCloudReview(current, reports));
+      } catch {
+        /* The regular refresh tries again. */
+      }
+    },
+    [enterpriseId, setReportsHistory, timeFormat],
+  );
+
+  // Staff returning, accepting or consolidating a report reaches this computer as a notification
+  // or a report event; the review state shown here follows it without waiting for the next poll.
+  useRealtimeEvent((event) => {
+    if (event.event_type.startsWith("report.") || event.event_type === "notification.created") void refreshLocalReports();
+  });
 
   useEffect(() => {
     void refreshLocalMetrics();
@@ -150,9 +180,10 @@ export function useReportsWorkspaceData({ currentReportingPeriod, period, setRep
     currentMetrics: current ? metricsFromEstablishment(current.current) : EMPTY,
     counting: current?.selected ?? null,
     pendingPeriodCounts: current?.periods ?? [],
-    metricsError: requestError ?? (current ? reportBaselineError(current.selected) : "Loading establishment summaries…"),
+    metricsError: requestError ?? (current ? reportBaselineError(current.selected) : "Loading this month's counts…"),
     loading: !current && !requestError,
     refreshLocalMetrics,
     refreshLocalReports,
+    refreshMonthReview,
   };
 }

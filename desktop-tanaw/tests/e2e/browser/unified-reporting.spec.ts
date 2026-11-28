@@ -37,6 +37,25 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
     openSpace: null,
   });
   let saved: Record<string, unknown> | null = submitted ? { ...fixture, sync_status: "synced" } : null;
+  // TANAW's copy of the already-reported month, waiting for Staff review.
+  const cloudReport = {
+    id: "cloud-one",
+    enterpriseId: user.enterpriseId,
+    enterprise: "Park",
+    category: "Parks",
+    attraction: parkClassification,
+    barangay: "Poblacion",
+    month: "October",
+    period: fixture.period,
+    submitted: fixture.submitted_at,
+    submittedAt: fixture.submitted_at,
+    status: "Pending Review",
+    code: fixture.report_id,
+    version: 1,
+    metrics: { entry: fixture.entries, exit: fixture.exits, peak: fixture.peak_occupancy, unique: fixture.unique_count },
+    payload: fixture.payload,
+    remarks: null,
+  };
   const submissions: Record<string, unknown>[] = [];
   const uploads: Record<string, unknown>[] = [];
   const drafts = new Map<string, unknown>();
@@ -57,34 +76,14 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
   await page.route("**/auth/me", (route) => route.fulfill({ json: user }));
   await page.route("**/operational/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/desktop/report-submissions") && route.request().method() === "GET") return route.fulfill({ json: submitted ? [cloudReport] : [] });
     if (path.endsWith("/desktop/report-submissions")) {
       uploads.push(route.request().postDataJSON());
       await uploadWait;
       if (uploadRefusal) return route.fulfill({ status: 409, json: { detail: uploadRefusal } });
       return route.fulfill({ status: uploadAvailable ? 202 : 503, json: uploadAvailable ? {} : { detail: "Offline test" } });
     }
-    if (submitted && path.endsWith("/reports/intake"))
-      return route.fulfill({
-        json: [
-          {
-            id: "cloud-one",
-            enterpriseId: user.enterpriseId,
-            enterprise: "Park",
-            category: "Parks",
-            attraction: parkClassification,
-            barangay: "Poblacion",
-            month: "October",
-            period: fixture.period,
-            submitted: fixture.submitted_at,
-            submittedAt: fixture.submitted_at,
-            status: "Pending Review",
-            code: fixture.report_id,
-            metrics: { entry: fixture.entries, exit: fixture.exits, peak: fixture.peak_occupancy, unique: fixture.unique_count },
-            payload: fixture.payload,
-            remarks: null,
-          },
-        ],
-      });
+    if (submitted && path.endsWith("/reports/intake")) return route.fulfill({ json: [cloudReport] });
     if (path.endsWith("/desktop/sample-preparation")) return route.fulfill({ json: null });
     return route.fulfill({ json: [] });
   });
@@ -138,9 +137,9 @@ async function setup(page: Page, mode: "open_space" | "entrance_exit" | "mixed",
       saved = { ...saved, sync_status: "synced" };
       return reply({ updated: 1 });
     }
-    // Like the local service: a refused upload is marked, so background sync never retries it.
+    // Like the local service: a refused upload is marked with TANAW's reason, so background sync never retries it.
     if (path.endsWith("/upload-rejected")) {
-      saved = { ...saved, sync_status: "upload_rejected" };
+      saved = { ...saved, sync_status: "upload_rejected", rejection_reason: (JSON.parse(request.body ?? "{}") as { reason?: string | null }).reason ?? null };
       return reply({ updated: 1 });
     }
     return reply({ detail: `Unconfigured ${path}` }, 503);
@@ -198,12 +197,19 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
     await expect(page.locator(".report-origin-table tfoot td").last()).toHaveText("2");
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
-    await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Send your October 2026 report to the LGU?" });
+    await expect(dialog.getByText("Visitors counted", { exact: true })).toBeVisible();
+    // Cancel is the safe first choice.
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await dialog.getByRole("button", { name: "Send report", exact: true }).click();
     await expect.poll(() => state.submissions.length).toBe(1);
     await expect.poll(() => state.getSaved()?.sync_status).toBe("pending_cloud_sync");
-    await expect(page.getByRole("button", { name: "Yes, Submit", exact: true })).toHaveCount(0);
-    await expect(page.locator(".tanaw-toast--warning")).toContainText("was saved on this device");
-    await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" })).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator(".tanaw-toast--warning")).toContainText("Report saved on this computer");
+    await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Report sent" })).toHaveCount(0);
+    // The panel keeps the outcome in view after the toast is gone.
+    await expect(page.locator(".report-status-line")).toContainText(`Reference ${state.getSaved()!.report_id}`);
+    await expect(page.locator(".report-status-line")).toContainText("Waiting to send");
     expect(state.uploads.length).toBeGreaterThan(0);
     expect(state.uploads[0].payload).toMatchObject({
       counting: { snapshot_version: state.counting.snapshot_version },
@@ -246,9 +252,14 @@ test("a submitted month is complete and offers no way to submit it again", async
   await expect(page.getByRole("dialog", { name: "Review Report Form", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await openReportMonth(page, "October 2026");
-  await expect(page.locator(".report-workflow-status")).toHaveText("Submitted · REP-FIXTURE");
+  // A lasting confirmation, with Staff's review state from TANAW.
+  await expect(page.locator(".report-status-line")).toContainText("Sent on ");
+  await expect(page.locator(".report-status-line")).toContainText("Reference REP-FIXTURE");
+  await expect(page.locator(".report-status-line")).toContainText("Waiting for Staff review");
   await expect(page.getByRole("button", { name: /Submit Report/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Resubmit/ })).toHaveCount(0);
+  // Only a report Staff returned can be corrected.
+  await expect(page.getByRole("button", { name: "Correct and send again" })).toHaveCount(0);
 
   // The month no longer appears as a period waiting for a report.
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
@@ -259,7 +270,7 @@ test("a submitted month is complete and offers no way to submit it again", async
   expect(state.uploads).toHaveLength(0);
 });
 
-test("a report TANAW refuses shows the backend's reason", async ({ page }) => {
+test("a report TANAW refuses shows the backend's reason, a fix and a way to ask IT", async ({ page }) => {
   const state = await setup(page, "open_space");
   state.enableUpload();
   state.refuseUpload(ONE_REPORT_PER_MONTH);
@@ -268,13 +279,22 @@ test("a report TANAW refuses shows the backend's reason", async ({ page }) => {
   await openReportMonth(page, "October 2026");
   await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
   await page.getByRole("button", { name: "Submit Report", exact: true }).click();
-  await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
+  await page.getByRole("button", { name: "Send report", exact: true }).click();
   await expect.poll(() => state.uploads.length).toBe(1);
-  const refused = page.locator(".tanaw-toast--error");
-  await expect(refused).toContainText(`TANAW did not accept report ${state.getSaved()!.report_id}. ${ONE_REPORT_PER_MONTH}`);
-  await expect(refused).toContainText("A copy is saved on this device.");
-  await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" })).toHaveCount(0);
+  // The refusal stays on the report, with TANAW's reason and the way forward, not in a passing toast.
+  const refused = page.getByRole("region", { name: "TANAW did not accept this report" });
+  await expect(refused).toBeVisible();
+  await expect(refused).toContainText(ONE_REPORT_PER_MONTH);
+  await expect(refused).toContainText(`Reference ${state.getSaved()!.report_id}`);
+  await expect(refused.getByRole("button", { name: "Fix and send again", exact: true })).toBeVisible();
+  await expect(page.locator(".tanaw-toast--error")).toHaveCount(0);
+  await expect(page.locator(".tanaw-toast--success").filter({ hasText: "Report sent" })).toHaveCount(0);
   expect(state.submissions).toHaveLength(1);
+  // Nothing is sent again on its own.
+  expect(state.uploads).toHaveLength(1);
+  await refused.getByRole("button", { name: "Ask IT for help", exact: true }).click();
+  await expect(page).toHaveURL(/#\/enterprise\/settings\/support$/);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("TANAW did not accept the October 2026 report");
 });
 
 test("reports validation, failed saving and confirmed upload without duplicate feedback", async ({ page }) => {
@@ -288,25 +308,29 @@ test("reports validation, failed saving and confirmed upload without duplicate f
   state.seedDraftOrigins({ "2026-10-10": { otherCity: { male: 3, female: 0 } } });
   await openReportMonth(page, "October 2026");
   const submit = page.getByRole("button", { name: "Submit Report", exact: true });
-  const success = page.locator(".tanaw-toast--success").filter({ hasText: "Report submitted successfully" });
-  const warning = page.locator(".tanaw-toast--warning");
-  const failure = page.locator(".tanaw-toast--error").filter({ hasText: "Report submission failed" });
+  const success = page.locator(".tanaw-toast--success").filter({ hasText: "Report sent" });
+  const blocker = page.locator(".report-submit-note");
+  const dialog = page.getByRole("dialog", { name: "Send your October 2026 report to the LGU?" });
   await expect(submit).toHaveAttribute("aria-disabled", "true");
+  // What blocks the report sits beside the button, and a blocked press points to it again.
+  await expect(blocker).toContainText("Lower the visitor origins for 1 day");
   await submit.press("Enter");
   await submit.press("Enter");
-  await expect(warning).toHaveCount(1);
-  await expect(warning.getByRole("status")).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Confirm Submission" })).toHaveCount(0);
+  await expect(blocker).toHaveAttribute("role", "alert");
+  await expect(page.locator(".tanaw-toast--warning")).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
   expect(state.submissions).toHaveLength(0);
-  await warning.getByRole("button", { name: "Dismiss notification" }).click();
-  await expect(warning).toHaveCount(0);
 
   await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
+  await expect(blocker).toHaveCount(0);
   state.setLocalSaveAvailable(false);
   await submit.click();
-  const confirm = page.getByRole("button", { name: "Yes, Submit", exact: true });
+  const confirm = dialog.getByRole("button", { name: /^(Send report|Try again)$/ });
   await confirm.click();
-  await expect(failure.getByRole("alert")).toHaveText("Report submission failed. Please try again.");
+  // A failed send is explained where the person is, and can be tried again.
+  await expect(dialog.getByRole("alert")).toHaveText("Report not sent. Something went wrong on this computer. Try again.");
+  await expect(confirm).toHaveText("Try again");
+  await expect(page.locator(".tanaw-toast--error")).toHaveCount(0);
   await expect(success).toHaveCount(0);
   expect(state.uploads).toHaveLength(0);
   expect(state.submissions).toHaveLength(1);
@@ -322,11 +346,16 @@ test("reports validation, failed saving and confirmed upload without duplicate f
     });
     await expect.poll(() => state.uploads.length).toBe(1);
     await expect(success).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Submitting…" })).toBeDisabled();
+    await expect(confirm).toBeDisabled();
+    await expect(confirm).toHaveAttribute("aria-busy", "true");
+    // While sending, the dialog cannot be dismissed by accident.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
   } finally {
     releaseUpload();
   }
-  await expect(success.getByRole("status")).toHaveText(`Report submitted successfully. Reference ${state.getSaved()!.report_id}.`);
+  await expect(success.getByRole("status")).toHaveText(`Report sent. Reference ${state.getSaved()!.report_id}.`);
+  await expect(page.locator(".report-status-line")).toContainText(`Reference ${state.getSaved()!.report_id}`);
   await expect(success).toHaveCount(1);
   expect(state.submissions).toHaveLength(2);
   expect(state.submissions[0].request_id).toBe(state.submissions[1].request_id);

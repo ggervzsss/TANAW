@@ -1,5 +1,5 @@
-export { completeAccountActivation, loginService, validateAccountActivation } from "./loginService";
-export type { AccountActivationDetails, LoginCredentials, LoginServiceResponse } from "./loginService";
+export { completeAccountActivation, isTwoFactorLoginChallenge, loginService, validateAccountActivation, verifyTwoFactorLogin } from "./loginService";
+export type { AccountActivationDetails, LoginCredentials, LoginServiceResponse, TwoFactorLoginChallenge, TwoFactorLoginVerification } from "./loginService";
 export { verifyAccountEmailChange } from "./emailChangeService";
 export type { EmailChangeVerificationResult } from "./emailChangeService";
 export { requestPasswordRecovery, resetRecoveredPassword, verifyPasswordRecovery } from "./passwordRecoveryService";

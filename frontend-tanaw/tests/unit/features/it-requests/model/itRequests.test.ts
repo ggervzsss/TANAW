@@ -55,6 +55,7 @@ function request(overrides: Partial<Request> = {}): Request {
     closedAt: null,
     unread: false,
     updated: false,
+    seenByIt: false,
     createdAt: "2026-11-23T05:40:00Z",
     updatedAt: "2026-11-23T05:40:00Z",
     ...overrides,

@@ -42,9 +42,14 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const title = pageHeader?.pathname === pathname ? pageHeader.title : undefined;
   const titleClassName = "tanaw-page-title tanaw-page-title--signed mb-7 shrink-0 max-sm:mb-5";
   const sectionClassName =
-    "text-(--tanaw-text) flex h-screen w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100 max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible";
+    "text-(--tanaw-text) flex h-dvh w-full overflow-hidden bg-(--tanaw-page-bg) transition-colors duration-200 dark:bg-(--tanaw-page-bg) dark:text-slate-100 max-[920px]:h-auto max-[920px]:min-h-dvh max-[920px]:flex-col max-[920px]:overflow-visible";
+  // At 920px and below the document scrolls rather than <main>: main and its wrapper clip sideways
+  // without becoming scroll containers, so the topbar and every page's sticky headings and bars
+  // stick to the window. Phones: 16px gutters (wider where a notch or rounded corner needs it), a
+  // shorter top, and room under the last section for the home indicator.
+  const windowScrolls = "max-[920px]:overflow-x-clip max-[920px]:overflow-y-visible";
   const mainClassName =
-    "it-portal-main tanaw-portal-content flex-1 overflow-y-auto px-[clamp(1.5rem,4vw,4.5rem)] pt-9 pb-14 text-[15px] transition-colors duration-200 max-sm:px-4 max-sm:pt-6 max-sm:pb-8";
+    "it-portal-main tanaw-portal-content flex-1 overflow-y-auto max-[920px]:overflow-x-clip max-[920px]:overflow-y-visible px-[clamp(1.5rem,4vw,4.5rem)] pt-9 pb-14 text-[15px] transition-colors duration-200 max-sm:pt-5 max-sm:pr-[max(1rem,env(safe-area-inset-right))] max-sm:pb-[calc(2rem+env(safe-area-inset-bottom))] max-sm:pl-[max(1rem,env(safe-area-inset-left))]";
   const mainContentClassName = "mx-auto w-full max-w-420";
   // A new page fades up into place; moving between settings sections is left to the settings page.
   usePageEnter(mainRef, isSettings ? "settings" : pathname, { rise: isSettings ? 0 : 4 });
@@ -130,9 +135,9 @@ export function AccountLayout({ role }: AccountLayoutProps) {
 
   return (
     <section className={sectionClassName}>
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} data-page-scroller className={isSettings ? "tanaw-settings-page overflow-auto" : mainClassName}>
+      <div className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${windowScrolls}`}>
+        <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} theme={theme.theme} onThemeChange={theme.selectTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
+        <main ref={mainRef} data-page-scroller className={isSettings ? `tanaw-settings-page overflow-auto ${windowScrolls}` : mainClassName}>
           {isSettings ? (
             outlet
           ) : (

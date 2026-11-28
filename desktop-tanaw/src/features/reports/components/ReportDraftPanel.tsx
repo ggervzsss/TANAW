@@ -1,12 +1,14 @@
-import { type Dispatch, type SetStateAction } from "react";
-import { Check, FileText, Info, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
-import { InfoTooltip } from "../../../components/InfoTooltip";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { Check, FileText, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
 import { Skeleton } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { SystemTimeFormat } from "../../../utils/date-time";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { VisitorDetails } from "./VisitorDetails";
 import { ReportDayPicker } from "./ReportDayPicker";
-import { missingDays, type ReportDay } from "../model/daily-origins";
+import { dailyOriginsError, formatReportDate, missingDays, type ReportDay } from "../model/daily-origins";
+import type { ReportLifecycle } from "../model/report-lifecycle";
+import { ReportLifecycleBanner, ReportStatusLine, ReportsNeedingAction } from "./ReportLifecycle";
 import { useSelectedReportDay } from "../hooks/useSelectedReportDay";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
@@ -17,7 +19,6 @@ type Props = {
   attractionType?: string;
   reviewed?: boolean;
   activeReport: ReportRecord | null;
-  activeReportId: string | null;
   days: ReportDay[];
   demo: DemoBreakdown;
   hasDailyOrigins: boolean;
@@ -35,6 +36,19 @@ type Props = {
   onReview: () => void;
   setOrigins: Dispatch<SetStateAction<DailyOrigins>>;
   setNotes: Dispatch<SetStateAction<string>>;
+  /** Where the month's report stands once sent: waiting, returned, refused or being corrected. */
+  lifecycle: ReportLifecycle;
+  reports: ReportRecord[];
+  timeFormat: SystemTimeFormat;
+  reopeningReportId: string | null;
+  reopenIssue: string | null;
+  onCorrect: (report: ReportRecord) => void;
+  onAskForHelp: (report: ReportRecord) => void;
+  /** Changes when a send or reopen ends; focus then moves to the report's new status. */
+  statusAnnouncement: number;
+  /** Other months whose report was returned or refused, and how to open one. */
+  reportsAwaitingAction: ReportRecord[];
+  onOpenReportMonth: (report: ReportRecord) => void;
 };
 
 export function ReportDraftPanel({
@@ -42,7 +56,6 @@ export function ReportDraftPanel({
   attractionType,
   reviewed = false,
   activeReport,
-  activeReportId,
   days,
   demo,
   hasDailyOrigins,
@@ -59,25 +72,57 @@ export function ReportDraftPanel({
   onReview,
   setOrigins,
   setNotes,
+  lifecycle,
+  reports,
+  timeFormat,
+  reopeningReportId,
+  reopenIssue,
+  onCorrect,
+  onAskForHelp,
+  statusAnnouncement,
+  reportsAwaitingAction,
+  onOpenReportMonth,
 }: Props) {
+  const panelRef = useRef<HTMLElement>(null);
   const selectedDay = useSelectedReportDay(days, period);
   const dailyDay = hasDailyOrigins ? selectedDay : null;
   const complete = (!hasDailyOrigins || missingDays(days).length === 0) && getDemographicAllocationStatus(demo, metrics.unique).isComplete && !metricsError && !isPeriodChanging;
   const submitted = Boolean(activeReport && ["Submitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
   const uploadRejected = activeReport?.syncStatus === "upload_rejected";
+  // The submit dialog closes onto a panel whose Submit button is gone; focus its new status.
+  useEffect(() => {
+    if (!statusAnnouncement) return;
+    const frame = window.requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>("[data-lifecycle-focus]")?.focus({ preventScroll: false }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [statusAnnouncement]);
+  const firstMissing = hasDailyOrigins && !isReadOnly ? missingDays(days)[0] : undefined;
+  const fixDay =
+    firstMissing && dailyDay && validationError === dailyOriginsError(days) && dailyDay.day.date !== firstMissing.date
+      ? { label: `Show ${formatReportDate(firstMissing.date)}`, onShow: () => dailyDay.select(firstMissing.date) }
+      : null;
   const steps = [
     { label: "Complete Visitor Details", done: complete },
     { label: "Review Report Form", done: submitted || (reviewed && complete) },
     { label: "Submit Report", done: submitted && !waitingForUpload && !uploadRejected },
   ];
   return (
-    <section className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
+    <section ref={panelRef} className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
+      <ReportLifecycleBanner
+        lifecycle={lifecycle}
+        reports={reports}
+        timeFormat={timeFormat}
+        reopeningReportId={reopeningReportId}
+        reopenIssue={reopenIssue}
+        onCorrect={onCorrect}
+        onAskForHelp={onAskForHelp}
+      />
+      <ReportsNeedingAction reports={reportsAwaitingAction} onOpen={onOpenReportMonth} />
       <div className="report-information">
         <div className="report-information-left">
           <header>
             <h2>Monthly DOT Visitor Report</h2>
-            <p>Create and manage your monthly tourism reports.</p>
+            <ReportStatusLine lifecycle={lifecycle} timeFormat={timeFormat} />
           </header>
           <dl className="report-information-fields">
             <div>
@@ -157,11 +202,6 @@ export function ReportDraftPanel({
           <h3>
             <Menu aria-hidden="true" />
             Next Steps
-            {!isReadOnly && (metricsError || validationError) && (
-              <InfoTooltip className="report-availability-hint" content={metricsError || validationError || ""} ariaLabel="Report availability">
-                <Info size={17} aria-hidden="true" />
-              </InfoTooltip>
-            )}
           </h3>
           <ol>
             {steps.map((step, index) => (
@@ -181,20 +221,12 @@ export function ReportDraftPanel({
             <ReportDraftActions
               isReadOnly={isReadOnly}
               isPeriodChanging={isPeriodChanging}
+              isLoadingCounts={isPeriodChanging}
               metricsError={metricsError}
               validationError={validationError}
+              fixDay={fixDay}
               onSubmitPrompt={onSubmitPrompt}
             />
-            {isReadOnly && (
-              <p className="report-workflow-status">
-                {waitingForUpload ? "Saved on this device · Upload pending" : uploadRejected ? "Saved on this device · Upload rejected" : activeReport?.status} · {activeReportId}
-              </p>
-            )}
-            {!isReadOnly && (metricsError || validationError) && (
-              <p className="sr-only" role="status">
-                {metricsError || validationError}
-              </p>
-            )}
           </div>
         </aside>
       </div>

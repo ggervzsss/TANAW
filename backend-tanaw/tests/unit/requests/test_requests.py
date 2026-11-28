@@ -568,3 +568,47 @@ async def test_starting_a_handled_request_is_a_conflict(monkeypatch: pytest.Monk
         await start_on_request(item.id, other_it(), fake_db())
 
     assert raised.value.status_code == 409
+
+
+def test_a_summary_says_whether_it_has_seen_the_request() -> None:
+    reader = account(AccountRole.ADMIN)
+
+    assert to_request_summary(request(), viewer=reader, now=NOW).seenByIt is False
+    assert to_request_summary(request(), viewer=reader, now=NOW, seen_by_it=True).seenByIt is True
+
+
+@pytest.mark.asyncio
+async def test_a_list_checks_which_requests_it_opened_in_one_query() -> None:
+    listed = MagicMock()
+    listed.unique.return_value.all.return_value = [
+        request(),
+        request(id="request-2", request_code="REQ-000002"),
+    ]
+    seen = MagicMock()
+    seen.all.return_value = ["request-2"]
+    db = MagicMock()
+    db.scalars = AsyncMock(side_effect=[listed, seen])
+    db.execute = AsyncMock(return_value=[])
+
+    summaries = await list_requests(db, account(AccountRole.ADMIN))
+
+    assert [(summary.id, summary.seenByIt) for summary in summaries] == [
+        ("request-1", False),
+        ("request-2", True),
+    ]
+    assert db.scalars.await_count == 2
+    sql = str(db.scalars.await_args_list[1].args[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "JOIN accounts ON accounts.id = request_reads.account_id" in sql
+    assert "accounts.role = 'IT'" in sql
+    assert "request_reads.request_id IN ('request-1', 'request-2')" in sql
+
+
+@pytest.mark.asyncio
+async def test_an_empty_list_asks_nothing_about_it_reads() -> None:
+    db = MagicMock()
+    result = MagicMock()
+    result.unique.return_value.all.return_value = []
+    db.scalars = AsyncMock(return_value=result)
+
+    assert await list_requests(db, account(AccountRole.ADMIN)) == []
+    assert db.scalars.await_count == 1

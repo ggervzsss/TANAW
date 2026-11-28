@@ -18,6 +18,7 @@ const intake: IntakeReport = {
   submittedAt: saved.submitted_at,
   status: "Ready to Consolidate",
   code: saved.report_id,
+  version: 1,
   metrics: { entry: saved.entries, exit: saved.exits, unique: saved.unique_count, peak: String(saved.peak_occupancy) },
   payload: saved.payload,
 };

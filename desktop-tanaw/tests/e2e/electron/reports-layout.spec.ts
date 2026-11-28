@@ -120,6 +120,8 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     };
     await application.context().route("http://localhost:8000/**", (route) => {
       const pathname = new URL(route.request().url()).pathname;
+      // The desktop also reads its own reports from this path; only POSTs are uploads.
+      if (pathname === "/operational/desktop/report-submissions" && route.request().method() === "GET") return route.fulfill({ json: [] });
       if (pathname === "/operational/desktop/report-submissions") {
         uploads.push(route.request().postDataJSON());
         return route.fulfill({ status: 202, json: {} });
@@ -251,10 +253,10 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await page.getByRole("button", { name: "Close preview", exact: true }).click();
     const reviewBeforeSubmission = (await page.getByRole("button", { name: "Review Report Form", exact: true }).boundingBox())!;
     await page.getByRole("button", { name: "Submit Report", exact: true }).click();
-    await page.getByRole("button", { name: "Yes, Submit", exact: true }).click();
+    await page.getByRole("dialog", { name: "Send your October 2026 report to the LGU?" }).getByRole("button", { name: "Send report", exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
     await expect.poll(() => uploads.some((item) => item.reportId === submissions[0].report_id)).toBe(true);
-    await expect(page.locator(".tanaw-toast--success").getByRole("status").filter({ hasText: "Report submitted successfully" })).toContainText(`Reference ${submissions[0].report_id}.`);
+    await expect(page.locator(".tanaw-toast--success").getByRole("status").filter({ hasText: "Report sent" })).toContainText(`Reference ${submissions[0].report_id}.`);
     expect(submissions[0].payload).toMatchObject({
       demo: { thisProvMale: "300", thisProvFemale: "317", thisProvUnspecified: "0" },
       var1: { thisCityMale: "295", thisCityFemale: "317", thisCityUnspecified: "0" },
@@ -262,11 +264,13 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     });
     await expect(page.getByRole("textbox", { name: "Other City Male", exact: true })).toHaveValue("5");
     await expect(page.getByRole("textbox", { name: "Other City Male", exact: true })).toBeDisabled();
-    const submittedInformation = page.locator(".report-workflow-status");
-    await expect(submittedInformation).toContainText(String(submissions[0].report_id));
+    // The lasting confirmation replaces the subtitle under the report title, so nothing moves.
+    const submittedInformation = page.locator(".report-status-line");
+    await expect(submittedInformation).toContainText(`Reference ${submissions[0].report_id}`);
+    await expect(submittedInformation).toContainText("Waiting for Staff review");
     const reviewAfterSubmission = (await page.getByRole("button", { name: "Review Report Form", exact: true }).boundingBox())!;
     expect(reviewAfterSubmission).toEqual(reviewBeforeSubmission);
-    expect((await submittedInformation.boundingBox())!.y).toBeGreaterThanOrEqual(reviewAfterSubmission.y + reviewAfterSubmission.height + 14);
+    expect((await submittedInformation.boundingBox())!.y).toBeLessThan(reviewAfterSubmission.y);
     expect(JSON.stringify(records.slice(0, 3))).toBe(originalRecords);
   } finally {
     if (application) await application.close();

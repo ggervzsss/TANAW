@@ -98,9 +98,139 @@
     transform 200ms var(--ae-ease);
 }
 
-.admin-enterprises .ae-table tbody tr:hover .tanaw-row-chevron {
-  color: var(--tanaw-accent-ink);
-  transform: translateX(3px);
+@media (hover: hover) {
+  .admin-enterprises .ae-table tbody tr:hover .tanaw-row-chevron {
+    color: var(--tanaw-accent-ink);
+    transform: translateX(3px);
+  }
+}
+
+/*
+ * Phones and tablets (below 60rem, where the columns no longer fit): each enterprise becomes one stacked row, whole-row tappable, with no sideways scroll. The
+ * name and address lead, the camera status (what needs attention) follows, then barangay, code and
+ * category as label and value lines. Only the sortable Enterprise header stays above the list.
+ * Cells: 1 name, 2 barangay, 3 attraction code, 4 category, 5 cameras, 6 chevron.
+ */
+@media (width < 60rem) {
+  .admin-enterprises .ae-table--stack,
+  .admin-enterprises .ae-table--stack :is(thead, tbody) {
+    display: block;
+  }
+
+  .admin-enterprises .ae-table--stack thead tr {
+    display: flex;
+  }
+
+  .admin-enterprises .ae-table--stack thead th:not(:first-child) {
+    display: none;
+  }
+
+  .admin-enterprises .ae-table--stack thead th:first-child {
+    width: 100%;
+    padding: 8px 4px;
+  }
+
+  .admin-enterprises .ae-table--stack .ae-sort {
+    min-height: 32px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20px;
+    align-items: start;
+    column-gap: 12px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+    border-radius: 0;
+    transition:
+      background-color 160ms var(--ae-ease),
+      border-color 160ms var(--ae-ease),
+      border-radius 160ms var(--ae-ease);
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > *,
+  .admin-enterprises .ae-table--stack tbody tr.tanaw-row-link:is(:hover, :focus-within, :active) > * {
+    display: block;
+    grid-column: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* A pressed or focused row reads as one rounded tint; its hairline steps aside. */
+  .admin-enterprises .ae-table--stack tbody tr.tanaw-row-link:is(:focus-within, :active) {
+    border-bottom-color: transparent;
+    border-radius: 12px;
+    background: var(--tanaw-control-hover);
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr.tanaw-row-link:active {
+    background: var(--tanaw-selected-bg);
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :first-child {
+    grid-row: 1;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :nth-child(5) {
+    grid-row: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 12px;
+    margin-top: 8px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :nth-child(5) > * {
+    margin-top: 0;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :nth-child(2) {
+    grid-row: 3;
+    margin-top: 10px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :nth-child(3) {
+    grid-row: 4;
+    margin-top: 4px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :nth-child(4) {
+    grid-row: 5;
+    margin-top: 4px;
+  }
+
+  /* Label and value lines: a muted 13px label in a fixed column, the value beside it. */
+  .admin-enterprises .ae-table--stack tbody td[data-label] {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    column-gap: 12px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody td[data-label]::before {
+    content: attr(data-label);
+    grid-row: 1 / span 2;
+    color: var(--tanaw-text-muted);
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  .admin-enterprises .ae-table--stack tbody td[data-label] > * {
+    grid-column: 2;
+  }
+
+  .admin-enterprises .ae-table--stack tbody tr > :last-child {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    width: auto;
+  }
+
+  /* Loading rows keep the stacked shape: the name lines and the camera lines. */
+  .admin-enterprises .ae-table--stack tbody tr:not(.tanaw-row-link) > :is(:nth-child(2), :nth-child(3), :nth-child(4)) {
+    display: none;
+  }
 }
 
 /* The sortable column header: the arrow lifts toward the direction it will sort next. */
@@ -112,8 +242,10 @@
   transition: translate 200ms var(--ae-ease);
 }
 
-.admin-enterprises .ae-sort:hover svg {
-  translate: 0 -1px;
+@media (hover: hover) {
+  .admin-enterprises .ae-sort:hover svg {
+    translate: 0 -1px;
+  }
 }
 
 /* Filter chips and inline actions: a tint that deepens on hover and settles when pressed. */
@@ -135,8 +267,10 @@
   transition: rotate 200ms var(--ae-ease);
 }
 
-.admin-enterprises .ae-chip:hover svg {
-  rotate: 90deg;
+@media (hover: hover) {
+  .admin-enterprises .ae-chip:hover svg {
+    rotate: 90deg;
+  }
 }
 
 .admin-enterprises .ae-text-action {
@@ -155,8 +289,44 @@
   transition: translate 200ms var(--ae-ease);
 }
 
-.admin-enterprises .ae-link-arrow:hover svg {
-  translate: 3px 0;
+@media (hover: hover) {
+  .admin-enterprises .ae-link-arrow:hover svg {
+    translate: 3px 0;
+  }
+}
+
+/*
+ * Opening Hours and Temporary Closures: read-only rows split by hairlines. A row reaches 12px past
+ * the text on each side so its tint has room, tints on hover, and today's row keeps the green
+ * selected tint. Only a tinted row rounds its corners (12px), once its own hairline and the one
+ * above it have stepped aside, so the hairlines stay straight. Vertical padding stays with each
+ * list's markup.
+ */
+.admin-enterprises .ae-rows > * {
+  margin-inline: -12px;
+  padding-inline: 12px;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  transition:
+    background-color 160ms var(--ae-ease),
+    border-color 160ms var(--ae-ease);
+}
+
+.admin-enterprises .ae-rows:not(.ae-rows-static) > :hover {
+  border-bottom-color: transparent;
+  border-radius: 12px;
+  background-color: var(--tanaw-control-hover);
+}
+
+.admin-enterprises .ae-rows > [data-today],
+.admin-enterprises .ae-rows:not(.ae-rows-static) > [data-today]:hover {
+  border-bottom-color: transparent;
+  border-radius: 12px;
+  background-color: var(--tanaw-selected-bg);
+}
+
+.admin-enterprises .ae-rows:not(.ae-rows-static) > :has(+ :hover),
+.admin-enterprises .ae-rows > :has(+ [data-today]) {
+  border-bottom-color: transparent;
 }
 
 /* The trend readout: the pointed period's figure as keyed text above the chart, never in a box. */
@@ -191,6 +361,7 @@
   }
 
   .admin-enterprises .ae-table tbody tr > *,
+  .admin-enterprises .ae-rows > *,
   .admin-enterprises .ae-table tbody tr [data-row-primary],
   .admin-enterprises .ae-table tbody tr .tanaw-row-chevron,
   .admin-enterprises :is(.ae-sort, .ae-sort svg, .ae-chip, .ae-chip svg, .ae-text-action, .ae-link-arrow svg) {

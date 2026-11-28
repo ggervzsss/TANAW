@@ -135,6 +135,12 @@ def to_auth_user(account: Account) -> AuthUser:
         displayImageDataUrl=display_image_data_url
         if isinstance(display_image_data_url, str)
         else None,
+        status=account.status.value if account.status else None,
+        isActivated=account.activated_at is not None,
+        twoFactorEnabled=None
+        if account.role == AccountRole.ENTERPRISE
+        else account.totp_enabled_at is not None and account.totp_secret_seed is not None,
+        lastSignInAt=account.previous_login_at or account.last_login_at,
     )
 
 

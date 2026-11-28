@@ -16,8 +16,12 @@ from app.features.accounts.enterprise import (
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.activity_logs.service import record_activity_log as record_operational_log
 from app.features.notifications.service import (
+    ENTERPRISE_REPORT_RETURNED_NOTIFICATION,
+    ENTERPRISE_REPORT_RETURNED_TITLE,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     create_role_notifications,
+    create_user_notification,
+    get_enterprise_notification_recipient,
 )
 from app.features.reporting.errors import (
     DuplicateReportPeriodError,
@@ -38,15 +42,18 @@ from app.features.reporting.idempotency import (
 from app.features.reporting.intake import (
     ingest_report_submission,
     list_intake_reports,
+    return_report,
     update_report_status,
 )
 from app.features.reporting.models import EnterpriseReportSubmission
+from app.features.reporting.policies import RETURN_REPORT_ACTION
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     FinalReportCreate,
     FinalReportStatusUpdate,
     FinalReportSummary,
     IntakeReportSummary,
+    ReportReturnRequest,
     ReportStatusUpdate,
     SamplePreparationCounts,
     SamplePreparationSummary,
@@ -98,6 +105,24 @@ async def ingest_desktop_report_submission(
     )
     await complete_report_submission(db, claim, report)
     return report
+
+
+@router.get("/desktop/report-submissions", response_model=list[IntakeReportSummary])
+async def list_desktop_report_submissions(
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    period: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=120,
+            description="Only this reporting period, for example October 2026.",
+        ),
+    ] = None,
+) -> list[IntakeReportSummary]:
+    """The calling enterprise's own report versions, newest first: whether each was accepted,
+    returned for correction (with the reason) or consolidated."""
+    return await list_intake_reports(db, account, period=period)
 
 
 @router.get("/desktop/sample-preparation", response_model=SamplePreparationSummary | None)
@@ -174,6 +199,48 @@ async def update_intake_report_status(
             "enterpriseId": report.enterpriseId,
             "period": report.period,
             "remarks": payload.remarks,
+        },
+    )
+    return report
+
+
+@router.post("/reports/intake/{report_id}/return", response_model=IntakeReportSummary)
+async def return_intake_report(
+    report_id: str,
+    payload: ReportReturnRequest,
+    actor: StaffWorkflowAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> IntakeReportSummary:
+    """Returns a waiting or accepted report to its enterprise for correction. The enterprise is
+    notified with the reason and can send a corrected version of the period's report."""
+    try:
+        report = await return_report(
+            db, report_id, reason=payload.reason, returned_by=actor.display_name
+        )
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+
+    await notify_enterprise_report_returned(db, actor, report)
+    await record_operational_log(
+        db,
+        group="Reports",
+        severity="Warning",
+        actor=actor.display_name,
+        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
+        action=RETURN_REPORT_ACTION,
+        target=report.enterprise,
+        summary=(
+            f"{actor.display_name} returned {report.code} from {report.enterprise} "
+            f"for {report.period}: {payload.reason}"
+        ),
+        source_id=report.id,
+        metadata={
+            "enterpriseId": report.enterpriseId,
+            "period": report.period,
+            "version": report.version,
+            "reason": payload.reason,
         },
     )
     return report
@@ -295,13 +362,44 @@ async def list_report_enterprises(
 async def notify_staff_report_submission(
     db: AsyncSession, actor: Account, report: IntakeReportSummary
 ) -> None:
+    message = (
+        f"{report.enterprise} submitted {report.code} for {report.period}."
+        if report.version == 1
+        else (
+            f"{report.enterprise} sent a corrected report, {report.code} "
+            f"(version {report.version}), for {report.period}."
+        )
+    )
     await create_role_notifications(
         db,
         recipient_roles=[AccountRole.STAFF],
         title=STAFF_REPORT_SUBMITTED_NOTIFICATION,
-        message=f"{report.enterprise} submitted {report.code} for {report.period}.",
+        message=message,
         notification_type=STAFF_REPORT_SUBMITTED_NOTIFICATION,
         severity="Info",
+        actor=actor,
+        source_type="enterprise.report",
+        source_id=report.id,
+    )
+
+
+async def notify_enterprise_report_returned(
+    db: AsyncSession, actor: Account, report: IntakeReportSummary
+) -> None:
+    """Tells the enterprise account, in its desktop notifications, why its report came back. The
+    notification insert also publishes the realtime notification.created event."""
+    recipient = await get_enterprise_notification_recipient(db, report.enterpriseId)
+    if recipient is None:
+        return
+    await create_user_notification(
+        db,
+        recipient=recipient,
+        title=ENTERPRISE_REPORT_RETURNED_TITLE,
+        message=(
+            f"Your {report.period} report was returned for correction: {report.returnedReason}"
+        ),
+        notification_type=ENTERPRISE_REPORT_RETURNED_NOTIFICATION,
+        severity="Warning",
         actor=actor,
         source_type="enterprise.report",
         source_id=report.id,

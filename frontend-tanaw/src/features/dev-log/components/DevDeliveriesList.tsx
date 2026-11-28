@@ -88,7 +88,7 @@ function DevLogMessage({ body }: { body: string }) {
             <button
               type="button"
               onClick={() => void copyLink(segment.value)}
-              className="rounded-tanaw-sm inline-flex size-6 shrink-0 items-center justify-center text-(--tanaw-accent-ink) transition-colors duration-150 hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+              className="rounded-tanaw-sm inline-flex size-6 shrink-0 items-center justify-center text-(--tanaw-accent-ink) pointer-coarse:size-11 transition-colors duration-150 hover:bg-(--tanaw-control-hover) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
               aria-label="Copy link"
               title="Copy link"
             >

@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   activityDetailFields,
+  activityEmptyMessage,
   activityKind,
   activityLinks,
   activityReference,
   activityRequestId,
   activitySummaryParts,
   activityTitle,
+  activityTypeOptions,
   filterRecentActivity,
+  isBusyPlaceRecord,
   paginateActivity,
   parseActivityType,
 } from "../../../../src/features/system-logs/model/recentActivity";
@@ -41,6 +44,24 @@ describe("Activity groups", () => {
     expect(parseActivityType("monitoring")).toBe("monitoring");
     expect(parseActivityType("enterprises")).toBe("enterprises");
     expect(parseActivityType("help")).toBe("all");
+    expect(parseActivityType("busy")).toBe("busy");
+    expect(parseActivityType(null)).toBe("all");
+  });
+
+  it("offers Busiest Enterprises right after Monitoring, with descriptions for the open menu only", () => {
+    expect(activityTypeOptions.map((option) => option.label)).toEqual([
+      "All Activity",
+      "Login & Security",
+      "Accounts",
+      "Enterprises",
+      "Reports",
+      "Requests",
+      "Monitoring",
+      "Busiest Enterprises",
+      "Settings & Maintenance",
+    ]);
+    expect(activityTypeOptions.find((option) => option.value === "busy")?.description).toBe("Places busier than usual right now");
+    expect(activityTypeOptions.every((option) => !("meta" in option))).toBe(true);
   });
 
   it("gives each action a plain, past-tense title", () => {
@@ -69,6 +90,29 @@ describe("Filtering and paging", () => {
 
   it("summarises the list without an unresolved count", () => {
     expect(activitySummaryParts(records.slice(1), "all", "")).toEqual({ label: "All activity", count: "2 records" });
+    expect(activitySummaryParts([], "busy", "")).toEqual({ label: "Busiest Enterprises", count: "0 records" });
+  });
+
+  it("lists the busy-place Monitoring records under Busiest Enterprises", () => {
+    const busy = log({ id: "busy", group: "Monitoring", actor: "TANAW", actorRole: "System", action: "Busier Than Usual", target: "San Antonio Plaza", timestamp: "2026-11-21T06:00:00.000Z" });
+    const usual = log({ id: "usual", group: "Monitoring", actor: "TANAW", actorRole: "System", action: "Back to Usual", target: "San Antonio Plaza", timestamp: "2026-11-21T08:00:00.000Z" });
+    const tagged = log({ id: "tagged", group: "Monitoring", action: "Place Alert", metadata: { alertType: "Busier Than Usual" }, timestamp: "2026-11-21T09:00:00.000Z" });
+    const all = [...records, busy, usual, tagged];
+    expect(isBusyPlaceRecord(busy)).toBe(true);
+    expect(isBusyPlaceRecord(records[1])).toBe(false);
+    expect(isBusyPlaceRecord(log({ id: "other-group", action: "Busier Than Usual" }))).toBe(false);
+    expect(filterRecentActivity(all, { type: "busy", query: "", range: november }).map((record) => record.id)).toEqual(["tagged", "usual", "busy"]);
+    expect(filterRecentActivity(all, { type: "monitoring", query: "", range: november }).map((record) => record.id)).toEqual(["tagged", "usual", "busy", "camera"]);
+  });
+
+  it("says what is missing when no record matches", () => {
+    const range = { rangeText: "Nov 1 – 28, 2026" };
+    expect(activityEmptyMessage({ type: "all", query: "", ...range })).toBe("No activity recorded for Nov 1 – 28, 2026.");
+    expect(activityEmptyMessage({ type: "all", query: " plaza ", ...range })).toBe("No activity matching “plaza” for Nov 1 – 28, 2026.");
+    expect(activityEmptyMessage({ type: "accounts", query: "", ...range })).toBe("No accounts for Nov 1 – 28, 2026.");
+    expect(activityEmptyMessage({ type: "busy", query: "", noneBusyNow: true, ...range })).toBe("No place is busier than usual right now. No busy-place records for Nov 1 – 28, 2026.");
+    expect(activityEmptyMessage({ type: "busy", query: "", noneBusyNow: false, ...range })).toBe("No busy-place records for Nov 1 – 28, 2026.");
+    expect(activityEmptyMessage({ type: "busy", query: "plaza", noneBusyNow: true, ...range })).toBe("No busy-place records matching “plaza” for Nov 1 – 28, 2026.");
   });
 
   it("pages eight records at a time", () => {
@@ -124,6 +168,26 @@ describe("Activity details", () => {
     expect(activityLinks(update, "it")).toEqual([{ label: "Open enterprise details", to: "/it/enterprises/ENT-3" }]);
     expect(filterRecentActivity([update], { type: "enterprises", query: "", range: november }).map((record) => record.id)).toEqual(["enterprise"]);
     expect(filterRecentActivity([update], { type: "accounts", query: "", range: november })).toEqual([]);
+  });
+
+  it("names a returned report and shows why it was returned", () => {
+    const returned = log({
+      id: "returned",
+      group: "Reports",
+      severity: "Warning",
+      action: "Return Enterprise Report",
+      actorRole: "LGU Staff",
+      target: "Daisy Resort",
+      metadata: { enterpriseId: "ENT-4", period: "October 2026", version: 2, reason: "Recount the visitor origins." },
+    });
+    expect(activityTitle(returned)).toBe("Report Returned for Correction");
+    expect(activityDetailFields(returned)).toEqual([
+      { label: "Enterprise", value: "Daisy Resort" },
+      { label: "Period", value: "October 2026" },
+      { label: "Staff review", value: "Returned", tone: "pending" },
+      { label: "Version", value: "2" },
+      { label: "Reason", value: "Recount the visitor origins." },
+    ]);
   });
 
   it("names the new request and password reset actions", () => {

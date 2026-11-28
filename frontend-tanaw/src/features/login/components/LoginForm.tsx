@@ -12,6 +12,8 @@ type LoginFormProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onAuthMessageClear: () => void;
   lockoutSeconds: number;
+  /** Kept mounted but hidden during two-step verification, so Back returns to the filled form. */
+  hidden?: boolean;
 };
 
 type DialogMode = "recovery" | "support" | null;
@@ -31,7 +33,7 @@ function formatLockout(seconds: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSeconds }: LoginFormProps) {
+export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSeconds, hidden = false }: LoginFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [identifierError, setIdentifierError] = useState("");
@@ -75,7 +77,7 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
 
   return (
     <>
-      <form className="tanaw-login-form" autoComplete="on" noValidate onSubmit={handleSubmit}>
+      <form className="tanaw-login-form" autoComplete="on" noValidate onSubmit={handleSubmit} hidden={hidden}>
         <div className="tanaw-auth-field-group">
           <label htmlFor="login-identifier" className="tanaw-auth-label">
             Email

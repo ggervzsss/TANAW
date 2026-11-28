@@ -8,7 +8,6 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import create_access_token
 from app.db.session import get_db
 from app.features.accounts.dependencies import (
     bearer_scheme,
@@ -29,8 +28,10 @@ from app.features.activity_logs.service import (
     record_activity_log as record_auth_log,
 )
 from app.features.auth.http_session import (
+    create_session_token,
     set_auth_session_cookie,
     token_remember_preference,
+    token_signed_in_at,
 )
 from app.features.auth.password_recovery import (
     PasswordRecoveryError,
@@ -93,9 +94,10 @@ async def change_password(
     remember = (
         token_remember_preference(credentials.credentials) if credentials is not None else False
     )
-    token = create_access_token(
-        account.id,
-        {"role": account.role.value, "remember": remember},
+    token = create_session_token(
+        account,
+        remember=remember,
+        signed_in_at=token_signed_in_at(credentials.credentials) if credentials else None,
     )
     set_auth_session_cookie(response, token, remember=remember)
     return LoginResponse(token=token, user=to_auth_user(account))

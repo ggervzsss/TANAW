@@ -49,7 +49,7 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <SegmentedControl ariaLabel="Email result" options={options} value={filter} onChange={(value) => setFilter(parseEmailLogFilter(value))} />
+        <SegmentedControl className="it-system__pills" ariaLabel="Email result" options={options} value={filter} onChange={(value) => setFilter(parseEmailLogFilter(value))} />
         <p className="text-[0.84375rem] text-(--tanaw-text-secondary)">Every email TANAW sent in the last 7 days.</p>
       </div>
 
@@ -107,8 +107,8 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
           />
         )
       ) : (
-        <div className="mt-3.5 overflow-x-auto">
-          <table className="it-system__table w-full min-w-200 border-separate border-spacing-0 text-left text-sm">
+        <div className="relative mt-3.5 overflow-x-auto max-lg:overflow-visible">
+          <table className="it-system__table it-system__email-table w-full min-w-200 border-separate border-spacing-0 text-left text-sm">
             <caption className="sr-only">{filter === "problems" ? "Emails that were not delivered in the last 7 days" : "Emails sent in the last 7 days"}</caption>
             <thead>
               <tr>
@@ -144,7 +144,9 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
                       <span className="block font-semibold wrap-anywhere text-(--tanaw-text)">{delivery.recipient}</span>
                       {who && <span className="mt-0.5 block text-[0.8125rem] text-(--tanaw-text-secondary)">{who}</span>}
                     </th>
-                    <td className="px-4 py-3.5 align-top text-(--tanaw-text)">{emailKindLabel(delivery.purpose)}</td>
+                    <td data-email-kind="" className="px-4 py-3.5 align-top text-(--tanaw-text)">
+                      {emailKindLabel(delivery.purpose)}
+                    </td>
                     <td className="px-4 py-3.5 align-top">
                       <span className={cn("inline-flex items-center gap-1.5 font-semibold", tone.text)}>
                         <span aria-hidden="true" className={cn("size-2 rounded-full", tone.dot)} />
@@ -152,11 +154,12 @@ export function EmailLogTab({ deliveries, isLoading, isError, onRefresh, retryin
                       </span>
                       {detail && <span className="mt-0.5 block text-[0.8125rem] text-(--tanaw-text-muted)">{detail}</span>}
                     </td>
-                    <td className="py-3.5 pr-3 pl-4 text-right align-top">
+                    <td data-email-actions={delivery.canRetry ? "" : undefined} className="py-3.5 pr-3 pl-4 text-right align-top">
                       {delivery.canRetry && (
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="pointer-coarse:min-h-11"
                           loading={retryingId === delivery.id}
                           disabled={Boolean(retryingId) && retryingId !== delivery.id}
                           onClick={() => onRetry(delivery)}

@@ -25,6 +25,13 @@ export type DialogProps = {
   closeLabel?: string;
   /** Whether a click on the backdrop closes it (on by default). */
   closeOnBackdrop?: boolean;
+  /**
+   * False while the dialog must stay open, for example while it sends something: Escape, the
+   * backdrop and the close button do nothing, and the close button shows as unavailable.
+   */
+  dismissible?: boolean;
+  /** A selector for the control that takes focus first, such as the safe choice; else the panel. */
+  initialFocus?: string;
   /** A thin accent line at the top: "thread" is the forest, gold, leaf metric thread; "danger" for destructive confirmations. */
   accent?: "none" | "thread" | "danger";
   /** Classes for the panel, for example a custom max width. */
@@ -56,6 +63,8 @@ export function Dialog({
   size = "md",
   closeLabel = "Close dialog",
   closeOnBackdrop = true,
+  dismissible = true,
+  initialFocus,
   accent = "none",
   className,
   bodyClassName,
@@ -63,7 +72,10 @@ export function Dialog({
   const panelRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  useDialogFocus(panelRef, onClose);
+  const close = () => {
+    if (dismissible) onClose();
+  };
+  useDialogFocus(panelRef, close, true, initialFocus);
 
   return (
     <ModalPortal lockScroll>
@@ -74,7 +86,7 @@ export function Dialog({
         exit={{ opacity: 0 }}
         transition={{ duration: 0.22, ease: easeOut }}
         onPointerDown={(event) => {
-          if (closeOnBackdrop && event.target === event.currentTarget) onClose();
+          if (closeOnBackdrop && event.target === event.currentTarget) close();
         }}
       >
         <motion.section
@@ -109,8 +121,9 @@ export function Dialog({
             <button
               type="button"
               aria-label={closeLabel}
-              onClick={onClose}
-              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 motion-reduce:transition-none"
+              onClick={close}
+              disabled={!dismissible}
+              className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,translate,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:active:scale-100 motion-reduce:transition-none"
             >
               <X size={18} aria-hidden="true" />
             </button>

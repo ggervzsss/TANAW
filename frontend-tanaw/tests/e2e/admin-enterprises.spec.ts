@@ -132,8 +132,32 @@ function account(enterpriseId: string, name: string, attraction: AccountSummary[
   };
 }
 
+/** Weekdays 8 AM to 12 PM and 1 PM to 5 PM, Saturday 8 AM to 9 PM, closed on Sunday. */
+const plazaHours: NonNullable<AccountSummary["openingHours"]> = {
+  days: (["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const).map((day) =>
+    day === "sunday"
+      ? { day, mode: "closed" as const, periods: [] }
+      : day === "saturday"
+        ? { day, mode: "hours" as const, periods: [{ open: "08:00", close: "21:00" }] }
+        : {
+            day,
+            mode: "hours" as const,
+            periods: [
+              { open: "08:00", close: "12:00" },
+              { open: "13:00", close: "17:00" },
+            ],
+          },
+  ),
+};
+
+/** An upcoming closure the enterprise marked from the desktop app (under its account name). */
+const plazaClosures = [{ id: "closure-plaza", startDate: isoDay(-26), endDate: isoDay(-28), reason: "Pond cleaning", createdBy: "City Plaza" }];
+
 const accounts = [
-  account("ENT-PLAZA", "City Plaza", { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" }, "Barangay Poblacion, San Pedro, Laguna 4023"),
+  {
+    ...account("ENT-PLAZA", "City Plaza", { code: "411", typeCode: "4", type: "Sports and Recreational Facilities", category: "Parks", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD409" }, "Barangay Poblacion, San Pedro, Laguna 4023"),
+    openingHours: plazaHours,
+  },
   account("ENT-SPORTS", "Pacita Sports Complex", { code: "405", typeCode: "4", type: "Sports and Recreational Facilities", category: "Sports Complex", portfolioCategory: "Leisure and Entertainment Tourism", ntdpCode: "TD412" }, "Pacita Avenue, San Pedro, Laguna"),
   account("ENT-MUSEUM", "Museo ng San Pedro", { code: "205", typeCode: "2", type: "History and Culture", category: "Museum", portfolioCategory: "Cultural Tourism", ntdpCode: "TD213" }, "Barangay San Antonio, San Pedro, Laguna"),
 ];
@@ -218,6 +242,7 @@ async function openEnterprises(page: Page, path = "/admin/enterprises") {
   await page.route("**/activity-logs**", (route) => route.fulfill(json([])));
   await mockPortalSession(page, adminUser);
   await page.route("**/accounts/enterprises", (route) => route.fulfill(json(accounts)));
+  await page.route("**/accounts/enterprises/*/closures", (route) => route.fulfill(json(route.request().url().includes("account-ENT-PLAZA") ? plazaClosures : [])));
   await page.route("**/operational/map-enterprises", (route) => route.fulfill(json(mapEnterprises)));
   await page.route("**/operational/reports/intake", (route) => route.fulfill(json([intakeReport])));
   await page.route("**/operational/visitor-insights**", (route) => {
@@ -370,6 +395,30 @@ test("Enterprise Details shows a past day from the address, within the camera hi
   await page.goto("/admin/enterprises/ENT-PLAZA?range=custom&from=2026-13-40&to=nope");
   await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Today’s Trend" })).toBeVisible();
+});
+
+test("Enterprise Details shows the opening hours and temporary closures, read-only", async ({ page }) => {
+  await openEnterprises(page, "/admin/enterprises/ENT-PLAZA");
+  await expect(page.getByRole("heading", { level: 1, name: "City Plaza" })).toBeVisible();
+
+  // Compact times, a split day joined with "and", and today's row marked.
+  const hours = page.getByRole("region", { name: "Opening Hours" });
+  const monday = hours.getByRole("listitem").filter({ hasText: "Monday" });
+  await expect(monday).toContainText("8 AM to 12 PM and 1 PM to 5 PM");
+  await expect(monday).toContainText("Lunch break");
+  await expect(hours.getByRole("listitem").filter({ hasText: "Saturday" })).toContainText("8 AM to 9 PM");
+  await expect(hours.getByRole("listitem").filter({ hasText: "Sunday" })).toContainText("Closed");
+  await expect(hours.locator('[aria-current="date"]')).toContainText("(today)");
+  await expect(hours.getByText(/^(Open now, until|Closed now, opens) /)).toBeVisible();
+  await expect(hours.getByRole("button")).toHaveCount(0);
+
+  const closures = page.getByRole("region", { name: "Temporary Closures" });
+  const closure = closures.getByRole("listitem");
+  await expect(closure).toHaveCount(1);
+  await expect(closure).toContainText("Upcoming");
+  await expect(closure).toContainText("Pond cleaning");
+  await expect(closure).toContainText("Marked by City Plaza from the desktop app");
+  await expect(closures.getByRole("button")).toHaveCount(0);
 });
 
 test("Enterprise Details explains an unknown enterprise ID", async ({ page }) => {

@@ -1,4 +1,4 @@
-// Admin Recent Activity: every record newest first in six groups, filters, paging and the details drawer.
+// Admin Recent Activity: every record newest first in seven groups, the busy places pinned above them, filters, paging and the details drawer.
 // IT reads the same records on the System screen (it-system.spec.ts).
 import { expect, test, type Page } from "@playwright/test";
 import { json, mockEmptyCollections, mockPortalSession, portalUser, type PortalTheme } from "./support/session";
@@ -62,15 +62,34 @@ const logs: Log[] = [
   log({ id: "n1", timestamp: "2026-11-23T01:30:00Z", action: "Login", summary: "LGU Admin signed in to TANAW." }),
 ];
 
-async function openActivity(page: Page, path = "/admin/activity", theme: PortalTheme = "light") {
+const liveAlert = (entry: { id: string; type: string; enterpriseId: string; enterpriseName: string; summary: string; startedAt: string; camera?: string }) => ({
+  severity: entry.type === "Camera Not Counting" ? "Critical" : "Warning",
+  status: "Active",
+  camera: null,
+  detail: null,
+  endedAt: null,
+  ...entry,
+});
+
+// Two places busier than usual right now, and a camera alert that is not pinned.
+const busyAlerts = [
+  liveAlert({ id: "ALT-000011", type: "Busier Than Usual", enterpriseId: "ENT-2", enterpriseName: "Pacita Complex Mall", summary: "Pacita Complex Mall has 210 visitors inside, more than its usual 120 around this time.", startedAt: "2026-11-23T00:40:00Z" }),
+  liveAlert({ id: "ALT-000010", type: "Busier Than Usual", enterpriseId: "ENT-7", enterpriseName: "San Antonio Plaza", summary: "San Antonio Plaza has 60 visitors inside, more than its usual 43 around this time.", startedAt: "2026-11-23T01:15:00Z" }),
+  liveAlert({ id: "ALT-000012", type: "Camera Not Counting", enterpriseId: "ENT-9", enterpriseName: "Municipal Sports Center", camera: "Gate A", summary: "The Gate A camera at Municipal Sports Center is not counting.", startedAt: "2026-11-22T23:00:00Z" }),
+];
+
+async function openActivity(page: Page, path = "/admin/activity", theme: PortalTheme = "light", alerts: unknown[] = []) {
   await page.clock.setFixedTime(new Date("2026-11-23T10:00:00+08:00"));
   await mockPortalSession(page, portalUser("admin"), { theme });
   await mockEmptyCollections(page, ["**/operational/notifications", "**/operational/alerts", "**/operational/requests", "**/accounts/enterprises"]);
+  // Registered after the empty collections, so it takes precedence.
+  if (alerts.length) await page.route("**/operational/alerts", (route) => route.fulfill(json(alerts)));
   await page.route("**/activity-logs", (route) => route.fulfill(json(logs)));
   await page.goto(path);
 }
 
 const rows = (page: Page) => page.locator("[data-activity-row]");
+const pinnedRows = (page: Page) => page.locator("[data-pinned]");
 const summary = (page: Page) => page.getByRole("status").filter({ hasText: / records? · / });
 
 test("lists every record newest first in groups, eight per page, with nothing pinned", async ({ page }) => {
@@ -122,6 +141,66 @@ test("filters by group, search and date range, and resets with Show all activity
   await page.getByRole("option", { name: /^Accounts/ }).click();
   await expect(rows(page)).toHaveCount(0);
   await expect(page.getByText("No accounts for Nov 23, 2026.")).toBeVisible();
+});
+
+test("pins each place busier than usual right now above the records, under All Activity and Busiest Enterprises", async ({ page }) => {
+  await openActivity(page, "/admin/activity", "light", busyAlerts);
+
+  // One amber row per busy place, most recently busy first; the camera alert is not pinned.
+  await expect(pinnedRows(page)).toHaveCount(2);
+  await expect(summary(page)).toHaveText("All activity · 10 records · 2 busy enterprises pinned · Nov 1 – 23, 2026");
+  const plaza = pinnedRows(page).first();
+  await expect(plaza).toContainText("Nov 23, 2026");
+  await expect(plaza).toContainText("Since 9:15 AM");
+  await expect(plaza).toContainText("Busier than usual");
+  await expect(plaza).toContainText("Busiest enterprises");
+  await expect(plaza).toContainText("Still busy");
+  await expect(plaza).toContainText("San Antonio Plaza");
+  await expect(plaza).toContainText("more than its usual 43 around this time.");
+  await expect(plaza.getByRole("link")).toHaveAttribute("href", "/admin/dashboard?place=ENT-7");
+  await expect(pinnedRows(page).nth(1)).toContainText("Pacita Complex Mall");
+  await expect(pinnedRows(page).filter({ hasText: "Municipal Sports Center" })).toHaveCount(0);
+
+  // Pinned rows are not records: the records still page eight at a time, and the pins stay on page 1.
+  await expect(rows(page)).toHaveCount(8);
+  const pages = page.getByRole("navigation", { name: "Activity pages" });
+  await expect(pages).toContainText("Showing 1–8 of 10");
+  await pages.getByRole("button", { name: "Page 2" }).click();
+  await expect(pinnedRows(page)).toHaveCount(0);
+  await pages.getByRole("button", { name: "Page 1" }).click();
+  await expect(pinnedRows(page)).toHaveCount(2);
+
+  // Other types hide them; Busiest Enterprises keeps them.
+  await page.getByRole("combobox", { name: "Activity type" }).click();
+  await page.getByRole("option", { name: /^Monitoring/ }).click();
+  await expect(pinnedRows(page)).toHaveCount(0);
+  await expect(summary(page)).toHaveText("Monitoring · 1 record · Nov 1 – 23, 2026");
+
+  await page.getByRole("combobox", { name: "Activity type" }).click();
+  await page.getByRole("option", { name: /^Busiest Enterprises/ }).click();
+  await expect(pinnedRows(page)).toHaveCount(2);
+  await expect(summary(page)).toHaveText("Busiest Enterprises · 0 records · 2 busy enterprises pinned · Nov 1 – 23, 2026");
+  await expect(page.getByText("No busy-place records for Nov 1 – 23, 2026.")).toBeVisible();
+
+  // The search matches a pinned row by its enterprise name.
+  await page.getByRole("searchbox", { name: "Search activity, person, or enterprise" }).fill("pacita");
+  await expect(pinnedRows(page)).toHaveCount(1);
+  await expect(pinnedRows(page).first()).toContainText("Pacita Complex Mall");
+  await expect(summary(page)).toHaveText("Busiest Enterprises · 0 matching records · 1 busy enterprise pinned · Nov 1 – 23, 2026");
+
+  // A pinned row opens the place on the Dashboard map, not the details drawer.
+  await pinnedRows(page).first().getByRole("link").press("Enter");
+  await expect(page).toHaveURL(/\/admin\/dashboard\?place=ENT-2/);
+});
+
+test("says so under Busiest Enterprises when no place is busy right now", async ({ page }) => {
+  await openActivity(page);
+
+  await page.getByRole("combobox", { name: "Activity type" }).click();
+  await page.getByRole("option", { name: /^Busiest Enterprises/ }).click();
+  await expect(pinnedRows(page)).toHaveCount(0);
+  await expect(summary(page)).toHaveText("Busiest Enterprises · 0 records · Nov 1 – 23, 2026");
+  await expect(page.getByText("No place is busier than usual right now. No busy-place records for Nov 1 – 23, 2026.")).toBeVisible();
 });
 
 test("opens an activity in the drawer, keeps it in the URL, links to the request and steps through the list", async ({ page }) => {

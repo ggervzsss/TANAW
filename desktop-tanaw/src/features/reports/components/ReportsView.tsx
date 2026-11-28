@@ -1,5 +1,8 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Files, History } from "lucide-react";
+import { routePaths } from "../../../app/router/routePaths";
+import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable } from "./ReportLedgerTable";
@@ -8,6 +11,7 @@ import type { Camera, ReportRecord } from "../../../types/enterprise";
 import { useReportsWorkspace } from "../hooks/useReportsWorkspace";
 import { validateDemographicAllocation } from "../model/report-workspace";
 import { dailyOriginsError } from "../model/daily-origins";
+import { rejectedUploadTicketDraft, reportReference } from "../model/report-lifecycle";
 
 type ReportsViewProps = {
   cameras?: Camera[];
@@ -18,9 +22,12 @@ type ReportsViewProps = {
 
 export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
   const workspace = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
-  return <ReportsWorkspace workspace={workspace} />;
+  return <ReportsWorkspace workspace={workspace} reportsHistory={reportsHistory} />;
 }
-function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useReportsWorkspace> }) {
+function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType<typeof useReportsWorkspace>; reportsHistory: ReportRecord[] }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [tab, setTab] = useState<"create" | "history">("create");
   const [reviewedKey, setReviewedKey] = useState("");
   const [previewedLedgerKey, setPreviewedLedgerKey] = useState<string | null>(null);
@@ -51,10 +58,20 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
     setNotes,
     setOrigins,
     setPreviewReport,
-    setShowConfirm,
     showConfirm,
     validationError,
+    closeSubmitDialog,
+    lifecycle,
+    openSubmitDialog,
+    reopenForCorrection,
+    reopenIssue,
+    reopeningReportId,
+    statusAnnouncement,
+    submitIssue,
+    reportsAwaitingAction,
   } = workspace;
+  // Opens Requests with the refused report's month, reference and TANAW's message filled in.
+  const askItForHelp = (report: ReportRecord) => navigate(routePaths.enterpriseTickets, { state: { returnTo: location.pathname, ticketDraft: rejectedUploadTicketDraft(report, timeFormat) } });
   const reviewKey = JSON.stringify([period, activeReportId, origins, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
   const previewIsDraft = previewReport?.reportId === (activeReportId ?? "TANAW-DRAFT") && !isReadOnly;
   const previewValidation = previewReport ? ((previewIsDraft ? dailyOriginsError(days) : null) ?? validateDemographicAllocation(previewReport.metrics, previewReport.demo)) : null;
@@ -84,7 +101,19 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
         />
       )}
 
-      {showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
+      {showConfirm && (
+        <SubmitReportDialog
+          period={period}
+          metrics={displayedMetrics}
+          demo={demo}
+          days={days}
+          correction={lifecycle.kind === "correcting" ? { version: lifecycle.version, previousId: reportReference(lifecycle.previous) } : null}
+          isSubmitting={isSubmitting}
+          issue={submitIssue}
+          onCancel={closeSubmitDialog}
+          onConfirm={executeSubmit}
+        />
+      )}
 
       <div className="reports-heading">
         <div>
@@ -129,7 +158,6 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           enterpriseName={enterpriseName}
           reviewed={reviewedKey === reviewKey}
           activeReport={activeReport}
-          activeReportId={activeReportId}
           days={days}
           demo={demo}
           hasDailyOrigins={hasDailyOrigins}
@@ -142,7 +170,17 @@ function ReportsWorkspace({ workspace }: { workspace: ReturnType<typeof useRepor
           notes={notes}
           period={period}
           validationError={validationError}
-          onSubmitPrompt={() => setShowConfirm(true)}
+          onSubmitPrompt={openSubmitDialog}
+          lifecycle={lifecycle}
+          reports={reportsHistory}
+          timeFormat={timeFormat}
+          reopeningReportId={reopeningReportId}
+          reopenIssue={reopenIssue}
+          onCorrect={(report) => void reopenForCorrection(report)}
+          onAskForHelp={askItForHelp}
+          statusAnnouncement={statusAnnouncement}
+          reportsAwaitingAction={reportsAwaitingAction}
+          onOpenReportMonth={(report) => handleSelectPeriod(report.period ?? report.date)}
           onReview={() =>
             setPreviewReport({
               attractionType,

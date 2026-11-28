@@ -58,7 +58,10 @@ export function requestStatusNote(request: Request, handler: { name: string | nu
   const when = handler.at ? formatTime(handler.at) : null;
   if (request.status === "In Progress") {
     if (handler.name && when) return `${handler.name} from IT started on this at ${when}.`;
-    return request.group === "Account change" ? "Waiting for IT to approve this change." : "Sent to IT. IT is working on this.";
+    if (request.handledBy) return `${request.handledBy.name} from IT is working on this.`;
+    const change = request.group === "Account change";
+    if (request.seenByIt) return change ? "IT has seen this change but has not decided on it yet." : "IT has seen this. Nobody has started on it yet.";
+    return change ? "Waiting for IT to approve this change." : "Sent to IT. Nobody in IT has opened it yet.";
   }
   if (request.status === "Approved") return `IT approved this change. ${requestPlace(request)}'s details are updated.`;
   if (request.group === "Account change") return handler.name ? `${handler.name} from IT resolved this without approving the change.` : "IT resolved this without approving the change.";

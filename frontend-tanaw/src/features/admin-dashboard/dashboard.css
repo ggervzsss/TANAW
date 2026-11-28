@@ -214,14 +214,18 @@ html.dark .tanaw-dashboard {
   transition: scale 200ms var(--dash-ease);
 }
 
-.tanaw-map-control:hover {
-  background: var(--dash-glass-hover);
-  color: var(--tanaw-text);
-  translate: 0 -1px;
+@media (hover: hover) {
+  .tanaw-map-control:hover {
+    background: var(--dash-glass-hover);
+    color: var(--tanaw-text);
+    translate: 0 -1px;
+  }
 }
 
-.tanaw-map-control:hover svg {
-  scale: 1.08;
+@media (hover: hover) {
+  .tanaw-map-control:hover svg {
+    scale: 1.08;
+  }
 }
 
 .tanaw-map-control:active {
@@ -267,8 +271,10 @@ html.dark .tanaw-dashboard {
   transition: translate 200ms var(--dash-ease);
 }
 
-.tanaw-dashboard-link:hover .tanaw-dashboard-link__arrow {
-  translate: 3px 0;
+@media (hover: hover) {
+  .tanaw-dashboard-link:hover .tanaw-dashboard-link__arrow {
+    translate: 3px 0;
+  }
 }
 
 /* Rows in Most Visited and the recent lists: quiet, with a soft tint on hover. */
@@ -518,8 +524,10 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
     rotate 200ms var(--dash-ease);
 }
 
-.tanaw-map-alerts-button:hover svg {
-  translate: 0 1px;
+@media (hover: hover) {
+  .tanaw-map-alerts-button:hover svg {
+    translate: 0 1px;
+  }
 }
 
 .tanaw-map-alerts-button--icon {
@@ -534,9 +542,11 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
   color: var(--tanaw-text);
 }
 
-.tanaw-map-alerts-button--icon:hover svg {
-  translate: 0 0;
-  rotate: 90deg;
+@media (hover: hover) {
+  .tanaw-map-alerts-button--icon:hover svg {
+    translate: 0 0;
+    rotate: 90deg;
+  }
 }
 
 .tanaw-map-alerts-row {
@@ -565,8 +575,10 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
   transition: scale 200ms var(--dash-ease);
 }
 
-.tanaw-map-alerts-row:hover .tanaw-map-alerts__icon {
-  scale: 1.08;
+@media (hover: hover) {
+  .tanaw-map-alerts-row:hover .tanaw-map-alerts__icon {
+    scale: 1.08;
+  }
 }
 
 /* Popovers: the place picker. A raised surface, the one kind this page allows. */
@@ -777,6 +789,235 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
   text-align: center;
 }
 
+/* The map key's phone toggle; from 48rem up the key is always shown and the toggle is hidden. */
+.tanaw-map-legend__toggle {
+  display: none;
+}
+
+/*
+ * Phones (below 48rem): the map takes most of the screen with touch-sized controls (44px), the key
+ * folds behind a "Map key" button, the live alerts card keeps clear of the zoom buttons, the place
+ * picker rises as a bottom sheet, and list rows are at least 44px tall.
+ */
+@media (width < 48rem) {
+  .tanaw-dashboard-map {
+    height: clamp(20rem, 58dvh, 34rem);
+    min-height: 0;
+    aspect-ratio: auto;
+    border-radius: 16px;
+  }
+
+  .tanaw-map-control {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tanaw-dashboard-map .leaflet-control-zoom a {
+    width: 44px !important;
+    height: 44px !important;
+    font: 600 20px/44px var(--font-sans) !important;
+  }
+
+  .tanaw-map-alerts {
+    width: calc(100% - 80px);
+  }
+
+  .tanaw-map-alerts__card {
+    gap: 8px;
+    padding: 6px 4px 6px 10px;
+  }
+
+  .tanaw-map-alerts-button {
+    min-height: 44px;
+  }
+
+  .tanaw-map-alerts-button--icon {
+    width: 44px;
+  }
+
+  .tanaw-map-alerts-row {
+    min-height: 52px;
+  }
+
+  .tanaw-map-legend {
+    margin-bottom: 12px;
+  }
+
+  .tanaw-map-legend__toggle {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--tanaw-control-bg);
+    color: var(--tanaw-text);
+    font-size: 14px;
+    font-weight: 600;
+    transition:
+      background-color 200ms var(--dash-ease),
+      scale 120ms var(--dash-ease);
+  }
+
+  .tanaw-map-legend__toggle:active {
+    scale: 0.97;
+    background: var(--tanaw-control-bg-hover);
+  }
+
+  .tanaw-map-legend__toggle:focus-visible {
+    outline: 2px solid var(--tanaw-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .tanaw-map-legend__swatches {
+    display: inline-flex;
+  }
+
+  .tanaw-map-legend__swatches > span {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--tanaw-page);
+    border-radius: 999px;
+  }
+
+  .tanaw-map-legend__swatches > span + span {
+    margin-left: -4px;
+  }
+
+  .tanaw-map-legend__chevron {
+    color: var(--tanaw-text-muted);
+    transition: rotate 220ms var(--dash-ease);
+  }
+
+  .tanaw-map-legend[data-open] .tanaw-map-legend__chevron {
+    rotate: 180deg;
+  }
+
+  .tanaw-map-legend:not([data-open]) .tanaw-map-legend__list {
+    display: none;
+  }
+
+  .tanaw-map-legend .tanaw-map-legend__list {
+    margin: 10px 0 0;
+    padding: 0 4px;
+    animation: tanaw-dashboard-fade-up 200ms var(--dash-ease) both;
+  }
+
+  .tanaw-dashboard-pill {
+    min-height: 44px;
+    max-width: 100%;
+    font-size: 14px;
+  }
+
+  /* The place picker takes the full width under its heading. */
+  .tanaw-place-picker {
+    flex-basis: 100%;
+  }
+
+  .tanaw-place-picker .tanaw-dashboard-pill {
+    width: 100%;
+  }
+
+  .tanaw-place-picker .tanaw-dashboard-pill > span {
+    flex: 1 1 auto;
+    text-align: left;
+  }
+
+  .tanaw-rank-row {
+    min-height: 44px;
+  }
+
+  .tanaw-dashboard-row {
+    min-height: 44px;
+  }
+
+  .tanaw-dashboard-link {
+    min-height: 44px;
+  }
+
+  /* The place picker rises as a bottom sheet over the shared scrim. */
+  .tanaw-dashboard-popover-scrim {
+    position: fixed;
+    z-index: 1290;
+    inset: 0;
+    animation: tanaw-dashboard-scrim-in 200ms var(--dash-ease);
+  }
+
+  .tanaw-dashboard-popover {
+    position: fixed;
+    z-index: 1300;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 80dvh;
+    padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    transform-origin: bottom center;
+    animation: tanaw-dashboard-sheet-in 260ms var(--dash-ease) both;
+  }
+
+  .tanaw-dashboard-search {
+    height: 48px;
+    font-size: 16px;
+  }
+
+  .tanaw-dashboard-option {
+    min-height: 52px;
+  }
+
+  @keyframes tanaw-dashboard-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  @keyframes tanaw-dashboard-scrim-in {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/* Touch screens of any width (tablets too): the map's floating controls are 44px touch targets. */
+@media (pointer: coarse) {
+  .tanaw-map-control {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tanaw-dashboard-map .leaflet-control-zoom a {
+    width: 44px !important;
+    height: 44px !important;
+    font: 600 20px/44px var(--font-sans) !important;
+  }
+
+  .tanaw-map-alerts {
+    width: calc(100% - 80px);
+  }
+
+  .tanaw-map-alerts-button {
+    min-height: 44px;
+  }
+
+  .tanaw-map-alerts-button--icon {
+    width: 44px;
+  }
+}
+
+.tanaw-dashboard-popover-scrim {
+  display: none;
+}
+
+@media (width < 48rem) {
+  .tanaw-dashboard-popover-scrim {
+    display: block;
+  }
+}
+
 @keyframes tanaw-dashboard-sweep {
   0% {
     background-position: 120% 0;
@@ -790,6 +1031,8 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
 @media (prefers-reduced-motion: reduce) {
   .tanaw-dashboard-fade,
   .tanaw-dashboard-popover,
+  .tanaw-dashboard-popover-scrim,
+  .tanaw-map-legend .tanaw-map-legend__list,
   .tanaw-map-alerts__card,
   .tanaw-map-alerts__panel,
   .tanaw-dashboard-map__status,
@@ -818,8 +1061,14 @@ a.tanaw-rank-row:hover .tanaw-rank-bar > span {
   .tanaw-map-alerts-row .tanaw-map-alerts__icon,
   .tanaw-dashboard-search,
   .tanaw-dashboard-search__icon,
-  .tanaw-dashboard-option {
+  .tanaw-dashboard-option,
+  .tanaw-map-legend__toggle,
+  .tanaw-map-legend__chevron {
     transition: none;
+  }
+
+  .tanaw-map-legend__toggle:active {
+    scale: none;
   }
 
   /* Colour feedback stays; movement goes. */

@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, recordLocalReportSubmission } from "../../camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, recordLocalReportSubmission, reopenLocalReportSubmission } from "../../camera/services/ml-service";
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
-import { notifyError, notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
+import { notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatReportAttraction } from "../../../utils/attractions";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
@@ -18,9 +18,12 @@ import {
   upsertReport,
   validateDemographicAllocation,
   validateReportDraft,
+  reopenReportErrorMessage,
   reportFromLocalSubmission,
-  reportSubmissionErrorMessage,
+  reportSubmissionIssue,
+  type ReportSubmissionIssue,
 } from "../model/report-workspace";
+import { canReopenReport, correctionCause, correctionSource, reportLifecycle, reportsNeedingAction } from "../model/report-lifecycle";
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
 import { syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
@@ -46,11 +49,18 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
   const [previewReport, setPreviewReport] = useState<Preview | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Why the last send failed, shown in the submit dialog where the person is.
+  const [submitIssue, setSubmitIssue] = useState<ReportSubmissionIssue | null>(null);
+  const [reopeningReportId, setReopeningReportId] = useState<string | null>(null);
+  const [reopenIssue, setReopenIssue] = useState<string | null>(null);
+  // Bumped when a send ends, so the report panel can move focus to its new status.
+  const [statusAnnouncement, setStatusAnnouncement] = useState(0);
   const submitting = useRef(false);
   const draftNotes = useRef(new Map<string, string>());
   const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
   const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
-  // A submitted month is done: an enterprise sends one report per month, and it cannot be replaced.
+  // A sent version is read-only. If Staff return it, or TANAW refuses it, the person reopens the
+  // month to send a corrected version.
   const isReadOnly = activeReport ? activeReport.status !== "Draft" : false;
   const attractionType = isReadOnly ? activeReport?.attractionType : currentAttractionType;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
@@ -81,6 +91,9 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     [activeReport, period, currentReportingPeriod, demo, origins, data.currentMetrics, data.pendingPeriodCounts, notes, reportsHistory],
   );
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  const lifecycle = useMemo(() => reportLifecycle(activeReport, reportsHistory, period), [activeReport, reportsHistory, period]);
+  // Returned or refused reports of other months, so they are found from whichever month is open.
+  const reportsAwaitingAction = useMemo(() => reportsNeedingAction(reportsHistory).filter((report) => !isSameReportingMonth(report.period ?? report.date, period)), [reportsHistory, period]);
   // The months the Tourism Period picker switches between, oldest first.
   const monthRows = useMemo(() => reportMonthRows(ledgerRows), [ledgerRows]);
   const months = useMemo(() => monthRows.map((row) => row.report.period ?? row.report.date), [monthRows]);
@@ -90,13 +103,17 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     if (submitting.current) return;
     pendingOperation.current = null;
     setPreviewReport(null);
+    setReopenIssue(null);
     const nextReportId = row.kind === "history" ? row.report.id : null;
     const nextPeriod = row.report.period ?? row.report.date ?? getCurrentReportingPeriod();
     // Notes typed on a draft month wait for it while another month is open.
     if (!isReadOnly) draftNotes.current.set(demographicDraftKey, notes);
     setActiveReportId(nextReportId);
     setPeriod(nextPeriod);
-    setNotes(row.kind === "history" ? (row.report.notes ?? "") : (draftNotes.current.get(getDemographicDraftKey(nextReportId, nextPeriod)) ?? ""));
+    // A month being corrected starts from the notes of the version it corrects.
+    setNotes(
+      row.kind === "history" ? (row.report.notes ?? "") : (draftNotes.current.get(getDemographicDraftKey(nextReportId, nextPeriod)) ?? correctionSource(reportsHistory, nextPeriod)?.notes ?? ""),
+    );
     // Another report loads its own draft. Clearing the open one would save the blank and delete its draft.
     if (getDemographicDraftKey(nextReportId, nextPeriod) !== demographicDraftKey) setOrigins(row.kind === "history" ? (row.report.origins ?? {}) : {});
   };
@@ -135,30 +152,45 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       attractionType: report.status === "Draft" ? currentAttractionType : report.attractionType,
     });
   };
+  const openSubmitDialog = () => {
+    setSubmitIssue(null);
+    setShowConfirm(true);
+  };
+  // Nothing closes the dialog while the report is being sent.
+  const closeSubmitDialog = () => {
+    if (submitting.current) return;
+    setSubmitIssue(null);
+    setShowConfirm(false);
+  };
   const executeSubmit = async () => {
     if (submitting.current || isReadOnly) return;
     const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, days, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
     if (error) {
-      notifyWarning(error);
+      setSubmitIssue({ message: error, canRetry: false });
       return;
     }
     const counting = displayedMetrics.counting;
     if (!counting) {
-      notifyWarning("Refresh the period to load its reconciled counts before submitting.");
+      setSubmitIssue({ message: "TANAW is still loading this month's counts. Wait a moment, then try again.", canRetry: true });
       return;
     }
-    submitting.current = true;
-    setIsSubmitting(true);
     const user = useAuthStore.getState().user;
     const enterpriseId = user?.enterpriseId;
     const attractionCode = user?.attraction?.code;
     const attractionDescription = user?.attractionDescription;
     if (counting.enterprise_id !== enterpriseId) {
-      submitting.current = false;
-      setIsSubmitting(false);
-      notifyWarning("Reconnect this establishment before submitting.");
+      // The counts on this computer are not yet linked to the signed-in establishment.
+      setSubmitIssue({
+        message:
+          "TANAW on this computer is still connecting to your establishment's account. Check this computer's internet connection, then try again. If this keeps happening, sign out and sign in again.",
+        canRetry: true,
+      });
+      void data.refreshLocalMetrics();
       return;
     }
+    submitting.current = true;
+    setIsSubmitting(true);
+    setSubmitIssue(null);
     const key = JSON.stringify({ enterpriseId, attractionCode, attractionDescription, activeReportId, period, notes, origins, snapshot: counting.snapshot_version });
     if (pendingOperation.current?.key !== key)
       pendingOperation.current = {
@@ -167,7 +199,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
         requestId: crypto.randomUUID(),
         auditTrail: [
           ...(activeReport?.auditTrail ?? []),
-          { time: formatPhilippineDateTime(new Date(), timeFormat), action: "Report Submitted", actor: "Enterprise User" },
+          { time: formatPhilippineDateTime(new Date(), timeFormat), action: lifecycle.kind === "correcting" ? "Corrected Report Submitted" : "Report Submitted", actor: "Enterprise User" },
         ],
       };
     const { reportId, requestId, auditTrail } = pendingOperation.current;
@@ -204,16 +236,17 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       const cloudResult = await syncSubmittedReportToCloud(submission.report_id, submission.submission_id);
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
       const reference = submission.report_id;
+      // The report panel keeps the outcome in view: sent, waiting to send, or refused with
+      // TANAW's reason and a way to fix it. A toast adds only that the send just finished.
       if (cloudResult.status === "confirmed") {
         setReportsHistory((current) => upsertReport(current, { ...report, syncStatus: "synced" }));
-        notifySuccess(`Report submitted successfully. Reference ${reference}.`, toastId);
+        // TANAW gives a correction its own code ("-v2"); the panel shows it once known.
+        notifySuccess(lifecycle.kind === "correcting" ? "Corrected report sent." : `Report sent. Reference ${reference}.`, toastId);
       } else {
         if (cloudResult.status === "rejected") {
-          // The backend's reason (for example, the month already has a report) is shown as given.
-          const reason = cloudResult.reason ? `${cloudResult.reason} ` : "";
-          notifyError(`TANAW did not accept report ${reference}. ${reason}A copy is saved on this device. Check Reports History for its upload status.`, toastId);
+          setReportsHistory((current) => upsertReport(current, { ...report, syncStatus: "upload_rejected", ...(cloudResult.reason ? { rejectionReason: cloudResult.reason } : {}) }));
         } else {
-          notifyWarning(`Report ${reference} was saved on this device. TANAW will retry the upload.`, toastId);
+          notifyWarning(`Report saved on this computer. TANAW will send it when the connection is back. Reference ${reference}.`, toastId);
         }
         window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
       }
@@ -224,11 +257,14 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       }
       setShowConfirm(false);
       setActiveReportId(reference);
+      setStatusAnnouncement((value) => value + 1);
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
+      // TANAW numbers the version and starts its review; show that as soon as it is known.
+      if (cloudResult.status === "confirmed") void data.refreshMonthReview(period);
     } catch (issue) {
       if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
-      notifyError(reportSubmissionErrorMessage(issue), toastId);
+      setSubmitIssue(reportSubmissionIssue(issue));
       void data.refreshLocalReports();
       void data.refreshLocalMetrics();
     } finally {
@@ -237,7 +273,48 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     }
   };
 
+  /**
+   * Reopens a month's report for correction after Staff returned it or TANAW refused it: the
+   * version stays in Reports History, and the month opens as an editable draft that starts from
+   * its figures. Nothing is sent until the person sends the corrected report.
+   */
+  const reopenForCorrection = async (report: ReportRecord) => {
+    if (submitting.current || reopeningReportId || !canReopenReport(report, reportsHistory)) return;
+    const enterpriseId = useAuthStore.getState().user?.enterpriseId;
+    setReopeningReportId(report.id);
+    setReopenIssue(null);
+    try {
+      const status = await getMlServiceStatus();
+      const record = await reopenLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, report.id, correctionCause(report));
+      if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      const nextPeriod = report.period ?? report.date;
+      setReportsHistory((current) => upsertReport(current, { ...report, reopenedAt: record.reopened_at ?? new Date().toISOString() }));
+      pendingOperation.current = null;
+      setPreviewReport(null);
+      draftNotes.current.delete(getDemographicDraftKey(null, nextPeriod));
+      setActiveReportId(null);
+      setPeriod(nextPeriod);
+      setNotes(report.notes ?? "");
+      setStatusAnnouncement((value) => value + 1);
+      void data.refreshLocalReports();
+      void data.refreshLocalMetrics();
+    } catch (issue) {
+      if (useAuthStore.getState().user?.enterpriseId === enterpriseId) setReopenIssue(reopenReportErrorMessage(issue));
+    } finally {
+      setReopeningReportId(null);
+    }
+  };
+
   return {
+    reportsAwaitingAction,
+    closeSubmitDialog,
+    lifecycle,
+    openSubmitDialog,
+    reopenForCorrection,
+    reopenIssue,
+    reopeningReportId,
+    statusAnnouncement,
+    submitIssue,
     activeLedgerKey,
     activeReport,
     activeReportId,

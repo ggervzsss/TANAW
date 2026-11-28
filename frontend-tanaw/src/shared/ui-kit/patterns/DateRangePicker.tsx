@@ -112,8 +112,8 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
         className={cn(
           "tanaw-picker-trigger inline-flex max-w-full items-center gap-2 border font-medium text-(--tanaw-text) outline-none transition-[border-color,background-color,box-shadow,scale] duration-200 ease-tanaw-out focus-visible:border-(--tanaw-accent-ink) focus-visible:shadow-(--tanaw-field-ring) active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
           variant === "pill"
-            ? "h-9 max-w-60 rounded-full border-transparent bg-(--tanaw-control-bg) px-3.5 text-[0.8125rem] hover:bg-(--tanaw-control-bg-hover)"
-            : "h-11 w-full min-w-56 rounded-tanaw-md border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3.5 text-sm hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover)",
+            ? "h-9 max-w-60 rounded-full border-transparent pointer-coarse:h-11 bg-(--tanaw-control-bg) px-3.5 text-[0.8125rem] hover:bg-(--tanaw-control-bg-hover)"
+            : "h-11 w-full min-w-0 rounded-tanaw-md sm:min-w-56 border-(--tanaw-control-border) bg-(--tanaw-control-bg) px-3.5 text-sm hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover)",
           open && "border-(--tanaw-accent-ink) bg-(--tanaw-control-bg-focus) shadow-(--tanaw-field-ring)",
         )}
       >
@@ -130,7 +130,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
           role="dialog"
           aria-label={ariaLabel}
           className={cn(
-            "tanaw-enter absolute top-full z-1100 mt-2 w-[min(29.5rem,calc(100vw-2rem))] rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text) shadow-tanaw-dialog",
+            "tanaw-picker-panel tanaw-enter absolute top-full z-1100 mt-2 w-[min(29.5rem,calc(100vw-2rem))] rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) p-3.5 text-(--tanaw-text) shadow-tanaw-dialog",
             align === "right" ? "right-0" : "left-0",
           )}
           onKeyDown={(event) => {
@@ -149,7 +149,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
                   aria-pressed={range.preset === preset.value}
                   onClick={() => choosePreset(preset.value)}
                   className={cn(
-                    "h-9 rounded-lg px-2.5 text-left text-[0.84375rem] font-semibold transition-colors",
+                    "h-9 rounded-lg px-2.5 text-left text-[0.84375rem] font-semibold transition-colors pointer-coarse:h-11 max-sm:px-3.5",
                     range.preset === preset.value ? "bg-(--tanaw-action) text-(--tanaw-on-action)" : "text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) hover:text-(--tanaw-text)",
                   )}
                 >
@@ -193,7 +193,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
                       aria-label={parseIsoDate(cell.iso).toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                       onClick={() => pickDay(cell.iso)}
                       className={cn(
-                        "h-9 text-[0.84375rem] font-semibold tabular-nums transition-shadow",
+                        "h-9 text-[0.84375rem] font-semibold tabular-nums transition-shadow pointer-coarse:h-11",
                         disabled && "cursor-default text-(--tanaw-interactive-disabled-text) opacity-70",
                         !disabled && !isEdge && "rounded-lg hover:shadow-[inset_0_0_0_1.5px_var(--tanaw-action)]",
                         inBand && "rounded-none bg-(--tanaw-range-band)",
@@ -221,11 +221,11 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
               <p className="text-sm font-semibold">Showing {formatRangeText(range)}</p>
               <p className="mt-0.5 text-xs text-(--tanaw-text-muted)">{rangeNote(range, today)}</p>
             </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => close()} className="h-9 rounded-full border border-(--tanaw-border) px-4 text-sm font-semibold hover:bg-(--tanaw-control-hover)">
+            <div className="flex gap-2 max-sm:w-full">
+              <button type="button" onClick={() => close()} className="h-9 rounded-full border border-(--tanaw-border) px-4 text-sm font-semibold hover:bg-(--tanaw-control-hover) pointer-coarse:h-11 max-sm:flex-1">
                 Cancel
               </button>
-              <button type="button" onClick={apply} className="h-9 rounded-full bg-(--tanaw-action) px-4 text-sm font-semibold text-(--tanaw-on-action) hover:bg-(--tanaw-action-hover)">
+              <button type="button" onClick={apply} className="h-9 rounded-full bg-(--tanaw-action) px-4 text-sm font-semibold text-(--tanaw-on-action) hover:bg-(--tanaw-action-hover) pointer-coarse:h-11 max-sm:flex-1">
                 Apply
               </button>
             </div>
@@ -237,7 +237,7 @@ export function DateRangePicker({ value, onChange, ariaLabel, variant = "pill", 
 }
 
 const navButtonClass =
-  "grid size-8.5 place-items-center rounded-[9px] border border-(--tanaw-border) text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
+  "grid size-8.5 place-items-center rounded-[9px] pointer-coarse:size-11 border border-(--tanaw-border) text-(--tanaw-text-secondary) hover:bg-(--tanaw-control-hover) disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
 function monthOf(iso: string) {
   const date = parseIsoDate(iso);

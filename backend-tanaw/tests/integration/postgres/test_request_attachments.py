@@ -353,3 +353,59 @@ async def test_it_starts_on_a_request_once_and_lists_requests_by_enterprise(
         )
         assert elsewhere.json() == []
     # The module's cleanup removes the request, then the IT account (its email matches).
+
+
+@pytest.mark.asyncio
+async def test_a_request_counts_as_seen_by_it_once_an_it_account_opens_it(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    enterprise = await _create_enterprise(postgres_runtime, label="seen")
+    it_account = await _create_it_account(postgres_runtime)
+    admin = Account(
+        id=str(uuid4()),
+        email=f"tanaw-support-attachment-pg-admin-{uuid4().hex[:12]}@example.com",
+        password_hash="unused-test-password-hash",
+        role=AccountRole.ADMIN,
+        display_name="Admin reader",
+        title="Administrator",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+        password_changed_at=datetime.now(UTC),
+    )
+    async with postgres_runtime.sessions() as db:
+        db.add(admin)
+        await db.commit()
+    application = _create_test_app(postgres_runtime)
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        ids: list[str] = []
+        for title in ("Opened by IT", "Opened by the Admin only"):
+            created = await client.post(
+                "/operational/requests",
+                headers=_authorization(enterprise),
+                json={"group": "Other", "title": title, "description": f"{title}, for the test."},
+            )
+            assert created.status_code == 201
+            assert created.json()["seenByIt"] is False
+            ids.append(created.json()["id"])
+        opened_by_it, opened_by_admin = ids
+
+        for reader, request_id in ((it_account, opened_by_it), (admin, opened_by_admin)):
+            read = await client.post(
+                "/operational/requests/read",
+                headers=_authorization(reader),
+                json={"all": False, "requestIds": [request_id]},
+            )
+            assert read.status_code == 200
+
+        listed = await client.get("/operational/requests", headers=_authorization(admin))
+        assert listed.status_code == 200
+        seen = {item["id"]: item["seenByIt"] for item in listed.json() if item["id"] in ids}
+        assert seen == {opened_by_it: True, opened_by_admin: False}
+
+        detail = await client.get(
+            f"/operational/requests/{opened_by_it}", headers=_authorization(admin)
+        )
+        assert detail.json()["seenByIt"] is True
+    # The module's cleanup removes the requests and their read marks, then the test accounts.

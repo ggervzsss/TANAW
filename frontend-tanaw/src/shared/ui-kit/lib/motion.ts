@@ -38,3 +38,13 @@ export const dialogIn = {
   },
   exit: { opacity: 0, y: 8, scale: 0.98, filter: "blur(2px)", transition: { duration: 0.15, ease: easeOut } },
 } as const;
+
+/**
+ * Bottom sheets on phones (dialogs, menus): rise from the bottom edge and settle without a bounce;
+ * they drop back faster than they came.
+ */
+export const sheetIn = {
+  initial: { opacity: 1, y: "100%" },
+  animate: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 420, damping: 40, mass: 0.9 } },
+  exit: { opacity: 1, y: "100%", transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } },
+} as const;

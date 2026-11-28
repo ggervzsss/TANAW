@@ -105,19 +105,19 @@ function DetailsForm({ account, onAccountUpdated }: { account: EnterpriseAccount
     <section aria-labelledby="ite-details">
       <SectionHeading id="ite-details">Details</SectionHeading>
       <p className="mt-1 text-sm text-(--tanaw-text-secondary)">Changes show on the Admin map and on reports sent after today.</p>
-      <form noValidate onSubmit={submit} className="mt-5 grid gap-6">
+      <form noValidate onSubmit={submit} className="mt-5 grid grid-cols-1 gap-6">
         <NameField {...fieldProps} />
         <AttractionFields {...fieldProps} />
         <LocationField draft={draft} mapId={`it-enterprise-map-${account.id}`} hint="No map pin yet. Search above, or click the map to pin the entrance." />
         <AddressFields {...fieldProps} />
         <ManagerFields {...fieldProps} />
-        <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-1">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-[minmax(0,1fr)_7rem]">
           <ContactNumberInput {...fieldProps} />
           <CapacityField {...fieldProps} />
         </div>
         {!account.isActivated && <EmailField {...fieldProps} hint="The owner has not signed in yet. Changing the email sends a new invitation to the new address." />}
         <div>
-          <Button type="submit" loading={save.isPending}>
+          <Button type="submit" className="pointer-coarse:min-h-11 max-sm:w-full" loading={save.isPending}>
             Save details
           </Button>
         </div>
@@ -185,7 +185,7 @@ function SignInAccount({ row, formats }: { row: EnterpriseRow; formats: DisplayF
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2.5">
+      <div className="mt-4 flex flex-wrap gap-2.5 pointer-coarse:*:min-h-11 max-sm:*:w-full">
         {canReset && (
           <Button variant="secondary" size="sm" loading={reset.isPending} disabled={reset.secondsLeft > 0} onClick={reset.send}>
             {reset.secondsLeft > 0 ? `Send again in ${reset.secondsLeft} s` : "Send a password reset email"}

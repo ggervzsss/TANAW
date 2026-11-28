@@ -120,6 +120,7 @@ export function PersonnelDialog({ account, lockedRoleReason, onClose, onInvited 
       closeLabel="Close"
       accent="thread"
       size="xl"
+      className="it-personnel-dialog"
       initialFocus="input:not([type='hidden'])"
       footer={
         <>
@@ -133,7 +134,7 @@ export function PersonnelDialog({ account, lockedRoleReason, onClose, onInvited 
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="grid gap-6">
-        <div className="grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)] items-start gap-x-4 gap-y-5 max-sm:grid-cols-[minmax(0,1fr)_5.5rem]">
+        <div className="grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)] items-start gap-x-4 gap-y-5 max-sm:grid-cols-[minmax(0,1fr)_5.5rem] max-sm:items-end">
           <PersonnelTextField
             name="firstName"
             label="First name"

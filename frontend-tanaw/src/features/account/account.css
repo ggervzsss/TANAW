@@ -1,0 +1,305 @@
+/*
+ * General Settings, account pages: the main form on the left and a read-only side panel on the
+ * right when the settings panel is wide enough; stacked otherwise. The side panel is set apart by
+ * a hairline and air, never a box (DESIGN.md, default UI style).
+ */
+
+.tanaw-account-security-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0 2.5rem;
+  min-width: 0;
+}
+
+.tanaw-account-security-main {
+  min-width: 0;
+}
+
+.tanaw-account-aside {
+  min-width: 0;
+}
+
+/* Stacked, the side panel starts under a hairline like every other group. */
+.tanaw-settings-panel .tanaw-settings-body .tanaw-account-aside > .tanaw-settings-group:first-child {
+  border-top: 1px solid var(--settings-line);
+}
+
+@container (width >= 52rem) {
+  .tanaw-account-profile-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+  .tanaw-account-profile-layout > :not(.tanaw-account-aside) {
+    grid-column: 1;
+  }
+  .tanaw-account-profile-layout > .tanaw-account-aside {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: stretch;
+  }
+}
+
+@container (width >= 60rem) {
+  .tanaw-account-security-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(17rem, 1fr);
+  }
+}
+
+/* Side by side, the panel sits level with the first group and a hairline runs down its edge. */
+@container (width >= 52rem) {
+  .tanaw-settings-panel .tanaw-settings-body .tanaw-account-profile-layout > .tanaw-account-aside > .tanaw-settings-group:first-child {
+    height: 100%;
+    padding-inline-start: 2rem;
+    border-top: 0;
+    border-inline-start: 1px solid var(--settings-line);
+  }
+}
+@container (width >= 60rem) {
+  .tanaw-settings-panel .tanaw-settings-body .tanaw-account-security-layout > .tanaw-account-aside > .tanaw-settings-group:first-child {
+    padding-inline-start: 2rem;
+    border-top: 0;
+    border-inline-start: 1px solid var(--settings-line);
+  }
+}
+
+/* ---------- Read-only facts: label and value on one row, rows split by hairlines ---------- */
+
+.tanaw-account-facts {
+  display: grid;
+  margin: 0;
+}
+.tanaw-account-facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--settings-line);
+}
+.tanaw-account-facts > div:first-child {
+  padding-top: 0.25rem;
+}
+.tanaw-account-facts > div:last-child {
+  border-bottom: 0;
+}
+.tanaw-account-facts dt {
+  flex: none;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.tanaw-account-facts dd {
+  min-width: 0;
+  margin-left: auto;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 550;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+/* A status with a small dot in its tone: green only for an active, verified account. */
+.tanaw-account-standing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.tanaw-account-standing::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-slate-400, #94a3b8);
+}
+/* The same dot colours as the kit's status badges. */
+.tanaw-account-standing[data-tone="success"]::before {
+  background: var(--color-emerald-500, #10b981);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-emerald-500, #10b981) 20%, transparent);
+}
+.tanaw-account-standing[data-tone="warning"]::before {
+  background: var(--color-amber-500, #f59e0b);
+}
+
+/* ---------- Two-step verification and sessions ---------- */
+
+.tanaw-account-security-section + .tanaw-account-security-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--settings-line);
+}
+.tanaw-account-security-section > h4 {
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.tanaw-account-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.tanaw-account-status-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text-secondary);
+}
+.tanaw-account-status-icon[data-on="true"] {
+  background: var(--tanaw-selected-bg);
+  color: var(--tanaw-accent-ink);
+}
+.tanaw-account-status-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.tanaw-account-status-detail {
+  margin-top: 0.15rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.tanaw-account-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-inline-start: 3rem;
+}
+
+/* ---------- Two-step setup dialog ---------- */
+
+.tanaw-two-factor-steps {
+  display: grid;
+  gap: 1rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.tanaw-two-factor-steps ol {
+  display: grid;
+  gap: 0.4rem;
+  padding-inline-start: 1.2rem;
+  list-style: decimal;
+}
+.tanaw-two-factor-steps ol li::marker {
+  color: var(--tanaw-accent-ink);
+  font-weight: 650;
+}
+
+/* The setup key: a tinted, selectable line in groups of four with its copy action beside it. */
+.tanaw-two-factor-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0.75rem 0.75rem 1rem;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-control-bg);
+}
+.tanaw-two-factor-key code {
+  flex: 1 1 14rem;
+  min-width: 0;
+  color: var(--tanaw-text);
+  font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.tanaw-two-factor-link {
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.tanaw-two-factor-link:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-two-factor-code-input {
+  max-width: 14rem;
+  font-size: 1.0625rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.16em;
+}
+
+/* Recovery codes: two columns of numbered, monospaced codes on one soft tint. */
+.tanaw-recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border-radius: var(--settings-radius);
+  background: var(--tanaw-control-bg);
+  list-style: none;
+  counter-reset: recovery;
+}
+.tanaw-recovery-codes li {
+  display: flex;
+  gap: 0.6rem;
+  color: var(--tanaw-text);
+  font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  counter-increment: recovery;
+}
+.tanaw-recovery-codes li::before {
+  content: counter(recovery);
+  min-width: 1.1rem;
+  color: var(--tanaw-text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+@media (width < 24rem) {
+  .tanaw-recovery-codes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tanaw-two-factor-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.tanaw-two-factor-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+  accent-color: var(--tanaw-action);
+  cursor: pointer;
+}
+.tanaw-two-factor-check input:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}

@@ -55,7 +55,7 @@ export function PortalNotificationDropdown({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] origin-top-right flex-col overflow-hidden rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-raised"
+            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-md:fixed max-md:top-20 max-md:right-4 max-md:left-4 max-md:mt-0 max-md:w-auto max-md:max-h-[calc(100dvh-6rem)] origin-top-right flex-col overflow-hidden rounded-tanaw-lg border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) text-(--tanaw-text) shadow-tanaw-raised"
           >
             <div className="flex items-start justify-between gap-4 border-b border-(--tanaw-border-soft) px-4 py-3.5">
               <div>
@@ -66,7 +66,7 @@ export function PortalNotificationDropdown({
                 type="button"
                 disabled={notifications.length === 0 || unreadCount === 0}
                 onClick={onMarkAllRead}
-                className="group inline-flex min-h-8 items-center gap-1.5 rounded-tanaw-sm px-2.5 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
+                className="group inline-flex min-h-8 items-center gap-1.5 rounded-tanaw-sm px-2.5 text-[13px] max-md:min-h-11 font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
               >
                 <CheckCheck size={14} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-enabled:group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
                 Mark all read
@@ -96,7 +96,7 @@ export function PortalNotificationDropdown({
                 type="button"
                 disabled={!viewAllPath}
                 onClick={onViewAll}
-                className="inline-flex min-h-9 items-center rounded-tanaw-sm px-3 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
+                className="inline-flex min-h-9 items-center rounded-tanaw-sm px-3 text-[13px] max-md:min-h-11 font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
               >
                 View all notifications
               </button>

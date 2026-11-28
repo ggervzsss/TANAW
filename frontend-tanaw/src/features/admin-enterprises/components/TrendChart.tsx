@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
-import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis, type MouseHandlerDataParam } from "recharts";
+import { usePhoneWidth } from "../hooks/useMediaQuery";
 import { formatCompact, formatCount, type Trend } from "../model/enterpriseTrend";
 
 type PeakBubbleProps = { viewBox?: { x?: number; y?: number }; text: string };
@@ -30,6 +31,13 @@ function PeakBubble({ viewBox, text }: PeakBubbleProps) {
 export function TrendChart({ trend, empty }: { trend: Trend | null; empty: string }) {
   const gradientId = useId().replace(/:/g, "");
   const [pointed, setPointed] = useState<number | null>(null);
+  const phone = usePhoneWidth();
+  // Pointing (mouse) or tapping and dragging (touch) names that period's figure above the chart; on
+  // touch the reading stays after the finger lifts, so it can be read.
+  const read = (state: MouseHandlerDataParam) => {
+    const index = Number(state.activeTooltipIndex);
+    setPointed(state.activeTooltipIndex != null && Number.isInteger(index) ? index : null);
+  };
   const points = useMemo(() => trend?.bars.map((bar) => ({ key: bar.key, value: bar.value })) ?? [], [trend]);
   const labels = useMemo(() => new Map(trend?.bars.map((bar) => [bar.key, bar]) ?? []), [trend]);
 
@@ -58,10 +66,10 @@ export function TrendChart({ trend, empty }: { trend: Trend | null; empty: strin
           <AreaChart
             data={points}
             margin={{ top: 40, right: 8, bottom: 0, left: 0 }}
-            onMouseMove={(state) => {
-              const index = Number(state.activeTooltipIndex);
-              setPointed(state.activeTooltipIndex != null && Number.isInteger(index) ? index : null);
-            }}
+            onMouseMove={read}
+            onClick={read}
+            onTouchStart={read}
+            onTouchMove={read}
             onMouseLeave={() => setPointed(null)}
           >
             <defs>
@@ -73,15 +81,17 @@ export function TrendChart({ trend, empty }: { trend: Trend | null; empty: strin
             <CartesianGrid vertical={false} stroke="var(--tanaw-chart-grid)" />
             <XAxis
               dataKey="key"
-              interval={0}
-              padding={{ left: 24, right: 24 }}
+              // Phones label as many periods as fit without overlap, always the first and last.
+              interval={phone && points.length > 6 ? "preserveStartEnd" : 0}
+              minTickGap={phone ? 10 : 5}
+              padding={phone ? { left: 12, right: 12 } : { left: 24, right: 24 }}
               tickLine={false}
               axisLine={{ stroke: "var(--tanaw-chart-grid)" }}
               tickMargin={8}
               tickFormatter={(key: string) => labels.get(key)?.axisLabel ?? ""}
               tick={axisTick}
             />
-            <YAxis width={56} allowDecimals={false} domain={[0, "auto"]} tickLine={false} axisLine={false} tickFormatter={(value: number) => format(value)} tick={axisTick} />
+            <YAxis width={phone ? 44 : 56} allowDecimals={false} domain={[0, "auto"]} tickLine={false} axisLine={false} tickFormatter={(value: number) => format(value)} tick={axisTick} />
             <Tooltip cursor={{ stroke: "var(--tanaw-chart-connector)", strokeDasharray: "3 3" }} content={() => null} />
             <Area
               type="monotone"

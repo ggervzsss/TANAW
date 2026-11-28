@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.password_policy import (
     PASSWORD_MAX_LENGTH,
@@ -21,6 +21,48 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     user: AuthUser
+
+
+class TwoFactorChallengeResponse(BaseModel):
+    """The password was right and the account uses two-step verification: send a code next."""
+
+    twoFactorRequired: Literal[True] = True
+    challengeToken: str
+    expiresInSeconds: int
+
+
+class TwoFactorLoginRequest(BaseModel):
+    challengeToken: str = Field(min_length=1, max_length=2048)
+    code: str | None = Field(default=None, min_length=1, max_length=16)
+    recoveryCode: str | None = Field(default=None, min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def require_one_code(self) -> TwoFactorLoginRequest:
+        if (self.code is None) == (self.recoveryCode is None):
+            raise ValueError("Send either a code from the authenticator app or a recovery code.")
+        return self
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    otpauthUri: str
+
+
+class TwoFactorConfirmRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=16)
+
+
+class TwoFactorConfirmResponse(BaseModel):
+    recoveryCodes: list[str]
+    user: AuthUser
+
+
+class TwoFactorDisableRequest(BaseModel):
+    currentPassword: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+
+
+class CurrentSessionResponse(BaseModel):
+    signedInAt: datetime | None = None
 
 
 class AccountActivationValidateRequest(BaseModel):

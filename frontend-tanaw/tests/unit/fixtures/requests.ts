@@ -15,6 +15,7 @@ export function request(overrides: Partial<Request> & Pick<Request, "id">): Requ
     updatedAt: "2026-11-23T06:00:00Z",
     unread: false,
     updated: false,
+    seenByIt: false,
     ...overrides,
   };
 }

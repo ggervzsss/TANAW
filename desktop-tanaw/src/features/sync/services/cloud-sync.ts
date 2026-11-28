@@ -246,7 +246,8 @@ async function uploadReportSubmission(baseUrl: string, submission: LocalReportSu
   try {
     await staffApi.post(apiPaths.desktopReportSubmissions, payload);
   } catch (error) {
-    if (isRefusedUpload(error)) await resolveOptional(() => markLocalReportUploadRejected(baseUrl, submission.report_id, submission.submission_id));
+    // TANAW's reason is kept with the report, so the person can see what to fix.
+    if (isRefusedUpload(error)) await resolveOptional(() => markLocalReportUploadRejected(baseUrl, submission.report_id, submission.submission_id, refusedUploadReason(error)));
     throw error;
   }
   await markLocalReportSynced(baseUrl, submission.report_id, submission.submission_id);

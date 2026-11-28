@@ -17,6 +17,7 @@ import {
   type LocalMetricsHistory,
   type LocalMetricsSummary,
   type LocalReportDraft,
+  type LocalReportReopenReason,
   type LocalReportSubmission,
   type LocalReportSubmissionRecord,
   type MlCameraStates,
@@ -262,9 +263,27 @@ export async function markLocalReportSynced(baseUrl: string, reportId: string, s
   return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/synced`, { method: "POST" }, 2500);
 }
 
-/** Marks a submission the backend refused, so the background upload stops retrying it. */
-export async function markLocalReportUploadRejected(baseUrl: string, reportId: string, submissionId: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/upload-rejected`, { method: "POST" }, 2500);
+/**
+ * Marks a submission the backend refused, so the background upload stops retrying it. The
+ * backend's reason, when it gave one, is kept so the person can see what to fix.
+ */
+export async function markLocalReportUploadRejected(baseUrl: string, reportId: string, submissionId: string, reason?: string | null): Promise<{ updated: number }> {
+  return requestJson<{ updated: number }>(
+    `${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/upload-rejected`,
+    { method: "POST", body: JSON.stringify({ reason: reason ?? null }) },
+    2500,
+  );
+}
+
+/**
+ * Reopens a month's saved report for correction, after Staff returned it or TANAW refused its
+ * upload. The version stays saved as history, and the month opens as a draft again. Nothing is
+ * sent until the person sends the corrected report.
+ */
+export async function reopenLocalReportSubmission(baseUrl: string, reportId: string, reason: LocalReportReopenReason): Promise<LocalReportSubmissionRecord> {
+  const record = await requestJson<LocalReportSubmissionRecord>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }, 5000);
+  notifyLocalDataChanged();
+  return record;
 }
 
 export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {

@@ -944,3 +944,26 @@ html.dark .tanaw-toast--info .tanaw-toast__icon {
   }
 }
 
+/* Phones: each toast spans the width between the 16px gutters, under the topbar and the notch. */
+@media (width < 40rem) {
+  .tanaw-toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* Below the "Live updates paused" strip when it is docked under the topbar (portal.css). */
+  body:has(.tanaw-connection-notice) .tanaw-toast-viewport--portal {
+    margin-top: 1.75rem;
+  }
+}
+
+/* A finger needs a bigger dismiss target than a pointer. */
+@media (pointer: coarse) {
+  .tanaw-toast__dismiss {
+    width: 40px;
+    height: 40px;
+    margin: -6px -6px -6px 0;
+  }
+}
+

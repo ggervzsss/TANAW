@@ -73,7 +73,7 @@ function WeeklyHours({ account, onAccountUpdated }: { account: EnterpriseAccount
           error={error ?? undefined}
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button type="submit" loading={save.isPending} disabled={unchanged && Boolean(account.openingHours)}>
+          <Button type="submit" className="pointer-coarse:min-h-11" loading={save.isPending} disabled={unchanged && Boolean(account.openingHours)}>
             Save hours
           </Button>
           {unchanged && account.openingHours && <span className="text-[13px] text-(--tanaw-text-muted)">No changes yet.</span>}
@@ -177,6 +177,7 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
                 <Button
                   variant="secondary"
                   size="sm"
+                  className="shrink-0 pointer-coarse:min-h-11"
                   loading={remove.isPending && remove.variables?.id === closure.id}
                   onClick={() => remove.mutate(closure)}
                   aria-label={`Remove closed day ${dates}`}
@@ -190,7 +191,7 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
       )}
 
       <form noValidate onSubmit={submit} className="mt-4">
-        <div className="grid grid-cols-2 gap-2.5 max-sm:grid-cols-1">
+        <div className="grid grid-cols-2 gap-2.5">
           <div>
             <FieldLabel htmlFor={startId}>Date</FieldLabel>
             <Input
@@ -219,7 +220,7 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
               }}
             />
           </div>
-          <div className="col-span-2 max-sm:col-span-1">
+          <div className="col-span-2">
             <FieldLabel htmlFor={reasonId} optional>
               Reason
             </FieldLabel>
@@ -228,7 +229,7 @@ function ClosedDays({ accountId, dateFormat }: { accountId: string; dateFormat: 
         </div>
         <FieldError id={`${startId}-error`}>{error}</FieldError>
         <div className="mt-3">
-          <Button type="submit" variant="secondary" loading={add.isPending}>
+          <Button type="submit" variant="secondary" className="pointer-coarse:min-h-11" loading={add.isPending}>
             Add closed day
           </Button>
         </div>

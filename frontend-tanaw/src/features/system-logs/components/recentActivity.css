@@ -7,6 +7,8 @@
 .tanaw-activity-drawer {
   --ra-chip: var(--tanaw-surface-inset);
   --ra-chip-ink: var(--tanaw-text-secondary);
+  --ra-busy: var(--tanaw-warning-surface);
+  --ra-busy-hover: var(--tanaw-warning-bg);
   --ra-ease: var(--ease-tanaw-out);
 }
 
@@ -39,8 +41,10 @@
   transition: background-color 160ms var(--ra-ease);
 }
 
-.tanaw-activity-row:hover:not([aria-expanded="true"]) {
-  background: var(--tanaw-control-hover);
+@media (hover: hover) {
+  .tanaw-activity-row:hover:not([aria-expanded="true"]) {
+    background: var(--tanaw-control-hover);
+  }
 }
 
 .tanaw-activity-row:active:not([aria-expanded="true"]) {
@@ -54,6 +58,27 @@
 
 .tanaw-activity-row:hover .tanaw-activity-title {
   color: var(--tanaw-accent-ink);
+}
+
+/*
+ * Busy places pinned above the records: each a soft amber row that deepens on hover, set apart
+ * from the records by one hairline under the group.
+ */
+.tanaw-activity-pinned {
+  border-bottom: 1px solid var(--tanaw-border-soft);
+}
+
+.tanaw-activity-item.tanaw-activity-item--pinned {
+  border-bottom-color: transparent;
+}
+
+.tanaw-activity-row.tanaw-activity-row--pinned {
+  background: var(--ra-busy);
+}
+
+.tanaw-activity-row.tanaw-activity-row--pinned:hover,
+.tanaw-activity-row.tanaw-activity-row--pinned:active {
+  background: var(--ra-busy-hover);
 }
 
 /* Related pages in the drawer: a tinted row whose arrow steps toward the page it opens. */
@@ -110,6 +135,84 @@
 @keyframes tanaw-activity-scrim-in {
   from {
     opacity: 0;
+  }
+}
+
+/*
+ * Phones and tablets: each record stacks in one row, in reading order: when it happened (a quiet caption), the
+ * activity and its chips, who did it, then the details in two lines. Pinned busy rows keep their
+ * amber tint. Rows stack up to 60rem, so tablets never scroll the list sideways either.
+ */
+@media (width < 60rem) {
+  .tanaw-activity-cols.tanaw-activity-cols {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols {
+    padding: 14px 12px;
+  }
+
+  .tanaw-activity-head.tanaw-activity-cols {
+    display: none;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :first-child {
+    font-size: 13px;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :first-child > *,
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(3) > * {
+    display: inline;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :first-child > :first-child {
+    font-weight: 600;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :first-child > :nth-child(2)::before,
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(3) > :nth-child(2)::before {
+    content: " · ";
+    color: var(--tanaw-text-muted);
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(2) {
+    margin-top: 2px;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(3) {
+    margin-top: 4px;
+    font-size: 13px;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(3) > :first-child {
+    font-weight: 600;
+  }
+
+  .tanaw-activity-row.tanaw-activity-cols > :nth-child(4) {
+    -webkit-line-clamp: 2;
+    font-size: 13px;
+  }
+
+}
+
+/* Phones: the details drawer becomes a full-screen sheet that rises from below. */
+@media (width < 48rem) {
+  .tanaw-activity-drawer__panel {
+    border-left: 0;
+    animation-name: tanaw-activity-sheet-in;
+  }
+
+  .tanaw-activity-drawer__foot button {
+    min-height: 44px;
+  }
+
+  @keyframes tanaw-activity-sheet-in {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
   }
 }
 

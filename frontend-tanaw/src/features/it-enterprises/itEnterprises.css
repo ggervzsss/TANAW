@@ -125,3 +125,203 @@
     animation: none;
   }
 }
+
+/*
+ * The figures: three in one ruled row. Phones put the first two side by side and the cameras
+ * figure, with its link, across the row under them.
+ */
+.it-enterprises .ite-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--tanaw-border-soft);
+}
+
+.it-enterprises .ite-figure {
+  padding: 1.125rem 1.5rem;
+}
+
+.it-enterprises .ite-figure:first-child {
+  padding-left: 0;
+}
+
+.it-enterprises .ite-figure + .ite-figure {
+  border-left: 1px solid var(--tanaw-border-soft);
+}
+
+@media (max-width: 1023px) {
+  .it-enterprises .ite-figure {
+    padding: 1rem 1.25rem;
+  }
+
+  .it-enterprises .ite-figure:first-child {
+    padding-left: 0;
+  }
+
+  .it-enterprises .ite-figure:last-child {
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .it-enterprises .ite-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .it-enterprises .ite-figure:nth-child(2) {
+    padding-right: 0;
+  }
+
+  .it-enterprises .ite-figure:nth-child(3) {
+    grid-column: 1 / -1;
+    padding-inline: 0;
+    border-top: 1px solid var(--tanaw-border-soft);
+    border-left: 0;
+  }
+
+  .it-enterprises .ite-figures .ite-value {
+    font-size: 2rem;
+  }
+
+  /* The Show chips run in one line that scrolls sideways, edge to edge. */
+  .it-enterprises .ite-chips {
+    flex-wrap: nowrap;
+    margin-inline: -1rem;
+    padding: 2px 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .it-enterprises .ite-chips::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Phones and tablets: each enterprise is a stacked row split by hairlines, not a sideways
+ * scrolling table. The name and place lead; Account, Desktop app and Cameras follow as labelled
+ * lines (side by side on tablets); an invitation button spans the row on phones. The chevron keeps
+ * the top right corner.
+ */
+@media (max-width: 1023px) {
+  .it-enterprises .ite-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .it-enterprises .ite-table caption,
+  .it-enterprises .ite-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .it-enterprises .ite-table tbody {
+    display: block;
+  }
+
+  .it-enterprises .ite-table tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 0.875rem;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+  }
+
+  .it-enterprises .ite-table tbody :is(th, td) {
+    display: block;
+    padding: 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  .it-enterprises .ite-table tbody th {
+    padding-right: 2rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-label] {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    column-gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-label]::before {
+    content: attr(data-label);
+    grid-row: 1 / span 2;
+    padding-top: 1px;
+    color: var(--tanaw-text-muted);
+    font-size: 0.8125rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-label] > * {
+    grid-column: 2;
+  }
+
+  .it-enterprises .ite-table tbody td:last-child > div {
+    display: flex;
+    min-height: 0;
+  }
+
+  .it-enterprises .ite-table tbody td[data-actions] {
+    margin-top: 0.875rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-actions] button {
+    flex: 1;
+  }
+
+  .it-enterprises .ite-table .tanaw-row-chevron {
+    position: absolute;
+    top: 1.25rem;
+    right: 0.25rem;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .it-enterprises .ite-table tbody tr {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 1.5rem;
+  }
+
+  .it-enterprises .ite-table tbody th,
+  .it-enterprises .ite-table tbody td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .it-enterprises .ite-table tbody td[data-label] {
+    display: block;
+    margin-top: 0.75rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-label]::before {
+    display: block;
+    margin-bottom: 0.125rem;
+  }
+
+  .it-enterprises .ite-table tbody td[data-actions] button {
+    flex: none;
+  }
+}
+
+/* Touch screens: the Back link and the tabs take a full thumb's height. */
+@media (pointer: coarse) {
+  .it-enterprises .tanaw-portal-header > a {
+    min-height: 2.75rem;
+  }
+
+  .it-enterprises [role="tablist"] > [role="tab"] {
+    min-height: 2.75rem;
+  }
+}
+
+/* Phones: fields use 16px text so the browser does not zoom into them. */
+@media (max-width: 639px) {
+  :is(.it-enterprises, .ite-dialog) :is(input, textarea, select) {
+    font-size: 1rem;
+  }
+}

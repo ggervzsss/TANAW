@@ -1,103 +1,108 @@
-import { Check, Send, X } from "lucide-react";
-import { ModalPortal } from "../../../components/ModalPortal";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Send } from "lucide-react";
+import { Alert, Button, Dialog } from "../../../ui-kit";
+import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
+import type { ReportDay } from "../model/daily-origins";
+import { originSplit, reportDayCoverage, submitDialogTitle, versionLabel } from "../model/report-lifecycle";
+import type { ReportSubmissionIssue } from "../model/report-workspace";
+import { formatReportingPeriodLabel } from "../utils/reporting-period";
 
 type SubmitReportDialogProps = {
+  period: string;
+  metrics: Metrics;
+  demo: DemoBreakdown;
+  days: ReportDay[];
+  /** Set when the month's draft corrects a returned or refused version. */
+  correction?: { version: number; previousId: string } | null;
   isSubmitting: boolean;
+  /** Why the last attempt failed; shown above the actions. */
+  issue?: ReportSubmissionIssue | null;
   onCancel: () => void;
   onConfirm: () => void | Promise<void>;
 };
 
-export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: SubmitReportDialogProps) {
-  const dialog = useRef<HTMLDivElement | null>(null);
-  const [ready, setReady] = useState(false);
-  const attachDialog = useCallback((element: HTMLDivElement | null) => {
-    dialog.current = element;
-    setReady(Boolean(element));
-  }, []);
-  const submitting = useRef(isSubmitting);
-  submitting.current = isSubmitting;
-  const cancel = useRef(onCancel);
-  cancel.current = onCancel;
-  useEffect(() => {
-    if (!ready) return;
-    const previous = document.activeElement as HTMLElement | null;
-    dialog.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
-    const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !submitting.current) {
-        event.preventDefault();
-        cancel.current();
-      }
-      if (event.key !== "Tab") return;
-      const buttons = dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-      if (!buttons?.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = buttons[0],
-        last = buttons[buttons.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      }
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", keyboard, true);
-    return () => {
-      document.removeEventListener("keydown", keyboard, true);
-      previous?.focus({ preventScroll: true });
-    };
-  }, [ready]);
+/**
+ * Asks before the month's report goes to the LGU, with the figures it will carry and what
+ * happens next. Cancel takes focus first; while the report is being sent the dialog stays open.
+ */
+export function SubmitReportDialog({ period, metrics, demo, days, correction = null, isSubmitting, issue = null, onCancel, onConfirm }: SubmitReportDialogProps) {
+  const origins = originSplit(demo);
+  const coverage = reportDayCoverage(days);
+  const version = correction ? versionLabel(correction.version) : null;
+  const originRows: Array<[string, number]> = [
+    ["This city", origins.thisCity],
+    ["Other cities in the province", origins.otherCities],
+    ["Other provinces", origins.otherProvinces],
+    ["Foreign", origins.foreign],
+  ];
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={isSubmitting ? undefined : onCancel}>
-        <div
-          ref={attachDialog}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-report-submission-title"
-          aria-describedby="confirm-report-submission-description"
-          className="animate-in fade-in w-full max-w-md rounded-2xl border border-t-4 border-emerald-100 border-t-tanaw-ledger bg-white p-6 shadow-2xl dark:border-slate-600 dark:border-t-emerald-400 dark:bg-[#121c31] dark:shadow-[0_28px_80px_rgba(0,0,0,0.58)]"
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div className="mb-2 flex items-start justify-between gap-4">
-            <h3 id="confirm-report-submission-title" className="flex items-center gap-2 text-lg font-bold text-[#111827] dark:text-slate-100">
-              <Send size={20} className="text-tanaw-ledger dark:text-emerald-300" /> Confirm Submission
-            </h3>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={onCancel}
-              className="rounded-full border border-transparent p-1 text-gray-400 transition-colors hover:border-gray-200 hover:bg-gray-100 hover:text-[#111827] dark:text-slate-400 dark:hover:border-slate-600 dark:hover:bg-[#1d2940] dark:hover:text-slate-100"
-              aria-label="Close dialog"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <p id="confirm-report-submission-description" className="mb-6 text-sm leading-relaxed text-gray-600 dark:text-slate-300">
-            Submit this establishment report to LGU Staff? TANAW will save these reconciled counts and lock this version for review.
-          </p>
-          <div className="flex justify-end gap-3">
-            <button
-              disabled={isSubmitting}
-              onClick={onCancel}
-              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-[#172033] dark:text-slate-100 dark:hover:bg-[#1d2940]"
-            >
-              Edit Draft
-            </button>
-            <button
-              disabled={isSubmitting}
-              onClick={onConfirm}
-              className="flex items-center gap-2 rounded-xl bg-tanaw-ledger px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
-            >
-              <Check size={16} /> {isSubmitting ? "Submitting…" : "Yes, Submit"}
-            </button>
-          </div>
+    <Dialog
+      size="sm"
+      title={submitDialogTitle(period, Boolean(correction))}
+      description={correction ? `It corrects ${correction.previousId}${version ? ` and goes as ${version.toLowerCase()}` : ""}.` : undefined}
+      onClose={onCancel}
+      dismissible={!isSubmitting}
+      closeOnBackdrop={!isSubmitting}
+      initialFocus="[data-submit-cancel]"
+      className="report-submit-dialog"
+      footer={
+        <>
+          <Button variant="secondary" data-submit-cancel onClick={onCancel} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button leadingIcon={<Send size={16} aria-hidden="true" />} loading={isSubmitting} onClick={() => void onConfirm()}>
+            {issue?.canRetry ? "Try again" : "Send report"}
+          </Button>
+        </>
+      }
+    >
+      <dl className="report-submit-summary" aria-label="What this report carries">
+        <div>
+          <dt>Reporting period</dt>
+          <dd>{formatReportingPeriodLabel(period)}</dd>
         </div>
-      </div>
-    </ModalPortal>
+        <div>
+          <dt>Visitors counted</dt>
+          <dd>{metrics.unique.toLocaleString()}</dd>
+        </div>
+        {metrics.unique > 0 && (
+          <div className="report-submit-origins">
+            <dt>Where visitors came from</dt>
+            <dd>
+              <ul>
+                {originRows.map(([label, value]) => (
+                  <li key={label}>
+                    <span>{label}</span>
+                    <span>{value.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+        {coverage.total > 0 && (
+          <div>
+            <dt>Days included</dt>
+            <dd>
+              {coverage.total.toLocaleString()} days · {coverage.counted.toLocaleString()} with visitors counted
+            </dd>
+          </div>
+        )}
+        {version && (
+          <div>
+            <dt>Version</dt>
+            <dd>{version}</dd>
+          </div>
+        )}
+      </dl>
+      <p className="report-submit-copy">After you send it, you can't edit this report. If something is wrong, LGU Staff can return it to you for correction.</p>
+      <p className="report-submit-copy">
+        <strong>What happens next:</strong> Staff in the City Tourism Office will review it.
+      </p>
+      {issue && (
+        <Alert tone="danger" className="report-submit-issue">
+          {issue.message}
+        </Alert>
+      )}
+    </Dialog>
   );
 }

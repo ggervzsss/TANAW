@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 from app.features.accounts.attractions import AttractionClassification
 from app.features.reporting.counting import counting_metrics
@@ -81,12 +81,26 @@ class SamplePreparationSummary(BaseModel):
     pendingCounts: list[SamplePreparationCounts] = Field(default_factory=list)
 
 
-ReportReviewStatus = Literal["Pending Review", "Ready to Consolidate", "Consolidated"]
+ReportReviewStatus = Literal["Pending Review", "Ready to Consolidate", "Consolidated", "Returned"]
+
+REPORT_RETURN_REASON_MIN_LENGTH = 10
+REPORT_RETURN_REASON_MAX_LENGTH = 500
 
 
 class ReportStatusUpdate(BaseModel):
     status: ReportReviewStatus
     remarks: str | None = Field(default=None, max_length=2000)
+
+
+class ReportReturnRequest(BaseModel):
+    reason: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=REPORT_RETURN_REASON_MIN_LENGTH,
+            max_length=REPORT_RETURN_REASON_MAX_LENGTH,
+        ),
+    ] = Field(description="What the enterprise needs to correct, shown to it in the desktop app.")
 
 
 class ReportDemographicsSummary(BaseModel):
@@ -137,6 +151,20 @@ class IntakeReportSummary(BaseModel):
     metrics: dict[str, int | str | None]
     payload: dict | None = None
     demographics: ReportDemographicsSummary | None = None
+    version: int = Field(
+        ge=1,
+        description="1 for the first report of a period; each corrected report after a return adds one.",
+    )
+    returnedReason: str | None = Field(
+        default=None, description="Why LGU staff returned this version for correction."
+    )
+    returnedAt: datetime | None = None
+    returnedBy: str | None = Field(
+        default=None, description="Display name of the Staff or Admin user who returned it."
+    )
+    previousVersionId: str | None = Field(
+        default=None, description="The id of the returned version this one replaces (version 2+)."
+    )
 
 
 FinalReportArchivedFromStatus = Literal["Draft", "Finalized"]

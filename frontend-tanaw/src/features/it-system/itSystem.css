@@ -194,3 +194,122 @@
     scale: none;
   }
 }
+
+/* Touch screens: the in-sentence dropdowns and the filter pills take a full thumb's height. */
+@media (pointer: coarse) {
+  .it-system__inline-select .tanaw-select-trigger {
+    min-height: 2.75rem;
+    padding-inline: 0.875rem 0.625rem;
+  }
+
+  .it-system__pills [role="radio"] {
+    min-height: 2.75rem;
+  }
+}
+
+/* Phones: filter pills run in one line that scrolls sideways, edge to edge, instead of wrapping. */
+@media (max-width: 639px) {
+  .it-system__pills {
+    flex-wrap: nowrap;
+    width: calc(100% + 2rem);
+    max-width: none;
+    margin-inline: -1rem;
+    padding: 2px 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .it-system__pills::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Phones and tablets: each email is a stacked row split by a hairline. The address leads,
+ * then the kind of email and when it went, then the result, and Try again across the row.
+ */
+@media (max-width: 1023px) {
+  .it-system__email-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .it-system__email-table caption,
+  .it-system__email-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .it-system__email-table tbody {
+    display: block;
+  }
+
+  .it-system__email-table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-block: 0.875rem;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+  }
+
+  .it-system__email-table tbody :is(th, td) {
+    display: block;
+    padding: 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  .it-system__email-table tbody th {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+
+  .it-system__email-table tbody td[data-email-kind] {
+    grid-row: 2;
+    grid-column: 1;
+    margin-top: 0.375rem;
+    color: var(--tanaw-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .it-system__email-table tbody td[data-email-kind]::after {
+    content: "·" / "";
+    margin-inline: 0.5rem;
+  }
+
+  .it-system__email-table tbody td:first-child {
+    grid-row: 2;
+    grid-column: 2;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .it-system__email-table tbody td:nth-last-child(2) {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    margin-top: 0.5rem;
+  }
+
+  .it-system__email-table tbody td:last-child {
+    grid-row: 4;
+    grid-column: 1 / -1;
+  }
+
+  .it-system__email-table tbody td[data-email-actions] {
+    margin-top: 0.75rem;
+  }
+
+  .it-system__email-table tbody td[data-email-actions] button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .it-system__email-table tbody td[data-email-actions] button {
+    width: auto;
+  }
+}

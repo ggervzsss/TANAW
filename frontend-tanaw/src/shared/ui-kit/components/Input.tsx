@@ -18,13 +18,13 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
   size?: "sm" | "md";
 };
 
-/** A text input, 44px tall (32px small). */
+/** A text input, 44px tall (32px small, 44px on touch screens). Touch screens set its text at 16px (Controls.css) so iOS does not zoom in. */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ invalid = false, leading, trailing, size = "md", className, ...props }, ref) {
   const input = (
     <input
       ref={ref}
       aria-invalid={invalid || props["aria-invalid"] || undefined}
-      className={cn(controlClassName, size === "sm" ? "h-8 px-2.5 text-xs" : "h-11 px-3.5", Boolean(leading) && "pl-10", Boolean(trailing) && "pr-10", leading || trailing ? undefined : className)}
+      className={cn(controlClassName, size === "sm" ? "h-8 px-2.5 text-xs pointer-coarse:h-11" : "h-11 px-3.5", Boolean(leading) && "pl-10", Boolean(trailing) && "pr-10 pointer-coarse:pr-12", leading || trailing ? undefined : className)}
       {...props}
     />
   );

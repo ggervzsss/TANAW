@@ -99,7 +99,8 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
       </p>
 
       {hasActions && (
-        <div role="group" aria-label={`Actions for ${request.code}`} className="mt-4.5 flex flex-wrap items-center gap-2.5">
+        // On phones the actions share the width: two to a row, and the type menu on a row of its own.
+        <div role="group" aria-label={`Actions for ${request.code}`} className="mt-4.5 flex flex-wrap items-center gap-2.5 max-sm:*:flex-1">
           {actions.canStart && (
             <Button size="lg" className="h-11 text-sm" loading={pending === "start"} disabled={busy && pending !== "start"} onClick={() => run({ kind: "start" })}>
               Start on it

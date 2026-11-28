@@ -170,6 +170,7 @@ def to_request_summary(
     email_request: AccountEmailChangeRequest | None = None,
     now: datetime | None = None,
     contact: AccountContact | None = None,
+    seen_by_it: bool = False,
 ) -> RequestSummary:
     current = now or _now()
     profile = request.enterprise_profile
@@ -200,6 +201,7 @@ def to_request_summary(
         handledAt=request.handled_at,
         unread=read_at is None,
         updated=read_at is not None and read_at < updated_at,
+        seenByIt=seen_by_it,
     )
 
 
@@ -261,10 +263,25 @@ async def _read_times(
     return reads
 
 
+async def _seen_by_it(db: AsyncSession, request_ids: Sequence[str]) -> set[str]:
+    """The requests at least one IT account has opened, in one query for the whole list."""
+    if not request_ids:
+        return set()
+    rows = await db.scalars(
+        select(RequestRead.request_id)
+        .join(Account, Account.id == RequestRead.account_id)
+        .where(Account.role == AccountRole.IT, RequestRead.request_id.in_(request_ids))
+        .distinct()
+    )
+    return set(rows.all())
+
+
 async def summarize_requests(
     db: AsyncSession, account: Account, requests: Sequence[Request]
 ) -> list[RequestSummary]:
-    reads = await _read_times(db, account, [request.id for request in requests])
+    request_ids = [request.id for request in requests]
+    reads = await _read_times(db, account, request_ids)
+    seen_by_it = await _seen_by_it(db, request_ids)
     email_requests = await _email_requests_by_id(db, requests)
     contacts = await _account_contacts(db, requests)
     now = _now()
@@ -276,6 +293,7 @@ async def summarize_requests(
             email_request=email_requests.get(request.email_change_request_id or ""),
             now=now,
             contact=contacts.get(request.enterprise_profile_id or ""),
+            seen_by_it=request.id in seen_by_it,
         )
         for request in requests
     ]

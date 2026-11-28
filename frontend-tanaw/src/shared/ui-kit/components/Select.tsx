@@ -3,14 +3,19 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "../lib/cn";
 import { getNextDropdownIndex, shouldShowDropdownSearch, type DropdownKey } from "../lib/dropdown";
-import { easeOut, popIn } from "../lib/motion";
+import { useIsPhone } from "../lib/media";
+import { easeOut, popIn, sheetIn } from "../lib/motion";
 import { useExclusivePopupDismissal } from "../lib/popup-dismissal";
 import { ModalPortal } from "./ModalPortal";
 
-/** A plain string, a [value, label] pair, or an object with optional meta text and extra search words. */
-export type SelectOption = string | readonly [string, string] | { value: string; label: string; meta?: string; searchText?: string; disabled?: boolean };
+/**
+ * A plain string, a [value, label] pair, or an object. `meta` is a short note at the option's right
+ * (a code, a count) that the closed field also shows; `description` is a longer explanation shown
+ * under the label in the open menu only, wrapping onto a second line when it must.
+ */
+export type SelectOption = string | readonly [string, string] | { value: string; label: string; meta?: string; description?: string; searchText?: string; disabled?: boolean };
 
-type NormalizedOption = { value: string; label: string; meta?: string; searchText?: string; disabled?: boolean };
+type NormalizedOption = { value: string; label: string; meta?: string; description?: string; searchText?: string; disabled?: boolean };
 type MenuPosition = { bottom?: number; left: number; maxHeight: number; top?: number; width: number };
 
 export type SelectProps = {
@@ -53,7 +58,10 @@ export type SelectProps = {
   menuClassName?: string;
 };
 
-/** A custom select: a combobox trigger and a listbox menu with keyboard support and optional search. */
+/**
+ * A custom select: a combobox trigger and a listbox menu with keyboard support and optional search.
+ * On phones the menu is a bottom sheet over a scrim, titled with the field's label, with 48px rows.
+ */
 export function Select({
   value,
   onChange,
@@ -91,16 +99,19 @@ export function Select({
   // Forms address a named field's message as `${name}-description`.
   const errorId = name ? `${name}-description` : generatedErrorId;
   const normalizedOptions = useMemo(() => options.map(normalizeOption), [options]);
+  const hasDescriptions = normalizedOptions.some((option) => Boolean(option.description));
   const searchEnabled = shouldShowDropdownSearch(searchable, normalizedOptions.length, searchMinOptions);
   const filteredOptions = useMemo(() => {
     const query = searchEnabled ? search.trim().toLowerCase() : "";
     if (!query) return normalizedOptions;
-    return normalizedOptions.filter((option) => `${option.label} ${option.value} ${option.searchText ?? ""}`.toLowerCase().includes(query));
+    return normalizedOptions.filter((option) => `${option.label} ${option.value} ${option.description ?? ""} ${option.searchText ?? ""}`.toLowerCase().includes(query));
   }, [normalizedOptions, search, searchEnabled]);
   const selectedOption = normalizedOptions.find((option) => option.value === value);
   const safeActiveIndex = Math.min(activeIndex, Math.max(filteredOptions.length - 1, 0));
   const activeOption = filteredOptions[safeActiveIndex];
   const isDirectory = variant === "directory";
+  // The map's glass directory keeps its own dropdown; every other select is a sheet on phones.
+  const asSheet = useIsPhone() && !isDirectory;
   const isInvalid = invalid || Boolean(error);
   const describedBy = [ariaDescribedBy, error ? errorId : undefined].filter(Boolean).join(" ") || undefined;
 
@@ -114,10 +125,10 @@ export function Select({
     const above = rect.top - padding - gap;
     const openUpward = below < 180 && above > below;
     const maxHeight = Math.min(searchEnabled ? 320 : 280, Math.max(openUpward ? above : below, 112));
-    const width = Math.min(Math.max(rect.width, 176), window.innerWidth - padding * 2);
+    const width = Math.min(Math.max(rect.width, 176, hasDescriptions ? 304 : 0), window.innerWidth - padding * 2);
     const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding));
     setMenuPosition({ ...(openUpward ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }), left, maxHeight, width });
-  }, [searchEnabled]);
+  }, [hasDescriptions, searchEnabled]);
 
   const closeMenu = useCallback((restoreFocus = false) => {
     setIsOpen(false);
@@ -130,9 +141,11 @@ export function Select({
   const openMenu = useCallback(() => {
     if (disabled) return;
     setActiveIndex(Math.max(normalizedOptions.findIndex((option) => option.value === value), 0));
-    updateMenuPosition();
+    // A phone sheet is pinned to the bottom edge by its classes; a dropdown follows its trigger.
+    if (asSheet) setMenuPosition({ bottom: 0, left: 0, maxHeight: 0, width: 0 });
+    else updateMenuPosition();
     setIsOpen(true);
-  }, [disabled, normalizedOptions, updateMenuPosition, value]);
+  }, [asSheet, disabled, normalizedOptions, updateMenuPosition, value]);
 
   const selectOption = useCallback(
     (option: NormalizedOption) => {
@@ -144,7 +157,7 @@ export function Select({
   );
 
   useEffect(() => {
-    if (!isOpen) return undefined;
+    if (!isOpen || asSheet) return undefined;
     updateMenuPosition();
     window.addEventListener("resize", updateMenuPosition);
     window.addEventListener("scroll", updateMenuPosition, true);
@@ -152,15 +165,16 @@ export function Select({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen, updateMenuPosition]);
+  }, [asSheet, isOpen, updateMenuPosition]);
 
   useEffect(() => {
     if (isOpen) activeOptionRef.current?.scrollIntoView({ block: "nearest" });
   }, [isOpen, safeActiveIndex]);
 
   useEffect(() => {
-    if (isOpen && !searchEnabled) menuRef.current?.focus();
-  }, [isOpen, searchEnabled]);
+    // A sheet does not open the on-screen keyboard on its own; the search field is a tap away.
+    if (isOpen && (!searchEnabled || asSheet)) menuRef.current?.focus();
+  }, [asSheet, isOpen, searchEnabled]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!isOpen && ["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
@@ -194,7 +208,7 @@ export function Select({
     ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition duration-150 ease-tanaw-out focus:outline-none"
     : cn(
         "tanaw-select-trigger flex w-full items-center justify-between gap-2 border border-(--tanaw-control-border) bg-(--tanaw-control-bg) text-left font-medium text-(--tanaw-text) transition-[background-color,border-color,box-shadow,color,scale] duration-200 ease-tanaw-out outline-none hover:border-(--tanaw-control-border-hover) hover:bg-(--tanaw-control-bg-hover) focus-visible:border-(--tanaw-accent-ink) focus-visible:shadow-(--tanaw-field-ring) active:scale-[0.99] aria-expanded:border-(--tanaw-accent-ink) aria-expanded:bg-(--tanaw-control-bg-focus) aria-expanded:shadow-(--tanaw-field-ring) disabled:cursor-not-allowed disabled:border-transparent disabled:bg-(--tanaw-control-disabled) disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100",
-        size === "sm" ? "min-h-8 rounded-tanaw-sm px-2.5 py-1.5 text-xs" : "min-h-11 rounded-tanaw-md px-3.5 py-2 text-sm",
+        size === "sm" ? "min-h-8 rounded-tanaw-sm px-2.5 py-1.5 text-xs pointer-coarse:min-h-11" : "min-h-11 rounded-tanaw-md px-3.5 py-2 text-sm",
         isInvalid && "border-(--tanaw-error)",
       );
 
@@ -224,12 +238,12 @@ export function Select({
         onKeyDown={handleKeyDown}
         className={triggerClassName}
       >
-        <span className={cn("truncate", isDirectory ? "tanaw-directory-select-value text-[13px] font-semibold" : !selectedOption && "font-normal text-(--tanaw-text-placeholder)")}>
+        <span className={cn("min-w-0 flex-1 truncate", isDirectory ? "tanaw-directory-select-value text-[13px] font-semibold" : !selectedOption && "font-normal text-(--tanaw-text-placeholder)")}>
           {selectedOption?.label ?? placeholder}
         </span>
-        <span className="flex shrink-0 items-center gap-2">
+        <span className="flex max-w-[48%] min-w-0 shrink-0 items-center gap-2">
           {selectedOption?.meta && (
-            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)"}>{selectedOption.meta}</span>
+            <span className={cn("min-w-0 truncate", isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs font-semibold text-(--tanaw-text-muted)")}>{selectedOption.meta}</span>
           )}
           <ChevronDown
             size={size === "sm" ? 14 : 16}
@@ -247,20 +261,39 @@ export function Select({
       <AnimatePresence>
         {isOpen && menuPosition && (
           <ModalPortal>
-            {dismissal === "backdrop" && <div className="fixed inset-0 z-1500" onPointerDown={() => closeMenu()} />}
+            {asSheet ? (
+              <motion.div
+                aria-hidden="true"
+                className="tanaw-dialog-backdrop fixed inset-0 z-1500"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: easeOut }}
+                onPointerDown={() => closeMenu()}
+              />
+            ) : (
+              dismissal === "backdrop" && <div className="fixed inset-0 z-1500" onPointerDown={() => closeMenu()} />
+            )}
             <motion.div
               ref={menuRef}
               tabIndex={-1}
-              {...popIn}
-              style={{ ...menuPosition, transformOrigin: menuPosition.bottom === undefined ? "top center" : "bottom center" }}
+              {...(asSheet ? sheetIn : popIn)}
+              style={asSheet ? undefined : { ...menuPosition, transformOrigin: menuPosition.bottom === undefined ? "top center" : "bottom center" }}
               onKeyDown={handleKeyDown}
               onPointerDown={(event) => event.stopPropagation()}
+              data-sheet={asSheet || undefined}
               className={cn(
-                "tanaw-dropdown-menu fixed z-1501 flex flex-col overflow-hidden rounded-tanaw-lg shadow-tanaw-dialog outline-none",
-                isDirectory ? "tanaw-directory-select-menu border backdrop-blur-md" : "border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised)",
+                "tanaw-dropdown-menu fixed z-1501 flex flex-col overflow-hidden shadow-tanaw-dialog outline-none",
+                asSheet ? "tanaw-dialog inset-x-0 bottom-0 max-h-[72dvh] rounded-t-3xl border-t border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) pb-[env(safe-area-inset-bottom)]" : "rounded-tanaw-lg",
+                !asSheet && (isDirectory ? "tanaw-directory-select-menu border backdrop-blur-md" : "border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised)"),
                 menuClassName,
               )}
             >
+              {asSheet && (label ?? ariaLabel) && (
+                <p aria-hidden="true" className="shrink-0 px-5 pt-5 pb-2 text-[0.9375rem] font-semibold text-(--tanaw-text)">
+                  {label ?? ariaLabel}
+                </p>
+              )}
               {searchEnabled && (
                 <div className={cn("shrink-0 border-b p-2", isDirectory ? "tanaw-directory-select-search-shell" : "border-(--tanaw-border-soft)")}>
                   <label
@@ -273,7 +306,7 @@ export function Select({
                   >
                     <Search size={14} aria-hidden="true" className={cn("absolute left-3", isDirectory ? "tanaw-directory-select-chevron" : "tanaw-field-icon text-(--tanaw-text-muted)")} />
                     <input
-                      autoFocus
+                      autoFocus={!asSheet}
                       type="search"
                       value={search}
                       role="searchbox"
@@ -292,7 +325,7 @@ export function Select({
                   </label>
                 </div>
               )}
-              <div id={listboxId} role="listbox" aria-label={ariaLabel ?? label ?? "Options"} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+              <div id={listboxId} role="listbox" aria-label={ariaLabel ?? label ?? "Options"} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5", asSheet && "px-3 pb-3")}>
                 {filteredOptions.map((option, index) => {
                   const selected = option.value === value;
                   const active = index === safeActiveIndex;
@@ -309,7 +342,8 @@ export function Select({
                       onClick={() => selectOption(option)}
                       onMouseEnter={() => setActiveIndex(index)}
                       className={cn(
-                        "relative isolate flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2.5 text-left text-sm transition-colors duration-150",
+                        "relative isolate flex w-full items-center justify-between gap-3 rounded-tanaw-sm px-3 py-2.5 text-left text-sm transition-colors duration-150 pointer-coarse:min-h-11",
+                        asSheet && "min-h-12 text-[0.9375rem]",
                         option.disabled && "cursor-not-allowed opacity-50",
                         isDirectory
                           ? active || selected
@@ -331,10 +365,13 @@ export function Select({
                           transition={{ duration: 0.18, ease: easeOut }}
                         />
                       )}
-                      <span className={cn("truncate", isDirectory && "text-xs font-medium")}>{option.label}</span>
-                      <span className="flex shrink-0 items-center gap-2">
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className={cn("truncate", isDirectory && "text-xs font-medium")}>{option.label}</span>
+                        {option.description && <span className="line-clamp-2 text-xs leading-snug font-normal whitespace-normal text-(--tanaw-text-muted)">{option.description}</span>}
+                      </span>
+                      <span className="flex max-w-[48%] min-w-0 shrink-0 items-center gap-2">
                         {option.meta && (
-                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs text-(--tanaw-text-muted)"}>{option.meta}</span>
+                          <span className={cn("min-w-0 truncate", isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[11px] font-bold" : "text-xs text-(--tanaw-text-muted)")}>{option.meta}</span>
                         )}
                         {selected && <Check size={15} aria-hidden="true" className="tanaw-pop-in text-(--tanaw-accent-ink)" />}
                       </span>

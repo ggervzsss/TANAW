@@ -17,6 +17,7 @@ export function ReportActionConfirmDialog({ title, message, confirmLabel, onCanc
     <Dialog
       title={title}
       size="sm"
+      className="tanaw-report-sheet"
       onClose={() => {
         if (!isPending) onCancel();
       }}

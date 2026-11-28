@@ -63,12 +63,13 @@ export function ITPersonnelPage() {
           </label>
           <SearchField id="personnel-search" value={page.query} onChange={page.setQuery} placeholder="Name or email" label="Search" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 max-sm:w-full">
           <span aria-hidden="true" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
             Role
           </span>
           <div className="flex min-h-11 items-center">
             <SegmentedControl
+              className="it-personnel__roles"
               ariaLabel="Role"
               value={page.role}
               onChange={(value) => page.setRole(value as PersonnelRoleFilter)}

@@ -134,6 +134,7 @@ export function SettingsTab(props: SettingsTabProps) {
 
       <SettingSection title="Keep activity for" description="TANAW removes older activity automatically. Reports and visitor counts are never removed.">
         <SegmentedControl
+          className="it-system__pills"
           ariaLabel="Keep activity for"
           options={RETENTION_DAY_OPTIONS.map((days) => ({ value: String(days), label: retentionLabel(days) }))}
           value={String(draft.retentionDays)}
@@ -142,7 +143,7 @@ export function SettingsTab(props: SettingsTabProps) {
         <p className="mt-3.5 text-sm text-(--tanaw-text-secondary)" role="status">
           {props.cleanupLoading ? "Checking the last cleanup." : cleanupText(props.cleanup, dateFormat, timeFormat)}
         </p>
-        <Button type="button" variant="secondary" size="sm" className="mt-3" leadingIcon={<Trash2 size={15} aria-hidden="true" />} loading={props.isRemoving} onClick={() => setConfirm("remove")}>
+        <Button type="button" variant="secondary" size="sm" className="mt-3 pointer-coarse:min-h-11" leadingIcon={<Trash2 size={15} aria-hidden="true" />} loading={props.isRemoving} onClick={() => setConfirm("remove")}>
           Remove older activity now
         </Button>
       </SettingSection>

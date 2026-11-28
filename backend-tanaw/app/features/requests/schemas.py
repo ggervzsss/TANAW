@@ -154,6 +154,8 @@ class RequestSummary(BaseModel):
     """The reader has never opened this request."""
     updated: bool = False
     """The request changed since the reader last opened it."""
+    seenByIt: bool = False
+    """At least one IT account has opened this request."""
 
 
 class RequestMessageCreate(BaseModel):

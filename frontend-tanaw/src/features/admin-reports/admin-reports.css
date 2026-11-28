@@ -40,8 +40,10 @@
   transition: background-color 200ms var(--ease-tanaw-out);
 }
 
-.tanaw-er-row:hover {
-  background: var(--tanaw-control-hover);
+@media (hover: hover) {
+  .tanaw-er-row:hover {
+    background: var(--tanaw-control-hover);
+  }
 }
 
 .tanaw-er-row:active {
@@ -71,15 +73,114 @@
     transform 200ms var(--ease-tanaw-out);
 }
 
-.tanaw-er-row:hover .tanaw-er-row__chevron {
-  color: var(--tanaw-accent-ink);
-  transform: translateX(2px);
+@media (hover: hover) {
+  .tanaw-er-row:hover .tanaw-er-row__chevron {
+    color: var(--tanaw-accent-ink);
+    transform: translateX(2px);
+  }
 }
 
 .tanaw-er-row:focus-visible,
 .tanaw-er-month-row:focus-visible {
   outline: 2px solid var(--tanaw-focus-ring);
   outline-offset: -2px;
+}
+
+/*
+ * Phones and tablets (below 60rem): each enterprise is one stacked, tappable row with no sideways scroll. The name and chevron
+ * lead, the submission and review pills follow (with an overdue note), then when it was sent and
+ * who reviewed it on one quiet line. The row's ::after breaks the line before that last one.
+ */
+@media (width < 60rem) {
+  .tanaw-er-row.tanaw-er-cols {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+    padding: 14px 8px;
+  }
+
+  .tanaw-er-row.tanaw-er-cols::after {
+    content: "";
+    order: 5;
+    flex-basis: 100%;
+  }
+
+  /* The column headings say nothing a stacked row does not; the row labels its own lines. */
+  .tanaw-er-head.tanaw-er-cols {
+    display: none;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--name {
+    order: 1;
+    flex: 1 1 calc(100% - 24px);
+  }
+
+  .tanaw-er-row .tanaw-er-row__chevron {
+    order: 2;
+    flex: none;
+  }
+
+  .tanaw-er-row :is(.tanaw-er-cell--submission, .tanaw-er-cell--review) {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 10px;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--submission {
+    order: 3;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--submission > span:not(:first-child) {
+    margin-top: 0;
+    font-size: 13px;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--review {
+    order: 4;
+  }
+
+  .tanaw-er-row :is(.tanaw-er-cell--sent, .tanaw-er-cell--reviewer) {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--sent {
+    order: 6;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--reviewer {
+    order: 7;
+    min-width: 0;
+  }
+
+  .tanaw-er-row .tanaw-er-cell--reviewer::before {
+    content: "·";
+    margin-right: 8px;
+    color: var(--tanaw-text-muted);
+  }
+
+  .tanaw-er-row .tanaw-er-cell--reviewer[data-empty] {
+    display: none;
+  }
+
+  /* Loading rows in the same stacked shape: the name lines, then the two pills. */
+  .tanaw-er-skeleton-row.tanaw-er-cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    padding: 14px 8px;
+  }
+
+  .tanaw-er-skeleton-row > :first-child {
+    flex-basis: 100%;
+  }
+
+  .tanaw-er-skeleton-row > :is(:nth-child(2), :nth-child(5), :last-child) {
+    display: none;
+  }
 }
 
 /* A section fades up a few pixels when what it shows changes. */
@@ -105,10 +206,12 @@
   max-width: 100%;
 }
 
-/* The year's three figures: an open strip split by hairlines, not tiles. */
+/* The year's figures (three, or four with a report awaiting correction): an open strip split by
+   hairlines, not tiles. */
 .tanaw-er-figures {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   border-block: 1px solid var(--tanaw-border-soft);
 }
 
@@ -125,18 +228,34 @@
   border-left: 1px solid var(--tanaw-border-soft);
 }
 
+/* Phones: the figures two by two; an odd last figure takes the whole row. */
 @media (width < 40rem) {
   .tanaw-er-figures {
-    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .tanaw-er-figures > div {
-    padding: 12px 0;
+  .tanaw-er-figures > div,
+  .tanaw-er-figures > div:first-child {
+    padding: 12px 16px 12px 0;
   }
 
   .tanaw-er-figures > div + div {
-    border-top: 1px solid var(--tanaw-border-soft);
     border-left: 0;
+  }
+
+  .tanaw-er-figures > div:nth-child(even) {
+    padding: 12px 0 12px 16px;
+    border-left: 1px solid var(--tanaw-border-soft);
+  }
+
+  .tanaw-er-figures > div:nth-child(n + 3) {
+    border-top: 1px solid var(--tanaw-border-soft);
+  }
+
+  .tanaw-er-figures > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    padding-right: 0;
   }
 }
 
@@ -214,9 +333,11 @@
   background: var(--tanaw-control-hover);
 }
 
-.tanaw-er-month-row:hover .tanaw-er-month-chevron {
-  color: var(--tanaw-accent-ink);
-  translate: 2px 0;
+@media (hover: hover) {
+  .tanaw-er-month-row:hover .tanaw-er-month-chevron {
+    color: var(--tanaw-accent-ink);
+    translate: 2px 0;
+  }
 }
 
 .tanaw-er-month-row[aria-expanded="true"]:hover .tanaw-er-month-chevron {
@@ -240,8 +361,10 @@
     translate 200ms var(--ease-tanaw-out);
 }
 
-.tanaw-er-more:hover svg {
-  translate: 0 1px;
+@media (hover: hover) {
+  .tanaw-er-more:hover svg {
+    translate: 0 1px;
+  }
 }
 
 .tanaw-er-log {

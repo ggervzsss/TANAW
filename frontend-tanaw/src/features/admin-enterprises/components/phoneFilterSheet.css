@@ -1,0 +1,193 @@
+/*
+ * The phone filter sheet (PhoneFilterSheet.tsx). From 48rem up the inline wrapper is `display: contents`,
+ * so the filter controls sit in the page's own filter grid exactly as before, and the Filters button
+ * is hidden. Below 48rem the inline controls are hidden behind a "Filters" button beside the search;
+ * it opens a bottom sheet (portalled to the body): the one raised surface, with 24px top corners, over
+ * the shared dialog scrim.
+ */
+
+.tanaw-phone-filters__toggle {
+  display: none;
+}
+
+.tanaw-phone-filters__inline {
+  display: contents;
+}
+
+@media (width < 48rem) {
+  .tanaw-phone-filters__inline {
+    display: none;
+  }
+
+  .tanaw-phone-filters__toggle {
+    position: relative;
+    display: inline-flex;
+    min-height: 44px;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: var(--tanaw-control-bg);
+    color: var(--tanaw-text);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition:
+      background-color 200ms var(--ease-tanaw-out),
+      border-color 200ms var(--ease-tanaw-out),
+      scale 120ms var(--ease-tanaw-out);
+  }
+
+  .tanaw-phone-filters__toggle:active {
+    scale: 0.97;
+    background: var(--tanaw-control-bg-hover);
+  }
+
+  .tanaw-phone-filters__toggle[aria-expanded="true"] {
+    border-color: var(--tanaw-accent-ink);
+    background: var(--tanaw-control-bg-focus);
+  }
+
+  .tanaw-phone-filters__toggle svg {
+    color: var(--tanaw-accent-ink);
+  }
+
+  /* How many filters are on: a small Civic Green count, the one solid mark on the button. */
+  .tanaw-phone-filters__count {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    place-items: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--tanaw-action);
+    color: var(--tanaw-on-action);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tanaw-phone-filters__toggle:focus-visible,
+.tanaw-phone-filters__close:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-phone-filters__scrim {
+  position: fixed;
+  z-index: 1290;
+  inset: 0;
+  animation: tanaw-phone-filters-fade 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-phone-filters__sheet {
+  position: fixed;
+  z-index: 1300;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  max-height: min(88dvh, 40rem);
+  flex-direction: column;
+  border: 1px solid var(--tanaw-border-soft);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--tanaw-surface-raised);
+  box-shadow: var(--shadow-tanaw-dialog);
+  color: var(--tanaw-text);
+  font-size: 15px;
+  outline: none;
+  animation: tanaw-phone-filters-rise 260ms var(--ease-tanaw-out);
+}
+
+.tanaw-phone-filters__head {
+  padding: 8px 16px 12px;
+}
+
+.tanaw-phone-filters__grip {
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: var(--tanaw-border);
+}
+
+.tanaw-phone-filters__close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  margin: -6px -8px 0 0;
+  border-radius: 999px;
+  color: var(--tanaw-text-muted);
+  transition:
+    background-color 200ms var(--ease-tanaw-out),
+    color 200ms var(--ease-tanaw-out);
+}
+
+.tanaw-phone-filters__close:active {
+  background: var(--tanaw-control-bg-hover);
+  color: var(--tanaw-text);
+}
+
+/* The controls stack full width, 16px apart, with room to breathe under the header. */
+.tanaw-phone-filters__body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 20px;
+}
+
+.tanaw-phone-filters__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--tanaw-border-soft);
+}
+
+@keyframes tanaw-phone-filters-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes tanaw-phone-filters-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (hover: hover) {
+  .tanaw-phone-filters__toggle:hover,
+  .tanaw-phone-filters__close:hover {
+    background: var(--tanaw-control-bg-hover);
+    color: var(--tanaw-text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-phone-filters__toggle,
+  .tanaw-phone-filters__close {
+    transition: none;
+  }
+
+  .tanaw-phone-filters__toggle:active {
+    scale: none;
+  }
+
+  .tanaw-phone-filters__sheet,
+  .tanaw-phone-filters__scrim {
+    animation: none;
+  }
+}

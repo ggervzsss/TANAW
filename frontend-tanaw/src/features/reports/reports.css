@@ -2,10 +2,89 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
   z-index: 1200;
 }
 
+/*
+ * Phones (under 640px). A report (the enterprise report, the monthly and annual previews) fills the
+ * screen: the official sheet scrolls under a fixed header, and the actions sit in a bar along the
+ * foot, full width and primary first, with Download PDF and Print side by side. The return and
+ * generate dialogs rise from the foot as sheets with their buttons stacked.
+ */
 @media (width < 40rem) {
-  .tanaw-report-preview > footer .tanaw-button {
-    padding-inline: 10px;
-    font-size: 0.75rem;
+  .tanaw-dialog-backdrop:has(> .tanaw-report-preview) {
+    padding: 0;
+  }
+
+  .tanaw-dialog.tanaw-report-preview {
+    height: 100dvh;
+    max-height: 100dvh;
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .tanaw-report-preview > header {
+    padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+  }
+
+  .tanaw-report-preview > footer,
+  .tanaw-report-sheet > footer {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    border-top-color: var(--tanaw-border-soft);
+  }
+
+  .tanaw-report-preview > footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .tanaw-report-preview > footer > .tanaw-button,
+  .tanaw-report-sheet > footer > .tanaw-button {
+    width: 100%;
+    height: 48px;
+    padding-inline: 12px;
+    font-size: 0.9375rem;
+  }
+
+  /* The decision actions take the full width; the primary one comes first. */
+  .tanaw-report-preview > footer > .tanaw-button:is([data-variant="primary"], [data-variant="danger"]),
+  .tanaw-report-preview > footer > .tanaw-button:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .tanaw-report-preview > footer > .tanaw-button[data-variant="primary"] {
+    order: -1;
+  }
+
+  .tanaw-dialog-backdrop:has(> .tanaw-report-sheet) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .tanaw-dialog.tanaw-report-sheet {
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    margin: auto 0 0;
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .tanaw-report-sheet > footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  /* 16px keeps phone browsers from zooming into the reason as it is typed. */
+  .tanaw-report-sheet textarea {
+    font-size: 1rem;
+  }
+
+  .tanaw-report-preview .tanaw-dialog-close,
+  .tanaw-report-sheet .tanaw-dialog-close {
+    width: 44px;
+    height: 44px;
+    margin: -6px -10px 0 0;
   }
 }
 
@@ -127,6 +206,397 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
 @media (width < 56rem) {
   .tanaw-staff-table .tanaw-hide-sm {
     display: none;
+  }
+}
+
+/*
+ * Phones (under 640px): each table row becomes a stacked entry, split from the next by a hairline.
+ * The name (and its barangay) leads with the row's chevron at the end; the status pills follow;
+ * then a secondary line ("RPT-2026-10-003 · Sent Nov 9") or the labelled figures; and a Remind
+ * spans the row's full width. The whole entry still opens its report when tapped. Cells say what
+ * they are with data-cell (name, pill, meta, stat, action).
+ */
+@media (width < 40rem) {
+  .tanaw-staff-table--stack,
+  .tanaw-staff-table--stack tbody {
+    display: block;
+  }
+
+  .tanaw-staff-table--stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .tanaw-staff-table--stack tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 8px;
+    padding: 14px 8px;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+    border-radius: 0;
+    transition:
+      background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+      border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+  }
+
+  /* The break between the pills and the secondary line. */
+  .tanaw-staff-table--stack tbody tr::before {
+    content: "";
+    order: 4;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .tanaw-staff-table--stack tbody :where(th, td) {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .tanaw-staff-table--stack tbody tr > :where(th, td) {
+    background: transparent;
+  }
+
+  .tanaw-staff-table--stack [data-cell="name"] {
+    order: 1;
+    flex: 1 1 calc(100% - 32px);
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: break-word;
+  }
+
+  .tanaw-staff-table--stack [data-cell="action"] {
+    order: 2;
+    flex: none;
+  }
+
+  .tanaw-staff-table--stack [data-cell="action"]:empty {
+    display: none;
+  }
+
+  .tanaw-staff-table--stack [data-cell="pill"] {
+    order: 3;
+  }
+
+  /* The break line adds a second row gap; the secondary line takes one back. */
+  .tanaw-staff-table--stack [data-cell="meta"],
+  .tanaw-staff-table--stack [data-cell="stat"] {
+    order: 5;
+    margin-top: -10px;
+  }
+
+  /* The report ID and sent date, hidden in the narrow table, form the secondary line here. */
+  .tanaw-staff-table--stack tbody td.tanaw-hide-sm[data-cell="meta"] {
+    display: block;
+    color: var(--tanaw-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .tanaw-staff-table--stack tbody td[data-cell="meta"][data-empty] {
+    display: none;
+  }
+
+  /* Loading rows leave out the action and the separator dot. */
+  .tanaw-staff-table--stack tr[data-skeleton] [data-cell="action"] {
+    display: none;
+  }
+
+  /* The report ID and "Sent Nov 9" share a line; on the narrowest phones the date drops below whole. */
+  .tanaw-staff-table--stack td[data-cell="meta"] > span {
+    display: inline;
+  }
+
+  .tanaw-staff-table--stack td[data-cell="meta"][data-label]::before {
+    content: attr(data-label) " ";
+  }
+
+  .tanaw-staff-table--stack td[data-cell="meta"] > span + span::before {
+    content: " · ";
+    color: var(--tanaw-text-muted);
+  }
+
+  /* Labelled figures: the label over the count, side by side. */
+  .tanaw-staff-table--stack tbody td[data-cell="stat"] {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: left;
+    font-size: 0.9375rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tanaw-staff-table--stack td[data-cell="stat"][data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--tanaw-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .tanaw-staff-table--stack td[data-cell="stat"] > span {
+    justify-content: flex-start;
+  }
+
+  /* Remind, alone in its last line, spans the row at a full thumb's height. */
+  .tanaw-staff-table--stack tr[data-remind] [data-cell="action"] {
+    order: 8;
+    flex-basis: 100%;
+    margin-top: 2px;
+  }
+
+  .tanaw-staff-table--stack tr[data-remind] [data-cell="action"] .tanaw-button {
+    width: 100%;
+    height: 44px;
+    font-size: 0.875rem;
+  }
+
+  .tanaw-staff-table--stack tbody tr.tanaw-row-link:active {
+    background: var(--tanaw-selected-bg);
+  }
+
+  .tanaw-staff-table--stack tbody tr.tanaw-row-link:active > * {
+    background: transparent;
+  }
+
+  /* The chevron sits in a 24px box at the name's first line. */
+  .tanaw-staff-table--stack [data-cell="action"] > .tanaw-row-chevron {
+    display: block;
+  }
+}
+
+@media (width < 40rem) and (hover: hover) {
+  .tanaw-staff-table--stack tbody tr:hover > *,
+  .tanaw-staff-table--stack tbody tr:has(+ tr:hover) > * {
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .tanaw-staff-table--stack tbody tr.tanaw-row-link:hover {
+    border-bottom-color: transparent;
+    border-radius: 12px;
+    background: var(--tanaw-control-hover);
+  }
+
+  .tanaw-staff-table--stack tbody tr.tanaw-row-link:has(+ tr:hover) {
+    border-bottom-color: transparent;
+  }
+}
+
+@media (width < 40rem) and (prefers-reduced-motion: reduce) {
+  .tanaw-staff-table--stack tbody tr {
+    transition: none;
+  }
+}
+
+/* A row's Remind keeps a full thumb's height wherever touch is the pointer. */
+@media (pointer: coarse) {
+  .tanaw-remind-button.tanaw-button {
+    min-height: 44px;
+  }
+}
+
+/*
+ * Staff Reports filters. From 640px up the three selects sit in the row beside the search (their
+ * wrapper is display: contents). On a phone they fold under a Filters button beside the search,
+ * which shows how many are set and opens them in one column below.
+ */
+.tanaw-staff-filters-toggle {
+  display: none;
+}
+
+@media (width < 40rem) {
+  .tanaw-staff-filters-toggle {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding-inline: 14px;
+    border: 1px solid var(--tanaw-control-border);
+    border-radius: var(--radius-tanaw-md, 12px);
+    background: var(--tanaw-control-bg);
+    color: var(--tanaw-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition:
+      background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+      border-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+      scale 140ms var(--ease-tanaw-out);
+  }
+
+  .tanaw-staff-filters-toggle > svg {
+    color: var(--tanaw-text-muted);
+  }
+
+  .tanaw-staff-filters-toggle[aria-expanded="true"],
+  .tanaw-staff-filters-toggle[data-set] {
+    border-color: var(--tanaw-accent-ink);
+    background: var(--tanaw-selected-bg);
+    color: var(--tanaw-accent-ink);
+  }
+
+  .tanaw-staff-filters-toggle[aria-expanded="true"] > svg,
+  .tanaw-staff-filters-toggle[data-set] > svg {
+    color: currentColor;
+  }
+
+  .tanaw-staff-filters-toggle:active {
+    scale: 0.97;
+  }
+
+  .tanaw-staff-filters-toggle:focus-visible {
+    outline: 2px solid var(--tanaw-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .tanaw-staff-filters-count {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    place-items: center;
+    padding-inline: 6px;
+    border-radius: 999px;
+    background: var(--tanaw-action);
+    color: var(--tanaw-on-action);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .tanaw-staff-filters-panel {
+    animation: tanaw-staff-rise var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+  }
+
+  /* 16px keeps phone browsers from zooming into the search as it is typed. */
+  .tanaw-staff-filters input {
+    font-size: 1rem;
+  }
+}
+
+/* Under 360px the button keeps its icon and count (its name still says "Filters"), so the search has room. */
+@media (width < 22.5rem) {
+  .tanaw-staff-filters-toggle {
+    justify-content: center;
+    min-width: 44px;
+    padding-inline: 12px;
+  }
+
+  .tanaw-staff-filters-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (hover: hover) and (width < 40rem) {
+  .tanaw-staff-filters-toggle:hover {
+    border-color: var(--tanaw-control-border-hover);
+    background: var(--tanaw-control-bg-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-staff-filters-toggle {
+    transition: none;
+  }
+
+  .tanaw-staff-filters-toggle:active {
+    scale: none;
+  }
+
+  .tanaw-staff-filters-panel {
+    animation: none;
+  }
+}
+
+/*
+ * The Staff Reports header actions: the reporting month, then Generate. On a phone both take the
+ * full width, and once Generate can be pressed it rides in a frosted bar along the foot of the
+ * screen, clear of the home indicator; a spacer keeps the last row above it.
+ */
+.tanaw-staff-reports-actions,
+.tanaw-staff-generate {
+  display: contents;
+}
+
+.tanaw-staff-generate-spacer {
+  display: none;
+}
+
+@media (width < 40rem) {
+  .tanaw-portal-header div:has(> .tanaw-staff-reports-actions) {
+    width: 100%;
+  }
+
+  .tanaw-staff-reports-actions {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .tanaw-staff-reports-actions > * {
+    width: 100%;
+  }
+
+  .tanaw-staff-generate {
+    display: block;
+  }
+
+  .tanaw-staff-generate > .tanaw-button {
+    width: 100%;
+    height: 48px;
+    font-size: 0.9375rem;
+  }
+
+  .tanaw-staff-generate[data-ready] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    width: auto;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--tanaw-border-soft);
+    background: color-mix(in srgb, var(--tanaw-surface) 86%, transparent);
+    box-shadow: 0 -8px 24px -16px rgb(16 36 27 / 0.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    backdrop-filter: blur(14px) saturate(1.2);
+    animation: tanaw-staff-bar-in var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+  }
+
+  body:has(.tanaw-staff-generate[data-ready]) .tanaw-staff-generate-spacer {
+    display: block;
+    height: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  body:has(.tanaw-staff-generate[data-ready]) .tanaw-connection-notice {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes tanaw-staff-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-staff-generate[data-ready] {
+    animation: none;
   }
 }
 
@@ -329,6 +799,45 @@ html.dark .tanaw-var-sheet {
   }
 }
 
+/*
+ * The full VAR 2M table never squeezes its columns below the DOT layout's width: where the dialog is
+ * narrower (tablets), the table scrolls sideways inside its frame, and a hint above the sheet says so.
+ */
+.tanaw-var-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.tanaw-var-scroll:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-var-scroll > .tanaw-var2m-table {
+  min-width: 60rem;
+}
+
+.tanaw-var-scroll-hint {
+  display: none;
+}
+
+@media (48rem <= width < 72rem) {
+  .tanaw-var-scroll-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: var(--tanaw-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .tanaw-var-scroll-hint > svg {
+    flex: none;
+    color: var(--tanaw-accent-ink);
+  }
+}
+
 .tanaw-var-data-note {
   margin: 4px 0 0;
   color: var(--var-muted);
@@ -345,5 +854,103 @@ html.dark .tanaw-var-sheet {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/*
+ * Remind (Staff Reports, a missing report): the one red action in the table. Dark red with a
+ * hairline of light, it lifts onto a soft red glow on hover while its bell rings once; the kit's
+ * band of light crosses it; pressing settles it. Once sent it becomes a quiet "Reminded" tint.
+ */
+.tanaw-remind-button.tanaw-button[data-variant="destructive"] {
+  --tanaw-remind-red: #8f1d14;
+  --tanaw-remind-red-hover: #741610;
+  background-color: var(--tanaw-remind-red);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 1px 2px rgb(143 29 20 / 0.28);
+  transition:
+    background-color 200ms var(--ease-tanaw-out),
+    box-shadow 240ms var(--ease-tanaw-out),
+    translate 200ms var(--ease-tanaw-out),
+    scale 140ms var(--ease-tanaw-out);
+}
+
+.tanaw-remind-button.tanaw-button[data-variant="destructive"]:not(:disabled):hover {
+  background-color: var(--tanaw-remind-red-hover);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 2px 4px -1px rgb(143 29 20 / 0.3),
+    0 10px 22px -10px rgb(143 29 20 / 0.7);
+}
+
+.tanaw-remind-button.tanaw-button[data-variant="destructive"]:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+.tanaw-remind-button > svg {
+  transform-origin: 50% 8%;
+}
+
+@media (hover: hover) {
+  .tanaw-remind-button.tanaw-button[data-variant="destructive"]:not(:disabled):hover > svg {
+    animation: tanaw-remind-ring 640ms var(--ease-tanaw-out);
+  }
+}
+
+.tanaw-remind-button--sent.tanaw-button:disabled {
+  opacity: 1;
+  color: var(--tanaw-text-secondary);
+}
+
+.tanaw-remind-button--sent > svg {
+  color: var(--tanaw-accent-ink);
+}
+
+.dark .tanaw-remind-button.tanaw-button[data-variant="destructive"] {
+  --tanaw-remind-red: #a3261d;
+  --tanaw-remind-red-hover: #b8322a;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+.dark .tanaw-remind-button.tanaw-button[data-variant="destructive"]:not(:disabled):hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 2px 4px -1px rgb(0 0 0 / 0.4),
+    0 10px 22px -10px rgb(184 50 42 / 0.55);
+}
+
+@keyframes tanaw-remind-ring {
+  0% {
+    rotate: 0deg;
+  }
+
+  20% {
+    rotate: -16deg;
+  }
+
+  40% {
+    rotate: 13deg;
+  }
+
+  60% {
+    rotate: -8deg;
+  }
+
+  80% {
+    rotate: 4deg;
+  }
+
+  100% {
+    rotate: 0deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-remind-button.tanaw-button[data-variant="destructive"]:not(:disabled):hover > svg {
+    animation: none;
   }
 }

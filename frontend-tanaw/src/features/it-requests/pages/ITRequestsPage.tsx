@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { ArrowLeft, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { useAdminRequests, useRequestDetail, useRequestReadMarks } from "@/features/alerts-monitor/hooks";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -10,6 +11,7 @@ import {
   REQUEST_PARAM,
   clearedFilters,
   countNotPickedUp,
+  defaultFilters,
   filterItRequests,
   filtersToParams,
   findSelectedRequest,
@@ -28,21 +30,32 @@ import {
   type Viewer,
 } from "../model";
 
+/** Below this width the list and the request are two screens: the list, then the request with a Back. */
 const NARROW_QUERY = "(max-width: 980px)";
 const filterLabel = "mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)";
+
+/** Marks a request opened from the list on a narrow screen, so Back returns to the list where it was. */
+type ListState = { fromRequestList?: boolean } | null;
 
 /**
  * IT Requests (`/it/requests`): help and approval requests from enterprises and the sign-in page,
  * grouped by day beside the selected request. Only IT changes a request's status; the Admin can add
- * notes. The filters and the selected request (`?request=<id>`) live in the address.
+ * notes. The filters and the selected request (`?request=<id>`) live in the address. On narrow
+ * screens the list comes first, and a request opens as its own screen with a Back to the list.
  */
 export function ITRequestsPage() {
   const { dateFormat, timeFormat } = useSystemDisplayPreferences();
   const user = useAuthStore((state) => state.user);
   const viewer: Viewer = useMemo(() => ({ id: user?.id ?? null, name: user?.displayName ?? null }), [user?.displayName, user?.id]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const narrow = useMediaQuery(NARROW_QUERY);
   const now = useMinuteClock();
-  const detailRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listScroll = useRef<number | null>(null);
+  const filtersId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { requests, isLoading, isError, retry } = useAdminRequests();
 
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
@@ -50,11 +63,16 @@ export function ITRequestsPage() {
   const groups = useMemo(() => groupByDay(visible, now, dateFormat), [dateFormat, now, visible]);
   const linked = useMemo(() => findSelectedRequest(requests, searchParams), [requests, searchParams]);
   const linkMissing = searchParams.has(REQUEST_PARAM) && !linked && !isLoading && !isError;
-  const selected = linked ?? visible[0] ?? null;
+  // Side by side, the newest request shows until another is picked. As two screens, the list
+  // shows until a request is opened.
+  const selected = linked ?? (narrow ? null : (visible[0] ?? null));
+  const requestScreen = narrow && searchParams.has(REQUEST_PARAM);
   const ownerOptions = useMemo(() => ownerFilterOptions(requests, viewer.id, filters.owner), [filters.owner, requests, viewer.id]);
   const waiting = countNotPickedUp(requests);
   const detailQuery = useRequestDetail(selected);
-  useRequestReadMarks(selected, !isLoading);
+  // Only a request someone picked (a click or a link) counts as read; the one shown by default does
+  // not, so it is never marked "Seen by IT" just because the page opened.
+  useRequestReadMarks(linked ?? null, !isLoading);
 
   const updateFilters = (patch: Partial<ItRequestFilters>) => setSearchParams(filtersToParams({ ...filters, ...patch }, searchParams), { replace: true });
   const clearFilters = () => setSearchParams(filtersToParams(clearedFilters, searchParams), { replace: true });
@@ -62,13 +80,45 @@ export function ITRequestsPage() {
   const select = (request: Request) => {
     const next = new URLSearchParams(searchParams);
     next.set(REQUEST_PARAM, request.id);
-    setSearchParams(next, { replace: true });
-    // List and detail stack on narrow screens: bring the request into view.
-    if (window.matchMedia(NARROW_QUERY).matches) {
-      const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      window.requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" }));
+    if (!narrow) {
+      setSearchParams(next, { replace: true });
+      return;
     }
+    // The request opens as its own screen: the browser's Back returns to the list, where it was.
+    listScroll.current = scrollerOf(rootRef.current).scrollTop;
+    setSearchParams(next, { state: { fromRequestList: true } satisfies ListState });
   };
+
+  const backToList = () => {
+    if ((location.state as ListState)?.fromRequestList) {
+      navigate(-1);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete(REQUEST_PARAM);
+    setSearchParams(next, { replace: true });
+  };
+
+  // Moving between the list and a request screen: a request starts at its top, and the list comes
+  // back where it was left.
+  useLayoutEffect(() => {
+    if (!narrow) return;
+    const scroller = scrollerOf(rootRef.current);
+    if (requestScreen) scroller.scrollTop = 0;
+    else if (listScroll.current !== null) {
+      scroller.scrollTop = listScroll.current;
+      listScroll.current = null;
+    }
+  }, [narrow, requestScreen]);
+
+  const activeFilters = [filters.type !== defaultFilters.type, filters.status !== defaultFilters.status, filters.owner !== defaultFilters.owner].filter(Boolean).length;
+  const filterSummary = [
+    statusFilterOptions.find(([value]) => value === filters.status)?.[1],
+    typeFilterOptions.find(([value]) => value === typeSlug(filters.type))?.[1],
+    ownerOptions.find(([value]) => value === filters.owner)?.[1],
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // After an action the request may leave the filtered list (resolved under "Open"): keep it selected.
   const keepSelected = (request: Request) =>
@@ -84,8 +134,43 @@ export function ITRequestsPage() {
 
   const when = (value: string) => formatWhen(value, now, dateFormat, timeFormat);
 
+  const detail = selected ? (
+    <ITRequestDetail
+      key={selected.id}
+      request={selected}
+      detail={detailQuery.data ?? null}
+      detailLoading={detailQuery.isLoading}
+      viewer={viewer}
+      now={now}
+      formatWhen={when}
+      onActed={keepSelected}
+    />
+  ) : isLoading ? (
+    <DetailSkeleton />
+  ) : null;
+
+  if (requestScreen) {
+    return (
+      <div ref={rootRef} className="w-full pb-14">
+        <h1 className="sr-only">Requests</h1>
+        <button
+          type="button"
+          onClick={backToList}
+          className="group rounded-tanaw-sm -ml-1 inline-flex min-h-11 items-center gap-1.5 px-1 text-sm font-semibold text-(--tanaw-text-secondary) transition-colors duration-150 hover:text-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+        >
+          <ArrowLeft size={16} aria-hidden="true" className="ease-tanaw-out transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transition-none" />
+          Requests
+        </button>
+        <div className="mt-2 min-w-0">
+          {linkMissing && <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />}
+          {detail}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full pb-14">
+    <div ref={rootRef} className="w-full pb-14">
       <PortalPageHeader
         title="Requests"
         description="Help and approval requests from enterprises and the sign-in page. Only IT changes a request's status. Admin can add notes."
@@ -96,16 +181,36 @@ export function ITRequestsPage() {
         }
       />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_16rem_13rem_13rem] items-end gap-3 max-[1180px]:grid-cols-3 max-[980px]:grid-cols-1">
-        <div className="max-[1180px]:col-span-3 max-[980px]:col-span-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_16rem_13rem_13rem] items-end gap-3 max-[1180px]:grid-cols-3 max-sm:grid-cols-1">
+        <div className="max-[1180px]:col-span-3 max-sm:col-span-1">
           <label htmlFor="it-requests-search" className={filterLabel}>
             Search
           </label>
           <SearchField id="it-requests-search" label="Search" value={filters.query} onChange={(query) => updateFilters({ query })} placeholder="Place, request or reference number" />
         </div>
-        <FilterSelect label="Type" value={typeSlug(filters.type)} options={typeFilterOptions} onChange={(value) => updateFilters({ type: typeFromSlug(value) })} />
-        <FilterSelect label="Status" value={filters.status} options={statusFilterOptions} onChange={(value) => updateFilters({ status: value as StatusFilter })} />
-        <FilterSelect label="Handled by" value={filters.owner} options={ownerOptions} onChange={(owner) => updateFilters({ owner })} />
+        {/* On phones the three filters fold under one row that says what they are set to. */}
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls={filtersId}
+          onClick={() => setFiltersOpen((open) => !open)}
+          className="rounded-tanaw-md ease-tanaw-out flex min-h-11 w-full cursor-pointer items-center gap-2.5 bg-(--tanaw-control-bg) px-3.5 text-left text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:bg-(--tanaw-control-bg-hover) sm:hidden"
+        >
+          <SlidersHorizontal size={16} aria-hidden="true" className="shrink-0 text-(--tanaw-text-secondary)" />
+          <span className="font-semibold text-(--tanaw-text)">Filters</span>
+          {activeFilters > 0 && <span className="rounded-full bg-(--tanaw-selected-bg) px-2 py-0.5 text-xs font-semibold text-(--tanaw-accent-ink) tabular-nums">{activeFilters}</span>}
+          <span className="min-w-0 flex-1 truncate text-right text-[13px] text-(--tanaw-text-secondary)">{filterSummary}</span>
+          <ChevronDown
+            size={16}
+            aria-hidden="true"
+            className={cn("ease-tanaw-out shrink-0 text-(--tanaw-text-muted) transition-transform duration-200 motion-reduce:transition-none", filtersOpen && "rotate-180")}
+          />
+        </button>
+        <div id={filtersId} className={cn("contents", !filtersOpen && "max-sm:hidden")}>
+          <FilterSelect label="Type" value={typeSlug(filters.type)} options={typeFilterOptions} onChange={(value) => updateFilters({ type: typeFromSlug(value) })} />
+          <FilterSelect label="Status" value={filters.status} options={statusFilterOptions} onChange={(value) => updateFilters({ status: value as StatusFilter })} />
+          <FilterSelect label="Handled by" value={filters.owner} options={ownerOptions} onChange={(owner) => updateFilters({ owner })} />
+        </div>
       </div>
       <p className="mt-3 text-[13px] text-(--tanaw-text-secondary)">{isLoading ? "Loading requests." : listSummary(visible.length)}</p>
 
@@ -131,25 +236,12 @@ export function ITRequestsPage() {
           onSelect={select}
           empty={<ListEmptyState isLoading={isLoading} filtered={requests.length > 0} onClear={clearFilters} />}
         />
-        <div ref={detailRef} className="min-w-0 scroll-mt-4">
-          {linkMissing && <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />}
-          {selected ? (
-            <ITRequestDetail
-              key={selected.id}
-              request={selected}
-              detail={detailQuery.data ?? null}
-              detailLoading={detailQuery.isLoading}
-              viewer={viewer}
-              now={now}
-              formatWhen={when}
-              onActed={keepSelected}
-            />
-          ) : isLoading ? (
-            <DetailSkeleton />
-          ) : (
-            <p className="py-1.5 text-sm text-(--tanaw-text-secondary)">Select a request to see its details.</p>
-          )}
-        </div>
+        {!narrow && (
+          <div className="min-w-0">
+            {linkMissing && <Alert tone="warning" className="mb-4" title="That request is not in the list. It may have been withdrawn." />}
+            {detail ?? <p className="py-1.5 text-sm text-(--tanaw-text-secondary)">Select a request to see its details.</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -257,6 +349,28 @@ function ListEmptyState({ isLoading, filtered, onClear }: { isLoading: boolean; 
         </Button>
       )}
     </div>
+  );
+}
+
+/** The element that scrolls the page: the portal content area, or the document. */
+function scrollerOf(element: HTMLElement | null): Element {
+  for (let node = element?.parentElement ?? null; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
+  }
+  return document.scrollingElement ?? document.documentElement;
+}
+
+/** Whether a media query matches, kept current as the window changes. */
+function useMediaQuery(query: string) {
+  return useSyncExternalStore(
+    (onChange) => {
+      const list = window.matchMedia(query);
+      list.addEventListener("change", onChange);
+      return () => list.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
   );
 }
 

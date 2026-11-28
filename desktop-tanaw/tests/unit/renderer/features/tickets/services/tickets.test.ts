@@ -67,5 +67,6 @@ function request(id: string, status: SupportTicketStatus, timestamp: string): Su
     updatedAt: timestamp,
     unread: false,
     updated: false,
+    seenByIt: false,
   };
 }

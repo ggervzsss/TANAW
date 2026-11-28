@@ -104,6 +104,7 @@ export function PersonnelTable({ rows, isLoading, emptyText, ...handlers }: Prop
             className={cn("it-personnel__row py-4", row.actions.canEdit && "tanaw-row-link", row.access.access === "deactivated" && "opacity-70")}
           >
             <PersonCell row={row} onEdit={handlers.onEdit} />
+            {row.actions.canEdit && <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron it-personnel__row-chevron" />}
             <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className={termClass}>Role</dt>
               <dd className="font-medium">{row.role}</dd>
@@ -211,6 +212,9 @@ function AccessCell({ access }: { access: AccessSummary }) {
   );
 }
 
+/** A row action at a full thumb's height on touch screens. */
+const touchClass = "pointer-coarse:min-h-11";
+
 /** The actions besides opening the account, which the whole row does. */
 function RowActions({ row, onResend, onDeactivate, onActivate, pendingAccountId, align = "end" }: PersonnelRowHandlers & { row: PersonnelRow; align?: "start" | "end" }) {
   const { account, actions } = row;
@@ -218,17 +222,17 @@ function RowActions({ row, onResend, onDeactivate, onActivate, pendingAccountId,
   return (
     <div className={cn("inline-flex flex-wrap items-center gap-2", align === "end" ? "justify-end" : "justify-start")}>
       {actions.resendLabel && (
-        <Button variant="secondary" onClick={() => onResend(account)} loading={busy} aria-label={`${actions.resendLabel} to ${account.displayName}`}>
+        <Button variant="secondary" className={touchClass} onClick={() => onResend(account)} loading={busy} aria-label={`${actions.resendLabel} to ${account.displayName}`}>
           {actions.resendLabel}
         </Button>
       )}
       {actions.canDeactivate && (
-        <Button variant="danger" onClick={() => onDeactivate(account)} disabled={busy} aria-label={`Deactivate ${account.displayName}`}>
+        <Button variant="danger" className={touchClass} onClick={() => onDeactivate(account)} disabled={busy} aria-label={`Deactivate ${account.displayName}`}>
           Deactivate
         </Button>
       )}
       {actions.canActivate && (
-        <Button variant="secondary" onClick={() => onActivate(account)} loading={busy} aria-label={`Activate ${account.displayName}`}>
+        <Button variant="secondary" className={touchClass} onClick={() => onActivate(account)} loading={busy} aria-label={`Activate ${account.displayName}`}>
           Activate
         </Button>
       )}

@@ -71,7 +71,7 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <SegmentedControl ariaLabel="Activity type" options={systemActivityFilterOptions} value={filter} onChange={changeFilter} />
+        <SegmentedControl className="it-system__pills" ariaLabel="Activity type" options={systemActivityFilterOptions} value={filter} onChange={changeFilter} />
         <p className="text-[0.84375rem] text-(--tanaw-text-secondary)">Newest first. Entries never change. Select one to see the technical detail.</p>
       </div>
 
@@ -157,7 +157,7 @@ export function ActivityTab({ logs, isLoading, isError, onRetry, expandedId, onE
             Showing {rows.length.toLocaleString("en-US")} of {filtered.length.toLocaleString("en-US")} {filtered.length === 1 ? "entry" : "entries"}
           </p>
           {remaining > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setPages(Math.ceil(shown / SYSTEM_ACTIVITY_PAGE_SIZE) + 1)}>
+            <Button variant="secondary" size="sm" className="pointer-coarse:min-h-11 max-sm:w-full" onClick={() => setPages(Math.ceil(shown / SYSTEM_ACTIVITY_PAGE_SIZE) + 1)}>
               Show {Math.min(remaining, SYSTEM_ACTIVITY_PAGE_SIZE)} more
             </Button>
           )}

@@ -10,7 +10,7 @@ export function LocationField({ draft, mapId, hint, mapHeightClassName = "h-60" 
       data-field-name="location"
       tabIndex={-1}
       aria-labelledby={`${mapId}-label`}
-      className="rounded-tanaw-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+      className="rounded-tanaw-md min-w-0 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
     >
       <p id={`${mapId}-label`} className="mb-1.5 text-[13px] font-medium text-(--tanaw-text-secondary)">
         Address and map pin

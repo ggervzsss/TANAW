@@ -39,7 +39,7 @@ function AppFacts({ row, formats }: { row: EnterpriseRow; formats: DisplayFormat
   const term = "text-[13px] text-(--tanaw-text-muted)";
   const value = "mt-1 font-semibold text-(--tanaw-text)";
   return (
-    <dl className="grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-sm:grid-cols-1 lg:[&>div+div]:border-l lg:[&>div+div]:border-(--tanaw-border-soft)">
+    <dl className="grid grid-cols-4 border-y border-(--tanaw-border-soft) max-lg:grid-cols-2 max-lg:gap-x-6 lg:[&>div+div]:border-l lg:[&>div+div]:border-(--tanaw-border-soft)">
       <div className={cell}>
         <dt className={term}>Desktop app status</dt>
         <dd className="mt-1">
@@ -229,9 +229,9 @@ function RequestsFromPlace({ row, formats }: { row: EnterpriseRow; formats: Disp
                   <span>
                     {request.group} · {requestWhen(request.createdAt, formats.now, formats.dateFormat, formats.timeFormat)}
                   </span>
-                  <span className="text-(--tanaw-text-muted) tabular-nums">{request.code}</span>
+                  <span className="shrink-0 whitespace-nowrap text-(--tanaw-text-muted) tabular-nums">{request.code}</span>
                 </span>
-                <Link to={requestPath(request.id)} className="mt-1 block font-semibold text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline">
+                <Link to={requestPath(request.id)} className="mt-1 block font-semibold pointer-coarse:py-1 text-(--tanaw-accent-ink) no-underline underline-offset-4 hover:underline">
                   {request.title}
                 </Link>
                 <span className={cn("mt-0.5 block text-sm font-semibold", toneText[status.tone])}>{status.text}</span>
@@ -323,7 +323,7 @@ function NoticeForm({ row }: { row: EnterpriseRow }) {
           <FieldError id={`${messageId}-error`}>{errors.message}</FieldError>
         </div>
         <div>
-          <Button type="submit" loading={send.isPending}>
+          <Button type="submit" className="pointer-coarse:min-h-11 max-sm:w-full" loading={send.isPending}>
             Send to {row.name}
           </Button>
         </div>

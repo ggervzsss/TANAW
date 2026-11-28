@@ -1,4 +1,4 @@
-import { REQUEST_GROUPS, type Request, type RequestGroup, type RequestStatus } from "@/shared/services/requests";
+import { isClosedRequest, type Request, type RequestGroup } from "@/shared/services/requests";
 import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 /*
@@ -9,54 +9,90 @@ import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/date
 
 export const REQUEST_PARAM = "request";
 
-export const REQUEST_STATUSES: readonly RequestStatus[] = ["In Progress", "Resolved", "Approved"];
+/*
+ * Type: the Admin's categories, worked out from a request's group and whether it names a camera.
+ * The groups themselves (what IT sees and the server stores) stay as they are.
+ */
+export type RequestCategory = "Camera Issue" | "Report Concern" | "Account and Access" | "Desktop app and Maintenance" | "Others";
 
-export const statusLabels: Record<RequestStatus, string> = {
-  "In Progress": "In progress",
-  Resolved: "Resolved",
-  Approved: "Approved",
+export const REQUEST_CATEGORIES: readonly RequestCategory[] = ["Camera Issue", "Report Concern", "Account and Access", "Desktop app and Maintenance", "Others"];
+
+const GROUP_CATEGORIES: Record<RequestGroup, RequestCategory> = {
+  "Desktop app or camera problem": "Desktop app and Maintenance",
+  "Report problem": "Report Concern",
+  "Sign-in help": "Account and Access",
+  "Account change": "Account and Access",
+  Other: "Others",
 };
 
-export const statusTextClass: Record<RequestStatus, string> = {
+/** A desktop app or camera problem that names a camera is a Camera Issue; every other group maps one to one. */
+export function requestCategory(request: Pick<Request, "group" | "camera">): RequestCategory {
+  if (request.group === "Desktop app or camera problem" && request.camera?.trim()) return "Camera Issue";
+  return GROUP_CATEGORIES[request.group];
+}
+
+/*
+ * Progress: how far IT has got. Resolved (closed, approved changes included), In Progress (someone
+ * in IT is handling it) or Seen by IT (opened by IT, nobody handling it yet). An open request
+ * nobody in IT has opened is "Sent to IT" and matches none of the three Progress options.
+ */
+export type RequestProgress = "Resolved" | "In Progress" | "Seen by IT";
+
+export const REQUEST_PROGRESS: readonly RequestProgress[] = ["Resolved", "In Progress", "Seen by IT"];
+
+export function requestProgress(request: Pick<Request, "status" | "handledBy" | "seenByIt">): RequestProgress | null {
+  if (isClosedRequest(request)) return "Resolved";
+  if (request.handledBy) return "In Progress";
+  if (request.seenByIt) return "Seen by IT";
+  return null;
+}
+
+export type RequestProgressState = RequestProgress | "Sent to IT";
+
+/** The progress a request's row and details show, "Sent to IT" included. */
+export function requestProgressState(request: Pick<Request, "status" | "handledBy" | "seenByIt">): RequestProgressState {
+  return requestProgress(request) ?? "Sent to IT";
+}
+
+export const progressTextClass: Record<RequestProgressState, string> = {
+  "Sent to IT": "text-(--tanaw-warn-ink)",
+  "Seen by IT": "text-(--tanaw-text)",
   "In Progress": "text-(--tanaw-accent-ink)",
   Resolved: "text-(--tanaw-text-secondary)",
-  Approved: "text-(--tanaw-text-secondary)",
 };
 
-export const statusDotClass: Record<RequestStatus, string> = {
+export const progressDotClass: Record<RequestProgressState, string> = {
+  "Sent to IT": "bg-(--tanaw-warn-ink)",
+  "Seen by IT": "bg-(--tanaw-text)",
   "In Progress": "bg-(--tanaw-accent-ink)",
   Resolved: "bg-(--tanaw-text-secondary)",
-  Approved: "bg-(--tanaw-text-secondary)",
 };
 
 export type RequestFilters = {
   query: string;
-  group: "all" | RequestGroup;
-  status: "all" | RequestStatus;
+  category: "all" | RequestCategory;
+  progress: "all" | RequestProgress;
 };
 
-export const initialRequestFilters: RequestFilters = { query: "", group: "all", status: "all" };
+export const initialRequestFilters: RequestFilters = { query: "", category: "all", progress: "all" };
 
-export const groupFilterOptions: Array<readonly [RequestFilters["group"], string]> = [["all", "All types"], ...REQUEST_GROUPS.map((group) => [group, group] as const)];
+export const categoryFilterOptions: Array<readonly [RequestFilters["category"], string]> = [["all", "All types"], ...REQUEST_CATEGORIES.map((category) => [category, category] as const)];
+
+/** Every progress option, even one no request is in right now, so the list stays put. */
+export const progressFilterOptions: Array<readonly [RequestFilters["progress"], string]> = [["all", "All progress"], ...REQUEST_PROGRESS.map((progress) => [progress, progress] as const)];
 
 export function isRequestFilters(value: unknown): value is RequestFilters {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
   return (
     typeof candidate.query === "string" &&
-    (candidate.group === "all" || REQUEST_GROUPS.includes(candidate.group as RequestGroup)) &&
-    (candidate.status === "all" || REQUEST_STATUSES.includes(candidate.status as RequestStatus))
+    (candidate.category === "all" || REQUEST_CATEGORIES.includes(candidate.category as RequestCategory)) &&
+    (candidate.progress === "all" || REQUEST_PROGRESS.includes(candidate.progress as RequestProgress))
   );
 }
 
 export function hasActiveFilters(filters: RequestFilters) {
-  return filters.query.trim() !== "" || filters.group !== "all" || filters.status !== "all";
-}
-
-/** The Status options: every status some request has now. */
-export function statusFilterOptions(requests: readonly Request[]): Array<readonly [RequestFilters["status"], string]> {
-  const present = new Set(requests.map((request) => request.status));
-  return [["all", "All statuses"], ...REQUEST_STATUSES.filter((status) => present.has(status)).map((status) => [status, statusLabels[status]] as const)];
+  return filters.query.trim() !== "" || filters.category !== "all" || filters.progress !== "all";
 }
 
 /** The place a request is about: the enterprise, or the person who asked for sign-in help. */
@@ -67,9 +103,9 @@ export function requestPlace(request: Pick<Request, "enterpriseName" | "requeste
 export function filterRequests(requests: readonly Request[], filters: RequestFilters) {
   const query = filters.query.trim().toLowerCase();
   return requests
-    .filter((request) => filters.group === "all" || request.group === filters.group)
-    .filter((request) => filters.status === "all" || request.status === filters.status)
-    .filter((request) => !query || [request.title, request.code, requestPlace(request), request.requesterName, request.group, request.description].join(" ").toLowerCase().includes(query))
+    .filter((request) => filters.category === "all" || requestCategory(request) === filters.category)
+    .filter((request) => filters.progress === "all" || requestProgress(request) === filters.progress)
+    .filter((request) => !query || [request.title, request.code, requestPlace(request), request.requesterName, requestCategory(request), request.description].join(" ").toLowerCase().includes(query))
     .sort(compareNewestFirst);
 }
 

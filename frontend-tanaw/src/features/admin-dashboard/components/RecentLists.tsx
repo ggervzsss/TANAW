@@ -100,7 +100,7 @@ export function RecentActivity() {
             const content = (
               <>
                 <span className="text-sm text-(--tanaw-text-secondary) tabular-nums">{formatDayAndTime(log.timestamp, timeFormat)}</span>
-                <span className="truncate text-sm text-(--tanaw-text)" title={log.summary}>
+                <span className="truncate text-sm text-(--tanaw-text) max-sm:line-clamp-2 max-sm:whitespace-normal" title={log.summary}>
                   {log.summary}
                 </span>
                 <span className="text-right text-sm font-semibold text-(--tanaw-accent-ink)">{tag}</span>
@@ -157,7 +157,7 @@ export function RecentRequests() {
           {requests.map((request) => (
             <li key={request.key} className="border-t border-(--dash-rule) first:border-t-0">
               <Link to={`${routes.admin.requests}${request.search}`} className="tanaw-dashboard-row grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 px-2 py-3">
-                <span className="truncate text-sm text-(--tanaw-text)">
+                <span className="truncate text-sm text-(--tanaw-text) max-sm:line-clamp-2 max-sm:whitespace-normal">
                   <strong className="font-semibold">{request.title}</strong>
                   {request.place && <span className="text-(--tanaw-text-secondary)">, {request.place}</span>}
                 </span>

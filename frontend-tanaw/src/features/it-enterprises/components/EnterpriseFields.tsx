@@ -78,7 +78,7 @@ export function NameField(props: FieldsProps) {
 export function AttractionFields({ form, errors, onChange, className }: FieldsProps & { className?: string }) {
   const id = useId();
   return (
-    <div className={cn("grid gap-6", className)}>
+    <div className={cn("grid grid-cols-1 gap-6", className)}>
       <div data-field-name="attractionCode">
         <FieldLabel htmlFor={id}>Attraction type</FieldLabel>
         <Select
@@ -135,10 +135,10 @@ export function ManagerFields(props: FieldsProps) {
   return (
     <fieldset className="min-w-0">
       <legend className="mb-1.5 text-[13px] font-medium text-(--tanaw-text-secondary)">Owner or manager</legend>
-      <div className="grid grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] gap-x-4 gap-y-6 max-sm:grid-cols-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] gap-x-4 gap-y-6 max-sm:grid-cols-[minmax(0,1fr)_5rem] max-sm:items-end">
         <TextInput {...props} field="managerFirstName" label="First name" autoComplete="given-name" maxLength={PERSON_NAME_MAX_LENGTH} />
         <TextInput {...props} field="managerMiddleInitial" label="M.I." optional autoComplete="additional-name" maxLength={1} normalize={normalizeMiddleInitial} />
-        <TextInput {...props} field="managerLastName" label="Last name" autoComplete="family-name" maxLength={PERSON_NAME_MAX_LENGTH} />
+        <TextInput {...props} field="managerLastName" label="Last name" autoComplete="family-name" maxLength={PERSON_NAME_MAX_LENGTH} className="max-sm:col-span-2" />
       </div>
     </fieldset>
   );

@@ -101,18 +101,18 @@ export function ITEnterprisesPage() {
           )}
 
           <div className="mt-5.5 flex flex-wrap items-end gap-x-6 gap-y-4">
-            <div className="min-w-0 flex-[1_1_20rem] sm:max-w-104">
+            <div className="min-w-0 flex-[1_1_20rem] max-sm:basis-full sm:max-w-104">
               <label htmlFor="it-enterprise-search" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
                 Search
               </label>
               <SearchField id="it-enterprise-search" value={query} onChange={(value) => setParam({ q: value || null })} placeholder="Enterprise, barangay or owner email" label="Search enterprises" />
             </div>
-            <div>
+            <div className="min-w-0 max-sm:w-full">
               <span id="it-enterprise-show" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
                 Show
               </span>
               <LayoutGroup id="it-enterprise-show">
-                <div role="group" aria-labelledby="it-enterprise-show" className="flex min-h-11 flex-wrap items-center gap-1">
+                <div role="group" aria-labelledby="it-enterprise-show" className="ite-chips flex min-h-11 flex-wrap items-center gap-1">
                   {CHIPS.map((item) => {
                     const on = chip === item.key;
                     return (
@@ -122,7 +122,7 @@ export function ITEnterprisesPage() {
                         aria-pressed={on}
                         onClick={() => showChip(item.key)}
                         className={cn(
-                          "rounded-tanaw-md ease-tanaw-out relative inline-flex min-h-10 cursor-pointer items-center gap-2 px-3.5 text-sm font-medium transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100",
+                          "rounded-tanaw-md ease-tanaw-out relative inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-2 px-3.5 whitespace-nowrap pointer-coarse:min-h-11 text-sm font-medium transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100",
                           on ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)",
                         )}
                       >
@@ -182,7 +182,7 @@ export function ITEnterprisesPage() {
 }
 
 function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; figures: EnterpriseFigures; onShowAttention: () => void }) {
-  const cell = "min-w-0 px-6 py-4.5 first:pl-0 max-lg:px-0 max-lg:py-4";
+  const cell = "ite-figure min-w-0";
   const note = "mt-2 block text-[13px] text-(--tanaw-text-muted)";
   // A note line holds its height while the figures load, so the strip does not grow when they arrive.
   const noteSkeleton = (
@@ -201,7 +201,7 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
       </span>
     );
   return (
-    <dl className="grid grid-cols-3 border-y border-(--tanaw-border-soft) max-lg:grid-cols-1 [&>div+div]:border-l [&>div+div]:border-(--tanaw-border-soft) max-lg:[&>div+div]:border-t max-lg:[&>div+div]:border-l-0">
+    <dl className="ite-figures">
       <div className={cell}>
         <dt className="text-sm font-semibold text-(--tanaw-text-secondary)">Registered enterprises</dt>
         <dd>
@@ -226,7 +226,7 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
               <button
                 type="button"
                 onClick={onShowAttention}
-                className="ease-tanaw-out rounded-sm font-semibold text-(--tanaw-accent-ink) underline decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-[text-decoration-color] duration-200 hover:decoration-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
+                className="ease-tanaw-out rounded-sm font-semibold text-(--tanaw-accent-ink) underline pointer-coarse:min-h-11 pointer-coarse:text-left decoration-(--tanaw-accent-ink)/40 underline-offset-4 transition-[text-decoration-color] duration-200 hover:decoration-(--tanaw-accent-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)"
               >
                 Show places that need attention
               </button>
@@ -241,7 +241,7 @@ function Figures({ isLoading, figures, onShowAttention }: { isLoading: boolean; 
 function EnterpriseTable({ rows, isLoading, formats, empty }: { rows: EnterpriseRow[]; isLoading: boolean; formats: DisplayFormats; empty: ReactNode }) {
   const head = "px-4 py-2.5 text-xs font-semibold tracking-label text-(--tanaw-label) uppercase";
   return (
-    <div className="mt-4 overflow-x-auto">
+    <div className="relative mt-4 overflow-x-auto max-lg:overflow-visible">
       <table className="ite-table w-full min-w-245 border-separate border-spacing-0 text-left text-sm">
         <caption className="sr-only">Enterprises with their account, desktop app and cameras</caption>
         <thead>
@@ -304,21 +304,21 @@ function EnterpriseTableRow({ row, formats }: { row: EnterpriseRow; formats: Dis
         </Link>
         <span className="mt-0.5 block text-[13px] text-(--tanaw-text-secondary)">{placeLine(row)}</span>
       </th>
-      <td className="px-4 py-4">
+      <td data-label="Account" className="px-4 py-4">
         <StateText tone={account.tone}>{account.label}</StateText>
         <span className={cn(sub, "break-all")}>{account.sub}</span>
       </td>
-      <td className="px-4 py-4">
+      <td data-label="Desktop app" className="px-4 py-4">
         <StateText tone={app.tone} dot>
           {app.label}
         </StateText>
         {app.sub && <span className={sub}>{app.sub}</span>}
       </td>
-      <td className="px-4 py-4">
+      <td data-label="Cameras" className="px-4 py-4">
         <span className={cn("block font-semibold", toneText[cameras.tone])}>{cameras.label}</span>
         {cameras.sub && <span className={sub}>{cameras.sub}</span>}
       </td>
-      <td className="py-4 pr-3 pl-4 text-right">
+      <td data-actions={resend ? "" : undefined} className="py-4 pr-3 pl-4 text-right">
         <div className="inline-flex min-h-10 items-center gap-4">
           {resend && <ResendInvitationButton row={row} label={resend} />}
           <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron" />
@@ -331,7 +331,7 @@ function EnterpriseTableRow({ row, formats }: { row: EnterpriseRow; formats: Dis
 function ResendInvitationButton({ row, label }: { row: EnterpriseRow; label: string }) {
   const resend = useResendInvitation();
   return (
-    <Button variant="secondary" loading={resend.isPending} onClick={() => resend.mutate(row.id)} aria-label={`${label} to ${row.name}`}>
+    <Button variant="secondary" className="pointer-coarse:min-h-11" loading={resend.isPending} onClick={() => resend.mutate(row.id)} aria-label={`${label} to ${row.name}`}>
       {label}
     </Button>
   );

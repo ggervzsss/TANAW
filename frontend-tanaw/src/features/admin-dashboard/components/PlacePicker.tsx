@@ -54,7 +54,7 @@ export function PlacePicker({ places, value, onChange, monitoredCount }: PlacePi
   };
 
   return (
-    <div className="relative">
+    <div className="tanaw-place-picker relative">
       <button
         ref={triggerRef}
         type="button"
@@ -78,6 +78,8 @@ export function PlacePicker({ places, value, onChange, monitoredCount }: PlacePi
         <span className="min-w-0 truncate">{selected?.name ?? "All of San Pedro"}</span>
         <ChevronDown size={15} className="shrink-0" aria-hidden="true" />
       </button>
+      {/* On phones the picker rises as a bottom sheet over a scrim (dashboard.css); a tap on the scrim closes it. */}
+      {open && <div aria-hidden="true" className="tanaw-dashboard-popover-scrim tanaw-dialog-backdrop" />}
       {open && (
         <div ref={panelRef} role="dialog" aria-label="Choose where to show peak occupancy" className="tanaw-dashboard-popover">
           <label className="tanaw-dashboard-search-field relative block">

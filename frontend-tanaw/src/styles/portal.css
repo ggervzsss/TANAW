@@ -36,6 +36,41 @@
 }
 
 /*
+ * Phones: the "Live updates paused" notice (shared/realtime) is a floating pill in the corner on
+ * wider screens. On a phone that pill would sit over rows, fields and the sticky bars along the
+ * foot, so it becomes a slim amber strip docked under the topbar: full width, one line, and it
+ * lets every tap through; the page steps down by its height while it shows.
+ * !important outranks the placements wider screens give it (Settings lifts it above its save bar).
+ */
+@media (width < 40rem) {
+  .tanaw-connection-notice {
+    top: var(--tanaw-topbar-height) !important;
+    right: 0 !important;
+    bottom: auto !important;
+    left: 0 !important;
+    z-index: 999 !important;
+    justify-content: center;
+    max-width: none !important;
+    padding: 0.3rem max(1rem, env(safe-area-inset-right)) 0.3rem max(1rem, env(safe-area-inset-left));
+    border-width: 0 0 1px;
+    border-radius: 0;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    box-shadow: 0 6px 14px -10px rgb(146 84 8 / 0.45);
+  }
+
+  /* The page steps down by the strip's height while it shows, so nothing hides behind it. */
+  body:has(.tanaw-connection-notice) :is(.tanaw-portal-content, .tanaw-settings-page) {
+    margin-top: 1.875rem;
+  }
+
+  /* A sheet (a dialog, the menu, a picker) owns the screen while it is open. */
+  body:has(:is([data-dialog], [data-sheet], [data-portal-nav-sheet], .tanaw-picker-panel)) .tanaw-connection-notice {
+    display: none;
+  }
+}
+
+/*
  * The page scroller keeps the room its scrollbar takes, so a page never slides sideways as it
  * starts or stops scrolling. While skeletons stand in for content the bar stays hidden: a
  * placeholder list can be taller than what arrives, and a bar that shows and then vanishes reads

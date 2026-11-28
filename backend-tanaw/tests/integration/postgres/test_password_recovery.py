@@ -46,6 +46,7 @@ from app.features.auth.schemas import (
     ForgotPasswordRequestResponse,
     LoginRequest,
     LoginResponse,
+    TwoFactorChallengeResponse,
 )
 from app.features.auth.secret_values import derive_password_reset_code
 from app.features.mail import service as mail_service
@@ -719,7 +720,9 @@ async def test_password_reset_serializes_before_old_password_login(
             except Exception as exc:  # pragma: no cover - assertion reports unexpected failures
                 return exc
 
-    async def run_old_password_login() -> LoginResponse | HTTPException | Exception:
+    async def run_old_password_login() -> (
+        LoginResponse | TwoFactorChallengeResponse | HTTPException | Exception
+    ):
         async with postgres_runtime.sessions() as db:
             try:
                 return await session_router.login(
@@ -737,7 +740,9 @@ async def test_password_reset_serializes_before_old_password_login(
                 return exc
 
     reset_task: asyncio.Task[Account | Exception] | None = None
-    login_task: asyncio.Task[LoginResponse | HTTPException | Exception] | None = None
+    login_task: (
+        asyncio.Task[LoginResponse | TwoFactorChallengeResponse | HTTPException | Exception] | None
+    ) = None
     async with postgres_runtime.sessions() as lock_holder:
         await lock_holder.scalar(select(Account).where(Account.id == account.id).with_for_update())
         event.listen(

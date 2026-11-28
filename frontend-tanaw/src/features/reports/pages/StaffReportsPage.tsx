@@ -2,8 +2,11 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { Button, MonthPicker, PortalPageHeader, type PickerMonth } from "@/shared/ui-kit";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import type { IntakeReport } from "@/shared/types";
 import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
 import { ReportActionConfirmDialog } from "../components/ReportActionConfirmDialog";
+import { ReturnReportDialog } from "../components/ReturnReportDialog";
 import { StaffReportsFilters } from "../components/StaffReportsFilters";
 import { StaffReportsTable } from "../components/StaffReportsTable";
 import { StaffTableSkeleton, type StaffTableSkeletonColumn } from "../components/StaffTableSkeleton";
@@ -13,6 +16,7 @@ import { formatReportingMonth, monthKey, parseMonthKey, reportingMonth, reportin
 import {
   EMPTY_STAFF_REPORT_FILTERS,
   filterStaffReportRows,
+  generateConfirmMessage,
   hasStaffReportFilters,
   parseStaffReportFilters,
   staffReportFilterParams,
@@ -27,8 +31,8 @@ const STATUS_ID = "staff-reports-status";
 /** The columns of StaffReportsTable, for its loading rows. */
 const STAFF_REPORT_COLUMNS: readonly StaffTableSkeletonColumn[] = [
   { header: "Enterprise", width: "w-3/5" },
-  { header: "Report ID", className: "tanaw-hide-sm", width: "w-24" },
-  { header: "Sent", className: "tanaw-hide-sm", width: "w-28" },
+  { header: "Report ID", className: "tanaw-hide-sm", width: "w-24", cell: "meta" },
+  { header: "Sent", className: "tanaw-hide-sm", width: "w-28", cell: "meta" },
   { header: "Submission", pill: true },
   { header: "Staff review", pill: true },
   { header: <span className="sr-only">Action</span>, width: "w-16" },
@@ -53,10 +57,12 @@ export function StaffReportsPage() {
   const filters = useMemo(() => parseStaffReportFilters(params), [params]);
   const reportId = params.get("report");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [returning, setReturning] = useState<IntakeReport | null>(null);
   const data = useStaffReports(month, today);
   const { progress } = data;
   const monthLabel = formatReportingMonth(month);
   const openReport = reportId ? data.reports.find((report) => report.id === reportId) : undefined;
+  const previousVersion = openReport?.previousVersionId ? data.reports.find((report) => report.id === openReport.previousVersionId) : undefined;
   const visibleRows = filterStaffReportRows(data.rows, filters);
   const filtered = hasStaffReportFilters(filters);
   // Any month from the oldest report up to the newest (at least the current reporting month).
@@ -73,6 +79,7 @@ export function StaffReportsPage() {
   const closeReport = () => updateParams({ report: null });
   const changeFilters = (patch: Partial<StaffReportFilters>) => updateParams(staffReportFilterParams({ ...filters, ...patch }));
   const clearFilters = () => updateParams(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS));
+  const canGenerate = progress.canGenerate && !data.isLoading && !data.isError;
   const summary = data.isError ? "Reports could not be loaded." : data.isLoading ? "Loading reports…" : staffReportsSummary(progress, month);
 
   return (
@@ -81,7 +88,7 @@ export function StaffReportsPage() {
         title="Reports"
         description={staffReportsCaption(month)}
         actions={
-          <>
+          <div className="tanaw-staff-reports-actions">
             <MonthPicker
               label="Reporting month"
               hideLabel
@@ -93,10 +100,13 @@ export function StaffReportsPage() {
               highlightLabel="Current reporting month"
               className="w-56"
             />
-            <Button aria-describedby={STATUS_ID} disabled={!progress.canGenerate || data.isLoading || data.isError} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
-              Generate consolidated report
-            </Button>
-          </>
+            {/* On a phone, Generate rides in a bar along the foot of the screen once it can be pressed (reports.css). */}
+            <div className="tanaw-staff-generate" data-ready={canGenerate || undefined}>
+              <Button aria-describedby={STATUS_ID} disabled={!canGenerate} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
+                Generate consolidated report
+              </Button>
+            </div>
+          </div>
         }
       />
 
@@ -141,21 +151,49 @@ export function StaffReportsPage() {
           />
         )}
       </div>
+      <div aria-hidden="true" className="tanaw-staff-generate-spacer" />
 
       {openReport && (
         <EnterpriseReportDialog
           key={openReport.id}
           report={openReport}
+          previousVersion={previousVersion}
           isUpdating={data.accept.isPending}
           onClose={closeReport}
           onAccept={(report) => data.accept.mutate(report, { onSuccess: closeReport })}
+          onReturn={(report) => {
+            data.returnReport.reset();
+            setReturning(report);
+          }}
+        />
+      )}
+
+      {returning && (
+        <ReturnReportDialog
+          key={returning.id}
+          report={returning}
+          isPending={data.returnReport.isPending}
+          error={data.returnReport.isError ? getApiErrorMessage(data.returnReport.error, "The report could not be returned. Check the connection and try again.") : null}
+          onDismissError={() => data.returnReport.reset()}
+          onCancel={() => setReturning(null)}
+          onSubmit={(reason) =>
+            data.returnReport.mutate(
+              { report: returning, reason },
+              {
+                onSuccess: () => {
+                  setReturning(null);
+                  closeReport();
+                },
+              },
+            )
+          }
         />
       )}
 
       {isConfirmOpen && (
         <ReportActionConfirmDialog
           title="Generate consolidated report?"
-          message={generateMessage(monthLabel, progress.readyReportIds.length, progress.notSent.length)}
+          message={generateConfirmMessage(monthLabel, progress)}
           confirmLabel="Generate report"
           pendingLabel="Generating…"
           isPending={data.generate.isPending}
@@ -173,10 +211,4 @@ export function StaffReportsPage() {
       )}
     </>
   );
-}
-
-function generateMessage(monthLabel: string, accepted: number, notSent: number) {
-  const reports = `${accepted} accepted ${accepted === 1 ? "report" : "reports"}`;
-  const missing = notSent ? ` ${notSent} ${notSent === 1 ? "enterprise has" : "enterprises have"} not sent a report and will not be included.` : "";
-  return `Combine the ${reports} into the ${monthLabel} monthly report (VAR 2M).${missing}`;
 }

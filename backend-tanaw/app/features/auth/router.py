@@ -16,6 +16,7 @@ from app.features.auth.session_router import router as session_router
 from app.features.auth.settings_router import router as settings_router
 from app.features.auth.support_router import create_support_request
 from app.features.auth.support_router import router as support_router
+from app.features.auth.two_factor_router import router as two_factor_router
 
 router = APIRouter()
 router.include_router(activation_router)
@@ -24,6 +25,7 @@ router.include_router(password_router)
 router.include_router(support_router)
 router.include_router(profile_router)
 router.include_router(settings_router)
+router.include_router(two_factor_router)
 
 __all__ = [
     "create_support_request",

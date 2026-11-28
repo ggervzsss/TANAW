@@ -25,6 +25,7 @@ function request(id: string, overrides: Partial<Schemas["RequestSummary"]> = {})
     accountChange: null,
     unread: false,
     updated: false,
+    seenByIt: false,
     handledBy: null,
     handledAt: null,
     createdAt: "2026-11-26T05:40:00Z",

@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { useAuthStore } from "@/app/store/authStore";
 import { SettingsGroup, SettingsImageUpload, SettingsNote, SettingsReadOnly, SettingsSaveBar } from "@/shared/ui-kit/patterns/GeneralSettings";
 import { useSettingsDraft } from "@/shared/ui-kit/lib/settingsDraft";
 import { roleAccessLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import { PERSON_NAME_MAX_LENGTH } from "@/shared/utils/accountValidation";
-import { AccountField } from "../components";
+import { AccountField, GovernanceDetails } from "../components";
 import { useAccountProfileForm } from "../hooks";
 import { isProfileDraftDirty, profileFieldValue, type ProfileDraft, type ProfileFieldName } from "../model";
+import "../account.css";
 
 const profileFields: ReadonlyArray<{ name: ProfileFieldName; label: string; maxLength: number; type?: string; autoComplete: string; hint?: string }> = [
   { name: "firstName", label: "First Name", maxLength: PERSON_NAME_MAX_LENGTH, autoComplete: "given-name" },
@@ -17,6 +19,7 @@ const profileFields: ReadonlyArray<{ name: ProfileFieldName; label: string; maxL
 
 export function AccountProfilePage({ role }: { role: UserRole }) {
   const profile = useAccountProfileForm();
+  const authUser = useAuthStore((state) => state.user);
   const [draft, setDraft] = useState<ProfileDraft>({});
   const saved = { ...profile.profileName, phone: profile.user.phone };
   const dirty = isProfileDraftDirty(saved, draft, profile.imageChanged);
@@ -45,7 +48,7 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
           onRemove={profile.removeImage}
           removeLabel="Remove photo"
         />
-        <div className="tanaw-profile-layout">
+        <div className="tanaw-profile-layout tanaw-account-profile-layout">
           <SettingsGroup title="Name and contact" description="The name and phone number shown on your account.">
             <div className="tanaw-settings-fields">
               {profileFields.map((field) => (
@@ -74,6 +77,9 @@ export function AccountProfilePage({ role }: { role: UserRole }) {
               </div>
             </dl>
           </SettingsGroup>
+          <div className="tanaw-account-aside">
+            <GovernanceDetails role={role} user={authUser} />
+          </div>
         </div>
         {profile.saveError && <SettingsNote tone="danger">{profile.saveError}</SettingsNote>}
       </fieldset>

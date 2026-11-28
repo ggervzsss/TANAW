@@ -203,3 +203,164 @@
     display: none;
   }
 }
+
+/* ---------- Phones and touch screens ---------- */
+
+/*
+ * Text fields are set at 16px on touch screens: iOS zooms the whole page into any field whose text
+ * is smaller, and the page then sits zoomed in after the keyboard closes.
+ */
+@media (pointer: coarse) {
+  :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"], [type="reset"]), textarea, select) {
+    font-size: max(1rem, 16px) !important;
+  }
+}
+
+/*
+ * `.tanaw-scroll-x`: a row that scrolls sideways when it does not fit (Tabs, SegmentedControl, the
+ * settings sections on phones). No scrollbar shows; the edge with more content past it fades out
+ * instead (`useScrollFade` in lib/scroll-fade.ts sets data-fade-start / data-fade-end).
+ */
+.tanaw-scroll-x {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tanaw-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.tanaw-scroll-x[data-fade-start] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.75rem);
+  mask-image: linear-gradient(90deg, transparent, #000 1.75rem);
+}
+
+.tanaw-scroll-x[data-fade-end] {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 1.75rem), transparent);
+}
+
+.tanaw-scroll-x[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+}
+
+/*
+ * The month and date-range pickers on phones: the dropdown becomes a sheet along the bottom edge,
+ * with 24px top corners, over a dimmed page, clear of the home indicator. A tap outside closes it.
+ */
+@media (width < 40rem) {
+  .tanaw-picker-panel {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 1500;
+    width: auto;
+    max-height: calc(100dvh - max(0.75rem, env(safe-area-inset-top)) - 2rem);
+    margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1.25rem max(1rem, env(safe-area-inset-right)) max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem)) max(1rem, env(safe-area-inset-left));
+    border-width: 1px 0 0;
+    border-radius: 24px 24px 0 0;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      var(--shadow-tanaw-dialog),
+      0 0 0 100vmax rgb(4 24 14 / 0.42);
+  }
+
+  /* Outranks the .tanaw-enter fade the panel carries on wider screens. */
+  .tanaw-picker-panel.tanaw-enter {
+    animation: tanaw-sheet-up 280ms var(--ease-tanaw-out) both;
+  }
+
+  .dark .tanaw-picker-panel {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      var(--shadow-tanaw-dialog),
+      0 0 0 100vmax rgb(1 7 12 / 0.62);
+  }
+}
+
+@keyframes tanaw-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/*
+ * `.tanaw-table-stack`: a data table that turns into stacked records on phones. Put it on the
+ * <table>; give every <td> a data-label with its column name ("Status", "Last sync"). Under 640px
+ * the header row hides, each row becomes a block split from the next by a hairline, and each cell
+ * shows its label on the left and its value on the right. A cell marked data-stack="title" is the
+ * record's heading (full width, no label); data-stack="actions" puts the row's buttons on their
+ * own full-width line. Feature pages may also lay out their own phone records.
+ */
+@media (width < 40rem) {
+  .tanaw-table-stack,
+  .tanaw-table-stack tbody,
+  .tanaw-table-stack tr,
+  .tanaw-table-stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .tanaw-table-stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .tanaw-table-stack tr {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+  }
+
+  .tanaw-table-stack td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+    padding: 0.3rem 0;
+    border: 0;
+    text-align: end;
+  }
+
+  .tanaw-table-stack td[data-label]::before {
+    flex: none;
+    max-width: 45%;
+    color: var(--tanaw-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: start;
+    content: attr(data-label);
+  }
+
+  .tanaw-table-stack td[data-stack="title"] {
+    display: block;
+    padding-bottom: 0.4rem;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    text-align: start;
+  }
+
+  .tanaw-table-stack td[data-stack="actions"] {
+    justify-content: stretch;
+    gap: 0.5rem;
+    padding-top: 0.6rem;
+  }
+
+  .tanaw-table-stack td[data-stack="actions"] > * {
+    flex: 1 1 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-picker-panel.tanaw-enter {
+    animation: none;
+  }
+}

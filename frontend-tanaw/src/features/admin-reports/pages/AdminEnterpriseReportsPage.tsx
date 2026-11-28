@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { currentReportingMonth, monthIndexOf } from "@/features/reports/model/reportStatuses";
 import { Alert, Button, EmptyState, MonthPicker, Pagination, PortalPageHeader, SearchField, Select, Skeleton } from "@/shared/ui-kit";
+import { PhoneFilterSheet } from "@/features/admin-enterprises/components/PhoneFilterSheet";
 import { EnterpriseReportList } from "../components/EnterpriseReportList";
 import { EnterpriseReportModal } from "../components/EnterpriseReportModal";
 import { useEnterpriseReportsData } from "../hooks/useEnterpriseReportsData";
@@ -16,6 +17,7 @@ const PAGE_SIZE = 10;
 const SUBMISSION_OPTIONS = [
   ["all", "All statuses"],
   ["Submitted", "Submitted"],
+  ["Awaiting correction", "Awaiting correction"],
   ["Pending", "Pending"],
   ["Missing", "Missing"],
 ] as const satisfies readonly (readonly [SubmissionFilter, string])[];
@@ -113,15 +115,25 @@ export function AdminEnterpriseReportsPage() {
       />
 
       {/* The filters share the full width, the search taking the larger part, so no gap is left at the end of the row. */}
-      <div className="mt-4 grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        <div className="min-w-0 max-lg:col-span-2 max-sm:col-span-1">
+      <div className="mt-4 grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 max-lg:grid-cols-2 max-md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 max-lg:col-span-2 max-md:col-span-1">
           <span aria-hidden="true" className="mb-2 block text-[13px] font-semibold text-(--tanaw-text-secondary)">
             Search reports
           </span>
           <SearchField value={query} onChange={changeQuery} placeholder="Enterprise, staff, or report ID" label="Search reports" />
         </div>
-        <Select label="Enterprise" value={enterpriseId} onChange={changeEnterprise} options={enterpriseOptions} searchable />
-        <Select label="Submission status" value={submission} onChange={changeSubmission} options={SUBMISSION_OPTIONS} />
+        <PhoneFilterSheet
+          noun="reports"
+          activeCount={(enterpriseId !== "all" ? 1 : 0) + (submission !== "all" ? 1 : 0)}
+          onClear={() => {
+            changeEnterprise("all");
+            changeSubmission("all");
+          }}
+          resultLabel={isLoading ? undefined : `${rows.length} of ${allRows.length} ${allRows.length === 1 ? "enterprise" : "enterprises"}`}
+        >
+          <Select label="Enterprise" value={enterpriseId} onChange={changeEnterprise} options={enterpriseOptions} searchable />
+          <Select label="Submission status" value={submission} onChange={changeSubmission} options={SUBMISSION_OPTIONS} />
+        </PhoneFilterSheet>
       </div>
       <p role="status" className="mt-3 text-sm font-semibold text-(--tanaw-text) tabular-nums">
         {isLoading ? "Loading enterprises" : `${rows.length} of ${allRows.length} ${allRows.length === 1 ? "enterprise" : "enterprises"}`}
@@ -193,9 +205,9 @@ export function AdminEnterpriseReportsPage() {
  */
 function ReportListSkeleton() {
   return (
-    <div className="mt-3.5 overflow-x-hidden" aria-hidden="true">
-      <div className="min-w-225">
-        <div className="tanaw-er-cols tanaw-er-head border-b border-(--tanaw-border-soft) px-3 py-3">
+    <div className="mt-3.5 overflow-x-hidden max-md:mt-2" aria-hidden="true">
+      <div className="min-[60rem]:min-w-225">
+        <div className="tanaw-er-cols tanaw-er-head border-b border-(--tanaw-border-soft) px-3 py-3 max-md:hidden">
           <span>Enterprise</span>
           <span>Sent on</span>
           <span>Submission</span>
@@ -205,7 +217,7 @@ function ReportListSkeleton() {
         </div>
         {Array.from({ length: PAGE_SIZE }, (_, index) => (
           <div key={index} className="tanaw-er-item">
-            <div className="tanaw-er-cols px-3 py-3.5">
+            <div className="tanaw-er-cols tanaw-er-skeleton-row px-3 py-3.5">
               <span className="block">
                 <span className="flex h-5.25 items-center">
                   <Skeleton className="h-3.5 w-44" />

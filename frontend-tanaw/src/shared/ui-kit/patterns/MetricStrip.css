@@ -136,3 +136,60 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
     transform: none;
   }
 }
+
+/*
+ * Phones: the figures stop scrolling sideways and sit two to a row (one below 360px), split by
+ * hairlines instead of the fading dividers. A control segment takes a row of its own.
+ */
+@media (width < 40rem) {
+  .tanaw-metric-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
+
+  .tanaw-metric-cell,
+  .tanaw-metric-control {
+    min-width: 0;
+    border-top: 1px solid var(--tanaw-border-soft);
+  }
+
+  /* Figures are every other child (the dividers between them are hidden); the first two start the grid. */
+  .tanaw-metric-row > .tanaw-metric-cell:nth-child(-n + 3) {
+    border-top: 0;
+  }
+
+  .tanaw-metric-row > .tanaw-metric-cell:nth-child(4n + 1) {
+    border-right: 1px solid var(--tanaw-border-soft);
+  }
+
+  .tanaw-metric-control {
+    grid-column: 1 / -1;
+    flex-basis: auto;
+  }
+}
+
+@media (width < 22.5rem) {
+  .tanaw-metric-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tanaw-metric-row > .tanaw-metric-cell:nth-child(3) {
+    border-top: 1px solid var(--tanaw-border-soft);
+  }
+
+  .tanaw-metric-row > .tanaw-metric-cell:nth-child(4n + 1) {
+    border-right: 0;
+  }
+}
+
+/* Touch screens have no hover: the sweep and the lifting icon stay for pointers. */
+@media (hover: none) {
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__hover {
+    opacity: 0;
+  }
+
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon {
+    transform: none;
+  }
+}

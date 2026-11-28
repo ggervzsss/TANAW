@@ -1,5 +1,6 @@
 export type SystemLogPeriod = string;
 import type { EstablishmentSummary } from "../features/camera/services/establishment.types";
+import type { ApiSchemas } from "../contracts/api";
 
 export type Metrics = {
   entries: number | null;
@@ -59,7 +60,24 @@ export type ReportRecord = {
   notes?: string;
   auditTrail?: AuditEntry[];
   remarks?: string | null;
+  /** The month's report version: 1, then one more for each correction Staff asked for. */
+  version?: number;
+  /** TANAW's code for the report, shown to people; a correction's code ends in "-vN". Else `id`. */
+  reference?: string;
+  /** Staff's review state in TANAW, once known. */
+  reviewStatus?: ReportReviewStatus;
+  /** Why Staff returned the report for correction, who did, and when. */
+  returnedReason?: string | null;
+  returnedAt?: string | null;
+  returnedBy?: string | null;
+  /** TANAW's reason for refusing the upload, kept on this computer. */
+  rejectionReason?: string | null;
+  /** When this version was reopened for correction; the month then waits for a corrected version. */
+  reopenedAt?: string | null;
 };
+
+/** Staff's review state of a sent report, as TANAW names it. */
+export type ReportReviewStatus = ApiSchemas["IntakeReportSummary"]["status"];
 
 export type ProcessingProfile = "auto" | "compatibility" | "balanced" | "high_accuracy" | "emergency";
 export type ReIdMode = "auto" | "off" | "fast" | "quality";

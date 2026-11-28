@@ -3,7 +3,8 @@ import { motion } from "motion/react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { useDialogFocus } from "../lib/focus-trap";
-import { dialogIn, easeOut } from "../lib/motion";
+import { useIsPhone } from "../lib/media";
+import { dialogIn, easeOut, sheetIn } from "../lib/motion";
 import { ModalPortal } from "./ModalPortal";
 
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "2xl" | "full";
@@ -81,6 +82,10 @@ function useScrollEdges(body: { readonly current: HTMLElement | null }): ScrollE
  * The title is set in the display font; the body scrolls between a header and a footer whose hairlines
  * appear only when content passes under them. It rises into place with a soft spring and leaves faster.
  * Focus stays inside while it is open; Escape and the close button close it.
+ *
+ * On phones (under 640px) it becomes a bottom sheet: full width with 24px top corners, as tall as
+ * its content up to the screen below the status bar, rising from the bottom edge. The footer stays
+ * pinned with its buttons stacked full width, primary on top, clear of the home indicator.
  */
 export function Dialog({
   title,
@@ -104,11 +109,12 @@ export function Dialog({
   const descriptionId = useId();
   useDialogFocus(panelRef, onClose, true, initialFocus);
   const edges = useScrollEdges(bodyRef);
+  const asSheet = useIsPhone();
 
   return (
     <ModalPortal lockScroll>
       <motion.div
-        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+        className="tanaw-dialog-backdrop fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 max-sm:items-end max-sm:px-0 max-sm:pt-[max(0.75rem,env(safe-area-inset-top))] max-sm:pb-0 sm:p-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -125,11 +131,13 @@ export function Dialog({
           aria-label={ariaLabel}
           aria-describedby={description ? descriptionId : undefined}
           tabIndex={-1}
-          {...dialogIn}
+          {...(asSheet ? sheetIn : dialogIn)}
           data-dialog
+          data-sheet={asSheet || undefined}
           className={cn(
             "tanaw-dialog relative my-auto flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-tanaw-2xl border border-(--tanaw-border-soft) bg-(--tanaw-surface-raised) shadow-tanaw-dialog outline-none sm:max-h-[calc(100dvh-3rem)]",
             sizes[size],
+            "max-sm:mt-auto max-sm:mb-0 max-sm:max-h-[calc(100dvh-max(0.75rem,env(safe-area-inset-top)))] max-sm:max-w-none max-sm:rounded-t-3xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0",
             className,
           )}
         >
@@ -154,7 +162,7 @@ export function Dialog({
               type="button"
               aria-label={closeLabel}
               onClick={onClose}
-              className="tanaw-dialog-close -mt-0.5 -mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
+              className="tanaw-dialog-close -mt-0.5 -mr-2 flex h-9 w-9 shrink-0 pointer-coarse:-mt-1.5 pointer-coarse:size-11 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
             >
               <X size={18} aria-hidden="true" />
             </button>
@@ -164,14 +172,14 @@ export function Dialog({
             ref={bodyRef}
             data-dialog-body
             data-modal-scroll-container
-            className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5 max-sm:pb-5", bodyClassName)}
+            className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5 max-sm:pb-5", !footer && "max-sm:pb-[max(1.25rem,calc(env(safe-area-inset-bottom)+0.5rem))]", bodyClassName)}
           >
             {children}
           </div>
           {footer && (
             <footer
               data-overflow={edges.bottom || undefined}
-              className="tanaw-dialog-footer flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-(--tanaw-border-soft) px-7 py-5 transition-[border-color,background-color] duration-200 ease-tanaw-out max-sm:px-5 max-sm:py-4"
+              className="tanaw-dialog-footer flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-(--tanaw-border-soft) px-7 py-5 transition-[border-color,background-color] duration-200 ease-tanaw-out max-sm:flex-col-reverse max-sm:flex-nowrap max-sm:items-stretch max-sm:gap-2 max-sm:px-5 max-sm:pt-4 max-sm:pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] max-sm:*:w-full"
             >
               {footer}
             </footer>

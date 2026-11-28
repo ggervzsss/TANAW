@@ -25,6 +25,7 @@ import {
   type RefObject,
 } from "react";
 import { Button } from "../components/Button";
+import { useScrollFade } from "../lib/scroll-fade";
 import { getSettingsSaveBarState } from "../lib/settingsDraft";
 import type { AccountIdentity } from "./TopbarAccount";
 import "./GeneralSettings.css";
@@ -95,6 +96,9 @@ export function GeneralSettings({
   const workspace = useRef<HTMLElement>(null);
   const content = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const rail = useRef<HTMLElement>(null);
+  // On phones the sections scroll sideways; keep the current one in view.
+  useScrollFade(rail, active);
   // Block bodies: scroll methods return a Promise in current Chromium, and React treats an
   // effect's return value as its clean-up, so returning one crashes on unmount.
   useEffect(() => {
@@ -132,7 +136,7 @@ export function GeneralSettings({
       </header>
 
       <div className="tanaw-settings-grid">
-        <nav aria-label="Settings sections" className="tanaw-settings-rail">
+        <nav ref={rail} aria-label="Settings sections" className="tanaw-settings-rail tanaw-scroll-x">
           <LayoutGroup id="settings-rail">
             {sections.map((section) => {
               const { label, icon: Icon } = settingsSections[section];

@@ -10,6 +10,7 @@ import { formatPhilippineDateTime } from "../../../utils/date-time";
 import { formatReportingPeriodLabel, reportingMonthKey } from "../utils/reporting-period";
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { uploadStatusLabel } from "../model/report-workspace";
+import { isReopenedReport, isReturnedReport, isUploadRejected, reportReference, reportVersion, versionLabel } from "../model/report-lifecycle";
 
 export type { ReportLedgerRow } from "../model/report-ledger";
 type Props = {
@@ -131,7 +132,13 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
                   }}
                 >
                   <td className="report-history-id-cell" title={row.reportDescription}>
-                    <ExpandableText primary={report.id} ariaLabel="report name and description" className="report-history-id" />
+                    <ExpandableText
+                      primary={row.kind === "history" ? reportReference(report) : report.id}
+                      secondary={row.kind === "history" ? (versionLabel(reportVersion(report)) ?? undefined) : undefined}
+                      ariaLabel="report name and description"
+                      className="report-history-id"
+                      secondaryClassName="report-history-version"
+                    />
                   </td>
                   <td>{formatReportingPeriodLabel(report.period ?? report.date)}</td>
                   <td className="report-history-count">{report.unique.toLocaleString()}</td>
@@ -139,11 +146,16 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
                     <span className="report-status" data-tone={statusTone(row)}>
                       {row.statusLabel}
                     </span>
-                    {/* A rejected upload is never retried, so it must not read as waiting. */}
-                    {report.syncStatus && report.syncStatus !== "synced" && (
-                      <span className="report-upload-state" data-state={report.syncStatus}>
-                        {uploadStatusLabel(report.syncStatus)}
-                      </span>
+                    {/* Staff's or TANAW's reason stays with the version it applies to. */}
+                    {row.kind === "history" && statusReason(report) ? (
+                      <ExpandableText primary={statusReason(report)!} ariaLabel="reason" className="report-status-reason" />
+                    ) : (
+                      report.syncStatus &&
+                      report.syncStatus !== "synced" && (
+                        <span className="report-upload-state" data-state={report.syncStatus}>
+                          {uploadStatusLabel(report.syncStatus)}
+                        </span>
+                      )
                     )}
                   </td>
                   <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { dateStyle: "medium" }) : "—"}</td>
@@ -210,8 +222,17 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
 }
 
 function statusTone(row: ReportLedgerRow) {
+  if (row.kind === "history" && isReturnedReport(row.report)) return "returned";
+  if (row.kind === "history" && isUploadRejected(row.report)) return "rejected";
   if (row.kind === "pending" || row.statusLabel === "Pending Submission") return "pending";
   if (row.report.status === "Submitted") return "submitted";
   if (row.report.status === "Consolidated") return "consolidated";
   return "draft";
+}
+
+/** Why Staff returned a version, or TANAW refused it; and that a correction replaced it. */
+function statusReason(report: ReportRecord) {
+  const reason = isReturnedReport(report) ? report.returnedReason : isUploadRejected(report) ? (report.rejectionReason ?? "No reason given") : null;
+  if (!reason) return null;
+  return isReopenedReport(report) ? `${reason} · Reopened for correction` : reason;
 }

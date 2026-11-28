@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -249,3 +250,88 @@ def test_non_identifying_source_provenance_survives_detail_retention(tmp_path: P
     assert evidence["identity_confidence"] == {"high": 1}
     assert sum(evidence["matching_decisions"].values()) == 1
     assert "visitor_id" not in json.dumps(snapshot)
+
+
+def _store(tmp_path: Path) -> LocalDataStore:
+    return LocalDataStore(str(tmp_path), "park")
+
+
+def _saved(tmp_path: Path) -> dict[str, dict[str, Any]]:
+    return {item["report_id"]: item for item in _store(tmp_path).list_report_submissions()}
+
+
+def test_a_report_staff_returned_reopens_and_its_correction_is_the_next_version(
+    tmp_path: Path,
+) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service)
+    raw = OccupancyEventRepository(service.database)
+    raw.append({"event_id": "selected", "direction": "entry", "camera_id": 1}, OBSERVED.isoformat())
+    repo = EstablishmentReportRepository(service.database)
+    first = repo.submit(**request(repo))
+    assert first["version"] == 1
+    store = _store(tmp_path)
+    # This computer missed TANAW's confirmation; a returned report reached TANAW all the same.
+    assert _saved(tmp_path)["REP-ONE"]["sync_status"] == "pending_cloud_sync"
+
+    reopened = store.reopen_report_submission("REP-ONE", "returned")
+    assert reopened["reopened_at"] is not None
+    assert reopened["reopen_reason"] == "returned"
+    assert reopened["sync_status"] == "synced"
+    assert reopened["synced_at"] is not None
+    # Reopening again changes nothing.
+    assert (
+        store.reopen_report_submission("REP-ONE", "returned")["reopened_at"]
+        == (reopened["reopened_at"])
+    )
+
+    corrected = repo.submit(**request(repo, report_id="REP-TWO"))
+    assert corrected["version"] == 2
+    saved = _saved(tmp_path)
+    assert {key: item["version"] for key, item in saved.items()} == {"REP-ONE": 1, "REP-TWO": 2}
+    assert saved["REP-ONE"]["sync_status"] == "synced"
+    assert saved["REP-TWO"]["reopened_at"] is None
+    # The month's raw evidence belongs to the version being sent now.
+    with service.database.connection() as db:
+        owner = db.execute(
+            "select submitted_report_id from count_events where event_id='selected'"
+        ).fetchone()[0]
+    assert owner == "REP-TWO"
+    # The corrected version holds the month again.
+    with pytest.raises(ValueError, match="one report per reporting month"):
+        repo.submit(**request(repo, report_id="REP-THREE"))
+
+
+def test_a_refused_upload_keeps_its_reason_and_its_fix_keeps_the_version(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service)
+    repo = EstablishmentReportRepository(service.database)
+    first = repo.submit(**request(repo))
+    store = _store(tmp_path)
+    with pytest.raises(ValueError, match="did not accept"):
+        store.reopen_report_submission("REP-ONE", "upload_rejected")
+    assert store.mark_report_upload_rejected(
+        "REP-ONE", first["submission_id"], "  Totals do not match.  "
+    )
+    assert _saved(tmp_path)["REP-ONE"]["rejection_reason"] == "Totals do not match."
+    # A later refusal without a reason keeps the one TANAW gave.
+    store.mark_report_upload_rejected("REP-ONE", first["submission_id"])
+    assert _saved(tmp_path)["REP-ONE"]["rejection_reason"] == "Totals do not match."
+    with pytest.raises(ValueError, match="could not return it"):
+        store.reopen_report_submission("REP-ONE", "returned")
+
+    store.reopen_report_submission("REP-ONE", "upload_rejected")
+    fixed = repo.submit(**request(repo, report_id="REP-FIX"))
+    # TANAW never accepted the first attempt, so the fix is still version 1.
+    assert fixed["version"] == 1
+    assert _saved(tmp_path)["REP-FIX"]["sync_status"] == "pending_cloud_sync"
+
+
+def test_reopening_needs_a_known_report_and_reason(tmp_path: Path) -> None:
+    service = EstablishmentRegistry(str(tmp_path), "park")
+    observed(service)
+    store = _store(tmp_path)
+    with pytest.raises(LookupError):
+        store.reopen_report_submission("REP-MISSING", "returned")
+    with pytest.raises(ValueError, match="Staff return"):
+        store.reopen_report_submission("REP-MISSING", "edited")

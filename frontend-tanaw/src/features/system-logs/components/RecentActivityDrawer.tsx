@@ -64,7 +64,7 @@ export function RecentActivityDrawer({
         >
           <header
             data-scrolled={scrolled || undefined}
-            className="border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-sm:px-5"
+            className="border-b border-transparent px-7 pt-6 pb-5 transition-colors duration-200 ease-tanaw-out data-scrolled:border-(--tanaw-border-soft) max-md:px-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -74,7 +74,7 @@ export function RecentActivityDrawer({
                 type="button"
                 aria-label="Close activity details"
                 onClick={onClose}
-                className="-mt-1 -mr-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
+                className="-mt-1 -mr-2 inline-flex size-11 shrink-0 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,rotate,scale] duration-200 ease-tanaw-out hover:rotate-90 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90 motion-reduce:transition-none motion-reduce:hover:rotate-0"
               >
                 <X size={18} aria-hidden="true" />
               </button>
@@ -91,7 +91,7 @@ export function RecentActivityDrawer({
           <div
             key={log.id}
             onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
-            className="tanaw-activity-drawer__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-sm:px-5"
+            className="tanaw-activity-drawer__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-1 pb-7 max-md:px-4"
           >
             <section aria-labelledby={`${titleId}-who`}>
               <h3 id={`${titleId}-who`} className={sectionLabel}>
@@ -156,7 +156,7 @@ export function RecentActivityDrawer({
             )}
           </div>
 
-          <footer className="flex items-center justify-between gap-3 border-t border-(--tanaw-border-soft) px-7 py-4 max-sm:px-5">
+          <footer className="tanaw-activity-drawer__foot flex items-center justify-between gap-3 border-t border-(--tanaw-border-soft) px-7 py-4 max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex gap-2">
               <Button variant="secondary" aria-label="Previous activity" disabled={position <= 0} onClick={onPrevious} leadingIcon={<ChevronLeft size={15} aria-hidden="true" />}>
                 Previous

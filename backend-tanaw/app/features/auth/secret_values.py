@@ -30,6 +30,25 @@ def hash_account_email_change_token(raw_token: str) -> str:
     ).hexdigest()
 
 
+def derive_two_factor_key(secret_seed: str) -> bytes:
+    """The authenticator key for a stored seed.
+
+    The database keeps only the random seed; the key itself also needs the server's derivation
+    secret, so a copy of the database alone cannot produce sign-in codes.
+    """
+    return _derive_digest("two-factor-totp-key", secret_seed)[:20]
+
+
+def hash_two_factor_recovery_code(account_id: str, normalized_code: str) -> str:
+    """A keyed hash of a recovery code, bound to its account, so stored codes reveal nothing."""
+    settings = get_settings()
+    return hmac.new(
+        settings.email_secret_key_value.encode(),
+        f"two-factor-recovery-code:{account_id}:{normalized_code}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def _derive_digest(purpose: str, source_id: str) -> bytes:
     settings = get_settings()
     return hmac.new(

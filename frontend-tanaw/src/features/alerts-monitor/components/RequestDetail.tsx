@@ -9,12 +9,13 @@ import {
   buildRequestUpdates,
   formatRequestWhen,
   handledByLabel,
+  progressDotClass,
+  progressTextClass,
+  requestCategory,
   requestHandler,
   requestPlace,
+  requestProgressState,
   requestStatusNote,
-  statusDotClass,
-  statusLabels,
-  statusTextClass,
   type RequestUpdateKind,
 } from "../model";
 import { NoteForItComposer } from "./NoteForItComposer";
@@ -50,19 +51,19 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
   const handler = requestHandler(detail);
   const updates = buildRequestUpdates(request, detail);
   const formatWhen = (value: string | null) => formatRequestWhen(value, now, timeFormat);
-  const statusLabel = statusLabels[request.status];
+  const progress = requestProgressState(request);
   const change = accountChangeSentence(request);
   const place = requestPlace(request);
   const sentBy = request.enterpriseName ? `${request.requesterName}, ${request.enterpriseName}` : request.requesterName;
 
   return (
     <article aria-labelledby="request-detail-title" className="tanaw-requests-detail min-w-0 py-1.5">
-      <p className={cn("text-[13px] font-semibold", statusTextClass[request.status])}>{statusLabel}</p>
+      <p className={cn("text-[13px] font-semibold", progressTextClass[progress])}>{progress}</p>
       <h2 id="request-detail-title" className="mt-2 font-display text-[1.875rem] leading-[1.15] font-bold text-(--tanaw-text) max-sm:text-2xl">
         {request.title}
       </h2>
       <p className="mt-2.5 flex items-center gap-2 text-[0.90625rem] text-(--tanaw-text-secondary)">
-        <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", statusDotClass[request.status])} />
+        <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", progressDotClass[progress])} />
         {requestStatusNote(request, handler, (value) => formatWhen(value))}
       </p>
 
@@ -89,10 +90,10 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
             place
           )}
         </DetailItem>
-        <DetailItem label="Type">{request.group}</DetailItem>
+        <DetailItem label="Type">{requestCategory(request)}</DetailItem>
         <DetailItem label="Sent by">{sentBy}</DetailItem>
         <DetailItem label="Handled by">{handledByLabel(handler)}</DetailItem>
-        <DetailItem label="Status">{statusLabel}</DetailItem>
+        <DetailItem label="Progress">{progress}</DetailItem>
         <DetailItem label="Reference number">
           <span className="tabular-nums">{request.code}</span>
         </DetailItem>
@@ -135,9 +136,10 @@ export function RequestDetail({ request, detail, detailLoading, timeFormat, now 
 
 function DetailItem({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:pr-0">
+    // Phones: the label and its value side by side on one line, as compact rows.
+    <div className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:grid max-sm:grid-cols-[7.5rem_minmax(0,1fr)] max-sm:items-baseline max-sm:gap-3 max-sm:py-2.5 max-sm:pr-0">
       <dt className="text-[13px] text-(--tanaw-text-muted)">{label}</dt>
-      <dd className="mt-1 font-semibold wrap-break-word text-(--tanaw-text)">{children}</dd>
+      <dd className="mt-1 font-semibold wrap-break-word text-(--tanaw-text) max-sm:mt-0">{children}</dd>
     </div>
   );
 }

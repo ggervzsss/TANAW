@@ -29,7 +29,7 @@ export function EmailChangeCallouts({ callouts, resolvingAccountId, onResolve }:
                 From {callout.from} to {callout.to}. {callout.status}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2.5 max-sm:w-full max-sm:*:flex-1 pointer-coarse:*:min-h-11">
               {callout.canApprove && (
                 <Button onClick={() => onResolve(callout.accountId, "approve")} disabled={busy} aria-label={`Approve the new email ${callout.to}`}>
                   Approve

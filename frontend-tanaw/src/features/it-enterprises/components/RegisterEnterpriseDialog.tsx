@@ -104,12 +104,13 @@ export function RegisterEnterpriseDialog({ onClose }: { onClose: () => void }) {
       closeLabel="Close"
       accent="thread"
       size="2xl"
+      className="ite-dialog"
       footer={
         <>
-          <Button variant="secondary" size="lg" onClick={onClose} disabled={create.isPending}>
+          <Button variant="secondary" size="lg" className="max-sm:w-full" onClick={onClose} disabled={create.isPending}>
             Cancel
           </Button>
-          <Button type="submit" form={formId} size="lg" loading={create.isPending}>
+          <Button type="submit" form={formId} size="lg" className="max-sm:w-full" loading={create.isPending}>
             Register and send invitation
           </Button>
         </>
@@ -121,7 +122,7 @@ export function RegisterEnterpriseDialog({ onClose }: { onClose: () => void }) {
           <AttractionFields {...fieldProps} />
           <AddressFields {...fieldProps} />
           <ManagerFields {...fieldProps} />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-1">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 max-sm:grid-cols-[minmax(0,1fr)_7rem]">
             <ContactNumberInput {...fieldProps} />
             <CapacityField {...fieldProps} />
           </div>

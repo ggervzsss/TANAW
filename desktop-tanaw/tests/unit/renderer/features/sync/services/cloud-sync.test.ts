@@ -103,11 +103,12 @@ describe("desktop report cloud idempotency", () => {
     const refused = localSubmission("11111111-1111-4111-8111-111111111111");
     const next = { ...localSubmission("33333333-3333-4333-8333-333333333333"), report_id: "REP-002" };
     vi.mocked(listLocalReportSubmissions).mockResolvedValue([refused, next]);
-    vi.mocked(staffApi.post).mockRejectedValueOnce(httpError(409)).mockResolvedValueOnce({ data: {} });
+    vi.mocked(staffApi.post).mockRejectedValueOnce(httpError(409, { detail: "A report for June 2026 has already been sent." })).mockResolvedValueOnce({ data: {} });
 
     await expect(syncDesktopReportSubmissions()).resolves.toBe(1);
 
-    expect(markLocalReportUploadRejected).toHaveBeenCalledWith("http://127.0.0.1:8765", refused.report_id, refused.submission_id);
+    // TANAW's reason is kept with the refused report, so the person can see what to fix.
+    expect(markLocalReportUploadRejected).toHaveBeenCalledWith("http://127.0.0.1:8765", refused.report_id, refused.submission_id, "A report for June 2026 has already been sent.");
     expect(markLocalReportSynced).toHaveBeenCalledWith("http://127.0.0.1:8765", next.report_id, next.submission_id);
   });
 

@@ -4,10 +4,19 @@ type ElementRef = { readonly current: HTMLElement | null };
 
 const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 
+/** The open dialogs, innermost last. Only the innermost one answers Escape and holds Tab. */
+const openDialogs: symbol[] = [];
+
+/** Whether this dialog is the innermost open one (a dialog opened from another sits on top). */
+function isInnermostDialog(dialog: symbol) {
+  return openDialogs[openDialogs.length - 1] === dialog;
+}
+
 /**
  * Keeps keyboard focus inside a dialog while it is open, closes it on Escape, and returns focus
  * to the element that opened it. The panel must be programmatically focusable
- * and may provide a selector for a preferred initial focus target.
+ * and may provide a selector for a preferred initial focus target. When a dialog opens another,
+ * only the one on top handles Escape and Tab until it closes.
  */
 export function useDialogFocus(container: ElementRef, onEscape: () => void, enabled = true, initialFocusSelector?: string): void {
   const onEscapeRef = useRef(onEscape);
@@ -17,6 +26,8 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
 
   useEffect(() => {
     if (!enabled) return undefined;
+    const dialog = Symbol("dialog");
+    openDialogs.push(dialog);
     const previous = document.activeElement as HTMLElement | null;
     const frame = requestAnimationFrame(() => {
       const node = container.current;
@@ -25,7 +36,7 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
       (preferred ?? node).focus();
     });
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || !isInnermostDialog(dialog)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -57,6 +68,7 @@ export function useDialogFocus(container: ElementRef, onEscape: () => void, enab
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKey);
+      openDialogs.splice(openDialogs.indexOf(dialog), 1);
       previous?.focus?.();
     };
   }, [container, enabled, initialFocusSelector]);

@@ -9,7 +9,7 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "childre
   children: ReactNode;
   /** primary: the one Civic Green action; secondary: a quiet tint; danger: a red tint for destructive actions; destructive: solid red, for the confirm button of a destructive confirmation; ghost: no fill until hovered; link: inline text. */
   variant?: ButtonVariant;
-  /** sm 34px, md 42px (default), lg 48px. */
+  /** sm 34px, md 42px (default), lg 48px; on touch screens sm and md are 44px. */
   size?: ButtonSize;
   /** Shows a spinner, keeps the width and blocks presses. */
   loading?: boolean;
@@ -45,9 +45,10 @@ const variants: Record<ButtonVariant, string> = {
   link: "h-auto! px-0! text-(--tanaw-accent-ink) underline-offset-4 hover:underline active:scale-100",
 };
 
+/* On touch screens sm and md grow to 44px, so every button is an easy press. */
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-8.5 px-3.5 text-[0.8125rem]",
-  md: "h-10.5 px-4.5 text-sm",
+  sm: "h-8.5 px-3.5 text-[0.8125rem] pointer-coarse:h-11 pointer-coarse:px-4",
+  md: "h-10.5 px-4.5 text-sm pointer-coarse:h-11",
   lg: "h-12 px-6 text-[0.9375rem]",
 };
 

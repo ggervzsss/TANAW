@@ -273,7 +273,7 @@ export function LocationPicker({
 
   return (
     // Open, not boxed: the search field, then the map as a soft-edged preview, then a line on how to pin.
-    <div className="grid h-fit gap-3 self-start">
+    <div className="grid h-fit min-w-0 grid-cols-1 gap-3 self-start">
       <LocationSearch
         inputId={`${mapId}-search`}
         onSelect={(suggestion) => {
@@ -283,9 +283,9 @@ export function LocationPicker({
       <div className="rounded-tanaw-lg overflow-hidden border border-(--tanaw-border-soft) bg-(--tanaw-surface-inset)">
         <div id={mapId} className={`${mapHeightClassName} w-full`} />
       </div>
-      <p className="flex items-center gap-2 text-[13px] text-(--tanaw-text-secondary)">
-        <MapPin size={14} aria-hidden="true" className="shrink-0 text-(--tanaw-accent-ink)" />
-        <span className="truncate">{getFooterText(isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
+      <p className="flex items-center gap-2 text-[13px] text-(--tanaw-text-secondary) max-sm:items-start">
+        <MapPin size={14} aria-hidden="true" className="shrink-0 text-(--tanaw-accent-ink) max-sm:mt-0.5" />
+        <span className="min-w-0 sm:truncate">{getFooterText(isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
       </p>
     </div>
   );

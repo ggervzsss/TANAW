@@ -41,6 +41,7 @@ class ArchitectureBoundariesTest(unittest.TestCase):
             "mark_report_synced",
             "mark_report_upload_rejected",
             "purge_report_raw_events",
+            "reopen_report_submission",
             "save_report_draft",
         }
         self.assertTrue(reporting_methods.isdisjoint(dir(CameraProcessingManager)))

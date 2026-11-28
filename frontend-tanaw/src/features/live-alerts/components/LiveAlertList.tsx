@@ -40,7 +40,7 @@ export function LiveAlertList({ alerts, dashboardPath, emptyText = "Nothing need
                 <Link
                   to={alertMapPath(alert, dashboardPath)}
                   onClick={onNavigate}
-                  className="group mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-(--tanaw-accent-ink) underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
+                  className="group mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-semibold max-md:min-h-11 text-(--tanaw-accent-ink) underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring)"
                 >
                   Show on map
                   <ArrowRight size={15} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />

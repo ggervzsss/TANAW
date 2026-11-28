@@ -68,7 +68,8 @@ SCHEMA_STATEMENTS = (
     create table report_submissions (
         report_id text primary key,
         submission_id text not null unique,
-        period text not null unique,
+        period text not null,
+        version integer not null default 1 check (version >= 1),
         submitted_at text not null,
         entries integer,
         exits integer,
@@ -78,8 +79,16 @@ SCHEMA_STATEMENTS = (
         payload_json text not null,
         sync_status text not null default 'pending_cloud_sync',
         synced_at text,
-        raw_purged_at text
+        raw_purged_at text,
+        rejection_reason text,
+        reopened_at text,
+        reopen_reason text check (reopen_reason in ('returned', 'upload_rejected'))
     )
+    """,
+    # A month holds one live report; a version reopened for correction no longer holds it.
+    """
+    create unique index idx_report_submissions_live_period
+        on report_submissions(period) where reopened_at is null
     """,
     """create table report_submission_snapshots (
         submission_id text primary key,

@@ -31,6 +31,7 @@ from app.storage.backup_camera_policy import backup_camera_profile
 from app.storage.local_data_serialization import _load_json_object
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.camera_repository import CameraRepository
+from app.storage.repositories.establishment_report_repository import next_report_version
 from app.storage.repositories.establishment_repository import TIMEZONE, timestamp
 
 # Report drafts for an open month use ``period:<Month YYYY>``; revisions use ``report:<id>``.
@@ -89,11 +90,13 @@ def export_local_backup(database: LocalDatabase, now: datetime) -> dict[str, Any
     today = now.astimezone(TIMEZONE).date()
     start = backup_window_start(today)
     with database.connection() as db:
-        # Only a report the server confirmed is safe to leave out of the backup.
+        # Only a report the server confirmed is safe to leave out of the backup; a month
+        # reopened for correction is still being worked on.
         delivered = {
             str(row["period"])
             for row in db.execute(
-                "select period from report_submissions where sync_status='synced'"
+                "select period from report_submissions "
+                "where sync_status='synced' and reopened_at is null"
             )
         }
         days = [
@@ -302,19 +305,27 @@ def _restore_day(db: Any, day: dict[str, Any], today: date, now: datetime) -> in
 def _restore_submission(db: Any, submission: dict[str, Any]) -> int:
     """Restore a report still waiting to upload, with its original IDs."""
     clash = db.execute(
-        "select 1 from report_submissions where report_id=? or submission_id=? or period=?",
+        "select 1 from report_submissions where report_id=? or submission_id=? "
+        "or (period=? and reopened_at is null)",
         (submission["report_id"], submission["submission_id"], submission["period"]),
     ).fetchone()
     if clash is not None:
         return 0
+    # A correction keeps the version after the month's latest version that Staff returned.
+    latest = db.execute(
+        "select version,reopen_reason from report_submissions where period=? "
+        "order by version desc, submitted_at desc limit 1",
+        (submission["period"],),
+    ).fetchone()
     db.execute(
-        "insert into report_submissions (report_id, submission_id, period, submitted_at, "
-        "entries, exits, peak_occupancy, unique_count, notes, payload_json, sync_status) "
-        "values (?,?,?,?,?,?,?,?,?,?,?)",
+        "insert into report_submissions (report_id, submission_id, period, version, "
+        "submitted_at, entries, exits, peak_occupancy, unique_count, notes, payload_json, "
+        "sync_status) values (?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             submission["report_id"],
             submission["submission_id"],
             submission["period"],
+            next_report_version(latest),
             submission["submitted_at"],
             submission.get("entries"),
             submission.get("exits"),

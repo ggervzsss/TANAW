@@ -3,6 +3,7 @@ import type { DailyOrigins, ReportRecord, SystemLogPeriod } from "../../../types
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalReportDraft, getMlServiceStatus } from "../../camera/services/ml-service";
 import { DESKTOP_SAMPLE_PREPARED_EVENT } from "../../sync/services/cloud-sync";
 import { mergeMissingOriginDays, originsFromPayload } from "../model/daily-origins";
+import { correctionSource } from "../model/report-lifecycle";
 import { clearLegacyBrowserDemographicDrafts, persistOriginsDraft } from "../services/report-workspace";
 import { notifyWarning } from "../../toasts/services/toast-service";
 
@@ -56,7 +57,8 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
         }
       }
       if (cancelled) return;
-      const report = activeReportId ? reportsHistoryRef.current.find((item) => item.id === activeReportId) : undefined;
+      // A month being corrected starts from the origins of the version it corrects.
+      const report = activeReportId ? reportsHistoryRef.current.find((item) => item.id === activeReportId) : correctionSource(reportsHistoryRef.current, period);
       const loadedOrigins = stored ?? report?.origins ?? {};
       hydratedOrigins.current = loadedOrigins;
       setOrigins(loadedOrigins);
@@ -68,7 +70,7 @@ export function useOriginsDraft({ activeReportId, draftKey, isReadOnly, period, 
       cancelled = true;
       if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
     };
-  }, [activeReportId, draftKey, isReadOnly]);
+  }, [activeReportId, draftKey, isReadOnly, period]);
 
   // Sample preparation confirms origins in the local draft, possibly after this report loaded.
   // Days it added are merged in; days already here keep what is shown.

@@ -27,7 +27,7 @@ from app.features.monitoring.visitor_insights import (
     HourlyVisitorObservation,
     load_hourly_visitor_observations,
 )
-from app.features.reporting.models import EnterpriseReportSubmission
+from app.features.reporting.models import REPORT_RETURNED_STATUS, EnterpriseReportSubmission
 from app.features.reporting.periods import reporting_period_key
 
 MAX_RANKING_DAYS = 3700
@@ -199,7 +199,12 @@ async def _load_reports(db: AsyncSession, start: date, end: date) -> list[Report
     ]
     submissions = (
         await db.scalars(
-            select(EnterpriseReportSubmission).where(EnterpriseReportSubmission.period.in_(periods))
+            # A returned report waits for its corrected version; every other period has at most one
+            # live version, which is the one to count.
+            select(EnterpriseReportSubmission).where(
+                EnterpriseReportSubmission.period.in_(periods),
+                EnterpriseReportSubmission.review_status != REPORT_RETURNED_STATUS,
+            )
         )
     ).all()
     reports: list[ReportVisitors] = []

@@ -5,43 +5,57 @@ import { Skeleton, cn } from "@/shared/ui-kit";
 import type { SystemTimeFormat } from "@/shared/utils/dateTime";
 import { ACTIVITY_PAGE_SIZE, activityKind, activityKindChipLabels, activityTitle, actorRoleLabel, formatActivityDate, formatActivityTime } from "../model/recentActivity";
 
-const chipClass = "inline-flex min-h-6 items-center rounded-tanaw-sm px-2 text-xs leading-tight font-semibold whitespace-nowrap";
+export const activityChipClass = "inline-flex min-h-6 items-center rounded-tanaw-sm px-2 text-xs leading-tight font-semibold whitespace-nowrap";
 
 /** The open-row highlight's glide: the app's 150–260ms ease-out. */
 const GLIDE: Transition = { type: "tween", duration: 0.24, ease: [0.2, 0.8, 0.2, 1] };
 
 export function ActivityTypeChip({ log }: { log: SystemLog }) {
-  return <span className={cn(chipClass, "bg-(--ra-chip) text-(--ra-chip-ink)")}>{activityKindChipLabels[activityKind(log)]}</span>;
+  return <span className={cn(activityChipClass, "bg-(--ra-chip) text-(--ra-chip-ink)")}>{activityKindChipLabels[activityKind(log)]}</span>;
 }
 
 export const ACTIVITY_DRAWER_ID = "activity-details-drawer";
 
-const columns = "grid grid-cols-[9.5rem_minmax(14rem,1.25fr)_minmax(12rem,1fr)_minmax(16rem,1.6fr)] gap-5";
+/**
+ * The four columns every row lines up on: date and time, activity, performed by, details. On phones
+ * the same cells stack into one row (recentActivity.css), so nothing scrolls sideways.
+ */
+export const activityColumns = "tanaw-activity-cols grid grid-cols-[9.5rem_minmax(14rem,1.25fr)_minmax(12rem,1fr)_minmax(16rem,1.6fr)] gap-5";
 
-/** The flat activity list: grid rows, each a button that opens the details drawer. */
+/** A row's box: the hover tint, the radius and the keyboard focus ring come with `tanaw-activity-row`. */
+export const activityRowClass =
+  "tanaw-activity-row w-full px-3 py-4 text-left text-sm text-(--tanaw-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)";
+
+/**
+ * The flat activity list: grid rows, each a button that opens the details drawer. `pinned` sits
+ * between the column headers and the records (the busy places on the Admin page).
+ */
 export function RecentActivityList({
   rows,
   selectedId,
   timeFormat,
   empty,
+  pinned,
   onSelect,
 }: {
   rows: readonly SystemLog[];
   selectedId: string | null;
   timeFormat: SystemTimeFormat;
   empty: ReactNode;
+  pinned?: ReactNode;
   onSelect: (log: SystemLog) => void;
 }) {
   const reduceMotion = useReducedMotion();
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-240">
-        <div aria-hidden="true" className={cn(columns, "tanaw-activity-head border-b border-(--tanaw-border-soft) px-3 pb-3")}>
+    <div className="overflow-x-auto max-[60rem]:overflow-x-visible">
+      <div className="min-[60rem]:min-w-240">
+        <div aria-hidden="true" className={cn(activityColumns, "tanaw-activity-head border-b border-(--tanaw-border-soft) px-3 pb-3 max-md:hidden")}>
           <span>Date &amp; time</span>
           <span>Activity</span>
           <span>Performed by</span>
           <span>Details</span>
         </div>
+        {pinned}
         {rows.length === 0 ? (
           empty
         ) : (
@@ -60,10 +74,7 @@ export function RecentActivityList({
                       aria-expanded={open}
                       aria-controls={open ? ACTIVITY_DRAWER_ID : undefined}
                       onClick={() => onSelect(log)}
-                      className={cn(
-                        columns,
-                        "tanaw-activity-row w-full px-3 py-4 text-left text-sm text-(--tanaw-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--tanaw-focus-ring)",
-                      )}
+                      className={cn(activityColumns, activityRowClass)}
                     >
                       <span className="tabular-nums">
                         <span className="block font-semibold">{formatActivityDate(log.timestamp)}</span>
@@ -108,7 +119,7 @@ export function RecentActivitySkeleton() {
       <div aria-hidden="true">
         {Array.from({ length: ACTIVITY_PAGE_SIZE }, (_, index) => (
           <span key={index} className="block border-b border-(--tanaw-border-soft) py-0.5">
-            <span className={cn(columns, "px-3 py-4")}>
+            <span className={cn(activityColumns, "px-3 py-4")}>
               <span className="block">
                 <SkeletonLine height="h-5" bar="h-3.5 w-24" />
                 <SkeletonLine height="h-5" bar="h-3 w-16" />

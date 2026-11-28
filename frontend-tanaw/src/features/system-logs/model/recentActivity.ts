@@ -8,11 +8,14 @@ import { PHILIPPINE_TIME_ZONE, type SystemTimeFormat } from "@/shared/utils/date
  * Activity: a record of everything every user did, and everything TANAW did by itself, once
  * per event. The Admin and IT read the same records, in seven groups, newest first. The Admin
  * reads the plain summary; IT also gets the technical details (`itDetail`) the backend sends
- * only to IT. Nothing is pinned: open problems are on the Requests page and in Alerts.
+ * only to IT. No record is pinned: open problems are on the Requests page and in Alerts. The
+ * Admin page pins one row above the records for each place that is busier than usual right now
+ * (busyEnterprises.ts); those rows come from the live alerts and are not records.
  */
 
 export type ActivityKind = "security" | "accounts" | "enterprises" | "reports" | "requests" | "monitoring" | "settings";
-export type ActivityTypeFilter = "all" | ActivityKind;
+/** `busy` is Busiest Enterprises: the busy places pinned now, and the Monitoring records about busy places. */
+export type ActivityTypeFilter = "all" | ActivityKind | "busy";
 
 export const ACTIVITY_PAGE_SIZE = 8;
 
@@ -29,14 +32,16 @@ const KIND_BY_GROUP: Record<ActivityGroup, ActivityKind> = {
   "Settings & Maintenance": "settings",
 };
 
-export const activityTypeOptions: readonly { value: ActivityTypeFilter; label: string; meta?: string }[] = [
+/** The Activity type choices. A `description` shows under its label in the open menu only. */
+export const activityTypeOptions: readonly { value: ActivityTypeFilter; label: string; description?: string }[] = [
   { value: "all", label: "All Activity" },
   { value: "security", label: "Login & Security" },
   { value: "accounts", label: "Accounts" },
-  { value: "enterprises", label: "Enterprises", meta: "Registrations, details, opening hours, closures" },
+  { value: "enterprises", label: "Enterprises", description: "Registrations, details, opening hours, closures" },
   { value: "reports", label: "Reports" },
   { value: "requests", label: "Requests" },
-  { value: "monitoring", label: "Monitoring", meta: "Cameras, busy places, offline desktop apps" },
+  { value: "monitoring", label: "Monitoring", description: "Cameras, busy places, offline desktop apps" },
+  { value: "busy", label: "Busiest Enterprises", description: "Places busier than usual right now" },
   { value: "settings", label: "Settings & Maintenance" },
 ];
 
@@ -61,6 +66,20 @@ export function parseActivityType(value: string | null): ActivityTypeFilter {
 
 export function activityKind(log: SystemLog): ActivityKind {
   return KIND_BY_GROUP[log.group] ?? "settings";
+}
+
+/** TANAW records a Monitoring activity when a place turns busier than usual, and again when it is back to usual. */
+const BUSY_PLACE_ACTIONS: ReadonlySet<string> = new Set(["Busier Than Usual", "Back to Usual"]);
+
+/** A Monitoring record about a busy place: listed under Busiest Enterprises as well as Monitoring. */
+export function isBusyPlaceRecord(log: SystemLog) {
+  return activityKind(log) === "monitoring" && (BUSY_PLACE_ACTIONS.has(log.action) || log.metadata?.alertType === "Busier Than Usual");
+}
+
+function matchesType(log: SystemLog, type: ActivityTypeFilter) {
+  if (type === "all") return true;
+  if (type === "busy") return isBusyPlaceRecord(log);
+  return activityKind(log) === type;
 }
 
 const ACTION_TITLES: Record<string, string> = {
@@ -93,6 +112,7 @@ const ACTION_TITLES: Record<string, string> = {
   "Report Pending Review": "Report Set to Pending Review",
   "Report Ready to Consolidate": "Report Review Completed",
   "Report Consolidated": "Report Consolidated",
+  "Return Enterprise Report": "Report Returned for Correction",
   "Generate Final Report": "Consolidated Report Generated",
   "Notify Enterprise": "Message Sent to Enterprise",
   // Requests
@@ -209,7 +229,7 @@ export function filterRecentActivity(logs: readonly SystemLog[], filters: Activi
     .filter((log) => {
       const day = philippineDay(log.timestamp);
       if (!day || day < filters.range.start || day > filters.range.end) return false;
-      if (filters.type !== "all" && activityKind(log) !== filters.type) return false;
+      if (!matchesType(log, filters.type)) return false;
       return !query || activitySearchText(log).includes(query);
     })
     .sort(compareActivity);
@@ -242,6 +262,22 @@ function plural(count: number, noun: string) {
 export function activitySummaryParts(items: readonly SystemLog[], type: ActivityTypeFilter, query: string) {
   const count = query.trim() ? `${items.length} matching ${items.length === 1 ? "record" : "records"}` : plural(items.length, "record");
   return { label: type === "all" ? "All activity" : activityTypeLabel(type), count };
+}
+
+/**
+ * The sentence under the column headers when no record matches. Under Busiest Enterprises, without
+ * a search, it also says so when no place is busy now (`noneBusyNow`: the range includes today and
+ * no busy place is pinned).
+ */
+export function activityEmptyMessage({ type, query, rangeText, noneBusyNow = false }: { type: ActivityTypeFilter; query: string; rangeText: string; noneBusyNow?: boolean }) {
+  const search = query.trim();
+  const matching = search ? `matching “${search}” ` : "";
+  if (type === "busy") {
+    const records = `No busy-place records ${matching}for ${rangeText}.`;
+    return noneBusyNow && !search ? `No place is busier than usual right now. ${records}` : records;
+  }
+  if (type === "all" && !search) return `No activity recorded for ${rangeText}.`;
+  return `No ${type === "all" ? "activity" : activityTypeLabel(type).toLowerCase()} ${matching}for ${rangeText}.`;
 }
 
 /** Sample data prefixes source IDs, for example `sample:activity:alert:<id>`. */
@@ -291,6 +327,14 @@ function reportFields(log: SystemLog): ActivityField[] {
       const review = reviewStatus({ status: stored as "Pending Review" | "Ready to Consolidate" | "Consolidated" });
       fields.push({ label: "Staff review", value: review, tone: reviewTone[review] });
     }
+  }
+  if (log.action === "Return Enterprise Report") {
+    const review = reviewStatus({ status: "Returned" });
+    fields.push({ label: "Staff review", value: review, tone: reviewTone[review] });
+    const version = metaNumber(log, "version");
+    if (version !== null && version > 1) fields.push({ label: "Version", value: String(version) });
+    const reason = metaString(log, "reason");
+    if (reason) fields.push({ label: "Reason", value: reason });
   }
   if (log.action.startsWith("Final Report ")) fields.push({ label: "Status", value: log.action.slice("Final Report ".length) });
   const unique = metaNumber(log, "uniqueCount");

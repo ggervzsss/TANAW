@@ -30,6 +30,19 @@ describe("reportMonthRows", () => {
 
     expect(reportMonthRows(rows).map((item) => item.key)).toEqual(["history-june", "pending-august", "history-october", "current-november"]);
   });
+
+  it("opens a month being corrected on its draft, and lists its versions newest first", () => {
+    const returned = {
+      ...row("history-october-1", "history", "October 2026"),
+      report: { ...row("history-october-1", "history", "October 2026").report, version: 1, reopenedAt: "2026-11-06T00:00:00Z" },
+    };
+    const sentAgain = { ...row("history-october-2", "history", "October 2026"), report: { ...row("history-october-2", "history", "October 2026").report, version: 2 } };
+    const correcting = [returned, row("pending-october", "pending", "October 2026")];
+    expect(reportMonthRows(correcting).map((item) => item.key)).toEqual(["pending-october"]);
+    expect(sortReportLedgerRows(correcting).map((item) => item.key)).toEqual(["pending-october", "history-october-1"]);
+    expect(sortReportLedgerRows([returned, sentAgain]).map((item) => item.key)).toEqual(["history-october-2", "history-october-1"]);
+    expect(reportMonthRows([returned, sentAgain]).map((item) => item.key)).toEqual(["history-october-2"]);
+  });
 });
 
 function row(key: string, kind: ReportLedgerRow["kind"], period: string): ReportLedgerRow {

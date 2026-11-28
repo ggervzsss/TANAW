@@ -30,8 +30,10 @@
   transition: background-color 160ms var(--ease-tanaw-out);
 }
 
-.tanaw-requests-row:hover:not([aria-current="true"]) {
-  background: var(--tanaw-control-hover);
+@media (hover: hover) {
+  .tanaw-requests-row:hover:not([aria-current="true"]) {
+    background: var(--tanaw-control-hover);
+  }
 }
 
 .tanaw-requests-row:active:not([aria-current="true"]) {
@@ -77,9 +79,11 @@
     scale 120ms var(--ease-tanaw-out);
 }
 
-.tanaw-requests-chip:hover {
-  background: var(--tanaw-control-bg-hover);
-  translate: 0 -1px;
+@media (hover: hover) {
+  .tanaw-requests-chip:hover {
+    background: var(--tanaw-control-bg-hover);
+    translate: 0 -1px;
+  }
 }
 
 .tanaw-requests-chip:active {
@@ -132,7 +136,80 @@
   }
 }
 
+/*
+ * Phones: the list is one screen and a chosen request another. Without `?request` the page shows the
+ * header, search and list; with it, only the request, under an "All requests" back button. From
+ * 48rem up both stay on the page together, as before.
+ */
+.tanaw-requests-back {
+  display: none;
+}
+
+@media (width < 48rem) {
+  .tanaw-requests-page[data-phone-view="detail"] :is(.tanaw-requests-page__list-only, .tanaw-requests-list) {
+    display: none;
+  }
+
+  .tanaw-requests-page[data-phone-view="detail"] .tanaw-requests-page__panes {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .tanaw-requests-page[data-phone-view="list"] .tanaw-requests-page__detail {
+    display: none;
+  }
+
+  .tanaw-requests-back {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 6px;
+    margin: -8px 0 8px -10px;
+    padding: 0 12px 0 8px;
+    border-radius: 12px;
+    color: var(--tanaw-accent-ink);
+    font-size: 15px;
+    font-weight: 650;
+    transition:
+      background-color 160ms var(--ease-tanaw-out),
+      scale 120ms var(--ease-tanaw-out);
+  }
+
+  .tanaw-requests-back:active {
+    background: var(--tanaw-selected-bg);
+    scale: 0.97;
+  }
+
+  .tanaw-requests-back:focus-visible {
+    outline: 2px solid var(--tanaw-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .tanaw-requests-row {
+    padding: 14px 12px;
+  }
+
+  .tanaw-requests-chip {
+    min-height: 44px;
+  }
+}
+
+@media (width < 48rem) and (hover: hover) {
+  .tanaw-requests-back:hover {
+    background: var(--tanaw-control-hover);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .tanaw-requests-back {
+    transition: none;
+  }
+
+  .tanaw-requests-back:active {
+    scale: none;
+  }
+
   .tanaw-requests-item,
   .tanaw-requests-row,
   .tanaw-requests-chip,

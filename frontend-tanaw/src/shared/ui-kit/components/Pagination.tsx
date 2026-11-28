@@ -15,23 +15,29 @@ export type PaginationProps = {
 
 /* Quiet controls: no outline, a soft tint on hover, and the current page in the green tint. */
 const buttonClass =
-  "inline-flex h-10 min-w-10 items-center justify-center gap-1 rounded-tanaw-md px-3 text-sm font-semibold text-(--tanaw-text-secondary) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:active:scale-100 motion-reduce:transition-none";
+  "inline-flex h-10 min-w-10 items-center pointer-coarse:h-11 pointer-coarse:min-w-11 justify-center gap-1 rounded-tanaw-md px-3 text-sm font-semibold text-(--tanaw-text-secondary) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:active:scale-100 motion-reduce:transition-none";
 
-/** Previous / numbered pages / Next, with the summary on the left. */
+/**
+ * Previous / numbered pages / Next, with the summary on the left. On phones it turns compact: the
+ * summary on its own line, then arrow buttons either side of "Page 3 of 12".
+ */
 export function Pagination({ page, pageCount, onChange, summary, ariaLabel = "Pagination", className }: PaginationProps) {
   const lastPage = Math.max(1, pageCount);
   return (
-    <nav aria-label={ariaLabel} className={cn("mt-4 flex flex-wrap items-center justify-between gap-3", className)}>
+    <nav aria-label={ariaLabel} className={cn("mt-4 flex flex-wrap items-center justify-between gap-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-2", className)}>
       <p className="text-[0.8125rem] text-(--tanaw-text-muted) tabular-nums" role="status">
         {summary}
       </p>
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1 max-sm:flex-nowrap max-sm:justify-between">
         <button type="button" className={buttonClass} disabled={page <= 1} onClick={() => onChange(page - 1)}>
-          <ChevronLeft size={16} aria-hidden="true" /> Previous
+          <ChevronLeft size={16} aria-hidden="true" /> <span className="max-[22.5rem]:sr-only">Previous</span>
         </button>
+        <span className="text-sm font-semibold text-(--tanaw-text-secondary) tabular-nums sm:hidden">
+          Page {Math.min(page, lastPage)} of {lastPage}
+        </span>
         {visiblePages(page, lastPage).map((value, index) =>
           value === "gap" ? (
-            <span key={`gap-${index}`} className="px-1 text-(--tanaw-text-muted)" aria-hidden="true">
+            <span key={`gap-${index}`} className="px-1 text-(--tanaw-text-muted) max-sm:hidden" aria-hidden="true">
               …
             </span>
           ) : (
@@ -41,14 +47,14 @@ export function Pagination({ page, pageCount, onChange, summary, ariaLabel = "Pa
               aria-current={value === page ? "page" : undefined}
               aria-label={`Page ${value}`}
               onClick={() => onChange(value)}
-              className={cn(buttonClass, "tabular-nums", value === page && "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink) hover:bg-(--tanaw-selected-bg) hover:text-(--tanaw-accent-ink)")}
+              className={cn(buttonClass, "tabular-nums max-sm:hidden", value === page && "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink) hover:bg-(--tanaw-selected-bg) hover:text-(--tanaw-accent-ink)")}
             >
               {value}
             </button>
           ),
         )}
         <button type="button" className={buttonClass} disabled={page >= lastPage} onClick={() => onChange(page + 1)}>
-          Next <ChevronRight size={16} aria-hidden="true" />
+          <span className="max-[22.5rem]:sr-only">Next</span> <ChevronRight size={16} aria-hidden="true" />
         </button>
       </div>
     </nav>

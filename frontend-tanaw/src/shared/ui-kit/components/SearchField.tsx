@@ -32,7 +32,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
             type="button"
             aria-label="Clear search"
             onClick={() => onChange("")}
-            className="tanaw-pop-in flex h-7 w-7 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90"
+            className="tanaw-pop-in flex h-7 w-7 items-center pointer-coarse:size-9 justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-150 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-90"
           >
             <X size={14} aria-hidden="true" />
           </button>

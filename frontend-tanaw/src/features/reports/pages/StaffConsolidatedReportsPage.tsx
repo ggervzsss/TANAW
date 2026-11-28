@@ -31,16 +31,16 @@ const opensReport = <span className="sr-only">Opens the report</span>;
 const MONTHLY_COLUMNS: readonly StaffTableSkeletonColumn[] = [
   { header: "Month", width: "w-2/5" },
   { header: "Report ID", className: "tanaw-hide-sm", width: "w-28" },
-  { header: "Enterprises", className: "tanaw-num", width: "w-12" },
-  { header: "Visitors", className: "tanaw-num", width: "w-16" },
+  { header: "Enterprises", className: "tanaw-num", width: "w-12", cell: "stat", label: "Enterprises" },
+  { header: "Visitors", className: "tanaw-num", width: "w-16", cell: "stat", label: "Visitors" },
   { header: "Generated", className: "tanaw-hide-sm", width: "w-24" },
   { header: "Status", pill: true },
   { header: opensReport, width: "w-4" },
 ];
 const ANNUAL_COLUMNS: readonly StaffTableSkeletonColumn[] = [
   { header: "Year", width: "w-16" },
-  { header: "Months included", className: "tanaw-num", width: "w-16" },
-  { header: "Visitors", className: "tanaw-num", width: "w-20" },
+  { header: "Months included", className: "tanaw-num", width: "w-16", cell: "stat", label: "Months included" },
+  { header: "Visitors", className: "tanaw-num", width: "w-20", cell: "stat", label: "Visitors" },
   { header: "Status", pill: true },
   { header: opensReport, width: "w-4" },
 ];
@@ -118,7 +118,7 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
   return (
     <>
       <div className="tanaw-staff-rise overflow-x-auto">
-        <table className="tanaw-staff-table" aria-label={`Monthly reports for ${year}`}>
+        <table className="tanaw-staff-table tanaw-staff-table--stack" aria-label={`Monthly reports for ${year}`}>
           <thead>
             <tr>
               <th scope="col">Month</th>
@@ -145,21 +145,23 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
               const status = finalReportStatus(report.status);
               return (
                 <tr key={report.id} onClick={openRowFromClick} className="tanaw-row-link">
-                  <th scope="row" className="font-semibold">
+                  <th scope="row" data-cell="name" className="font-semibold">
                     <button type="button" data-row-primary aria-label={`View the ${report.period} report`} onClick={() => onOpen(report)}>
                       {report.period}
                     </button>
                   </th>
                   <td className="tanaw-hide-sm text-(--tanaw-text-secondary) tabular-nums">{report.id}</td>
-                  <td className="tanaw-num" title={registered ? `${report.enterpriseCount} of the ${registered} enterprises registered today` : undefined}>
+                  <td data-cell="stat" data-label="Enterprises" className="tanaw-num" title={registered ? `${report.enterpriseCount} of the ${registered} enterprises registered today` : undefined}>
                     {enterpriseCoverage(report.enterpriseCount, registered)}
                   </td>
-                  <td className="tanaw-num font-semibold">{formatCount(report.totalUnique)}</td>
+                  <td data-cell="stat" data-label="Visitors" className="tanaw-num font-semibold">
+                    {formatCount(report.totalUnique)}
+                  </td>
                   <td className="tanaw-hide-sm text-(--tanaw-text-secondary)">{formatGeneratedOn(report.generatedOn)}</td>
-                  <td>
+                  <td data-cell="pill">
                     <StatusPill tone={status.tone}>{status.label}</StatusPill>
                   </td>
-                  <td>
+                  <td data-cell="action">
                     <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                   </td>
                 </tr>
@@ -181,7 +183,7 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
   return (
     <>
       <div className="tanaw-staff-rise overflow-x-auto">
-        <table className="tanaw-staff-table" aria-label="Annual reports">
+        <table className="tanaw-staff-table tanaw-staff-table--stack" aria-label="Annual reports">
           <thead>
             <tr>
               <th scope="col">Year</th>
@@ -200,17 +202,21 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
           <tbody>
             {rows.map((row) => (
               <tr key={row.year} onClick={openRowFromClick} className="tanaw-row-link">
-                <th scope="row" className="font-semibold">
+                <th scope="row" data-cell="name" className="font-semibold">
                   <button type="button" data-row-primary aria-label={`View the ${row.year} annual report`} onClick={() => onOpen(row)}>
                     {row.year}
                   </button>
                 </th>
-                <td className="tanaw-num">{row.monthsIncluded} of 12</td>
-                <td className="tanaw-num font-semibold">{formatCount(row.visitors)}</td>
-                <td>
+                <td data-cell="stat" data-label="Months included" className="tanaw-num">
+                  {row.monthsIncluded} of 12
+                </td>
+                <td data-cell="stat" data-label="Visitors" className="tanaw-num font-semibold">
+                  {formatCount(row.visitors)}
+                </td>
+                <td data-cell="pill">
                   <StatusPill tone={row.complete ? "consolidated" : "waiting"}>{row.complete ? "Consolidated" : "Waiting"}</StatusPill>
                 </td>
-                <td>
+                <td data-cell="action">
                   <ChevronRight size={16} aria-hidden="true" className="tanaw-row-chevron ml-auto" />
                 </td>
               </tr>

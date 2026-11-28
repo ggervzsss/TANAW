@@ -397,6 +397,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login Two Factor
+         * @description The second sign-in step: a code from the authenticator app, or a one-time recovery code.
+         */
+        post: operations["login_two_factor_auth_login_two_factor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -639,6 +659,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/sessions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Session
+         * @description When this device signed in. Sessions from before the sign-in time was kept fall back to
+         *     the account's latest sign-in.
+         */
+        get: operations["current_session_auth_sessions_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Other Sessions
+         * @description Sign out every other device: all earlier tokens stop working, and this device gets a
+         *     fresh one so it stays signed in.
+         */
+        post: operations["revoke_other_sessions_auth_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/support-request": {
         parameters: {
             query?: never;
@@ -675,6 +737,67 @@ export interface paths {
         head?: never;
         /** Update System Settings */
         patch: operations["update_system_settings_auth_system_settings_patch"];
+        trace?: never;
+    };
+    "/auth/two-factor/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Setup
+         * @description Turn it on with a code from the app; the recovery codes are returned this once.
+         */
+        post: operations["confirm_setup_auth_two_factor_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/two-factor/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable
+         * @description Turn it off after the current password is confirmed. A wrong password is a 400, not a
+         *     401, so the web portal does not read it as an expired session.
+         */
+        post: operations["disable_auth_two_factor_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/two-factor/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Setup
+         * @description A new key for the authenticator app. Nothing changes at sign-in until it is confirmed.
+         */
+        post: operations["start_setup_auth_two_factor_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/dev/deliveries": {
@@ -896,7 +1019,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Desktop Report Submissions
+         * @description The calling enterprise's own report versions, newest first: whether each was accepted,
+         *     returned for correction (with the reason) or consolidated.
+         */
+        get: operations["list_desktop_report_submissions_operational_desktop_report_submissions_get"];
         put?: never;
         /** Ingest Desktop Report Submission */
         post: operations["ingest_desktop_report_submission_operational_desktop_report_submissions_post"];
@@ -1128,6 +1256,27 @@ export interface paths {
         get: operations["list_intake_report_submissions_operational_reports_intake_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operational/reports/intake/{report_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return Intake Report
+         * @description Returns a waiting or accepted report to its enterprise for correction. The enterprise is
+         *     notified with the reason and can send a corrected version of the period's report.
+         */
+        post: operations["return_intake_report_operational_reports_intake__report_id__return_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1806,8 +1955,12 @@ export interface components {
             firstName?: string | null;
             /** Id */
             id: string;
+            /** Isactivated */
+            isActivated?: boolean | null;
             /** Lastname */
             lastName?: string | null;
+            /** Lastsigninat */
+            lastSignInAt?: string | null;
             /** Managername */
             managerName?: string | null;
             openingHours?: components["schemas"]["OpeningHours"] | null;
@@ -1815,8 +1968,12 @@ export interface components {
             phone?: string | null;
             /** Role */
             role: string;
+            /** Status */
+            status?: string | null;
             /** Title */
             title: string;
+            /** Twofactorenabled */
+            twoFactorEnabled?: boolean | null;
         };
         /** BuildingCapacityUpdate */
         BuildingCapacityUpdate: {
@@ -1916,6 +2073,11 @@ export interface components {
         ContactNumberChangeRequest: {
             /** Phone */
             phone: string;
+        };
+        /** CurrentSessionResponse */
+        CurrentSessionResponse: {
+            /** Signedinat */
+            signedInAt?: string | null;
         };
         /** DayHours */
         DayHours: {
@@ -2886,13 +3048,30 @@ export interface components {
             } | null;
             /** Period */
             period: string;
+            /**
+             * Previousversionid
+             * @description The id of the returned version this one replaces (version 2+).
+             */
+            previousVersionId?: string | null;
             /** Remarks */
             remarks?: string | null;
+            /** Returnedat */
+            returnedAt?: string | null;
+            /**
+             * Returnedby
+             * @description Display name of the Staff or Admin user who returned it.
+             */
+            returnedBy?: string | null;
+            /**
+             * Returnedreason
+             * @description Why LGU staff returned this version for correction.
+             */
+            returnedReason?: string | null;
             /**
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated" | "Returned";
             /** Submitted */
             submitted: string;
             /**
@@ -2900,6 +3079,11 @@ export interface components {
              * Format: date-time
              */
             submittedAt: string;
+            /**
+             * Version
+             * @description 1 for the first report of a period; each corrected report after a return adds one.
+             */
+            version: number;
         };
         /** LeadAdminNameUpdate */
         LeadAdminNameUpdate: {
@@ -3185,6 +3369,14 @@ export interface components {
              */
             thisProvUnspecified: number;
         };
+        /** ReportReturnRequest */
+        ReportReturnRequest: {
+            /**
+             * Reason
+             * @description What the enterprise needs to correct, shown to it in the desktop app.
+             */
+            reason: string;
+        };
         /** ReportStatusUpdate */
         ReportStatusUpdate: {
             /** Remarks */
@@ -3193,7 +3385,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Pending Review" | "Ready to Consolidate" | "Consolidated";
+            status: "Pending Review" | "Ready to Consolidate" | "Consolidated" | "Returned";
         };
         /** RequestAttachmentCreate */
         RequestAttachmentCreate: {
@@ -3283,6 +3475,11 @@ export interface components {
             requesterEmail?: string | null;
             /** Requestername */
             requesterName: string;
+            /**
+             * Seenbyit
+             * @default false
+             */
+            seenByIt: boolean;
             /**
              * Status
              * @enum {string}
@@ -3415,6 +3612,11 @@ export interface components {
             requesterEmail?: string | null;
             /** Requestername */
             requesterName: string;
+            /**
+             * Seenbyit
+             * @default false
+             */
+            seenByIt: boolean;
             /**
              * Status
              * @enum {string}
@@ -3596,6 +3798,54 @@ export interface components {
             unsubmittedEvents: number;
             /** Unsyncedevents */
             unsyncedEvents: number;
+        };
+        /**
+         * TwoFactorChallengeResponse
+         * @description The password was right and the account uses two-step verification: send a code next.
+         */
+        TwoFactorChallengeResponse: {
+            /** Challengetoken */
+            challengeToken: string;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /**
+             * Twofactorrequired
+             * @default true
+             * @constant
+             */
+            twoFactorRequired: true;
+        };
+        /** TwoFactorConfirmRequest */
+        TwoFactorConfirmRequest: {
+            /** Code */
+            code: string;
+        };
+        /** TwoFactorConfirmResponse */
+        TwoFactorConfirmResponse: {
+            /** Recoverycodes */
+            recoveryCodes: string[];
+            user: components["schemas"]["AuthUser"];
+        };
+        /** TwoFactorDisableRequest */
+        TwoFactorDisableRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+        };
+        /** TwoFactorLoginRequest */
+        TwoFactorLoginRequest: {
+            /** Challengetoken */
+            challengeToken: string;
+            /** Code */
+            code?: string | null;
+            /** Recoverycode */
+            recoveryCode?: string | null;
+        };
+        /** TwoFactorSetupResponse */
+        TwoFactorSetupResponse: {
+            /** Otpauthuri */
+            otpauthUri: string;
+            /** Secret */
+            secret: string;
         };
         /** UserNotificationSummary */
         UserNotificationSummary: {
@@ -4555,6 +4805,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["LoginResponse"] | components["schemas"]["TwoFactorChallengeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_two_factor_auth_login_two_factor_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["LoginResponse"];
                 };
             };
@@ -5070,6 +5353,46 @@ export interface operations {
             };
         };
     };
+    current_session_auth_sessions_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentSessionResponse"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_auth_sessions_revoke_others_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
     create_support_request_auth_support_request_post: {
         parameters: {
             query?: never;
@@ -5152,6 +5475,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_setup_auth_two_factor_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorConfirmResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_auth_two_factor_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorDisableRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_setup_auth_two_factor_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorSetupResponse"];
                 };
             };
         };
@@ -5515,6 +5924,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_desktop_report_submissions_operational_desktop_report_submissions_get: {
+        parameters: {
+            query?: {
+                /** @description Only this reporting period, for example October 2026. */
+                period?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeReportSummary"][];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -5955,6 +6396,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeReportSummary"][];
+                };
+            };
+        };
+    };
+    return_intake_report_operational_reports_intake__report_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportReturnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeReportSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

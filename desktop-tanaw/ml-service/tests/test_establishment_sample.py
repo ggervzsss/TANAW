@@ -254,6 +254,29 @@ def test_sample_api_prepares_counts_that_can_be_submitted(tmp_path: Path) -> Non
         assert [(item["report_id"], item["sync_status"]) for item in listed] == [
             ("REP-OCT", "upload_rejected")
         ]
+        assert listed[0]["version"] == 1
+        assert listed[0]["rejection_reason"] is None
+        # TANAW's reason for refusing is kept with the report.
+        client.post(
+            f"/reports/local/REP-OCT/submissions/{submission_id}/upload-rejected",
+            json={"reason": "The totals do not match."},
+        )
+        assert client.get("/reports/local").json()[0]["rejection_reason"] == (
+            "The totals do not match."
+        )
+        # Fixing it reopens the month; reopening a report TANAW never received as returned fails.
+        assert (
+            client.post("/reports/local/REP-OCT/reopen", json={"reason": "returned"}).status_code
+            == 409
+        )
+        assert (
+            client.post("/reports/local/REP-NONE/reopen", json={"reason": "returned"}).status_code
+            == 404
+        )
+        reopened = client.post("/reports/local/REP-OCT/reopen", json={"reason": "upload_rejected"})
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["reopen_reason"] == "upload_rejected"
+        assert reopened.json()["reopened_at"]
     finally:
         pipelines.close()
 

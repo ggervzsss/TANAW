@@ -39,7 +39,7 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
             type="button"
             disabled={allNotifications.length === 0 || unreadCount === 0}
             onClick={markAllAsRead}
-            className="group inline-flex min-h-9 shrink-0 items-center gap-2 rounded-tanaw-md px-3 text-[13px] font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
+            className="group inline-flex min-h-9 shrink-0 items-center gap-2 rounded-tanaw-md px-3 text-[13px] max-md:-mr-3 max-md:min-h-11 font-semibold text-(--tanaw-accent-ink) transition-[background-color,color,scale] duration-200 ease-tanaw-out hover:bg-(--tanaw-control-bg-hover) enabled:active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) disabled:cursor-not-allowed disabled:text-(--tanaw-interactive-disabled-text) disabled:hover:bg-transparent"
           >
             <CheckCheck size={14} aria-hidden="true" className="transition-transform duration-200 ease-tanaw-out group-enabled:group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
             Mark all read

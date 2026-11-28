@@ -153,7 +153,7 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
           <button
             type="button"
             aria-label="Clear location search"
-            className="tanaw-pop-in ease-tanaw-out absolute right-2 flex size-7 items-center justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) active:scale-90 motion-reduce:transition-none"
+            className="tanaw-pop-in ease-tanaw-out absolute right-2 flex size-7 items-center pointer-coarse:right-0.5 pointer-coarse:size-10 justify-center rounded-full text-(--tanaw-text-muted) transition-[background-color,color,scale] duration-200 hover:bg-(--tanaw-control-bg-hover) hover:text-(--tanaw-text) active:scale-90 motion-reduce:transition-none"
             onClick={() => {
               setQuery("");
               setSuggestions([]);
@@ -197,7 +197,7 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
                 type="button"
                 role="option"
                 aria-selected={index === activeIndex}
-                className={`rounded-tanaw-sm flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors duration-150 ${index === activeIndex ? "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)"}`}
+                className={`rounded-tanaw-sm flex min-h-11 w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors duration-150 ${index === activeIndex ? "bg-(--tanaw-selected-bg) text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)"}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectSuggestion(suggestion)}

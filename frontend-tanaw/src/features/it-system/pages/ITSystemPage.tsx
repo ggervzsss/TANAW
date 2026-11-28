@@ -141,7 +141,7 @@ export function ITSystemPage() {
   });
 
   return (
-    <div className="pb-14">
+    <div className="it-system pb-14">
       <PortalPageHeader title="System" description="What happened in TANAW, which emails went out, and the rules every account follows." />
 
       <Tabs items={tabs} value={tab} onChange={changeTab} ariaLabel="System sections" idPrefix={TAB_PREFIX} />

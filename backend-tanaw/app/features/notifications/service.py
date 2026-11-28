@@ -18,6 +18,9 @@ from app.features.notifications.schemas import UserNotificationSummary
 
 SYSTEM_SETTINGS_ID = "default"
 STAFF_REPORT_SUBMITTED_NOTIFICATION = "Enterprise Report Submitted"
+# Sent to the enterprise account when Staff or an Admin returns its report for correction.
+ENTERPRISE_REPORT_RETURNED_NOTIFICATION = "Enterprise Report Returned"
+ENTERPRISE_REPORT_RETURNED_TITLE = "Report returned for correction"
 
 
 def to_user_notification_summary(

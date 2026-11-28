@@ -5,7 +5,7 @@ import { Button, Dialog } from "@/shared/ui-kit";
 type ReportPreviewDialogProps = {
   title: string;
   size?: "md" | "full";
-  description?: string;
+  description?: ReactNode;
   onClose: () => void;
   onDownload?: () => void;
   /** Prints the official sheet at once. */
@@ -23,7 +23,7 @@ export function ReportPreviewDialog({ title, size = "full", description, onClose
       onClose={onClose}
       closeLabel="Close report"
       className="tanaw-report-preview"
-      bodyClassName="space-y-5 bg-(--tanaw-surface-inset) pt-5! max-sm:p-2!"
+      bodyClassName="space-y-5 bg-(--tanaw-surface-inset) pt-5! max-sm:space-y-4 max-sm:px-4! max-sm:pt-4! max-sm:pb-6!"
       footer={
         (onDownload || onPrint || actions) && (
           <>

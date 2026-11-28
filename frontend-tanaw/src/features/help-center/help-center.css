@@ -690,3 +690,45 @@
     translate: none;
   }
 }
+
+/*
+ * Touch screens: a tap must not leave a row or topic tinted as if a pointer rested on it, so the
+ * hover tints apply only where something can hover; pressing still shows. Back and the search
+ * clear button grow to a full 44px press.
+ */
+@media (hover: none) {
+  .help-row:hover,
+  .help-topic:hover:not([aria-current]),
+  .help-back:hover,
+  .help-search-clear:hover {
+    background: transparent;
+  }
+  .help-row:hover .help-row-title {
+    color: var(--tanaw-text);
+  }
+  .help-row:hover .help-row-arrow,
+  .help-back:hover > svg {
+    color: var(--tanaw-text-muted);
+    translate: none;
+  }
+  .help-list > li:hover::before,
+  .help-list > li:hover + li::before {
+    opacity: 1;
+  }
+  .help-topic:hover .help-topic-icon {
+    color: var(--tanaw-text-secondary);
+  }
+  .help-topic[aria-current]:hover .help-topic-icon {
+    color: var(--tanaw-on-action);
+  }
+}
+
+@media (pointer: coarse) {
+  .help-back {
+    min-height: 44px;
+  }
+  .help-search-clear {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

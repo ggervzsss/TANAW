@@ -19,6 +19,9 @@ const base = {
   attachments: [],
   accountChange: null,
   closedAt: null,
+  handledBy: null,
+  handledAt: null,
+  seenByIt: false,
 };
 
 function requestsFixture(): RequestRecord[] {
@@ -36,6 +39,10 @@ function requestsFixture(): RequestRecord[] {
       attachments: [{ id: "request-1:0", fileName: "camera.png", mediaType: "image/png", sizeBytes: 68, url: "/operational/requests/request-1/attachments/0" }],
       createdAt: "2026-11-23T05:05:00Z",
       updatedAt: "2026-11-23T06:20:00Z",
+      // Carlo replied, so he handles it: In Progress.
+      handledBy: { accountId: "it-1", name: "Carlo Mendoza" },
+      handledAt: "2026-11-23T06:05:00Z",
+      seenByIt: true,
       unread: true,
       updated: false,
     },
@@ -68,6 +75,8 @@ function requestsFixture(): RequestRecord[] {
       accountChange: { field: "contactNumber", label: "Contact number", currentValue: "09170000000", requestedValue: "09171234567", verification: null, canApprove: true },
       createdAt: "2026-11-21T01:00:00Z",
       updatedAt: "2026-11-21T01:00:00Z",
+      // IT opened it but nobody has taken it on: Seen by IT.
+      seenByIt: true,
       unread: false,
       updated: true,
     },
@@ -135,8 +144,10 @@ test("selects a deep-linked request and shows its details, photos and updates", 
 
   const detail = page.getByRole("article");
   await expect(detail.getByRole("heading", { level: 2, name: "Entrance camera is offline" })).toBeVisible();
-  await expect(detail.getByText("In progress", { exact: true }).first()).toBeVisible();
+  await expect(detail.getByText("In Progress", { exact: true }).first()).toBeVisible();
   await expect(detail.getByText("Type", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Camera Issue", { exact: true })).toBeVisible();
+  await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toContainText("Camera Issue");
   await expect(detail.getByText("Carlo Mendoza from IT started on this at 2:05 PM.")).toBeVisible();
   await expect(detail.getByRole("link", { name: "San Pedro Plaza" })).toHaveAttribute("href", "/admin/enterprises/ENT-001");
   await expect(detail.getByText("Carlo Mendoza, IT", { exact: true })).toBeVisible();
@@ -186,7 +197,7 @@ test("adds a note for IT that appears at the top of Latest updates", async ({ pa
   await expect(detail.getByText("Joy Villanueva asked for help signing in.")).toBeVisible();
 });
 
-test("filters by type and status, searches, and marks everything read", async ({ page }) => {
+test("filters by type and progress, searches, and marks everything read", async ({ page }) => {
   const api = await openRequests(page);
   const list = page.getByRole("navigation", { name: "Requests" });
   await expect(page.getByText("3 requests, newest first.")).toBeVisible();
@@ -206,28 +217,39 @@ test("filters by type and status, searches, and marks everything read", async ({
   await expect(list.getByText("No requests match these filters.")).toBeVisible();
   await list.getByRole("button", { name: "Clear filters" }).click();
 
-  await page.getByRole("combobox", { name: "Type" }).click();
-  await page.getByRole("option", { name: "Account change" }).click();
-  await expect(list.getByRole("button")).toHaveCount(1);
+  // The filters carry no visible labels above them; screen readers still hear their names.
+  const type = page.getByRole("combobox", { name: "Type" });
+  await type.click();
+  await expect(page.getByRole("option")).toHaveText(["All types", "Camera Issue", "Report Concern", "Account and Access", "Desktop app and Maintenance", "Others"]);
+  // Sign-in help and the account change are both Account and Access.
+  await page.getByRole("option", { name: "Account and Access" }).click();
+  await expect(list.getByRole("button")).toHaveCount(2);
   await list.getByRole("button", { name: /Change of contact number/ }).click();
   await expect(page).toHaveURL(/\?request=request-3$/);
   const detail = page.getByRole("article");
   await expect(detail.getByText("Contact number from 09170000000 to 09171234567.", { exact: false })).toBeVisible();
-  await expect(detail.getByText("Waiting for IT to approve this change.")).toBeVisible();
-  await page.getByRole("combobox", { name: "Type" }).click();
+  await expect(detail.getByText("IT has seen this change but has not decided on it yet.")).toBeVisible();
+  await expect(detail.getByText("Seen by IT", { exact: true }).first()).toBeVisible();
+  await type.click();
   await page.getByRole("option", { name: "All types" }).click();
 
-  await page.getByRole("combobox", { name: "Status" }).click();
-  await expect(page.getByRole("option", { name: "Approved" })).toHaveCount(0);
-  await expect(page.getByRole("option", { name: "Sent" })).toHaveCount(0);
+  const progress = page.getByRole("combobox", { name: "Progress" });
+  await progress.click();
+  await expect(page.getByRole("option")).toHaveText(["All progress", "Resolved", "In Progress", "Seen by IT"]);
   await page.getByRole("option", { name: "Resolved" }).click();
   await expect(list.getByRole("button")).toHaveCount(1);
-  await page.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "In progress" }).click();
-  await expect(list.getByRole("button")).toHaveCount(2);
-  await page.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "All statuses" }).click();
-
+  await expect(list.getByRole("button", { name: /Sign-in help/ })).toContainText("Resolved");
+  await progress.click();
+  await page.getByRole("option", { name: "In Progress" }).click();
+  await expect(list.getByRole("button")).toHaveCount(1);
+  await expect(list.getByRole("button", { name: /Entrance camera is offline/ })).toContainText("In Progress");
+  await progress.click();
+  await page.getByRole("option", { name: "Seen by IT" }).click();
+  await expect(list.getByRole("button")).toHaveCount(1);
+  await expect(list.getByRole("button", { name: /Change of contact number/ })).toContainText("Seen by IT");
+  await progress.click();
+  await page.getByRole("option", { name: "All progress" }).click();
+  await expect(list.getByRole("button")).toHaveCount(3);
 });
 
 test("explains a deep link to a request that is not listed", async ({ page }) => {

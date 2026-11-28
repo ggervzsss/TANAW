@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { easeOut } from "../lib/motion";
+import { useScrollFade } from "../lib/scroll-fade";
 
 function nextIndex(key: string, index: number, count: number): number | null {
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % count;
@@ -27,12 +28,15 @@ export type TabsProps = {
 /**
  * Underlined tabs that switch between views of one page ("Create reports", "Reports history").
  * The green underline glides to the chosen tab. Arrow keys move between tabs. Render the matching
- * panel with role="tabpanel".
+ * panel with role="tabpanel". When the tabs do not fit (phones), the row scrolls sideways with its
+ * cut-off edge faded, and the chosen tab is kept in view.
  */
 export function Tabs({ items, value, onChange, ariaLabel, idPrefix, className }: TabsProps) {
   const generated = useId();
   const prefix = idPrefix ?? generated;
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const listRef = useRef<HTMLDivElement>(null);
+  useScrollFade(listRef, value);
   const enabled = items.filter((item) => !item.disabled);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -47,7 +51,7 @@ export function Tabs({ items, value, onChange, ariaLabel, idPrefix, className }:
   };
 
   return (
-    <div role="tablist" aria-label={ariaLabel} className={cn("tanaw-tabs flex gap-1 overflow-x-auto border-b border-(--tanaw-border-soft)", className)}>
+    <div ref={listRef} role="tablist" aria-label={ariaLabel} className={cn("tanaw-tabs tanaw-scroll-x flex gap-1 overflow-x-auto border-b border-(--tanaw-border-soft)", className)}>
       {items.map((item, index) => {
         const selected = item.value === value;
         return (
