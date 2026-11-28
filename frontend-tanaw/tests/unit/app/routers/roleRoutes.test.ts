@@ -13,8 +13,10 @@ describe("General Settings return paths", () => {
 
   it("uses the portal landing page for missing, cross-portal, or settings destinations", () => {
     expect(getRoleSettingsBackPath("admin", undefined)).toBe("/admin/dashboard");
-    expect(getRoleSettingsBackPath("it", "/admin/dashboard")).toBe("/it/dashboard");
-    expect(getRoleSettingsBackPath("it", "/it/settings/profile")).toBe("/it/dashboard");
+    expect(getRoleSettingsBackPath("it", "/admin/dashboard")).toBe("/it/requests");
+    expect(getRoleSettingsBackPath("it", "/it/settings/profile")).toBe("/it/requests");
+    // The retired IT Overview is no longer a destination; Requests is IT's landing page.
+    expect(getRoleSettingsBackPath("it", "/it/dashboard")).toBe("/it/requests");
     expect(getRoleSettingsBackPath("staff", "/staff/missing")).toBe("/staff/reports");
   });
 });

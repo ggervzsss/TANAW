@@ -406,7 +406,8 @@
 .report-day-popover[data-placement="top"],
 .report-search-popover[data-placement="top"] {
   transform-origin: bottom right;
-}@keyframes reports-popover-enter {
+}
+@keyframes reports-popover-enter {
   from {
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
@@ -617,12 +618,15 @@
 .report-origin-table th {
   font-weight: 600;
 }
-/* Header band: a quiet green tint with soft ends, matching the Grand Total band. */
+/*
+ * Visitor Details header band: a quiet green tint with 12px ends on all four corners, matching
+ * the Grand Total band and the tinted rows below it. Reports History has a plain header instead.
+ */
 .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) thead {
   background: transparent !important;
   color: var(--tanaw-label) !important;
 }
-.tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) thead th {
+.tanaw-reports-workspace .report-origin-table thead th {
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: var(--tracking-label);
@@ -630,11 +634,40 @@
   border-bottom: 0;
   background: rgb(6 95 70 / 6%);
 }
-.tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) thead th:first-child {
-  border-radius: 10px 0 0 10px;
+.tanaw-reports-workspace .report-origin-table thead th:first-child {
+  border-radius: 12px 0 0 12px;
 }
-.tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) thead th:last-child {
-  border-radius: 0 10px 10px 0;
+.tanaw-reports-workspace .report-origin-table thead th:last-child {
+  border-radius: 0 12px 12px 0;
+}
+/*
+ * Tinted rows are rounded bands like the header: the tint sits on the cells so the first and last
+ * can take 12px ends. Hairlines step aside around a tinted band, both its own and the one above
+ * it, so no straight line runs past its rounded corners. Reports History's rows follow the same
+ * idea below, with its own states.
+ * `:root` keeps these above the theme's square row tints and dark-mode divider colours.
+ */
+:root .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) tbody tr {
+  background: transparent;
+}
+:root .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) tbody tr > :is(th, td) {
+  transition:
+    background-color 180ms var(--reports-ease),
+    border-color 180ms var(--reports-ease),
+    box-shadow 180ms var(--reports-ease),
+    color 180ms var(--reports-ease);
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:hover > :is(th, td) {
+  border-bottom-color: transparent;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:has(+ tr:hover) > :is(th, td) {
+  border-bottom-color: transparent;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:hover > :first-child {
+  border-radius: 12px 0 0 12px;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:hover > :last-child {
+  border-radius: 0 12px 12px 0;
 }
 .report-origin-table th:first-child {
   text-align: left;
@@ -647,10 +680,7 @@
 .enterprise-shell .report-origin-table tbody {
   color: var(--reports-text);
 }
-.report-origin-table tbody tr {
-  transition: background-color 180ms var(--reports-ease);
-}
-.report-origin-table tbody tr:hover {
+.tanaw-reports-workspace .report-origin-table tbody tr:hover > :is(th, td) {
   background: rgb(6 95 70 / 3%);
 }
 .report-origin-lock {
@@ -671,7 +701,9 @@
   background: var(--tanaw-control-disabled);
   color: var(--tanaw-text-secondary);
   line-height: 24px;
-  cursor: help;
+  font-size: inherit;
+  text-align: center;
+  cursor: default;
 }
 .enterprise-shell .report-origin-table input {
   display: block;
@@ -726,55 +758,21 @@
   border-radius: 7px;
 }
 
-.report-day-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin-top: 12px;
-}
+/* Empty until a day's origins exceed TANAW's count; then one plain line under the table. */
 .report-day-actions p {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
+  margin: 12px 0 0;
   font-size: var(--text-sm);
   line-height: 20px;
-  color: var(--reports-muted);
+  color: var(--reports-missing-text);
+  animation: reports-panel-rise 240ms var(--reports-ease);
 }
 .report-day-actions p svg {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-}
-.report-day-actions p[data-tone="missing"] {
-  color: var(--reports-missing-text);
-}
-.report-day-actions p[data-tone="complete"] {
-  color: var(--reports-green);
-}
-.report-day-actions > div {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.report-day-actions .reports-button {
-  min-height: 40px;
-  padding: 8px 16px;
-}
-.report-day-actions .reports-text-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.report-day-actions .reports-text-button svg {
-  width: 15px;
-  height: 15px;
-  transition: translate 180ms var(--reports-ease);
-}
-.report-day-actions .reports-text-button:hover svg {
-  translate: 2px 0;
 }
 
 /* ---- Next Steps rail */
@@ -1264,68 +1262,39 @@
   text-decoration-color: currentcolor;
 }
 
-/* ---- Supporting details disclosure */
-.report-supporting-controls {
-  position: relative;
-  margin-top: 12px;
+/* ---- Report notes and audit trail: open under the Visitor Details table, all optional */
+.report-supporting {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+  gap: 20px 40px;
+  margin-top: 20px;
   font-size: var(--text-sm);
   line-height: 20px;
   color: var(--reports-muted);
 }
-.report-supporting-controls > details > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  margin-left: -6px;
-  padding: 4px 8px 4px 6px;
-  border-radius: 8px;
-  color: var(--reports-green);
-  font-weight: 500;
-  list-style: none;
-  cursor: pointer;
-  transition: background-color 180ms var(--reports-ease);
-}
-.report-supporting-controls > details > summary::-webkit-details-marker {
-  display: none;
-}
-.report-supporting-controls > details > summary::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin: 0 3px;
-  border-right: 2px solid currentcolor;
-  border-bottom: 2px solid currentcolor;
-  rotate: -45deg;
-  transition: rotate 200ms var(--reports-ease);
-}
-.report-supporting-controls > details[open] > summary::before {
-  rotate: 45deg;
-}
-.report-supporting-controls > details > summary:hover {
-  background: var(--tanaw-control-hover);
-}
-.report-supporting-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  align-items: start;
-  gap: 20px 40px;
-  padding: 16px 0 8px;
-  animation: reports-panel-rise 240ms var(--reports-ease);
-}
 .report-notes label {
   display: block;
   margin-bottom: 8px;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 18px;
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--tanaw-label);
+}
+.report-notes-skeleton-label {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  margin-bottom: 8px;
+}
+.report-notes-skeleton {
+  height: 80px;
+  border-radius: 12px;
 }
 .enterprise-shell .report-notes textarea {
   display: block;
   width: 100%;
-  min-height: 96px;
+  min-height: 80px;
   padding: 12px 14px;
   resize: vertical;
   border: 1px solid var(--tanaw-control-border);
@@ -1350,11 +1319,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 12px;
-  font-size: 0.75rem;
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  line-height: 18px;
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--tanaw-label);
 }
 .report-audit-trail ol {
@@ -1535,13 +1503,22 @@
   width: 100%;
   table-layout: fixed;
   border-collapse: separate;
-  border-spacing: 0;
+  /* A 2px gap keeps each rounded band clear of the header rule and of the hairline above it. */
+  border-spacing: 0 2px;
   font-size: var(--text-sm);
   line-height: 22px;
   text-align: center;
 }
 .report-ledger thead tr {
   height: 48px;
+}
+/*
+ * A plain header: tracked labels over one hairline, a step firmer than the lines between rows.
+ * The scroll container in the selector keeps it above the dark theme's divider colour.
+ */
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger > .report-history-table-scroll thead th {
+  background: transparent;
+  border-bottom-color: var(--tanaw-border);
 }
 .report-ledger th {
   font-size: 0.75rem;
@@ -1560,18 +1537,61 @@
 .report-ledger tbody tr {
   height: 60px;
   cursor: pointer;
-  transition:
-    background-color 180ms var(--reports-ease),
-    box-shadow 180ms var(--reports-ease);
 }
-.tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover {
-  background: rgb(6 95 70 / 4%);
+/*
+ * Rows are bands with 12px ends; the tint paints the cells so the first and last can round.
+ * A row tints on hover (pointer devices only); the report in view keeps a calm Civic Green tint
+ * with its ID and chevron in Ledger Green; the keyboard focus ring follows the same rounded band.
+ * Hairlines step back under and above a tinted band, so no straight line runs past its corners.
+ * `:root` keeps these above the theme's square row tints and dark-mode divider colours.
+ */
+.tanaw-reports-workspace .report-ledger {
+  --ledger-hover: var(--tanaw-control-hover);
+  --ledger-selected: rgb(6 95 70 / 7%);
+  --ledger-selected-hover: rgb(6 95 70 / 10%);
+  --ledger-pressed: rgb(6 95 70 / 13%);
 }
-.tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] {
-  background: rgb(6 95 70 / 6%);
+:root.dark .tanaw-reports-workspace .report-ledger {
+  --ledger-selected: var(--tanaw-selected-bg);
+  --ledger-selected-hover: rgb(16 185 129 / 15%);
+  --ledger-pressed: rgb(16 185 129 / 19%);
 }
-.tanaw-reports-workspace .report-ledger tbody tr[role="button"]:active {
-  background: rgb(6 95 70 / 9%);
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr:is([aria-selected="true"], :focus-visible, [role="button"]:active) > td,
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr:has(+ tr:is([aria-selected="true"], :focus-visible, [role="button"]:active)) > td {
+  border-bottom-color: transparent;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr:is([aria-selected="true"], :focus-visible, [role="button"]:active) > td:first-child {
+  border-radius: 12px 0 0 12px;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr:is([aria-selected="true"], :focus-visible, [role="button"]:active) > td:last-child {
+  border-radius: 0 12px 12px 0;
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] > td {
+  background: var(--ledger-selected);
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] :is(.report-history-id, .report-history-open) {
+  color: var(--tanaw-accent-ink);
+}
+@media (hover: hover) {
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover > td,
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr:has(+ tr[role="button"]:hover) > td {
+    border-bottom-color: transparent;
+  }
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover > td {
+    background: var(--ledger-hover);
+  }
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"][aria-selected="true"]:hover > td {
+    background: var(--ledger-selected-hover);
+  }
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover > td:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"]:hover > td:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+}
+:root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[role="button"][tabindex]:active > td {
+  background: var(--ledger-pressed);
 }
 .report-ledger tbody tr:last-child td {
   border-bottom: 0;
@@ -1612,7 +1632,7 @@
   justify-content: center;
   align-items: center;
   min-height: 26px;
-  min-width: 136px;
+  min-width: 112px;
   max-width: 100%;
   padding: 3px 10px;
   font-size: 12px;
@@ -1623,21 +1643,26 @@
   background: var(--tanaw-neutral-bg);
   box-shadow: none;
 }
+/*
+ * Reports History speaks in four statuses: Pending (amber), Submitted (teal), Missing (red) and
+ * Consolidated (green).
+ */
+.report-status[data-tone="missing"],
+:root.dark .report-status[data-tone="missing"] {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger-text);
+}
 .report-status[data-tone="pending"] {
   background: var(--tanaw-warning-bg);
   color: var(--tanaw-warning-text);
 }
 .report-status[data-tone="submitted"] {
-  background: var(--tanaw-info-bg);
-  color: var(--tanaw-info-text);
+  background: var(--tanaw-submitted-bg);
+  color: var(--tanaw-submitted-text);
 }
 .report-status[data-tone="consolidated"] {
   background: var(--tanaw-success-bg);
   color: var(--tanaw-success-text);
-}
-.report-status[data-tone="rejected"] {
-  background: var(--tanaw-danger-bg);
-  color: var(--tanaw-danger-text);
 }
 .report-status-reason {
   margin-top: 2px;
@@ -1653,42 +1678,30 @@
   line-height: 16px;
   color: var(--reports-muted);
 }
-.report-history-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+/* Each row opens its report; the chevron says so without another control. */
+.report-ledger .report-history-open {
+  padding-inline: 0 16px;
+  text-align: right;
+  color: var(--reports-muted);
 }
-.report-view-action {
-  min-height: 36px;
-  padding-inline: 6px;
-  color: var(--tanaw-accent-ink);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-decoration: underline;
-  text-decoration-color: rgb(6 95 70 / 35%);
-  text-underline-offset: 3px;
-  border-radius: 8px;
-  transition: text-decoration-color 180ms var(--reports-ease);
-}
-.report-view-action:hover {
-  text-decoration-color: currentcolor;
-}
-.report-download-action {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  color: var(--reports-green);
-  opacity: 0.7;
+.report-history-open svg {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
   transition:
-    opacity 180ms var(--reports-ease),
-    background-color 180ms var(--reports-ease);
+    translate 180ms var(--reports-ease),
+    color 180ms var(--reports-ease);
 }
-.report-download-action:hover {
-  opacity: 1;
-  background: var(--tanaw-control-hover);
+.report-ledger tbody tr[role="button"]:focus-visible .report-history-open svg {
+  translate: 2px 0;
+  color: var(--tanaw-accent-ink);
+}
+@media (hover: hover) {
+  .report-ledger tbody tr[role="button"]:hover .report-history-open svg {
+    translate: 2px 0;
+    color: var(--tanaw-accent-ink);
+  }
 }
 .report-history-empty {
   padding: 40px !important;
@@ -1700,9 +1713,26 @@
   outline: 2px solid var(--reports-focus);
   outline-offset: 3px;
 }
+/* The focus ring traces the row's rounded band: top and bottom on every cell, sides on the ends. */
 .tanaw-reports-workspace .report-ledger tr:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--reports-focus);
+}
+.tanaw-reports-workspace .report-ledger tr:focus-visible > td {
+  box-shadow:
+    inset 0 2px 0 var(--reports-focus),
+    inset 0 -2px 0 var(--reports-focus);
+}
+.tanaw-reports-workspace .report-ledger tr:focus-visible > td:first-child {
+  box-shadow:
+    inset 0 2px 0 var(--reports-focus),
+    inset 0 -2px 0 var(--reports-focus),
+    inset 2px 0 0 var(--reports-focus);
+}
+.tanaw-reports-workspace .report-ledger tr:focus-visible > td:last-child {
+  box-shadow:
+    inset 0 2px 0 var(--reports-focus),
+    inset 0 -2px 0 var(--reports-focus),
+    inset -2px 0 0 var(--reports-focus);
 }
 .tanaw-reports-workspace :is(button, summary):focus:not(:focus-visible) {
   outline: none;
@@ -1745,10 +1775,14 @@
   background: transparent !important;
   color: var(--tanaw-label) !important;
 }
-:root.dark .tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) thead th {
+:root.dark .tanaw-reports-workspace .report-origin-table thead th {
   background: rgb(110 231 183 / 7%);
 }
-:root.dark .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:hover {
+/* The theme tints whole dark rows square; the rounded cell tints below replace it. */
+:root.dark .enterprise-shell .tanaw-reports-workspace :is(.report-origin-table, .report-ledger table) tbody tr:is([role="button"]:hover, [aria-selected="true"], :hover) {
+  background: transparent;
+}
+:root.dark .enterprise-shell .tanaw-reports-workspace .report-origin-table tbody tr:hover > :is(th, td) {
   background: rgb(110 231 183 / 4%);
 }
 :root.dark .enterprise-shell .tanaw-reports-workspace .reports-tabs > button[aria-selected="true"] {
@@ -1763,7 +1797,7 @@
 :root.dark .enterprise-shell .tanaw-reports-workspace .report-next-steps li[data-complete="true"]:not(:last-child)::after {
   background: var(--tanaw-accent-ink);
 }
-:root.dark .enterprise-shell .tanaw-reports-workspace :is(.reports-text-button, .report-view-action) {
+:root.dark .enterprise-shell .tanaw-reports-workspace .reports-text-button {
   text-decoration-color: rgb(110 231 183 / 40%);
 }
 :root.dark .enterprise-shell .tanaw-reports-workspace .report-origin-locked {
@@ -1771,9 +1805,6 @@
 }
 :root.dark .enterprise-shell .tanaw-reports-workspace .reports-button:hover:not(:disabled, [aria-disabled="true"], .reports-primary) {
   background: var(--tanaw-control-hover);
-}
-:root.dark .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr[aria-selected="true"] {
-  background: var(--tanaw-selected-bg);
 }
 :root.dark .report-notes textarea {
   background: var(--tanaw-surface-inset);
@@ -1800,63 +1831,70 @@
   box-shadow: 0 2px 7px rgb(0 0 0 / 12%);
   overflow: hidden;
 }
+/* A compact header, like the app's dialogs, so the form gets the room. */
 .var1-viewer-header {
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin: 0 46px;
-  padding: 36px 0 24px;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 12px 10px 24px;
   border-bottom: 1px solid var(--tanaw-border-soft);
 }
 .var1-viewer-icon {
-  width: 62px;
-  height: 62px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   color: var(--tanaw-accent-ink);
 }
+.var1-viewer-title {
+  min-width: 0;
+}
 .var1-viewer-header h2 {
-  font-size: var(--text-xl);
-  font-weight: 700;
-  line-height: 28px;
   margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 22px;
 }
 .var1-viewer-header p {
-  font-size: var(--text-sm);
-  line-height: 24px;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 18px;
   color: var(--tanaw-text-muted);
-  margin: 4px 0 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .var1-close {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 54px;
-  margin-left: auto;
-  border: 1px solid var(--tanaw-control-border);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 22%);
-  flex: 0 0 auto;
-  color: var(--tanaw-accent-ink);
-  transition:
-    background-color 180ms ease,
-    transform 160ms ease;
-}
-.var1-close svg {
   width: 36px;
   height: 36px;
-  stroke-width: 3;
+  margin-left: auto;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  color: var(--tanaw-text-muted);
+  transition:
+    background-color 150ms var(--reports-ease),
+    color 150ms var(--reports-ease),
+    transform 150ms var(--reports-ease);
+}
+.var1-close svg {
+  width: 18px;
+  height: 18px;
 }
 .var1-close:hover {
-  background: var(--tanaw-selected-bg);
+  background: var(--tanaw-control-hover);
+  color: var(--tanaw-text);
 }
 .var1-close:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 .var1-viewer-canvas {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  margin: 20px 24px 16px;
+  margin: 16px 24px;
   padding: 22px 12px;
   border: 1px solid var(--tanaw-border-soft);
   border-radius: var(--radius-tanaw-md);
@@ -2042,6 +2080,25 @@
   width: 20px;
   height: 20px;
 }
+.var1-export-controls .report-submit-action {
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 12px;
+}
+.var1-export-controls .report-submit-note {
+  max-width: 380px;
+}
+.tanaw-var1-modal .var1-export-controls .reports-button:is(:disabled, [aria-disabled="true"]),
+:root.dark .tanaw-var1-modal .var1-export-controls .reports-button:is(:disabled, [aria-disabled="true"]) {
+  background: var(--tanaw-control-disabled);
+  border-color: var(--tanaw-control-disabled);
+  color: var(--tanaw-text-placeholder);
+  box-shadow: none;
+}
+.tanaw-var1-modal .var1-export-controls .reports-button:is(:disabled, [aria-disabled="true"]) svg,
+:root.dark .tanaw-var1-modal .var1-export-controls .reports-button:is(:disabled, [aria-disabled="true"]) svg {
+  color: currentcolor;
+}
 .var1-validation {
   font-size: 14px;
   line-height: 20px;
@@ -2062,18 +2119,6 @@
   outline: none;
 }
 @media (max-width: 900px) {
-  .var1-viewer-header {
-    margin-inline: 24px;
-    padding-top: 24px;
-    gap: 12px;
-  }
-  .var1-viewer-header p {
-    font-size: var(--text-sm);
-  }
-  .var1-viewer-icon {
-    width: 46px;
-    height: 46px;
-  }
   .var1-viewer-footer {
     flex-wrap: wrap;
     margin-inline: 24px;
@@ -2094,22 +2139,14 @@
     height: calc(100dvh - 24px);
   }
   .var1-viewer-header {
-    margin-inline: 16px;
-    padding: 20px 0 16px;
-  }
-  .var1-viewer-header h2 {
-    font-size: var(--text-lg);
-  }
-  .var1-viewer-header p {
-    font-size: var(--text-xs);
-    line-height: 18px;
+    padding: 8px 8px 8px 16px;
   }
   .var1-viewer-icon {
     display: none;
   }
   .var1-close {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
   }
   .var1-viewer-canvas {
     margin: 12px;
@@ -2133,6 +2170,14 @@
     flex: 1;
     min-width: 0;
   }
+  .var1-export-controls .report-submit-action {
+    flex: 1;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .var1-export-controls .report-submit-note {
+    max-width: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .report-submit-note,
@@ -2146,6 +2191,16 @@
   }
   .var1-close:active {
     transform: none;
+  }
+  .report-history-open svg {
+    transition: none;
+  }
+  .report-ledger tbody tr[role="button"]:is(:hover, :focus-visible) .report-history-open svg {
+    translate: none;
+  }
+  /* Rows still change tint and show the focus ring, without easing. */
+  :root .enterprise-shell .tanaw-reports-workspace .report-ledger tbody tr > td {
+    transition: none;
   }
 }
 @media print {

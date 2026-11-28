@@ -3,6 +3,8 @@ import {
   annualReportRows,
   consolidatedReportYears,
   defaultConsolidatedYear,
+  draftMonthsNote,
+  draftReportSummary,
   enterpriseCoverage,
   finalReportStatus,
   formatGeneratedOn,
@@ -21,6 +23,9 @@ function finalReport(id: string, period: string, status: FinalReport["status"] =
     preparedBy: "Staff",
     preparedRole: "Staff Processing Division",
     enterpriseCount: 1,
+    enterpriseTotal: 1,
+    generatedAt: "2026-10-09T08:00:00+08:00",
+    updatedAt: "2026-10-09T08:00:00+08:00",
     totalEntry: null,
     totalExit: null,
     totalUnique: unique,
@@ -49,8 +54,14 @@ describe("monthly consolidated reports", () => {
 
   it("shows finalized reports as Consolidated and keeps the other stored statuses honest", () => {
     expect(finalReportStatus("Finalized")).toEqual({ label: "Consolidated", tone: "consolidated" });
-    expect(finalReportStatus("Draft")).toEqual({ label: "Draft", tone: "pending" });
+    expect(finalReportStatus("Draft")).toEqual({ label: "Draft", tone: "waiting" });
     expect(finalReportStatus("Archived").label).toBe("Archived");
+  });
+
+  it("says what an open draft includes and when it last changed", () => {
+    expect(draftReportSummary({ enterpriseCount: 8, enterpriseTotal: 11, updatedAt: "2026-11-28T09:30:00+08:00", generatedOn: "2026-11-20" })).toBe(
+      "This draft includes 8 of 11 enterprises and was last updated Nov 28, 2026. It is updated from Reports as the remaining reports are accepted, and becomes final once every enterprise's report is in.",
+    );
   });
 
   it("formats coverage and dates", () => {
@@ -68,8 +79,11 @@ describe("annual consolidated reports", () => {
     const year2025 = Array.from({ length: 12 }, (_, index) => finalReport(`M${index}`, `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][index]} 2025`, "Finalized", "2026-01-01", 10));
     const rows = annualReportRows([...year2025, finalReport("SEP", "September 2026", "Finalized", "2026-10-09", 70), finalReport("OCT", "October 2026", "Draft", "2026-11-09", 50)]);
     expect(rows).toEqual([
-      { year: 2026, monthsIncluded: 1, visitors: 70, complete: false },
-      { year: 2025, monthsIncluded: 12, visitors: 120, complete: true },
+      { year: 2026, monthsIncluded: 1, draftMonths: 1, visitors: 70, complete: false },
+      { year: 2025, monthsIncluded: 12, draftMonths: 0, visitors: 120, complete: true },
     ]);
+    expect(draftMonthsNote(1)).toBe("1 draft not counted");
+    expect(draftMonthsNote(2)).toBe("2 drafts not counted");
+    expect(draftMonthsNote(0)).toBeNull();
   });
 });

@@ -148,6 +148,8 @@ export type Var3Form = {
   period: string;
   attractions: Var3Attraction[];
   months: Var3Month[];
+  /** Months whose monthly report is still a Draft, January first; they are left out. */
+  draftMonths: string[];
   totals: VarCell[][];
   grand: VarCell[];
   notes: string[];
@@ -197,9 +199,15 @@ export function buildVar3(reports: readonly FinalReport[], year: number): Var3Fo
     ),
   );
   const missing = months.filter((month) => !month.finalized).map((month) => month.month);
+  // A month with a final report is never also a draft month: a month has one open report.
+  const draftMonths = MONTH_NAMES.filter(
+    (_, index) => !months[index].finalized && reports.some((report) => report.status === "Draft" && periodParts(report.period)?.year === year && periodParts(report.period)?.index === index),
+  );
   const partial = months.some((month) => month.cells.some((cell) => cell[2] !== null && cell[0] === null));
   const notes = [
     missing.length === 12 ? `No monthly report (VAR 2M) has been finalized for ${year}.` : missing.length ? `No finalized monthly report (VAR 2M) for ${listMonths(missing)}.` : "",
+    draftMonths.length === 1 ? `${draftMonths[0]} is still a draft and is not counted until it is final.` : "",
+    draftMonths.length > 1 ? `${draftMonths.length} months (${listMonths([...draftMonths])}) are still drafts and are not counted until they are final.` : "",
     partial ? "Domestic and Foreign are blank where the establishment did not record residence; the total still counts those visitors." : "",
   ].filter(Boolean);
   return {
@@ -209,6 +217,7 @@ export function buildVar3(reports: readonly FinalReport[], year: number): Var3Fo
     period: `January - December ${year}`,
     attractions,
     months,
+    draftMonths,
     totals,
     grand: sumColumns(
       months.map((month) => month.grand),

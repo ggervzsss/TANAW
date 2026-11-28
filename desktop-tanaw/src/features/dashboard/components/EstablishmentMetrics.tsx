@@ -1,25 +1,18 @@
-﻿import { ArrowDown, ArrowUp } from "lucide-react";
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import type { Camera } from "../../../types/enterprise";
 import type { EstablishmentLive, EstablishmentSummary } from "../../camera/services/establishment.types";
-import type { DashboardRange, TrafficPoint } from "../types/dashboard";
-import { joinNames, shortTimeSpan } from "../utils/camera-status";
-import { isSingleDay, rangePhrase, shortDate, weekdayName } from "../utils/dashboard-range";
+import type { DashboardRange } from "../types/dashboard";
+import { isSingleDay, rangePhrase } from "../utils/dashboard-range";
 import { isCameraCounting } from "../utils/establishment";
+import { useSkeletonReveal } from "../../../ui-kit/lib/skeleton";
 
 type MetricsProps = {
   cameras: Camera[];
   summary: EstablishmentSummary | null;
   live: EstablishmentLive | null;
-  points: TrafficPoint[];
-  change: { text: string | null; percent: number | null };
   range: DashboardRange;
   today: string;
   loading: boolean;
-  /** "Parking Area not counted since 3:10 PM", when a camera stopped during the range. */
-  outageNote: string | null;
-  /** "a few seconds ago" or "7:41 PM". */
-  updatedLabel: string;
 };
 
 const count = (value: number) => value.toLocaleString("en-US");
@@ -35,36 +28,35 @@ function Figure({ segment, name, qualifier, tone, children }: { segment: string;
   );
 }
 
-function Value({ loading, children }: { loading: boolean; children: ReactNode }) {
+/**
+ * The figure itself, with no caption under it. A dash says nothing on its own, so `missing` tells a
+ * screen reader why the figure is not there.
+ */
+function Value({ loading, reveal, missing, children }: { loading: boolean; reveal?: string; missing?: string | null; children: ReactNode }) {
   if (loading) return <span className="design-skeleton dash-figure-skeleton" aria-hidden="true" />;
-  return <strong className="dash-figure-value">{children}</strong>;
+  return (
+    <strong className={reveal ? `dash-figure-value ${reveal}` : "dash-figure-value"}>
+      {children}
+      {missing && <span className="sr-only">. {missing}</span>}
+    </strong>
+  );
 }
 
-function NoteSkeleton() {
-  return <span className="design-skeleton dash-note-skeleton" aria-hidden="true" />;
-}
-
-/** The period with the most visitors inside at once, for the Peak Occupancy note. */
-function peakPeriod(points: TrafficPoint[]) {
-  let best: TrafficPoint | null = null;
-  for (const point of points) if (point.occupancy !== null && point.occupancy > 0 && (!best || point.occupancy > (best.occupancy ?? 0))) best = point;
-  return best;
-}
-
-export function EstablishmentMetrics({ cameras, summary, live, points, change, range, today, loading, outageNote, updatedLabel }: MetricsProps) {
+export function EstablishmentMetrics({ cameras, summary, live, range, today, loading }: MetricsProps) {
   const counting = cameras.filter((camera) => isCameraCounting(camera.id, live));
   const stopped = live ? cameras.filter((camera) => !isCameraCounting(camera.id, live)) : [];
   const entriesUnavailable = summary?.movement_state === "unavailable";
   const single = isSingleDay(range);
-  const changeTone = change.percent !== null && Math.abs(change.percent) >= 2 ? (change.percent > 0 ? " dash-note-up" : " dash-note-down") : "";
   const peakValue = summary?.peak_occupancy ?? null;
-  const peak = peakPeriod(points);
-  const peakNote = !peakValue ? "No visitors recorded yet" : peak ? (single ? `From ${shortTimeSpan(...(peak.period.split(" to ") as [string, string]))}` : `Reached on ${weekdayName(peak.key)}, ${shortDate(peak.key)}`) : `Highest ${rangePhrase(range, today)}`;
+  const occupancy = live?.occupancy ?? null;
+  // The four figures arrive together, fading in where their placeholders stood.
+  const reveal = useSkeletonReveal(loading);
 
   return (
     <section className="dash-figures" data-unified-metrics-header aria-label="Enterprise analytics summary" aria-busy={loading}>
+      {/* Which camera is not counting reads in Monitored Locations; here the bars say how many. */}
       <Figure segment="cameras" name="Cameras" qualifier="counting right now" tone={stopped.length ? "alert" : undefined}>
-        <Value loading={loading}>
+        <Value loading={loading} reveal={reveal}>
           {counting.length}
           <span className="dash-figure-of">of {cameras.length}</span>
           {cameras.length > 0 && (
@@ -75,45 +67,24 @@ export function EstablishmentMetrics({ cameras, summary, live, points, change, r
             </span>
           )}
         </Value>
-        {loading ? (
-          <NoteSkeleton />
-        ) : (
-          <p className={`dash-figure-note${stopped.length ? " dash-note-alert" : ""}`}>
-            <span className={`dash-dot ${cameras.length === 0 ? "dash-dot-off" : stopped.length ? "dash-dot-alert" : "dash-dot-live"}`} aria-hidden="true" />
-            {cameras.length === 0 ? "No cameras added yet" : stopped.length ? `${joinNames(stopped.map((camera) => camera.name))} not counting` : "All cameras counting"}
-          </p>
-        )}
       </Figure>
 
       <Figure segment="entries" name="Total Entries" qualifier={range.from === today && single ? "recorded today" : `recorded ${rangePhrase(range, today)}`}>
-        <Value loading={loading}>{summary && !entriesUnavailable ? count(summary.entries) : "—"}</Value>
-        {loading && <NoteSkeleton />}
-        {!loading && entriesUnavailable && <p className="dash-figure-note">Unavailable for these cameras</p>}
-        {!loading && !entriesUnavailable && change.text && (
-          <p className={`dash-figure-note${changeTone}`}>
-            {changeTone === " dash-note-up" && <ArrowUp size={15} aria-hidden="true" />}
-            {changeTone === " dash-note-down" && <ArrowDown size={15} aria-hidden="true" />}
-            {change.text}
-          </p>
-        )}
-        {!loading && outageNote && <p className="dash-figure-note dash-note-muted">{outageNote}</p>}
+        <Value loading={loading} reveal={reveal} missing={entriesUnavailable ? "Unavailable for these cameras" : null}>
+          {summary && !entriesUnavailable ? count(summary.entries) : "—"}
+        </Value>
       </Figure>
 
       <Figure segment="occupancy" name="Live Occupancy" qualifier="current visitor inside">
-        <Value loading={loading}>{live?.occupancy !== null && live?.occupancy !== undefined ? count(live.occupancy) : "—"}</Value>
-        {loading ? (
-          <NoteSkeleton />
-        ) : (
-          <p className="dash-figure-note">
-            <span className={`dash-dot ${live?.state === "unavailable" ? "dash-dot-off" : "dash-dot-live"}`} aria-hidden="true" />
-            {live?.state === "unavailable" ? "No camera is counting" : `Live, updated ${updatedLabel}`}
-          </p>
-        )}
+        <Value loading={loading} reveal={reveal} missing={live?.state === "unavailable" ? "No camera is counting" : null}>
+          {occupancy !== null ? count(occupancy) : "—"}
+        </Value>
       </Figure>
 
       <Figure segment="peak" name="Peak Occupancy" qualifier="highest visitor record">
-        <Value loading={loading}>{peakValue !== null ? count(peakValue) : "—"}</Value>
-        {loading ? <NoteSkeleton /> : <p className="dash-figure-note">{peakNote}</p>}
+        <Value loading={loading} reveal={reveal} missing={peakValue === null ? "No visitors recorded yet" : null}>
+          {peakValue !== null ? count(peakValue) : "—"}
+        </Value>
       </Figure>
     </section>
   );

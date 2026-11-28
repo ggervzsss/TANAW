@@ -74,22 +74,15 @@
 
 /* Workspace: camera rail, then the selected camera. */
 .camera-workspace {
-  --camera-sidebar-track: clamp(220px, 17.5vw, 264px);
-  --camera-sidebar-timing: 260ms var(--camera-ease);
   display: grid;
   flex: 1;
-  grid-template-columns: var(--camera-sidebar-track) minmax(0, 1fr);
+  grid-template-columns: clamp(220px, 17.5vw, 264px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: clamp(14px, 1.4vw, 24px);
   min-height: 0;
-  transition: grid-template-columns var(--camera-sidebar-timing);
-}
-.camera-workspace[data-camera-sidebar="collapsed"] {
-  --camera-sidebar-track: 88px;
 }
 .camera-workspace[data-camera-view="settings"] {
   grid-template-columns: minmax(0, 1fr);
-  transition: none;
 }
 .camera-workspace-main {
   min-width: 0;
@@ -113,11 +106,9 @@
   overflow: hidden;
 }
 .camera-list-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
   min-height: 44px;
   padding: 0 2px 8px 6px;
 }
@@ -129,34 +120,8 @@
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.25;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  transition: opacity 140ms ease 70ms;
-}
-.camera-list-count {
-  display: grid;
-  min-width: 24px;
-  height: 22px;
-  place-items: center;
-  padding-inline: 7px;
-  border-radius: 999px;
-  background: var(--tanaw-surface-inset);
-  color: var(--tanaw-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.camera-sidebar-toggle {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 10px;
-  color: var(--tanaw-text-secondary);
-  cursor: pointer;
-}
-.camera-sidebar-toggle:hover {
-  background: var(--tanaw-control-hover);
-  color: var(--tanaw-accent-ink);
 }
 .camera-list-items {
   display: grid;
@@ -167,6 +132,11 @@
   overflow: auto;
   scrollbar-width: thin;
 }
+/* A row holds the select button and, beside it, the camera's delete button. */
+.camera-list-row {
+  position: relative;
+  border-radius: 14px;
+}
 .camera-list-item {
   position: relative;
   display: grid;
@@ -175,7 +145,8 @@
   gap: 10px;
   width: 100%;
   min-height: 64px;
-  padding: 10px 10px 10px 8px;
+  /* The end padding keeps the name and status clear of the delete button. */
+  padding: 10px 48px 10px 8px;
   border: 0;
   border-radius: 14px;
   background: transparent;
@@ -199,7 +170,8 @@
     opacity 200ms ease,
     transform 260ms var(--camera-ease);
 }
-.camera-list-item:hover {
+/* Hover is read from the row, so pointing at the delete button keeps the row tinted. */
+.camera-list-row:hover .camera-list-item {
   background: var(--tanaw-interactive-hover-bg);
 }
 .camera-list-item[aria-pressed="true"] {
@@ -209,7 +181,7 @@
   opacity: 1;
   transform: none;
 }
-.camera-list-item[aria-pressed="true"]:hover {
+.camera-list-row:hover .camera-list-item[aria-pressed="true"] {
   background: var(--tanaw-interactive-active-bg);
 }
 .camera-list-item:active {
@@ -219,8 +191,6 @@
   outline-offset: -2px;
 }
 .camera-list-glyph {
-  --camera-status-dot: var(--tanaw-text-muted);
-  position: relative;
   display: grid;
   width: 40px;
   height: 40px;
@@ -230,9 +200,6 @@
   border-radius: 12px;
   background: var(--tanaw-surface);
   color: var(--tanaw-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
   transition:
     color 180ms ease,
     border-color 180ms ease;
@@ -241,54 +208,16 @@
   border-color: var(--tanaw-interactive-hover-border);
   color: var(--tanaw-accent-ink);
 }
-.camera-list-glyph[data-tone="success"] { --camera-status-dot: var(--tanaw-success-text); }
-.camera-list-glyph[data-tone="warning"] { --camera-status-dot: var(--tanaw-warning-text); }
-.camera-list-glyph[data-tone="danger"] { --camera-status-dot: var(--tanaw-danger); }
-.camera-list-glyph::after {
-  position: absolute;
-  right: -4px;
-  bottom: -3px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--tanaw-surface);
-  border-radius: 50%;
-  background: var(--camera-status-dot);
-  content: "";
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-.camera-list-glyph > * {
-  grid-area: 1 / 1;
-  transition: opacity 160ms ease;
-}
-.camera-list-glyph > span {
-  opacity: 0;
-}
 .camera-list-item-copy {
   display: grid;
   gap: 3px;
   min-width: 0;
-  max-height: 72px;
-  overflow: hidden;
-  transition: opacity 140ms ease 80ms, max-height var(--camera-sidebar-timing);
 }
 .camera-list-item strong,
-.camera-list-zone,
-.camera-list-short-name {
+.camera-list-zone {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.camera-list-short-name {
-  position: absolute;
-  inset: auto 4px 6px;
-  color: var(--tanaw-text-secondary);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  line-height: 1.2;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 120ms ease;
 }
 .camera-list-item strong {
   font-size: 0.875rem;
@@ -310,6 +239,45 @@
 }
 .camera-list-item-footer .tanaw-badge {
   flex: none;
+}
+/*
+ * Delete sits at the row's end: shown on the selected row, and on another row while it is
+ * pointed at or holds focus. Touch screens cannot hover, so there it always shows.
+ */
+.camera-list-delete {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tanaw-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    opacity 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.camera-list-row:is(:hover, :focus-within, [data-selected]) .camera-list-delete {
+  opacity: 1;
+}
+.camera-list-delete:hover {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger);
+}
+.camera-list-delete:active {
+  transform: translateY(-50%) scale(0.94);
+}
+@media (hover: none) {
+  .camera-list-delete {
+    opacity: 1;
+  }
 }
 .camera-list-empty,
 .camera-list-footer p {
@@ -343,9 +311,6 @@
   display: grid;
   gap: 3px;
 }
-.camera-list[data-compact="true"] .camera-list-placeholder-copy {
-  display: none;
-}
 .camera-list-footer {
   flex: none;
   padding-top: 10px;
@@ -361,39 +326,6 @@
 }
 .camera-list-footer .camera-add-button:hover:enabled {
   background: var(--tanaw-interactive-active-bg);
-}
-.camera-list[data-compact="true"] .camera-list-heading h3,
-.camera-list[data-compact="true"] .camera-list-item-copy {
-  opacity: 0;
-  transition-delay: 0ms;
-}
-.camera-list[data-compact="true"] :is(.camera-list-item, .camera-list-placeholder) {
-  grid-template-columns: minmax(0, 1fr) 0;
-  gap: 0;
-  padding-inline: 4px;
-}
-.camera-list[data-compact="true"] .camera-list-item {
-  padding-bottom: 22px;
-}
-.camera-list[data-compact="true"] .camera-list-item-copy {
-  max-height: 0;
-}
-.camera-list[data-compact="true"] .camera-list-short-name {
-  opacity: 1;
-  transition-delay: 110ms;
-}
-.camera-list[data-compact="true"] .camera-list-glyph > svg {
-  opacity: 0;
-}
-.camera-list[data-compact="true"] .camera-list-glyph > span,
-.camera-list[data-compact="true"] .camera-list-glyph::after {
-  opacity: 1;
-}
-.camera-list[data-compact="true"] .camera-add-button {
-  gap: 0;
-}
-.camera-list[data-compact="true"] .camera-add-button > span {
-  display: none;
 }
 
 /* Selected camera */
@@ -901,6 +833,50 @@ html.dark .camera-live-metrics {
   flex: none;
   color: var(--tanaw-warning-text);
 }
+/*
+ * A quiet footer under a hairline at the panel's foot. Above it, the ambience stops bleeding to
+ * the panel edge and fades out before the line.
+ */
+.camera-metrics-ambience:has(+ .camera-metrics-footer) {
+  margin-bottom: 0;
+  border-radius: 0;
+  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.3) 15%, #000 42%, #000 76%, transparent);
+}
+.camera-metrics-footer {
+  flex: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--camera-hairline);
+}
+.camera-performance-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.camera-performance-name {
+  color: var(--tanaw-text);
+  font-weight: 600;
+}
+.camera-performance-change {
+  flex: none;
+  border-radius: 4px;
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+  text-underline-offset: 4px;
+}
+.camera-performance-change:hover {
+  text-decoration: underline;
+}
+.camera-performance-change:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
 @media (max-width: 940px) {
   .camera-preview-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -931,7 +907,7 @@ html.dark .camera-live-metrics {
   .camera-list-items {
     display: flex;
   }
-  .camera-list-item {
+  .camera-list-row {
     width: max(184px, 46%);
     flex: none;
   }
@@ -940,25 +916,6 @@ html.dark .camera-live-metrics {
   }
   .camera-list-placeholder {
     width: max(184px, 46%);
-  }
-  .camera-list[data-compact="true"] {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-  }
-  .camera-list[data-compact="true"] .camera-list-heading {
-    grid-template-columns: 0 auto auto;
-    padding-block: 0;
-  }
-  .camera-list[data-compact="true"] .camera-list-item {
-    width: 56px;
-    min-height: 62px;
-    padding-inline: 3px;
-  }
-  .camera-list[data-compact="true"] .camera-list-footer {
-    border-top: 0;
-    padding-top: 0;
   }
   .camera-workspace-main {
     flex: 1 0 auto;
@@ -975,12 +932,8 @@ html.dark .camera-live-metrics {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .camera-workspace,
-  .camera-list-heading h3,
-  .camera-list-glyph > *,
-  .camera-list-glyph::after,
-  .camera-list-item-copy,
-  .camera-list-short-name {
+  .camera-list-glyph,
+  .camera-list-delete {
     transition: none;
   }
 }
@@ -1738,6 +1691,20 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 .camera-add-dialog .camera-add-back {
   margin-right: auto;
 }
+/* A field the camera or the form rejected keeps its error border through hover and focus. */
+:is(.camera-add-dialog, .camera-settings) .settings-field input[aria-invalid="true"],
+:is(.camera-add-dialog, .camera-settings) .settings-field input[aria-invalid="true"]:is(:hover, :focus) {
+  border-color: var(--tanaw-error);
+}
+/* A connection failure that is no single field's fault sits just above the dialog's buttons. */
+.camera-add-dialog .camera-add-connection-error {
+  margin: 16px 0 0;
+  line-height: 1.5;
+}
+.camera-add-dialog .camera-add-connection-error:focus-visible {
+  outline: 2px solid var(--tanaw-error);
+  outline-offset: 2px;
+}
 .camera-add-address {
   margin-bottom: 24px;
 }
@@ -2191,7 +2158,7 @@ body:has(.camera-dialog) [aria-label="Current system issues"] {
 .camera-page-heading,
 .camera-list,
 .camera-settings > :is(.camera-settings-heading, .camera-settings-body, .camera-settings-footer) {
-  animation: camera-rise 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: camera-rise 300ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 .camera-list {
   animation-delay: 30ms;

@@ -6,6 +6,9 @@ type Theme = "dark" | "light";
 
 const telemetrySummary = {
   enterpriseCount: 7,
+  enterpriseTotal: 7,
+  generatedAt: "2026-10-09T08:00:00+08:00",
+  updatedAt: "2026-10-09T08:00:00+08:00",
   onlineGateways: 2,
   delayedGateways: 1,
   offlineGateways: 4,
@@ -169,20 +172,19 @@ test("keeps the flat IT navigation keyboard-accessible and reduced-motion safe",
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockPortal(page, "it", "dark");
-  await page.goto("/it/dashboard");
+  await page.goto("/it/requests");
 
   const navigation = page.locator("nav[data-topbar-underline-navigation]:visible");
-  await expect(navigation.getByRole("link")).toHaveText(["Overview", "Requests", "Enterprises", "LGU Personnel", "System"]);
+  await expect(navigation.getByRole("link")).toHaveText(["Requests", "Enterprises", "LGU Personnel", "System"]);
   // One level of links: no Accounts or System menus, and no live-alerts button for IT.
   await expect(navigation.getByRole("button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Alerts/ })).toHaveCount(0);
 
-  const overview = navigation.getByRole("link", { name: "Overview" });
   const requests = navigation.getByRole("link", { name: "Requests" });
   const enterprises = navigation.getByRole("link", { name: "Enterprises" });
   const personnel = navigation.getByRole("link", { name: "LGU Personnel" });
   const underline = navigation.locator("[data-topbar-underline]");
-  await expectUnderlineUnder(underline, overview);
+  await expectUnderlineUnder(underline, requests);
   await expect(underline).toHaveCSS("transition-property", "none");
 
   await requests.focus();
@@ -191,7 +193,7 @@ test("keeps the flat IT navigation keyboard-accessible and reduced-motion safe",
   await expect(enterprises).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(personnel).toBeFocused();
-  await expectUnderlineUnder(underline, overview);
+  await expectUnderlineUnder(underline, requests);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/it\/personnel$/);
   await expect(personnel).toHaveAttribute("aria-current", "page");
@@ -201,17 +203,17 @@ test("keeps the flat IT navigation keyboard-accessible and reduced-motion safe",
 test("keeps the IT underline selection through hover, history, reload and mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockPortal(page, "it", "dark");
-  await page.goto("/it/dashboard");
+  await page.goto("/it/requests");
 
   const navigation = page.locator("nav[data-topbar-underline-navigation]:visible");
-  const overview = navigation.getByRole("link", { name: "Overview" });
   const requests = navigation.getByRole("link", { name: "Requests" });
+  const enterprises = navigation.getByRole("link", { name: "Enterprises" });
   const system = navigation.getByRole("link", { name: "System", exact: true });
   const underline = navigation.locator("[data-topbar-underline]");
-  await expectUnderlineUnder(underline, overview);
-  await requests.hover();
-  await expect(requests).toHaveCSS("color", "rgb(158, 241, 200)");
-  await expectUnderlineUnder(underline, overview);
+  await expectUnderlineUnder(underline, requests);
+  await enterprises.hover();
+  await expect(enterprises).toHaveCSS("color", "rgb(158, 241, 200)");
+  await expectUnderlineUnder(underline, requests);
 
   await system.hover();
   await system.click();
@@ -220,7 +222,7 @@ test("keeps the IT underline selection through hover, history, reload and mobile
   await expectUnderlineUnder(underline, system);
 
   await page.goBack();
-  await expectUnderlineUnder(underline, overview);
+  await expectUnderlineUnder(underline, requests);
   await page.goForward();
   await expectUnderlineUnder(underline, system);
   await page.reload();

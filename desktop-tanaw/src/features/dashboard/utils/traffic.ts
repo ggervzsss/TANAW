@@ -22,21 +22,20 @@ function observedHour(hour: EstablishmentHourly["hours"][number]) {
   return hour.covered_ms > 0 || hour.entries > 0;
 }
 
-/** Visiting hours the chart always shows, so a quiet morning still sits in a full day. */
-export const DAY_WINDOW = { from: 8, to: 20 };
-
 /**
- * First hour of each two-hour period on the chart: the usual visiting hours, widened to include
- * every hour that has counts. `throughHour` (today's current hour) keeps today's periods on the
- * chart even before anything is counted, so a quiet day reads as zero instead of as no data.
+ * First hour of each two-hour period on the chart: from the first period the cameras counted to the
+ * last, so the bars run edge to edge with no empty hours before opening or after closing. Periods
+ * between them that went uncounted stay, as gaps. `throughHour` (today's current hour) ends today
+ * at the period under way, so periods still to come are not drawn, and keeps that period on the
+ * chart before anything is counted, so a quiet start reads as zero instead of as no data.
  */
 export function bucketStarts(hourly: EstablishmentHourly | null, throughHour: number | null = null) {
   const observed = (hourly?.hours ?? []).filter(observedHour).map((hour) => hour.hour);
   if (!hourly || hourly.state === "unavailable" || (!observed.length && throughHour === null)) return [];
-  const first = Math.floor(Math.min(DAY_WINDOW.from, ...observed, throughHour ?? DAY_WINDOW.from) / BUCKET_HOURS) * BUCKET_HOURS;
-  const last = Math.max(DAY_WINDOW.to - 1, ...observed, throughHour ?? 0);
+  const from = throughHour === null ? Math.min(...observed) : Math.min(throughHour, ...observed.filter((hour) => hour <= throughHour));
+  const last = throughHour ?? Math.max(...observed);
   const starts = [];
-  for (let hour = first; hour <= last; hour += BUCKET_HOURS) starts.push(hour);
+  for (let hour = Math.floor(from / BUCKET_HOURS) * BUCKET_HOURS; hour <= last; hour += BUCKET_HOURS) starts.push(hour);
   return starts;
 }
 
@@ -63,6 +62,21 @@ export function hourlyTraffic(hourly: EstablishmentHourly | null, history: Array
     const samples = history.map((day) => bucketEntries(day, start)).filter((value): value is number => value !== null);
     return { key: `h${start}`, label, period: `${label} to ${end}`, entries: bucketEntries(hourly, start), occupancy: bucketOccupancy(hourly, start), usual: usualOf(samples) };
   });
+}
+
+/**
+ * Today's periods as the live chart draws them: only those that have started, a period with no
+ * entries reads as zero (a flat bar and the line at the floor), and the period in progress carries
+ * the occupancy the cameras read right now. `elapsedHours` is hours since midnight, fractional.
+ */
+export function todaySoFar(points: TrafficPoint[], elapsedHours: number, liveOccupancy: number | null): TrafficPoint[] {
+  const nowBucket = Math.floor(elapsedHours / BUCKET_HOURS) * BUCKET_HOURS;
+  return points
+    .filter((point) => Number(point.key.slice(1)) <= elapsedHours)
+    .map((point) => {
+      const occupancy = Number(point.key.slice(1)) === nowBucket && liveOccupancy !== null ? liveOccupancy : (point.occupancy ?? 0);
+      return { ...point, entries: point.entries ?? 0, occupancy };
+    });
 }
 
 function observedDay(day: DailyEstablishmentMetrics | undefined): day is DailyEstablishmentMetrics {
@@ -256,7 +270,7 @@ export function trafficGeometry(points: TrafficPoint[], width: number, plotHeigh
 
   // Occupancy's own scale: as many round steps as the entries scale, so its labels sit on the same gridlines.
   const steps = Math.max(1, scale.ticks.length - 1);
-  const mostInside = Math.max(0, ...points.map((point) => (point.later ? 0 : (point.occupancy ?? 0))));
+  const mostInside = Math.max(0, ...points.map((point) => point.occupancy ?? 0));
   // An empty day still gets a readable scale (0 to about 10), with the line on the floor.
   const occupancyTop = niceStep(Math.max(mostInside, 10) / steps) * steps;
   const yOccupancy = (value: number) => base - (Math.min(Math.max(value, 0), occupancyTop) / occupancyTop) * barsH;
@@ -268,9 +282,8 @@ export function trafficGeometry(points: TrafficPoint[], width: number, plotHeigh
   const fewestEntries = counted.length ? Math.min(...counted) : 0;
   const shade = (entries: number) => shadeLevel(entries, fewestEntries, mostEntries);
 
-  // The usual entries: a soft band from low to high, broken where a period has no usual. Periods of
-  // today that have not happened show nothing, so the chart never looks like it holds data it doesn't.
-  const allUsualRuns = runsWhere(points, (point) => point.usual !== null && !point.later);
+  // The usual entries: a soft band from low to high, broken where a period has no usual.
+  const allUsualRuns = runsWhere(points, (point) => point.usual !== null);
   // A period whose neighbours have no usual still shows its range, as a short capsule around its bar.
   const capsule = Math.min(slot * 0.8, barWidth + 12);
   const band = allUsualRuns
@@ -286,8 +299,8 @@ export function trafficGeometry(points: TrafficPoint[], width: number, plotHeigh
       return `${upper}L${lower.slice(1)}Z`;
     })
     .join("");
-  // Occupancy: one line through every period that has happened and has a reading, broken at gaps.
-  const occupancyLine = runsWhere(points, (point) => !point.later && point.occupancy !== null)
+  // Occupancy: one line through every period that has a reading, broken at gaps.
+  const occupancyLine = runsWhere(points, (point) => point.occupancy !== null)
     .filter((run) => run.length > 1)
     .map((run) => monotonePath(run.map((i) => [x(i), yOccupancy(points[i].occupancy!)])))
     .join("");

@@ -23,6 +23,7 @@ import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { ThemedEnterpriseTopbar } from "./ThemedEnterpriseTopbar";
 import { usePageEnter } from "../../ui-kit/lib/page-enter";
+import { SkeletonScreenReveal } from "../../ui-kit/lib/skeleton";
 import { enterpriseFrameClassNames } from "./enterprise-frame";
 import { EnterpriseViewSkeleton } from "./EnterpriseViewSkeleton";
 import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
@@ -292,6 +293,7 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
       <main ref={mainRef} className={frame.main}>
         {activeView === "settings" ? (
           <Suspense fallback={<EnterpriseViewSkeleton view="settings" />}>
+            <SkeletonScreenReveal target={mainRef} />
             {user?.role === "enterprise" && <GeneralSettingsView />}
           </Suspense>
         ) : (
@@ -306,6 +308,8 @@ export function EnterpriseShell({ activeView }: EnterpriseShellProps) {
                 />
               )}
               <Suspense fallback={<EnterpriseViewSkeleton view={activeView} />}>
+                {/* The page fades in where its skeleton screen stood, when that screen was seen. */}
+                <SkeletonScreenReveal target={contentScrollRef} />
                 {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
                 {activeView === "cameras" && mlContextReady && (
                   <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />

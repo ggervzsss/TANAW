@@ -1,19 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useOperationalFinalReports } from "@/app/hooks/useOperationalSync";
-import { listReportEnterprises } from "@/shared/services/reporting";
 import type { FinalReport } from "@/shared/types";
 import { PortalPageHeader, Select, StatusPill, Tabs, openRowFromClick } from "@/shared/ui-kit";
 import { AnnualReportDialog } from "../components/AnnualReportDialog";
 import { MonthlyReportDialog } from "../components/MonthlyReportDialog";
 import { StaffTableSkeleton, type StaffTableSkeletonColumn } from "../components/StaffTableSkeleton";
-import { reportEnterprisesQueryKey } from "../hooks/useStaffReports";
 import {
   annualReportRows,
   consolidatedReportYears,
   defaultConsolidatedYear,
+  draftMonthsNote,
   enterpriseCoverage,
   finalReportStatus,
   formatGeneratedOn,
@@ -53,9 +51,7 @@ export function StaffConsolidatedReportsPage() {
   const [params, setParams] = useSearchParams();
   const [currentYear] = useState(() => new Date().getFullYear());
   const reportsQuery = useOperationalFinalReports();
-  const enterprisesQuery = useQuery({ queryKey: reportEnterprisesQueryKey, queryFn: listReportEnterprises });
   const reports = reportsQuery.data ?? EMPTY_REPORTS;
-  const registered = enterprisesQuery.data?.length ?? null;
   const tab = parseConsolidatedTab(params.get("tab"));
   const year = parseYear(params.get("year")) ?? defaultConsolidatedYear(reports, currentYear);
   const years = consolidatedReportYears(reports, currentYear);
@@ -102,7 +98,7 @@ export function StaffConsolidatedReportsPage() {
             Consolidated reports could not be loaded. Refresh the page to try again.
           </p>
         ) : tab === "monthly" ? (
-          <MonthlyTable reports={monthly} year={year} registered={registered} onOpen={(report) => updateParams({ report: report.id })} />
+          <MonthlyTable reports={monthly} year={year} onOpen={(report) => updateParams({ report: report.id })} />
         ) : (
           <AnnualTable rows={annual} onOpen={(row) => updateParams({ annual: String(row.year) })} />
         )}
@@ -114,7 +110,7 @@ export function StaffConsolidatedReportsPage() {
   );
 }
 
-function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly FinalReport[]; year: number; registered: number | null; onOpen: (report: FinalReport) => void }) {
+function MonthlyTable({ reports, year, onOpen }: { reports: readonly FinalReport[]; year: number; onOpen: (report: FinalReport) => void }) {
   return (
     <>
       <div className="tanaw-staff-rise overflow-x-auto">
@@ -151,8 +147,8 @@ function MonthlyTable({ reports, year, registered, onOpen }: { reports: readonly
                     </button>
                   </th>
                   <td className="tanaw-hide-sm text-(--tanaw-text-secondary) tabular-nums">{report.id}</td>
-                  <td data-cell="stat" data-label="Enterprises" className="tanaw-num" title={registered ? `${report.enterpriseCount} of the ${registered} enterprises registered today` : undefined}>
-                    {enterpriseCoverage(report.enterpriseCount, registered)}
+                  <td data-cell="stat" data-label="Enterprises" className="tanaw-num" title={report.enterpriseTotal ? `${report.enterpriseCount} of the ${report.enterpriseTotal} enterprises expected when it was last generated` : undefined}>
+                    {enterpriseCoverage(report.enterpriseCount, report.enterpriseTotal || null)}
                   </td>
                   <td data-cell="stat" data-label="Visitors" className="tanaw-num font-semibold">
                     {formatCount(report.totalUnique)}
@@ -209,6 +205,7 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
                 </th>
                 <td data-cell="stat" data-label="Months included" className="tanaw-num">
                   {row.monthsIncluded} of 12
+                  {draftMonthsNote(row.draftMonths) && <span className="block text-[0.8125rem] font-normal text-(--tanaw-text-secondary)">{draftMonthsNote(row.draftMonths)}</span>}
                 </td>
                 <td data-cell="stat" data-label="Visitors" className="tanaw-num font-semibold">
                   {formatCount(row.visitors)}
@@ -229,7 +226,7 @@ function AnnualTable({ rows, onOpen }: { rows: readonly AnnualReportRow[]; onOpe
           No annual report yet. It starts once a monthly report is finalized.
         </p>
       )}
-      <p className="mt-3 text-[0.84375rem] text-(--tanaw-text-secondary)">The annual report adds up the finalized monthly reports. It shows Waiting until all 12 months are consolidated.</p>
+      <p className="mt-3 text-[0.84375rem] text-(--tanaw-text-secondary)">The annual report adds up the finalized monthly reports; a month that is still a draft is not counted until it is final. It shows Waiting until all 12 months are consolidated.</p>
     </>
   );
 }

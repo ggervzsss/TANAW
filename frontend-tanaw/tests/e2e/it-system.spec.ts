@@ -227,7 +227,7 @@ test("opens a linked activity with its IT detail", async ({ page }) => {
   const detail = page.getByRole("region", { name: "Technical detail: Camera Stopped Counting" });
   await expect(detail).toContainText("STREAM_TIMEOUT after 3 retries");
   await expect(detail).toContainText("TANAW itself, not a browser");
-  await expect(detail.getByRole("link", { name: "Open the Overview" })).toHaveAttribute("href", "/it/dashboard");
+  await expect(detail.getByRole("link", { name: "Open Enterprises" })).toHaveAttribute("href", "/it/enterprises");
 });
 
 test("shows the last 7 days of email and tries a failed one again", async ({ page }) => {

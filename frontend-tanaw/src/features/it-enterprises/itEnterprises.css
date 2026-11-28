@@ -9,7 +9,6 @@
   --ite-down: #b91c1c;
   --ite-closed: #cbd5e1;
   --ite-future: var(--tanaw-surface-inset);
-  --ite-chip-on: var(--tanaw-selected-bg);
 }
 
 .dark .it-enterprises {
@@ -87,14 +86,6 @@
   .it-enterprises .ite-table tbody tr.tanaw-row-link:hover > :last-child {
     border-radius: 0 12px 12px 0;
   }
-}
-
-/* The chosen Show chip: a soft green tint with no edge that glides between chips (see ITEnterprisesPage). */
-.it-enterprises .ite-chip-highlight {
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-tanaw-md);
-  background: var(--ite-chip-on);
 }
 
 /* Figures and tab panels fade up a few pixels when they arrive. */
@@ -181,20 +172,6 @@
 
   .it-enterprises .ite-figures .ite-value {
     font-size: 2rem;
-  }
-
-  /* The Show chips run in one line that scrolls sideways, edge to edge. */
-  .it-enterprises .ite-chips {
-    flex-wrap: nowrap;
-    margin-inline: -1rem;
-    padding: 2px 1rem;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .it-enterprises .ite-chips::-webkit-scrollbar {
-    display: none;
   }
 }
 

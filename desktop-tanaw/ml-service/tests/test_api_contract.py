@@ -1,9 +1,11 @@
 import unittest
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.camera.pipeline_manager import CameraPipelineRegistry
+from app.camera.stream_candidates import StreamSelection
 from app.config.service_settings import ServiceSettings
 from app.main import (
     API_CONTRACT_VERSION,
@@ -94,6 +96,33 @@ class ApiContractTest(unittest.TestCase):
             self.assertEqual(envelope["type"], "camera.states")
             self.assertEqual(envelope["data"]["active_camera_count"], 0)
             self.assertEqual(envelope["data"]["cameras"], [])
+
+    def test_failed_camera_test_reports_why_it_failed(self) -> None:
+        refused = StreamSelection(
+            False, "The camera refused this username or password.", reason="auth_failed"
+        )
+        with TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(directory)
+            application = create_app(registry=registry, settings=ServiceSettings())
+            with (
+                patch.object(registry, "test_connection", return_value=refused),
+                TestClient(application) as client,
+            ):
+                response = client.post(
+                    "/camera/test",
+                    json={
+                        "camera_id": 1,
+                        "camera_brand": "tapo",
+                        "camera_host": "192.168.1.20",
+                        "stream_url": "rtsp://192.168.1.20/stream2",
+                        "username": "admin",
+                        "password": "wrong",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reason"], "auth_failed")
+        self.assertFalse(response.json()["ok"])
 
 
 if __name__ == "__main__":

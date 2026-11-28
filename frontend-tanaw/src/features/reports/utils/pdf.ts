@@ -23,8 +23,10 @@ export function printFinalReportPdf(report: FinalReport) {
   printOrDownload(createFinalReportPdf(report), `${report.id}.pdf`);
 }
 
+/** A draft carries "DRAFT - NOT FINAL" above the sheet and in its footer, outside the DOT grid. */
 export function createFinalReportPdf(report: FinalReport) {
-  return buildPdfDocument(finishVarPdfPages(var2mPdfPages(var2mFromFinalReport(report)), report.id));
+  const draft = report.status === "Draft" ? `DRAFT - NOT FINAL (${report.enterpriseCount} of ${Math.max(report.enterpriseTotal, report.enterpriseCount)} enterprises)` : undefined;
+  return buildPdfDocument(finishVarPdfPages(var2mPdfPages(var2mFromFinalReport(report)), report.id, { draft }));
 }
 
 export function downloadAnnualReportPdf(reports: readonly FinalReport[], year: number) {

@@ -6,7 +6,7 @@ export function getRoleDashboardPath(role: UserRole): string {
   if (role === "admin") return routes.admin.dashboard;
   if (role === "staff") return routes.staff.reports;
   if (role === "enterprise") return routes.enterpriseAccess;
-  return routes.it.dashboard;
+  return routes.it.requests;
 }
 
 export function getRoleSettingsPath(role: UserRole): string {

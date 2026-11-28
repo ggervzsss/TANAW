@@ -1,4 +1,5 @@
 import type { ReportRecord } from "../../../types/enterprise";
+import type { ReportingStatus } from "./report-status";
 
 export type ReportLedgerRowKind = "current" | "pending" | "history";
 
@@ -8,5 +9,6 @@ export type ReportLedgerRow = {
   report: ReportRecord;
   reportLabel: string;
   reportDescription: string;
-  statusLabel: string;
+  /** Pending, Submitted, Missing or Consolidated; see `reportingStatus`. */
+  statusLabel: ReportingStatus;
 };

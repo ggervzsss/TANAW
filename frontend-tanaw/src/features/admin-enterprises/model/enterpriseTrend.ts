@@ -7,7 +7,7 @@ import { parseIsoDate, toIsoDate, type DateRange } from "@/shared/ui-kit/lib/dat
  *
  *   Hourly   one day: /operational/visitor-insights?start=day&end=day, the most visitors inside at
  *            once in each hour (peakVisitors). Only hours with camera updates appear.
- *   Daily    longer ranges: /operational/visitor-insights?start&end, the estimated unique visitors of
+ *   Daily    longer ranges: /operational/visitor-insights?start&end, the unique visitors of
  *            each day the camera history covers (estimatedUniqueCount). A day without updates shows
  *            an empty slot, never 0.
  *   Monthly  submitted monthly reports (/operational/reports/intake) for the months the range

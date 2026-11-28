@@ -3,15 +3,18 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload
 
 from app.core.date_time import ensure_aware
-from app.features.accounts.models import Account, AccountRole
+from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.reporting.counting import complete_sum
-from app.features.reporting.errors import ReportAlreadyConsolidatedError
+from app.features.reporting.errors import (
+    InvalidReportWorkflowError,
+    ReportAlreadyConsolidatedError,
+)
 from app.features.reporting.intake import (
     parse_report_payload,
     report_demographics_from_payload,
@@ -22,11 +25,17 @@ from app.features.reporting.models import (
     FinalReport,
     FinalReportSource,
 )
+from app.features.reporting.periods import reporting_period_key
 from app.features.reporting.policies import (
+    FINAL_REPORT_ARCHIVED_STATUS,
+    FINAL_REPORT_DRAFT_STATUS,
+    final_report_consolidation_status,
+    final_report_expected_enterprises,
     final_report_period,
     resolve_final_report_status_transition,
     to_final_report_archived_from_status,
     validate_final_report_sources,
+    validate_final_report_target,
 )
 from app.features.reporting.schemas import (
     FinalReportCreate,
@@ -101,6 +110,13 @@ async def load_final_report_sources(
 async def create_final_report(
     db: AsyncSession, payload: FinalReportCreate
 ) -> FinalReportSummary | None:
+    """Consolidates a month's accepted reports into its one open consolidated report.
+
+    With no open report for the month, this creates one; with a Draft, it adds the given reports.
+    Either way the report is Finalized when the month is complete (every expected enterprise sent
+    its report and every report is included) and stays a Draft otherwise. The included reports are
+    marked Consolidated in both cases, so the desktop app shows them as consolidated.
+    """
     source_reports = list(
         await db.scalars(
             select(EnterpriseReportSubmission)
@@ -113,34 +129,42 @@ async def create_final_report(
     if len(source_reports) != len(payload.reportIds):
         return None
     validate_final_report_sources(source_reports)
+    period = consolidation_period(source_reports, payload.period)
+    await lock_final_report_period(db, period)
 
-    already_consolidated = await db.scalar(
-        select(FinalReportSource.id)
-        .where(FinalReportSource.intake_report_id.in_(payload.reportIds))
-        .limit(1)
-    )
-    if already_consolidated is not None:
-        raise ReportAlreadyConsolidatedError(
-            "One or more source reports already belong to another final report."
+    if payload.reportIds:
+        already_consolidated = await db.scalar(
+            select(FinalReportSource.id)
+            .where(FinalReportSource.intake_report_id.in_(payload.reportIds))
+            .limit(1)
         )
+        if already_consolidated is not None:
+            raise ReportAlreadyConsolidatedError(
+                "One or more source reports already belong to another final report."
+            )
 
-    period = final_report_period(source_reports)
-    report = FinalReport(
-        report_code=await generate_final_report_code(db, period),
-        title="Citywide Tourism Aggregation",
-        period=period,
-        generated_on=datetime.now(UTC),
-        prepared_by=payload.preparedBy,
-        prepared_role="Staff Processing Division",
-        status="Draft",
-        total_entry=complete_sum(item.entries for item in source_reports),
-        total_exit=complete_sum(item.exits for item in source_reports),
-        total_unique=sum(item.unique_count for item in source_reports),
-        enterprise_count=len({item.enterprise_profile_id for item in source_reports}),
-    )
+    report = await find_open_final_report(db, period)
+    validate_final_report_target(period, report.status if report else None)
+    if report is None and not source_reports:
+        raise InvalidReportWorkflowError(f"No accepted reports for {period} to consolidate yet.")
+
+    now = datetime.now(UTC)
     try:
-        db.add(report)
-        await db.flush()
+        if report is None:
+            report = FinalReport(
+                report_code=await generate_final_report_code(db, period),
+                title="Citywide Tourism Aggregation",
+                period=period,
+                generated_on=now,
+                prepared_by=payload.preparedBy,
+                prepared_role="Staff Processing Division",
+                status=FINAL_REPORT_DRAFT_STATUS,
+                total_unique=0,
+                enterprise_count=0,
+                enterprise_total=0,
+            )
+            db.add(report)
+            await db.flush()
         for source in source_reports:
             mark_source_consolidated(source)
             db.add(final_report_source_snapshot(report.id, source))
@@ -150,8 +174,98 @@ async def create_final_report(
         raise ReportAlreadyConsolidatedError(
             "One or more source reports were consolidated by another request."
         ) from exc
+
+    sources = (await load_final_report_sources(db, [report.id])).get(report.id, [])
+    expected = final_report_expected_enterprises(
+        await active_enterprise_ids(db), await period_reporting_enterprise_ids(db, period)
+    )
+    report.total_entry = complete_sum(source.entries for source in sources)
+    report.total_exit = complete_sum(source.exits for source in sources)
+    report.total_unique = sum(source.unique_count for source in sources)
+    report.enterprise_count = len({source.enterprise_profile_id for source in sources})
+    report.enterprise_total = len(expected)
+    report.status = final_report_consolidation_status(
+        expected_enterprise_ids=expected,
+        period_reports=await period_report_statuses(db, period),
+    )
+    report.updated_at = now
+    await db.flush()
     await db.refresh(report)
-    return await to_final_report_summary(db, report)
+    return final_report_summary(report, sources)
+
+
+def consolidation_period(
+    source_reports: Sequence[EnterpriseReportSubmission], requested_period: str | None
+) -> str:
+    """The month to consolidate: the reports' month, or the requested month when no report is
+    given (to finalize a draft that has nothing new to add)."""
+    if source_reports:
+        period = final_report_period(source_reports)
+        if requested_period is not None and reporting_period_key(
+            requested_period
+        ) != reporting_period_key(period):
+            raise InvalidReportWorkflowError(
+                f"The reports belong to {period}, not {requested_period.strip()}."
+            )
+        return period
+    period = (requested_period or "").strip()
+    if reporting_period_key(period) is None:
+        raise InvalidReportWorkflowError(
+            "Reporting period must use the Month YYYY format, for example June 2026."
+        )
+    return period
+
+
+async def lock_final_report_period(db: AsyncSession, period: str) -> None:
+    """Serializes consolidations of one month, so concurrent requests add to one report."""
+    key = reporting_period_key(period) or period.strip()
+    await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"final-report:{key}"))))
+
+
+async def find_open_final_report(
+    db: AsyncSession, period: str, *, excluding_id: str | None = None
+) -> FinalReport | None:
+    """The month's consolidated report that is not archived, locked for update."""
+    statement = select(FinalReport).where(
+        FinalReport.period == period,
+        FinalReport.status != FINAL_REPORT_ARCHIVED_STATUS,
+    )
+    if excluding_id is not None:
+        statement = statement.where(FinalReport.id != excluding_id)
+    statement = (
+        statement.limit(1).with_for_update(of=FinalReport).execution_options(populate_existing=True)
+    )
+    return cast(FinalReport | None, await db.scalar(statement))
+
+
+async def active_enterprise_ids(db: AsyncSession) -> set[str]:
+    """Enterprises expected to report: active and activated, as the Staff Reports page lists them."""
+    return set(
+        await db.scalars(
+            select(Account.id)
+            .join(Account.enterprise_profile)
+            .where(
+                Account.role == AccountRole.ENTERPRISE,
+                Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
+            )
+        )
+    )
+
+
+async def period_reporting_enterprise_ids(db: AsyncSession, period: str) -> set[str]:
+    return {enterprise_id for enterprise_id, _ in await period_report_statuses(db, period)}
+
+
+async def period_report_statuses(db: AsyncSession, period: str) -> list[tuple[str, str]]:
+    """Each of the month's reports as (enterprise id, review status)."""
+    rows = await db.execute(
+        select(
+            EnterpriseReportSubmission.enterprise_profile_id,
+            EnterpriseReportSubmission.review_status,
+        ).where(EnterpriseReportSubmission.period == period)
+    )
+    return [(enterprise_id, review_status) for enterprise_id, review_status in rows.tuples()]
 
 
 async def update_final_report_status(
@@ -165,8 +279,21 @@ async def update_final_report_status(
         current_archived_from_status=report.archived_from_status,
         requested_status=payload.status,
     )
-    report.status = next_status
-    report.archived_from_status = archived_from_status
+    restoring = (
+        report.status == FINAL_REPORT_ARCHIVED_STATUS
+        and next_status != FINAL_REPORT_ARCHIVED_STATUS
+    )
+    if restoring:
+        await lock_final_report_period(db, report.period)
+        if await find_open_final_report(db, report.period, excluding_id=report.id) is not None:
+            raise InvalidReportWorkflowError(
+                f"{report.period} already has a consolidated report. Archive it before restoring "
+                "this one."
+            )
+    if (next_status, archived_from_status) != (report.status, report.archived_from_status):
+        report.status = next_status
+        report.archived_from_status = archived_from_status
+        report.updated_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(report)
     return await to_final_report_summary(db, report)
@@ -198,6 +325,8 @@ def final_report_summary(
         title=report.title,
         period=report.period,
         generatedOn=ensure_aware(report.generated_on).date().isoformat(),
+        generatedAt=ensure_aware(report.generated_on),
+        updatedAt=ensure_aware(report.updated_at),
         preparedBy=report.prepared_by,
         preparedRole=report.prepared_role,
         status=report.status,  # type: ignore[arg-type]
@@ -206,6 +335,7 @@ def final_report_summary(
         totalExit=report.total_exit,
         totalUnique=report.total_unique,
         enterpriseCount=report.enterprise_count,
+        enterpriseTotal=report.enterprise_total,
         sources=[
             FinalReportSourceSummary(
                 id=source.intake_report_id,

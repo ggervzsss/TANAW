@@ -14,6 +14,7 @@ import {
   shadeLevel,
   trafficGeometry,
   rangeChangeFromBefore,
+  todaySoFar,
   usualHistoryDates,
 } from "../../../../../src/features/dashboard/utils/traffic";
 
@@ -31,32 +32,45 @@ function day(business_date: string, entries: number, covered = true) {
 }
 
 describe("two-hour periods of a day", () => {
-  it("covers visiting hours and widens to every counted hour, in two-hour steps", () => {
-    expect(bucketStarts(hourly({ 9: 4, 14: 2 }))).toEqual([8, 10, 12, 14, 16, 18]);
+  it("runs from the first counted period to the last, in two-hour steps, with no empty hours at either end", () => {
+    expect(bucketStarts(hourly({ 9: 4, 14: 2 }))).toEqual([8, 10, 12, 14]);
     expect(bucketStarts(hourly({ 6: 1, 21: 3 }))).toEqual([6, 8, 10, 12, 14, 16, 18, 20]);
+    expect(bucketStarts(hourly({ 11: 1, 16: 3 }))).toEqual([10, 12, 14, 16]);
     expect(bucketStarts(hourly({}))).toEqual([]);
     expect(bucketStarts(hourly({ 9: 4 }, "unavailable"))).toEqual([]);
     expect(bucketStarts(null)).toEqual([]);
   });
 
-  it("keeps today's periods on the chart before anything is counted, through the current hour", () => {
-    expect(bucketStarts(hourly({}), 10)).toEqual([8, 10, 12, 14, 16, 18]);
-    expect(bucketStarts(hourly({}), 21)).toEqual([8, 10, 12, 14, 16, 18, 20]);
-    // Before opening hours, today still starts at the current period, which reads as zero.
-    expect(bucketStarts(hourly({}), 2)).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+  it("ends today at the period under way, and keeps it on the chart before anything is counted", () => {
+    expect(bucketStarts(hourly({ 8: 3, 9: 1 }), 13)).toEqual([8, 10, 12]);
+    expect(bucketStarts(hourly({ 10: 3 }), 15)).toEqual([10, 12, 14]);
+    expect(bucketStarts(hourly({}), 10)).toEqual([10]);
+    expect(bucketStarts(hourly({}), 21)).toEqual([20]);
+    expect(bucketStarts(hourly({}), 2)).toEqual([2]);
     expect(bucketStarts(hourly({}, "unavailable"), 10)).toEqual([]);
-    expect(hourlyTraffic(hourly({}), [], "12-hour", 10).map((point) => point.entries)).toEqual([null, null, null, null, null, null]);
+    expect(hourlyTraffic(hourly({}), [], "12-hour", 10).map((point) => point.entries)).toEqual([null]);
+  });
+
+  it("draws today only up to now: uncounted periods read as zero and the period under way carries the live reading", () => {
+    const points = todaySoFar(hourlyTraffic(hourly({ 8: 40, 13: 5 }), [], "12-hour", 13), 13.5, 17);
+    expect(points.map((point) => [point.key, point.entries, point.occupancy])).toEqual([
+      ["h8", 40, 0],
+      ["h10", 0, 0],
+      ["h12", 5, 17],
+    ]);
+    // A period that has not started never reaches the chart.
+    const ahead = [...hourlyTraffic(hourly({ 8: 40 }), [], "12-hour"), { key: "h16", label: "4 PM", period: "4 PM to 6 PM", entries: null, occupancy: null, usual: null }];
+    expect(todaySoFar(ahead, 9, null).map((point) => point.key)).toEqual(["h8"]);
   });
 
   it("adds entries per period, keeps uncovered periods as gaps and names them", () => {
-    const points = hourlyTraffic(hourly({ 8: 100, 9: 160, 12: 40 }), [], "12-hour");
+    const points = hourlyTraffic(hourly({ 8: 100, 9: 160, 12: 40, 17: 2 }), [], "12-hour");
     expect(points.map((point) => [point.label, point.entries])).toEqual([
       ["8 AM", 260],
       ["10 AM", null],
       ["12 PM", 40],
       ["2 PM", null],
-      ["4 PM", null],
-      ["6 PM", null],
+      ["4 PM", 2],
     ]);
     expect(points[0].period).toBe("8 AM to 10 AM");
     expect(points[0].usual).toBeNull();
@@ -188,7 +202,7 @@ describe("chart geometry", () => {
   });
 
   it("draws occupancy as one line through the periods that have happened, broken at gaps", () => {
-    const points = [point(0, 10, 4), point(1, 20, 0), point(2, 30, null), point(3, 40, 6), point(4, 50, 9), { ...point(5, null, 3), later: true }];
+    const points = [point(0, 10, 4), point(1, 20, 0), point(2, 30, null), point(3, 40, 6), point(4, 50, 9), point(5, null, null)];
     const g = trafficGeometry(points, 1000, 200, 70, true);
     expect(g.occupancyLine.match(/M/g)).toHaveLength(2);
     const f = (value: number) => Math.round(value * 10) / 10;
@@ -218,9 +232,20 @@ describe("chart geometry", () => {
     expect(g.yOccupancy(0)).toBe(g.base);
   });
 
-  it("draws no usual band for periods of today that have not happened", () => {
-    const later = { ...point(1, null, null), later: true };
-    expect(trafficGeometry([point(0, 10, 1), later], 1000, 200, 70, true).band.match(/Z/g)).toHaveLength(1);
+  it("spreads the periods across the whole plot, edge to edge", () => {
+    // Three periods so far today fill the plot as fully as a whole day's six would.
+    for (const count of [3, 6]) {
+      const g = trafficGeometry(
+        Array.from({ length: count }, (_, i) => point(i, 100 + i, 10)),
+        1000,
+        200,
+        70,
+        true,
+        56,
+      );
+      expect(g.x(0) - g.slot / 2).toBeCloseTo(g.left, 6);
+      expect(g.x(count - 1) + g.slot / 2).toBeCloseTo(g.left + g.plotWidth, 6);
+    }
   });
 
   it("keeps the usual within scale, so a high usual never clips above the plot", () => {

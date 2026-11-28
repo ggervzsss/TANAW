@@ -6,7 +6,11 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.features.reporting.errors import DuplicateReportPeriodError, InvalidReportWorkflowError
+from app.features.reporting.errors import (
+    DuplicateReportPeriodError,
+    InvalidReportWorkflowError,
+    ReportAlreadyConsolidatedError,
+)
 from app.features.reporting.intake import report_demographics_from_payload
 from app.features.reporting.models import EnterpriseReportSubmission
 from app.features.reporting.periods import (
@@ -14,8 +18,11 @@ from app.features.reporting.periods import (
     reporting_period_submission_error,
 )
 from app.features.reporting.policies import (
+    final_report_consolidation_status,
+    final_report_expected_enterprises,
     resolve_final_report_status_transition,
     validate_final_report_sources,
+    validate_final_report_target,
     validate_new_report_submission,
     validate_report_review_transition,
 )
@@ -80,6 +87,66 @@ def test_final_report_source_ids_must_be_unique() -> None:
         FinalReportCreate(reportIds=["report-1", "report-1"], preparedBy="Staff User")
 
 
+def test_final_report_create_needs_reports_or_the_month() -> None:
+    with pytest.raises(
+        ValidationError, match="at least one accepted report or the reporting month"
+    ):
+        FinalReportCreate(reportIds=[], preparedBy="Staff User")
+
+    assert FinalReportCreate(preparedBy="Staff User", period="October 2026").reportIds == []
+
+
+def test_consolidation_is_a_draft_while_an_enterprise_has_not_reported() -> None:
+    expected = final_report_expected_enterprises({"a", "b", "c"}, {"a", "b"})
+    assert expected == {"a", "b", "c"}
+    assert (
+        final_report_consolidation_status(
+            expected_enterprise_ids=expected,
+            period_reports=[("a", "Consolidated"), ("b", "Consolidated")],
+        )
+        == "Draft"
+    )
+
+
+def test_consolidation_is_a_draft_while_a_sent_report_is_left_out() -> None:
+    expected = final_report_expected_enterprises({"a", "b"}, {"a", "b"})
+    for left_out in ("Pending Review", "Ready to Consolidate"):
+        assert (
+            final_report_consolidation_status(
+                expected_enterprise_ids=expected,
+                period_reports=[("a", "Consolidated"), ("b", left_out)],
+            )
+            == "Draft"
+        )
+
+
+def test_consolidation_is_finalized_once_every_expected_report_is_included() -> None:
+    # A deactivated enterprise that reported still counts, and its report is included.
+    expected = final_report_expected_enterprises({"a", "b"}, {"a", "b", "retired"})
+    assert (
+        final_report_consolidation_status(
+            expected_enterprise_ids=expected,
+            period_reports=[
+                ("a", "Consolidated"),
+                ("b", "Consolidated"),
+                ("retired", "Consolidated"),
+            ],
+        )
+        == "Finalized"
+    )
+    assert (
+        final_report_consolidation_status(expected_enterprise_ids=set(), period_reports=[])
+        == "Draft"
+    )
+
+
+def test_a_month_has_one_open_consolidated_report() -> None:
+    validate_final_report_target("October 2026", None)
+    validate_final_report_target("October 2026", "Draft")
+    with pytest.raises(ReportAlreadyConsolidatedError, match="already final"):
+        validate_final_report_target("October 2026", "Finalized")
+
+
 def test_final_report_sources_must_be_ready_and_same_period() -> None:
     ready_report = _report("REP-001", "Ready to Consolidate", "June 2026")
     validate_final_report_sources(
@@ -116,6 +183,25 @@ def test_final_report_can_be_archived_and_restored(current_status: str) -> None:
         current_status="Archived",
         current_archived_from_status=current_status,
         requested_status="Draft",
+    ) == (current_status, None)
+
+
+@pytest.mark.parametrize(
+    ("current_status", "requested_status"), [("Draft", "Finalized"), ("Finalized", "Draft")]
+)
+def test_draft_and_final_status_cannot_be_set_by_hand(
+    current_status: str, requested_status: str
+) -> None:
+    with pytest.raises(InvalidReportWorkflowError, match="generating it again from Reports"):
+        resolve_final_report_status_transition(
+            current_status=current_status,
+            current_archived_from_status=None,
+            requested_status=requested_status,
+        )
+    assert resolve_final_report_status_transition(
+        current_status=current_status,
+        current_archived_from_status=None,
+        requested_status=current_status,
     ) == (current_status, None)
 
 

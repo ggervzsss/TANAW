@@ -41,7 +41,6 @@ const prefetchesByPath: Partial<Record<string, Prefetch[]>> = {
   [routes.admin.reports]: [operationalReports, reportEnterprises, enterpriseAccounts, operationalMap, activityLogs, operationalFinalReports],
   [routes.admin.activity]: [activityLogs],
   [routes.admin.requests]: [requests],
-  [routes.it.dashboard]: [requests, enterpriseHealth, lguAccounts, enterpriseAccounts, recentEmails],
   [routes.it.requests]: [requests, enterpriseHealth],
   [routes.it.enterprises]: [enterpriseAccounts, enterpriseHealth],
   [routes.it.personnel]: [lguAccounts],

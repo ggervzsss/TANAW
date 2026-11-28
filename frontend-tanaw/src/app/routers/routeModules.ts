@@ -10,7 +10,6 @@ const modules = {
   alerts: () => import("@/features/alerts-monitor"),
   devLog: () => import("@/features/dev-log"),
   itEnterprises: () => import("@/features/it-enterprises"),
-  itOverview: () => import("@/features/it-overview"),
   itPersonnel: () => import("@/features/it-personnel"),
   itRequests: () => import("@/features/it-requests"),
   itSystem: () => import("@/features/it-system"),
@@ -28,7 +27,6 @@ export const EnterpriseDetailsPage = lazy(() => modules.adminEnterprises().then(
 export const AdminEnterpriseReportsPage = lazy(() => modules.adminReports().then((module) => ({ default: module.AdminEnterpriseReportsPage })));
 export const AdminRecentActivityPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminRecentActivityPage })));
 export const AdminRequestsPage = lazy(() => modules.alerts().then((module) => ({ default: module.AdminRequestsPage })));
-export const ITOverviewPage = lazy(() => modules.itOverview().then((module) => ({ default: module.ITOverviewPage })));
 export const ITRequestsPage = lazy(() => modules.itRequests().then((module) => ({ default: module.ITRequestsPage })));
 export const ITEnterprisesPage = lazy(() => modules.itEnterprises().then((module) => ({ default: module.ITEnterprisesPage })));
 export const ITEnterpriseManagePage = lazy(() => modules.itEnterprises().then((module) => ({ default: module.ITEnterpriseManagePage })));
@@ -51,7 +49,6 @@ const portalModuleByPath: Partial<Record<string, () => Promise<unknown>>> = {
   [routes.admin.activity]: modules.systemLogs,
   [routes.admin.requests]: modules.alerts,
   [routes.admin.generalSettings]: modules.settings,
-  [routes.it.dashboard]: modules.itOverview,
   [routes.it.requests]: modules.itRequests,
   [routes.it.enterprises]: modules.itEnterprises,
   [routes.it.personnel]: modules.itPersonnel,

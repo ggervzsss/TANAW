@@ -115,7 +115,6 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
     await expect(page.locator('[data-metric-segment="entries"] strong')).toHaveText("371");
     const chart = page.locator(".dash-plot");
     await expect(chart).toHaveCount(1);
-    const readout = page.locator(".dash-readout");
     const assertCleanClick = async () => {
       const focus = await page.evaluate(() => {
         const element = document.activeElement!;
@@ -131,29 +130,46 @@ test("Dashboard chart clicks never paint native SVG focus rectangles in Electron
       const columns = chart.locator(".dash-hit");
       await expect(columns).toHaveCount(7);
       await expect(chart.locator(".dash-bar")).toHaveCount(7);
+      const selectedIndex = () => chart.locator(".dash-bar").evaluateAll((bars) => bars.findIndex((bar) => bar.classList.contains("dash-bar-selected")));
+      // At rest no period is highlighted, and the chart has nothing to press.
+      await expect(chart.locator(".dash-bar-selected")).toHaveCount(0);
+      await expect(chart.locator(".dash-hover")).toHaveCount(0);
+      await expect(chart.locator("[aria-pressed]")).toHaveCount(0);
+      // Pointing at a period highlights it and shows its label beside the bar; the rest dim.
       for (const column of [0, 2, 5]) {
-        await columns.nth(column).click();
-        await assertCleanClick();
-        await expect(columns.nth(column)).toHaveAttribute("aria-pressed", "true");
-        await expect(chart.locator(".dash-bar-selected")).toHaveCount(1);
+        await columns.nth(column).hover();
+        await expect.poll(selectedIndex).toBe(column);
+        await expect(chart.locator(".dash-hover")).toBeVisible();
       }
-      // Pointing at the chart dims every bar except the one under the pointer.
-      await columns.nth(3).hover();
       await expect(chart.locator(".dash-bar").nth(0)).not.toHaveCSS("opacity", "1");
       await expect(chart.locator(".dash-bar-selected")).toHaveCSS("opacity", "1");
-      // Keyboard: the date control is followed by the chart, and arrows move between days.
+      await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-hover.png`) });
+      // A click picks nothing: once the pointer leaves the chart, the highlight and label go.
+      await columns.nth(3).click();
+      await assertCleanClick();
+      await page.mouse.move(0, 0);
+      await expect.poll(selectedIndex).toBe(-1);
+      await expect(chart.locator(".dash-hover")).toHaveCount(0);
+      // Keyboard: the date control is followed by the chart, and the keys move the highlight.
       await page.getByRole("button", { name: /^Dashboard date range/ }).focus();
       await page.keyboard.press("Tab");
       await expect(chart).toBeFocused();
-      const shown = await readout.textContent();
-      await page.keyboard.press("ArrowLeft");
-      await expect(readout).not.toHaveText(shown ?? "");
+      await expect(chart.locator(".dash-bar-selected")).toHaveCount(0);
+      await page.keyboard.press("Home");
+      await expect.poll(selectedIndex).toBe(0);
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(selectedIndex).toBe(1);
+      await expect(chart.locator(".dash-hover")).toBeVisible();
+      await expect(page.locator(".dash-traffic [aria-live]")).toContainText("entries");
+      await page.keyboard.press("End");
+      await expect.poll(selectedIndex).toBe(6);
       await expect(chart).toHaveCSS("outline-style", "solid");
       expect(await chart.boundingBox()).toEqual(before);
       await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-keyboard.png`) });
-      await columns.nth(2).click();
-      await assertCleanClick();
-      await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-chart-clicked.png`) });
+      // Escape lets the highlight go while the chart keeps focus.
+      await page.keyboard.press("Escape");
+      await expect.poll(selectedIndex).toBe(-1);
+      await expect(chart).toBeFocused();
     }
     await page.getByRole("button", { name: "Open TANAW Insights" }).click();
     const assistant = page.getByRole("complementary", { name: "TANAW Insights" });

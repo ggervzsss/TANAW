@@ -142,11 +142,11 @@ describe("Activity details", () => {
     ]);
   });
 
-  it("names the place for Monitoring records and links to the Dashboard", () => {
+  it("names the place for Monitoring records and links to the Dashboard or Enterprises", () => {
     const camera = log({ id: "camera", group: "Monitoring", action: "Camera Stopped Counting", actor: "TANAW", actorRole: "System", target: "Sampaguita Gardens" });
     expect(activityDetailFields(camera)).toEqual([{ label: "Place", value: "Sampaguita Gardens" }]);
     expect(activityLinks(camera)).toEqual([{ label: "Open the Dashboard", to: "/admin/dashboard" }]);
-    expect(activityLinks(camera, "it")).toEqual([{ label: "Open the Overview", to: "/it/dashboard" }]);
+    expect(activityLinks(camera, "it")).toEqual([{ label: "Open Enterprises", to: "/it/enterprises" }]);
   });
 
   it("files enterprise-account events under Enterprises and links to the enterprise in each portal", () => {

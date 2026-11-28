@@ -4,6 +4,7 @@ import { formatBusinessDate, formatClock, formatHourRange, PHRASES, type Phrases
 import { isSingleDay } from "./periods";
 import type { AssistantData, ComposeContext, Plan, Reply } from "./types";
 import type { EstablishmentSummary } from "../../camera/services/establishment.types";
+import { reportingStatus } from "../../reports/model/report-status";
 
 type Draft = { text: string; details?: string[]; notes?: Note[]; extraNotes?: string[]; basis?: "period" | "now" | "report" | null; suggest?: boolean };
 
@@ -129,7 +130,7 @@ function occupancyDraft(data: AssistantData, phrases: Phrases): Draft {
   return { text: phrases.occupancy.now(live.occupancy), details, basis: "now" };
 }
 
-function reportDraft(data: AssistantData, phrases: Phrases): Draft {
+function reportDraft(data: AssistantData, phrases: Phrases, context: ComposeContext): Draft {
   const report = data.report;
   if (!report) return { text: phrases.report.none, basis: null };
   const details: string[] = [];
@@ -140,7 +141,8 @@ function reportDraft(data: AssistantData, phrases: Phrases): Draft {
     if (!Number.isNaN(at.getTime())) details.push(phrases.report.submitted(at.toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" })));
   }
   details.push(phrases.report.open);
-  return { text: phrases.report.latest(report.period ?? report.date, report.unique, report.status), details, basis: "report" };
+  // The same four statuses Reports History shows: Pending, Submitted, Missing or Consolidated.
+  return { text: phrases.report.latest(report.period ?? report.date, report.unique, reportingStatus("history", report, context.now)), details, basis: "report" };
 }
 
 /** Write the reply for ``plan`` from ``data``. Every number comes from ``data``. */
@@ -158,7 +160,7 @@ export function compose(plan: Plan, data: AssistantData, context: ComposeContext
     case "unknown":
       return done({ text: phrases.unknown, suggest: true });
     case "report":
-      return done(reportDraft(data, phrases));
+      return done(reportDraft(data, phrases, context));
     default:
       break;
   }

@@ -59,6 +59,6 @@ function row(key: string, kind: ReportLedgerRow["kind"], period: string): Report
     },
     reportLabel: key,
     reportDescription: key,
-    statusLabel: key,
+    statusLabel: "Pending",
   };
 }

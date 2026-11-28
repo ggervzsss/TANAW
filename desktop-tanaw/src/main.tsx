@@ -15,9 +15,12 @@ import "./features/help/help-center.css";
 import "./ui-kit/patterns/GeneralSettings.css";
 import { preloadLoginBackgroundImages } from "./features/login/utils/login-background-assets.ts";
 import { applyThemePreference, getInitialThemePreference } from "./features/security/utils/theme.ts";
+import { syncSkeletonSweep } from "./ui-kit/lib/skeleton.ts";
 
 applyThemePreference(getInitialThemePreference());
 void preloadLoginBackgroundImages();
+// Every loading skeleton shimmers with the same passing band of light, whenever it appears.
+syncSkeletonSweep();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

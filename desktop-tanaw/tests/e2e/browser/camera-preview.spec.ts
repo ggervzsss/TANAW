@@ -119,25 +119,23 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   await assertToolbarEdge();
   await assertWidePanelLayout();
   await page.screenshot({ path: info.outputPath("monitor-expanded.png") });
-  const width = (await preview.boundingBox())!.width;
-  const collapse = page.getByRole("button", { name: "Collapse configured cameras" });
-  await collapse.hover();
-  await expect(page.getByRole("tooltip")).toHaveText("Collapse configured cameras");
-  await collapse.click();
-  await expect(page.getByRole("img", { name: "2 configured cameras" })).toBeVisible();
-  await expect.poll(async () => (await preview.boundingBox())!.width).toBeGreaterThan(width + 100);
   const sidebar = page.getByRole("region", { name: "My Cameras" });
-  await expect(sidebar.getByRole("button", { name: /Dahua Camera/, pressed: false })).toBeVisible();
-  await expect.poll(async () => (await sidebar.boundingBox())!.height).toBeLessThan(290);
+  // My Cameras has no count or collapse toggle; each row carries its own delete button.
+  await expect(sidebar.getByRole("button", { name: /configured cameras/ })).toHaveCount(0);
+  await expect(sidebar.getByRole("img", { name: /configured camera/ })).toHaveCount(0);
+  await expect(selected.getByRole("button", { name: /^Delete/ })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "Delete Tapo Camera", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: /^Dahua Camera/, pressed: false })).toBeVisible();
+  await expect(metrics.locator(".camera-metrics-footer")).toContainText("Performance:");
+  await expect(page.locator(".camera-page-heading")).not.toContainText("Performance:");
   await expect(video).toHaveAttribute("data-test-original-frame", "true");
-  await assertAligned();
-  await assertToolbarEdge();
   await switchTheme(page, "dark");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition");
-  await page.screenshot({ path: info.outputPath("monitor-compact.png") });
-  await page.getByRole("button", { name: "Expand configured cameras" }).click();
-  await expect(page.getByRole("button", { name: /Tapo Camera/, pressed: true })).toBeVisible();
+  await assertAligned();
+  await assertToolbarEdge();
+  await page.screenshot({ path: info.outputPath("monitor-dark.png") });
+  await expect(page.getByRole("button", { name: /^Tapo Camera/, pressed: true })).toBeVisible();
 
   await toolbar.getByRole("button", { name: "Fullscreen", exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("camera-preview-surface"))).toBe(true);
@@ -161,7 +159,6 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   await expect(toolbar.getByRole("button", { name: "Refresh Preview", exact: true })).toHaveCount(0);
   await expect(metrics.getByText("Live observations unavailable")).toBeVisible();
   await expect(preview.getByRole("heading", { name: "Camera preview is paused" })).toBeVisible();
-  await sidebar.getByRole("button", { name: "Collapse configured cameras" }).click();
   await assertToolbarEdge();
   await assertWidePanelLayout();
   await page.screenshot({ path: info.outputPath("monitor-stopped.png") });
@@ -170,7 +167,6 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   expect(state.requests.map(({ path }) => path)).toEqual(["/camera/1/stop", "/camera/start"]);
   expect(state.profiles()[0]).toEqual(originalProfile);
 
-  await sidebar.getByRole("button", { name: "Expand configured cameras" }).click();
   await page.setViewportSize({ width: 800, height: 620 });
   await metrics.scrollIntoViewIfNeeded();
   await expect(metrics).toBeVisible();
@@ -178,10 +174,9 @@ test("uses the preview toolbar and keeps the selected stream aligned while resiz
   expect((await metrics.boundingBox())!.y).toBeGreaterThan((await preview.boundingBox())!.y);
   await assertAligned();
 
-  await sidebar.getByRole("button", { name: "Collapse configured cameras" }).click();
-  await sidebar.getByRole("button", { name: /Dahua Camera/ }).press("Enter");
+  await sidebar.getByRole("button", { name: /^Dahua Camera/ }).press("Enter");
   await expect(selected.getByRole("heading", { name: "Dahua Camera", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: /Dahua Camera/, pressed: true })).toBeFocused();
+  await expect(sidebar.getByRole("button", { name: /^Dahua Camera/, pressed: true })).toBeFocused();
   state.setStatus("failed");
   await expect(preview.getByRole("heading", { name: "Camera needs attention" })).toBeVisible();
   await expect(preview.getByRole("alert")).toContainText("Camera unreachable");

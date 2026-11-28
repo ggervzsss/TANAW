@@ -225,6 +225,8 @@ async def generate_final_report(
             detail="No report submissions were found for consolidation.",
         )
 
+    added = len(payload.reportIds)
+    outcome = "a draft of" if final_report.status == "Draft" else "the final"
     await record_operational_log(
         db,
         group="Reports",
@@ -233,9 +235,20 @@ async def generate_final_report(
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
         action="Generate Final Report",
         target=final_report.id,
-        summary=f"{actor.display_name} generated {final_report.id} from {len(final_report.sources)} ready submissions.",
+        summary=(
+            f"{actor.display_name} generated {outcome} {final_report.id} with "
+            f"{added} newly accepted {'submission' if added == 1 else 'submissions'} "
+            f"({final_report.enterpriseCount} of {final_report.enterpriseTotal} enterprises)."
+        ),
         source_id=final_report.id,
-        metadata={"reportCount": len(final_report.sources), "period": final_report.period},
+        metadata={
+            "reportCount": len(final_report.sources),
+            "addedReportCount": added,
+            "period": final_report.period,
+            "status": final_report.status,
+            "enterpriseCount": final_report.enterpriseCount,
+            "enterpriseTotal": final_report.enterpriseTotal,
+        },
     )
     return final_report
 

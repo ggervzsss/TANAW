@@ -3,6 +3,8 @@ import { Button, Dialog } from "@/shared/ui-kit";
 type ReportActionConfirmDialogProps = {
   title: string;
   message: string;
+  /** A short factual line under the message, such as what the action leaves out. */
+  detail?: string;
   confirmLabel: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -12,7 +14,7 @@ type ReportActionConfirmDialogProps = {
   destructive?: boolean;
 };
 
-export function ReportActionConfirmDialog({ title, message, confirmLabel, onCancel, onConfirm, isConfirmDisabled, isPending, pendingLabel, destructive }: ReportActionConfirmDialogProps) {
+export function ReportActionConfirmDialog({ title, message, detail, confirmLabel, onCancel, onConfirm, isConfirmDisabled, isPending, pendingLabel, destructive }: ReportActionConfirmDialogProps) {
   return (
     <Dialog
       title={title}
@@ -34,6 +36,7 @@ export function ReportActionConfirmDialog({ title, message, confirmLabel, onCanc
       }
     >
       <p className="text-sm leading-relaxed text-(--tanaw-text-secondary)">{message}</p>
+      {detail && <p className="mt-3 border-t border-(--tanaw-border-soft) pt-3 text-[0.8125rem] leading-relaxed text-(--tanaw-text-muted) tabular-nums">{detail}</p>}
     </Dialog>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { CircleAlert, MapPin, Maximize, Minimize, Play, RefreshCw, Settings, Square, Trash2, Video } from "lucide-react";
+import { CircleAlert, MapPin, Maximize, Minimize, Play, RefreshCw, Settings, Square, Video } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { Button } from "../../../ui-kit";
+import { Button, cn, useSkeletonReveal } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import { useBoundedLoading } from "../hooks/useBoundedLoading";
@@ -15,6 +15,7 @@ import { CameraStatusBadge } from "./CameraList";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { NoCameraSelected } from "./NoCameraSelected";
+import { PerformanceStatus } from "./PerformanceStatus";
 import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
 export type CameraPreviewPanelProps = {
@@ -61,7 +62,11 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
     setPreviewState("connecting");
   }, [activeCam?.id]);
 
-  if (!activeCam && props.loading && !serviceError && !error) return <CameraMonitorSkeleton />;
+  const showSkeleton = !activeCam && Boolean(props.loading) && !serviceError && !error;
+  // The selected camera fades in where its outline stood, when the outline was seen.
+  const reveal = useSkeletonReveal(showSkeleton);
+
+  if (showSkeleton) return <CameraMonitorSkeleton />;
 
   if (!activeCam)
     return (
@@ -80,17 +85,19 @@ export function CameraPreviewPanel(props: CameraPreviewPanelProps) {
 
   if (isEditMode && editForm) return <CameraSettingsPanel key={activeCam.id} {...props} initialPreviewState={previewState} activeCam={activeCam} editForm={editForm} />;
 
-  return <CameraMonitor key={activeCam.id} {...props} activeCam={activeCam} onPreviewStateChange={setPreviewState} />;
+  return <CameraMonitor key={activeCam.id} {...props} activeCam={activeCam} onPreviewStateChange={setPreviewState} reveal={reveal} />;
 }
 
 type CameraMonitorProps = CameraPreviewPanelProps & {
   activeCam: Camera;
   onPreviewStateChange: (state: CameraPreviewState) => void;
+  /** The skeleton-reveal class, when the monitor takes the place of its skeleton. */
+  reveal?: string;
 };
 
 function CameraMonitor({
-  activeCam, area, counts, detections, error, health, isRestartingService, isSaving, isStarting, isStopping, isTesting,
-  onDelete, onEdit, onEditFormChange, onPreviewStateChange, onRestartService, onStartProcessing, onStopProcessing,
+  activeCam, area, reveal, counts, detections, error, health, isRestartingService, isSaving, isStarting, isStopping, isTesting,
+  onEdit, onEditFormChange, onPreviewStateChange, onRestartService, onStartProcessing, onStopProcessing,
   runtimeReady = true, serviceError, serviceStatus, storageKey, streamUrl, warnings,
 }: CameraMonitorProps) {
   const previewRef = useRef<HTMLElement>(null);
@@ -147,7 +154,7 @@ function CameraMonitor({
   }
 
   return (
-    <div className="camera-preview-card" role="region" aria-label="Selected camera">
+    <div className={cn("camera-preview-card", reveal)} role="region" aria-label="Selected camera">
       <header className="camera-preview-heading">
         <span ref={iconRef} className="camera-identity-icon"><Video size={20} aria-hidden="true" /></span>
         <div className="camera-identity">
@@ -159,7 +166,6 @@ function CameraMonitor({
         </div>
         <div className="camera-header-actions">
           <Button variant="secondary" aria-label="Edit configuration" leadingIcon={<Settings size={16} aria-hidden="true" />} onClick={onEdit}>Settings</Button>
-          <Button variant="ghost" className="camera-icon-button" aria-label="Delete camera" title="Delete camera" onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></Button>
         </div>
       </header>
 
@@ -217,7 +223,8 @@ function CameraMonitor({
           </div>
           {fullscreenError && <p className="camera-preview-feedback" role="alert">Fullscreen is unavailable. Try again.</p>}
         </section>
-        <CameraLiveMetrics activeCam={activeCam} area={area} counts={counts} health={health} runtimeReady={runtimeReady && !serviceIssue} loading={metricsLoading} />
+        <CameraLiveMetrics activeCam={activeCam} area={area} counts={counts} health={health} runtimeReady={runtimeReady && !serviceIssue} loading={metricsLoading}
+          footer={<PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />} />
       </motion.div>
     </div>
   );

@@ -537,6 +537,56 @@ body:has(.tanaw-report-preview) .tanaw-connection-notice {
   display: none;
 }
 
+/* The month's draft, or why Generate cannot be pressed yet: a quiet line under the caption. */
+.tanaw-staff-generate-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 68ch;
+  margin-top: 12px;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  animation: tanaw-staff-note-in var(--tanaw-duration-base) var(--ease-tanaw-out) both;
+}
+
+.tanaw-staff-generate-note > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--tanaw-st-waiting);
+}
+
+.tanaw-staff-generate-note a {
+  border-radius: 4px;
+  color: var(--tanaw-accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 4px;
+  white-space: nowrap;
+}
+
+.tanaw-staff-generate-note a:hover {
+  text-decoration: underline;
+}
+
+.tanaw-staff-generate-note a:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes tanaw-staff-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-staff-generate-note {
+    animation: none;
+  }
+}
+
 @media (width < 40rem) {
   .tanaw-portal-header div:has(> .tanaw-staff-reports-actions) {
     width: 100%;

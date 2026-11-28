@@ -35,16 +35,3 @@ export function parseCameraMarks(raw: string | null): CameraStatusMarks {
     return {};
   }
 }
-
-/** "Parking Area" or "Gate A, Lobby and Hall". */
-export function joinNames(names: string[]) {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-/** "6 to 8 PM", or "10 AM to 12 PM" when the two times differ in AM/PM. */
-export function shortTimeSpan(start: string, end: string) {
-  const suffix = (label: string) => label.match(/\s(AM|PM)$/)?.[1] ?? null;
-  const first = suffix(start);
-  return first && first === suffix(end) ? `${start.replace(/\s(AM|PM)$/, "")} to ${end}` : `${start} to ${end}`;
-}

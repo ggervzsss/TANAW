@@ -56,7 +56,10 @@ html.dark .enterprise-shell .tanaw-assistant-scope .tanaw-assistant.tanaw-assist
   background: var(--theme-raised);
   box-shadow: -24px 0 48px -16px rgb(0 0 0 / 0.6);
 }
+/* While its edge is dragged the panel keeps the resize cursor and nothing in it is selected. The
+   class sits beside .tanaw-assistant-dock, so the panel stays docked through the drag. */
 .tanaw-assistant-dock.is-resizing {
+  cursor: col-resize;
   user-select: none;
 }
 

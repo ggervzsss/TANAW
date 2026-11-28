@@ -1,4 +1,4 @@
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, X } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { requestPlace } from "@/features/alerts-monitor/model";
@@ -37,6 +37,8 @@ type ITRequestDetailProps = {
   formatWhen: (value: string) => string;
   /** Called after an action succeeds, so the page can keep this request selected. */
   onActed?: (request: Request) => void;
+  /** Closes the request beside the table (wide screens). Without it, no close button shows. */
+  onClose?: () => void;
 };
 
 const dotBorder: Record<TimelineKind, string> = {
@@ -66,7 +68,7 @@ const dotFill: Record<TimelineKind, string> = {
  * conversation and the reply box. Mount it with `key={request.id}` so another request starts
  * with an empty reply.
  */
-export function ITRequestDetail({ request, detail, detailLoading, viewer, now, formatWhen, onActed }: ITRequestDetailProps) {
+export function ITRequestDetail({ request, detail, detailLoading, viewer, now, formatWhen, onActed, onClose }: ITRequestDetailProps) {
   const [draft, setDraft] = useState("");
   const reasonId = useId();
   const afterAction = (action: RequestAction) => {
@@ -85,15 +87,26 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
   const hasActions = actions.canStart || actions.canDecide || actions.canResolve || actions.canReopen || actions.canMove;
 
   return (
-    <article aria-labelledby="it-request-title" className="it-requests__detail min-w-0 py-1.5">
-      <p className="flex items-center gap-2.5 text-[0.8125rem] font-semibold">
+    <article aria-labelledby="it-request-title" className="it-requests__detail min-w-0 py-1.5 text-base">
+      <p className="flex items-center gap-2.5 text-sm font-semibold">
         <span className={stateTextClass[state]}>{stateLabels[state]}</span>
         <span className="font-semibold text-(--tanaw-text-muted) tabular-nums">{request.code}</span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close request details"
+            title="Close (Esc)"
+            className="rounded-tanaw-md ease-tanaw-out -my-2.5 ml-auto inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-(--tanaw-text-secondary) transition-[background-color,color,scale] duration-150 hover:bg-(--tanaw-control-bg) hover:text-(--tanaw-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-95 motion-reduce:transition-none"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
       </p>
-      <h2 id="it-request-title" className="mt-2 text-[1.375rem] leading-tight font-[650] tracking-[-0.015em] text-(--tanaw-text) max-sm:text-xl">
+      <h2 id="it-request-title" className="mt-2 text-2xl leading-tight font-[650] tracking-[-0.015em] text-(--tanaw-text) max-sm:text-xl">
         {request.title}
       </h2>
-      <p role="status" className="mt-2.5 flex items-center gap-2 text-[0.90625rem] text-(--tanaw-text-secondary)">
+      <p role="status" className="mt-2.5 flex items-center gap-2 text-[0.9375rem] text-(--tanaw-text-secondary)">
         <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", stateDotClass[state])} />
         {statusNote(request, viewer, formatWhen)}
       </p>
@@ -153,34 +166,34 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
         </div>
       )}
       {blocked && (
-        <p id={reasonId} className="mt-2 max-w-[68ch] text-[0.84375rem] font-semibold text-(--tanaw-warn-ink)">
+        <p id={reasonId} className="mt-2 max-w-[68ch] text-sm font-semibold text-(--tanaw-warn-ink)">
           {blocked}
         </p>
       )}
 
-      <h3 className="mt-7 text-base font-[650]">What happened</h3>
+      <h3 className="mt-7 text-[1.0625rem] font-[650]">What happened</h3>
       <p className="mt-1.5 max-w-[68ch] leading-relaxed whitespace-pre-line text-(--tanaw-text-secondary)">{request.description}</p>
 
       {change && (
         <div className="mt-5 max-w-184">
-          <p className="mb-1 text-[13px] font-medium text-(--tanaw-text-secondary)">{change.label}</p>
+          <p className="mb-1 text-sm font-medium text-(--tanaw-text-secondary)">{change.label}</p>
           {/* Open, not boxed: the current and the asked-for value read across one ruled line. */}
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-5 gap-y-3 border-y border-(--tanaw-border-soft) py-3.5">
             <div className="min-w-0">
-              <span className="block text-[13px] text-(--tanaw-text-muted)">Now</span>
+              <span className="block text-sm text-(--tanaw-text-muted)">Now</span>
               <span className="mt-0.5 block font-semibold wrap-anywhere">{change.currentValue || "Not set"}</span>
             </div>
             <ArrowRight size={18} aria-hidden="true" className="text-(--tanaw-text-muted)" />
             <span className="sr-only">changes to</span>
             <div className="min-w-0">
-              <span className="block text-[13px] text-(--tanaw-text-muted)">Asked for</span>
+              <span className="block text-sm text-(--tanaw-text-muted)">Asked for</span>
               <span className="mt-0.5 block font-semibold wrap-anywhere text-(--tanaw-accent-ink)">{change.requestedValue}</span>
             </div>
           </div>
         </div>
       )}
 
-      <h3 className="mt-6 text-base font-[650]">Details</h3>
+      <h3 className="mt-6 text-[1.0625rem] font-[650]">Details</h3>
       <dl className="mt-2 grid grid-cols-2 border-t border-(--tanaw-border-soft) max-sm:grid-cols-1">
         <DetailItem label="Place">
           {request.enterpriseId ? (
@@ -205,16 +218,16 @@ export function ITRequestDetail({ request, detail, detailLoading, viewer, now, f
 
       <RequestPhotos attachments={request.attachments ?? []} />
 
-      <h3 className="mt-6 text-base font-[650]">Conversation and updates</h3>
+      <h3 className="mt-6 text-[1.0625rem] font-[650]">Conversation and updates</h3>
       <ol aria-busy={detailLoading || undefined} className="mt-2.5 list-none pl-2">
         {timeline.map((entry, index) => (
           <li key={entry.id} className="relative border-l-2 border-(--tanaw-border-soft) pb-3.5 pl-5.5 last:border-transparent last:pb-1">
             <span aria-hidden="true" className={cn("absolute top-0.5 -left-1.75 size-3 rounded-full border-2", dotBorder[entry.kind], index === 0 ? dotFill[entry.kind] : "bg-(--tanaw-page)")} />
             <div className={cn(entry.kind === "note" && "rounded-tanaw-md bg-(--tanaw-warning-surface) px-3 py-2")}>
               <p className="font-semibold text-(--tanaw-text)">
-                {entry.title} {entry.at && <span className="text-[0.8125rem] font-medium text-(--tanaw-text-muted)">{formatWhen(entry.at)}</span>}
+                {entry.title} {entry.at && <span className="text-sm font-medium text-(--tanaw-text-muted)">{formatWhen(entry.at)}</span>}
               </p>
-              <p className="mt-0.75 text-sm wrap-break-word whitespace-pre-line text-(--tanaw-text-secondary)">{entry.detail}</p>
+              <p className="mt-0.75 text-[0.9375rem] wrap-break-word whitespace-pre-line text-(--tanaw-text-secondary)">{entry.detail}</p>
             </div>
           </li>
         ))}
@@ -246,7 +259,7 @@ function AppStatus({ enterpriseId, query, now, formatWhen }: { enterpriseId: str
 function DetailItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="border-b border-(--tanaw-border-soft) py-3 pr-4 even:pr-0 max-sm:pr-0">
-      <dt className="text-[13px] text-(--tanaw-text-muted)">{label}</dt>
+      <dt className="text-sm text-(--tanaw-text-muted)">{label}</dt>
       <dd className="mt-0.75 font-semibold wrap-break-word text-(--tanaw-text)">{children}</dd>
     </div>
   );

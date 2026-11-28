@@ -171,7 +171,7 @@ const SAMPLE_LIVE: EstablishmentLive = {
   identification_available: true,
 };
 
-const report = (id: string, period: string, date: string, status: string, entries: number, syncStatus = "submitted"): ReportRecord => ({
+const report = (id: string, period: string, date: string, status: string, entries: number, syncStatus = "synced"): ReportRecord => ({
   id,
   period,
   date,
@@ -189,7 +189,7 @@ const SAMPLE_REPORTS: ReportRecord[] = [
   report("SAMPLE-2026-08", "August 2026", "Sep 5, 2026", "Submitted", 121_560),
   report("SAMPLE-2026-07", "July 2026", "Aug 6, 2026", "Submitted", 131_204),
   report("SAMPLE-2026-06", "June 2026", "Jul 7, 2026", "Submitted", 126_998),
-  report("SAMPLE-2026-05", "May 2026", "Jun 5, 2026", "Submitted", 140_311, "pending"),
+  report("SAMPLE-2026-05", "May 2026", "Jun 5, 2026", "Submitted", 140_311, "pending_cloud_sync"),
   report("SAMPLE-2026-04", "April 2026", "May 7, 2026", "Submitted", 137_450),
 ];
 

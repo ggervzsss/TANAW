@@ -1,8 +1,8 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { CircleAlert, CircleCheck, LockKeyhole } from "lucide-react";
-import { Skeleton, SkeletonLine } from "../../../ui-kit";
+import { CircleAlert, LockKeyhole } from "lucide-react";
+import { Skeleton, SkeletonLine, Tooltip, useSkeletonReveal } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics } from "../../../types/enterprise";
-import { formatReportDate, OTHER_ORIGINS, otherOriginsTotal, setDayOrigin } from "../model/daily-origins";
+import { formatReportDate, OTHER_ORIGINS, setDayOrigin } from "../model/daily-origins";
 import { var1MonthlyCells } from "../model/var1";
 import type { SelectedReportDay } from "../hooks/useSelectedReportDay";
 
@@ -26,12 +26,13 @@ const ESTIMATED = "Estimated by TANAW from the cameras. Visitors entered for oth
 const NOT_RECORDED = "TANAW had no male/female estimate for this day.";
 
 export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoading = false, isReadOnly, setOrigins }: Props) {
-  const figure = (content: ReactNode) => (isLoading ? <Skeleton className="report-cell-skeleton" /> : content);
+  // Each figure fades in where its placeholder stood, when the placeholders were seen.
+  const reveal = useSkeletonReveal(isLoading);
+  const figure = (content: ReactNode) => (isLoading ? <Skeleton className="report-cell-skeleton" /> : reveal ? <span className={reveal}>{content}</span> : content);
   if (!hasDailyOrigins || !selected) return <MonthlyVisitorDetails demo={demo} metrics={metrics} figure={figure} />;
   const day = selected.day;
   const editable = !isReadOnly && Boolean(day.unique);
   const origins = day.origins;
-  const entered = otherOriginsTotal(origins) > 0;
   const sexed = day.thisCityMale !== null && day.thisCityFemale !== null;
   const city = { male: day.thisCityMale ?? 0, female: day.thisCityFemale ?? 0 };
   const sum = (sex: "male" | "female") => (sexed ? city[sex] : 0) + OTHER_ORIGINS.reduce((total, { id }) => total + (origins?.[id][sex] ?? 0), 0);
@@ -63,9 +64,10 @@ export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoa
                 const label = `This City ${sex === "male" ? "Male" : "Female"}`;
                 return (
                   <td key={sex}>
-                    <span className="report-origin-locked" title={sexed ? ESTIMATED : NOT_RECORDED} aria-label={sexed ? label : `${label} not recorded`}>
+                    {/* The hint opens on hover and on keyboard focus; the pointer stays the default arrow. */}
+                    <Tooltip className="report-origin-locked" align="left" content={sexed ? ESTIMATED : NOT_RECORDED} ariaLabel={sexed ? label : `${label} not recorded`}>
                       {figure(sexed ? city[sex].toLocaleString() : "—")}
-                    </span>
+                    </Tooltip>
                   </td>
                 );
               })}
@@ -111,23 +113,13 @@ export function VisitorDetails({ selected, hasDailyOrigins, demo, metrics, isLoa
           </tfoot>
         </table>
       </div>
-      <div className="report-day-actions">
-        {isLoading ? (
-          <p>
-            <SkeletonLine width="22rem" />
-          </p>
-        ) : day.status === "missing" ? (
-          <p data-tone="missing" role="status">
+      {/* Only a problem speaks up here; a day that adds up needs no message. */}
+      <div className="report-day-actions" role="status">
+        {!isLoading && day.status === "missing" && (
+          <p data-tone="missing">
             <CircleAlert aria-hidden="true" />
             These origins add up to more than the {(day.unique ?? 0).toLocaleString()} visitors TANAW counted. Lower them to continue.
           </p>
-        ) : day.status === "complete" ? (
-          <p data-tone="complete" role="status">
-            <CircleCheck aria-hidden="true" />
-            {entered ? "Visitor origins entered for this day." : "All visitors count as This City unless you enter other origins."}
-          </p>
-        ) : (
-          <p role="status">No visitor origins to enter for this day.</p>
         )}
       </div>
     </>

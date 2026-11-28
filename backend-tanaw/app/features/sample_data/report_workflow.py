@@ -15,6 +15,7 @@ from app.features.reporting.models import (
     EnterpriseReportSubmission,
     FinalReport,
 )
+from app.features.reporting.policies import final_report_consolidation_status
 from app.features.sample_data.daily_details import sample_report_details
 from app.features.sample_data.dataset import (
     SAMPLE_CAMERA_PREFIX,
@@ -269,15 +270,22 @@ async def create_staff_report_notifications(
 
 
 async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalReport]:
-    """One finalized monthly report per month whose reports are consolidated. As in the Staff
-    portal, enterprises that did not send a report are left out rather than blocking the month."""
+    """One monthly report per month whose reports are consolidated. Past sample months count as
+    closed: the enterprises that sent a report are the ones the month waited for, so a month is
+    Finalized unless one of its reports still awaits review, which leaves it a Draft."""
     reports_by_period: dict[str, list[EnterpriseReportSubmission]] = {}
+    statuses_by_period: dict[str, list[tuple[str, str]]] = {}
     for report in history["reports"]:
+        statuses_by_period.setdefault(report.period, []).append(
+            (report.enterprise_profile_id, report.review_status)
+        )
         if report.review_status == "Consolidated":
             reports_by_period.setdefault(report.period, []).append(report)
 
     final_reports: list[FinalReport] = []
     for period, reports in sorted(reports_by_period.items()):
+        period_reports = statuses_by_period[period]
+        expected = {enterprise_id for enterprise_id, _ in period_reports}
         final_report = FinalReport(
             id=sample_uuid("final-report", period),
             report_code=f"{SAMPLE_FINAL_REPORT_PREFIX}{period.replace(' ', '-').upper()}",
@@ -286,11 +294,14 @@ async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalRep
             generated_on=max(report.submitted_at for report in reports) + timedelta(days=2),
             prepared_by=REPORTING_STAFF_NAME,
             prepared_role="Staff Processing Division",
-            status="Finalized",
+            status=final_report_consolidation_status(
+                expected_enterprise_ids=expected, period_reports=period_reports
+            ),
             total_entry=complete_sum(report.entries for report in reports),
             total_exit=complete_sum(report.exits for report in reports),
             total_unique=sum(report.unique_count for report in reports),
             enterprise_count=len({report.enterprise_profile_id for report in reports}),
+            enterprise_total=len(expected),
         )
         db.add(final_report)
         await db.flush()

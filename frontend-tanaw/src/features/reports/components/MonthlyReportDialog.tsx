@@ -1,9 +1,6 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast/headless";
-import { operationalFinalReportsQueryKey } from "@/app/hooks/useOperationalSync";
-import { Button } from "@/shared/ui-kit";
-import { updateFinalReportStatus } from "@/shared/services/reporting";
+import { StatusPill } from "@/shared/ui-kit";
 import type { FinalReport } from "@/shared/types";
+import { DRAFT_MARKER, draftReportSummary } from "../model/consolidatedReports";
 import { var2mFromFinalReport } from "../model/varForms";
 import { downloadFinalReportPdf, printFinalReportPdf } from "../utils/pdf";
 import { ReportPreviewDialog } from "./ReportPreviewDialog";
@@ -14,34 +11,32 @@ type MonthlyReportDialogProps = {
   onClose: () => void;
 };
 
+/**
+ * One month's consolidated report (VAR 2M). A draft is marked "Draft — not final" in the header
+ * and on its printed pages; it is updated, and finalized, from Reports rather than here.
+ */
 export function MonthlyReportDialog({ report, onClose }: MonthlyReportDialogProps) {
-  const queryClient = useQueryClient();
-  const finalize = useMutation({
-    mutationFn: () => updateFinalReportStatus(report.id, { status: "Finalized" }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
-      toast.success("Monthly report finalized.");
-    },
-    onError: () => toast.error("Monthly report could not be finalized. Try again."),
-  });
-  const currentReport = finalize.data ?? report;
+  const draft = report.status === "Draft";
 
   return (
     <ReportPreviewDialog
       title="Monthly report (VAR 2M)"
-      description={`${report.period} · ${report.id}`}
-      onClose={onClose}
-      onDownload={() => downloadFinalReportPdf(currentReport)}
-      onPrint={() => printFinalReportPdf(currentReport)}
-      actions={
-        currentReport.status === "Draft" && (
-          <Button loading={finalize.isPending} onClick={() => finalize.mutate()}>
-            {finalize.isPending ? "Finalizing..." : "Finalize monthly report"}
-          </Button>
-        )
+      description={
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span>{`${report.period} · ${report.id}`}</span>
+          {draft && (
+            <StatusPill tone="waiting" className="min-w-0">
+              {DRAFT_MARKER}
+            </StatusPill>
+          )}
+        </span>
       }
+      onClose={onClose}
+      onDownload={() => downloadFinalReportPdf(report)}
+      onPrint={() => printFinalReportPdf(report)}
     >
-      <Var2mSheet form={var2mFromFinalReport(currentReport)} label={`VAR 2M ${report.period}`} />
+      {draft && <p className="max-w-[72ch] text-sm leading-relaxed text-(--tanaw-text-secondary)">{draftReportSummary(report)}</p>}
+      <Var2mSheet form={var2mFromFinalReport(report)} label={`VAR 2M ${report.period}`} />
     </ReportPreviewDialog>
   );
 }

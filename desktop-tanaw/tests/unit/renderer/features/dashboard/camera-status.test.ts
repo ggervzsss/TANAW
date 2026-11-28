@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { joinNames, nextCameraMarks, parseCameraMarks, shortTimeSpan } from "../../../../../src/features/dashboard/utils/camera-status";
+import { nextCameraMarks, parseCameraMarks } from "../../../../../src/features/dashboard/utils/camera-status";
 
 const live = (counting: number[], missing: number[]) => ({
   contributions: [{ camera_ids: counting, occupancy: 1, state: "estimated" as const, basis: "entry_exit_balance" as const }],
@@ -25,18 +25,5 @@ describe("camera status times", () => {
     expect(parseCameraMarks('{"1":{"counting":true,"since":5},"2":{"counting":"yes"}}')).toEqual({ "1": { counting: true, since: 5 } });
     expect(parseCameraMarks("not json")).toEqual({});
     expect(parseCameraMarks(null)).toEqual({});
-  });
-});
-
-describe("caption helpers", () => {
-  it("joins camera names the way a sentence does", () => {
-    expect(joinNames(["Parking Area"])).toBe("Parking Area");
-    expect(joinNames(["Gate A", "Lobby", "Hall"])).toBe("Gate A, Lobby and Hall");
-  });
-
-  it("shortens a time span when both ends share AM or PM", () => {
-    expect(shortTimeSpan("6 PM", "8 PM")).toBe("6 to 8 PM");
-    expect(shortTimeSpan("10 AM", "12 PM")).toBe("10 AM to 12 PM");
-    expect(shortTimeSpan("18:00", "20:00")).toBe("18:00 to 20:00");
   });
 });

@@ -1,9 +1,10 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Files, History } from "lucide-react";
 import { routePaths } from "../../../app/router/routePaths";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { DotFormModal } from "./DotFormModal";
+import { ReportDraftActions } from "./ReportDraftActions";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
@@ -12,6 +13,8 @@ import { useReportsWorkspace } from "../hooks/useReportsWorkspace";
 import { validateDemographicAllocation } from "../model/report-workspace";
 import { dailyOriginsError } from "../model/daily-origins";
 import { rejectedUploadTicketDraft, reportReference } from "../model/report-lifecycle";
+import { previewActions } from "../model/report-preview";
+import { isSameReportingMonth } from "../utils/reporting-period";
 
 type ReportsViewProps = {
   cameras?: Camera[];
@@ -42,7 +45,6 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
     demo,
     displayedMetrics,
     executeSubmit,
-    handleDownloadReport,
     handlePreviewReport,
     handleSelectPeriod,
     hasDailyOrigins,
@@ -75,6 +77,48 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
   const reviewKey = JSON.stringify([period, activeReportId, origins, notes, displayedMetrics.unique, displayedMetrics.counting?.snapshot_version]);
   const previewIsDraft = previewReport?.reportId === (activeReportId ?? "TANAW-DRAFT") && !isReadOnly;
   const previewValidation = previewReport ? ((previewIsDraft ? dailyOriginsError(days) : null) ?? validateDemographicAllocation(previewReport.metrics, previewReport.demo)) : null;
+  // A month TANAW does not hold yet (Pending or Missing) offers Submit Form; Print and Download PDF
+  // appear once it is Submitted or Consolidated.
+  const previewPlan = previewReport ? previewActions({ preview: previewReport, rows: ledgerRows, openPeriod: period, openIsEditable: !isReadOnly }) : null;
+  // Submit Form starts the same flow as Submit Report: the preview gives way to the confirmation.
+  const submitFromPreview = () => {
+    setReviewedKey(reviewKey);
+    setPreviewReport(null);
+    openSubmitDialog();
+  };
+  const reviewOpenForm = () =>
+    setPreviewReport({
+      attractionType,
+      demo,
+      origins: hasDailyOrigins ? origins : undefined,
+      metrics: displayedMetrics,
+      notes,
+      period,
+      reportId: activeReportId ?? "TANAW-DRAFT",
+    });
+  // Submit Form for another month opens it in Create Reports, as its Tourism Period picker does,
+  // and submits it once its counts and visitor details have loaded. Only that month is sent.
+  const [submitAfterOpen, setSubmitAfterOpen] = useState<string | null>(null);
+  const submitMonth = (target: string) => {
+    setSubmitAfterOpen(target);
+    selectTab("create");
+    handleSelectPeriod(target);
+  };
+  useEffect(() => {
+    if (!submitAfterOpen) return;
+    // The month did not open (another send is under way, for example): nothing is sent.
+    if (!isSameReportingMonth(period, submitAfterOpen) || isReadOnly) {
+      setSubmitAfterOpen(null);
+      return;
+    }
+    if (isPeriodChanging) return;
+    setSubmitAfterOpen(null);
+    // What still blocks it shows beside Submit Form in that month's form.
+    if (blockingMetricsError ?? validationError) reviewOpenForm();
+    else submitFromPreview();
+    // Runs when the opened month settles; the handlers read that render's values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitAfterOpen, period, isReadOnly, isPeriodChanging]);
   // Reports History only previews: the month in Create Reports changes from its Tourism Period picker.
   const selectTab = (next: "create" | "history") => {
     if (next === "create") setPreviewedLedgerKey(null);
@@ -93,7 +137,29 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
           notes={previewReport.notes}
           period={previewReport.period}
           reportId={previewReport.reportId}
-          validationMessage={previewValidation}
+          validationMessage={previewPlan?.kind === "export" ? previewValidation : null}
+          actions={
+            previewPlan?.kind === "submit-open" ? (
+              <ReportDraftActions
+                label="Submit Form"
+                isReadOnly={false}
+                isPeriodChanging={isPeriodChanging}
+                isLoadingCounts={isPeriodChanging}
+                metricsError={blockingMetricsError}
+                validationError={validationError}
+                onSubmitPrompt={submitFromPreview}
+              />
+            ) : previewPlan?.kind === "submit-month" ? (
+              <ReportDraftActions
+                label="Submit Form"
+                isReadOnly={false}
+                isPeriodChanging={isSubmitting}
+                metricsError={null}
+                validationError={previewPlan.blocker}
+                onSubmitPrompt={() => submitMonth(previewPlan.period)}
+              />
+            ) : undefined
+          }
           onClose={() => {
             if (previewReport.reportId === (activeReportId ?? "TANAW-DRAFT") && !previewValidation && JSON.stringify(previewReport.origins) === JSON.stringify(origins)) setReviewedKey(reviewKey);
             setPreviewReport(null);
@@ -181,17 +247,7 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
           statusAnnouncement={statusAnnouncement}
           reportsAwaitingAction={reportsAwaitingAction}
           onOpenReportMonth={(report) => handleSelectPeriod(report.period ?? report.date)}
-          onReview={() =>
-            setPreviewReport({
-              attractionType,
-              demo,
-              origins: hasDailyOrigins ? origins : undefined,
-              metrics: displayedMetrics,
-              notes,
-              period,
-              reportId: activeReportId ?? "TANAW-DRAFT",
-            })
-          }
+          onReview={reviewOpenForm}
           setOrigins={setOrigins}
           setNotes={setNotes}
         />
@@ -201,7 +257,6 @@ function ReportsWorkspace({ workspace, reportsHistory }: { workspace: ReturnType
           activeLedgerKey={previewedLedgerKey ?? activeLedgerKey}
           ledgerRows={ledgerRows}
           isLoading={isPeriodChanging && !ledgerRows.length}
-          onDownloadReport={handleDownloadReport}
           onPreviewReport={handlePreviewReport}
           onSelectReport={(row) => setPreviewedLedgerKey(row.key)}
         />

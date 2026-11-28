@@ -160,7 +160,7 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
   if (role === "it") {
     if (notification.sourceType === "email.delivery") return `${routes.it.system}?tab=email`;
     if (notification.sourceType === "request" || text.includes("enterprise.profile") || text.includes("profile change request")) return requestPath(routes.it.requests, notification.sourceType === "request" ? notification.sourceId : null);
-    if (notification.sourceType === "enterprise.offline") return routes.it.dashboard;
+    if (notification.sourceType === "enterprise.offline") return routes.it.enterprises;
     return text.includes("security") || text.includes("password") || text.includes("startup") ? `${routes.it.system}?tab=activity` : routes.it.requests;
   }
   if (role === "staff") {

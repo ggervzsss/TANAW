@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Download, FileText, Maximize, Printer, Ratio, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
@@ -19,10 +19,16 @@ type Props = {
   period: SystemLogPeriod;
   reportId?: string;
   validationMessage?: string | null;
+  /**
+   * Replaces Print and Download PDF at the foot of the preview. A month not submitted yet
+   * (Pending or Missing) shows only Submit Form here; Print and Download PDF appear once the
+   * report is Submitted or Consolidated.
+   */
+  actions?: ReactNode;
 };
 const PAPER_WIDTH = REPORT_PAPER_WIDTH;
 
-export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, origins, notes, attractionType, reportId = "TANAW-DRAFT", validationMessage = null }: Props) {
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, origins, notes, attractionType, reportId = "TANAW-DRAFT", validationMessage = null, actions }: Props) {
   const reduceMotion = useReducedMotion();
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -94,8 +100,8 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, o
           style={{ pointerEvents: closing ? "none" : undefined }}
         >
           <header className="var1-viewer-header">
-            <FileText className="var1-viewer-icon" fill="currentColor" stroke="white" aria-hidden="true" />
-            <div>
+            <FileText className="var1-viewer-icon" aria-hidden="true" />
+            <div className="var1-viewer-title">
               <h2 id="var1-review-title">Review Report Form</h2>
               <p>Check the report before download / submitting the official PDF</p>
             </div>
@@ -135,14 +141,18 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, o
               </button>
             </div>
             <div className="var1-export-controls">
-              <button type="button" className="reports-button" disabled={Boolean(validationMessage)} onClick={() => window.print()}>
-                <Printer aria-hidden="true" />
-                Print
-              </button>
-              <button type="button" className="reports-button reports-primary" disabled={Boolean(validationMessage)} onClick={() => downloadDotReportPdf(report)}>
-                <Download aria-hidden="true" />
-                Download PDF
-              </button>
+              {actions ?? (
+                <>
+                  <button type="button" className="reports-button" disabled={Boolean(validationMessage)} onClick={() => window.print()}>
+                    <Printer aria-hidden="true" />
+                    Print
+                  </button>
+                  <button type="button" className="reports-button reports-primary" disabled={Boolean(validationMessage)} onClick={() => downloadDotReportPdf(report)}>
+                    <Download aria-hidden="true" />
+                    Download PDF
+                  </button>
+                </>
+              )}
             </div>
           </footer>
         </motion.div>

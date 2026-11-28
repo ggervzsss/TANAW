@@ -17,14 +17,11 @@ export function CameraSetupSkeleton({ label = "Loading camera setup" }: { label?
             <SkeletonLine width="20rem" />
           </p>
         </div>
-        <Skeleton className="h-4 w-44" />
       </div>
-      <div data-camera-view="monitoring" data-camera-sidebar="expanded" className="camera-workspace" aria-hidden="true">
+      <div data-camera-view="monitoring" className="camera-workspace" aria-hidden="true">
         <div className="camera-list">
           <div className="camera-list-heading">
             <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-5.5 w-6" shape="pill" />
-            <Skeleton className="h-8.5 w-8.5" />
           </div>
           <div className="camera-list-items">
             <CameraListPlaceholders />
@@ -62,8 +59,8 @@ export function CameraListPlaceholders() {
 const METRIC_TILES: ReadonlyArray<{ tone: string; label: string; icon: LucideIcon; detail?: boolean }> = [
   { tone: "entry", label: "Entry", icon: LogIn },
   { tone: "exit", label: "Exit", icon: LogOut },
-  { tone: "occupancy", label: "Establishment Occupancy", icon: Users, detail: true },
-  { tone: "visitors", label: "Estimated Visitors", icon: Users },
+  { tone: "occupancy", label: "Live Occupancy", icon: Users, detail: true },
+  { tone: "visitors", label: "Visitors", icon: Users },
 ];
 
 /** The monitoring layout in outline while the saved cameras load. */
@@ -84,7 +81,6 @@ export function CameraMonitorSkeleton() {
         </span>
         <span className="camera-header-actions">
           <Skeleton className="h-10.5 w-28" />
-          <Skeleton className="h-10.5 w-10.5" />
         </span>
       </div>
       <div className="camera-preview-layout" aria-hidden="true">

@@ -32,6 +32,9 @@ function finalReport(sources: FinalReport["sources"], overrides: Partial<FinalRe
     totalExit: sources.reduce((sum, source) => sum + (source.exit ?? 0), 0),
     totalUnique: sources.reduce((sum, source) => sum + source.unique, 0),
     enterpriseCount: sources.length,
+    enterpriseTotal: sources.length,
+    generatedAt: "2026-10-09T08:00:00+08:00",
+    updatedAt: "2026-10-09T08:00:00+08:00",
     sources,
     ...overrides,
   };
@@ -115,6 +118,14 @@ describe("VAR 2M PDF", () => {
     const pdf = createFinalReportPdf(report);
     expect(pdf).toContain("(300) Tj");
     expect(pdf).not.toContain("999,999");
+  });
+
+  it("marks a draft above the sheet and in its footer, and leaves the final report unmarked", () => {
+    const sources = [{ id: "one", enterprise: "One", enterpriseProfileId: "one", attractionCode: "411", code: "REP-1", unique: 100, entry: 15, exit: 12 }];
+    const draft = createFinalReportPdf(finalReport(sources, { status: "Draft", enterpriseTotal: 3 }));
+    expect(draft).toContain("(DRAFT - NOT FINAL \\(1 of 3 enterprises\\)) Tj");
+    expect(draft).toContain("(CON-MAY-2026-0001 - DRAFT - NOT FINAL \\(1 of 3 enterprises\\)) Tj");
+    expect(createFinalReportPdf(finalReport(sources))).not.toContain("DRAFT");
   });
 });
 

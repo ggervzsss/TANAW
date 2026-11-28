@@ -159,8 +159,8 @@ export function trendSource(period: TrendPeriod, range: DateRange, today: Date) 
   if (period === "hourly") return `Most visitors inside at once in each hour ${phrase}.`;
   if (period === "monthly") return `Visitors stated in each submitted monthly report ${phrase}.`;
   const window = cameraWindow(range, today);
-  if (window?.clipped) return `Estimated visitors on each day, ${windowText(window)}. ${CAMERA_HISTORY_NOTE}.`;
-  return `Estimated visitors on each day ${phrase}.`;
+  if (window?.clipped) return `Visitors on each day, ${windowText(window)}. ${CAMERA_HISTORY_NOTE}.`;
+  return `Visitors on each day ${phrase}.`;
 }
 
 /** What the chart says when it has no bars. */

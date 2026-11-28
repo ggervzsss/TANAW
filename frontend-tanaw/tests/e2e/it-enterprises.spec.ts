@@ -1,4 +1,4 @@
-// IT Enterprises and Manage an enterprise: the list with its figures, chips and invitation actions,
+// IT Enterprises and Manage an enterprise: the list with its figures, Account Status filter and invitation actions,
 // the Register enterprise dialog, and the Connection, Details and account, and Opening hours tabs.
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { transparentPng } from "./support/adminMap";
@@ -251,7 +251,7 @@ async function openIt(page: Page, path: string, options: { passwordReset?: "ok" 
 }
 
 test.describe("IT Enterprises list", () => {
-  test("shows the figures, chips and each enterprise's account, app and cameras", async ({ page }) => {
+  test("shows the figures, the Account Status filter and each enterprise's account, app and cameras", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openIt(page, "/it/enterprises");
 
@@ -265,11 +265,16 @@ test.describe("IT Enterprises list", () => {
     await expect(figures).toContainText("5 of 6");
     await expect(figures).toContainText("1 not counting at 1 place");
 
-    const chips = page.getByRole("group", { name: "Show" });
-    await expect(chips.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
-    await expect(chips.getByRole("button", { name: "Needs attention 1" })).toBeVisible();
-    await expect(chips.getByRole("button", { name: "Invitation pending 2" })).toBeVisible();
-    await expect(chips.getByRole("button", { name: "Sending data 1" })).toBeVisible();
+    const status = page.getByRole("combobox", { name: "Account Status" });
+    await expect(status).toContainText("All");
+    await status.click();
+    const statuses = page.getByRole("listbox", { name: "Account Status" });
+    await expect(statuses.getByRole("option", { name: /^All\s*4$/ })).toHaveAttribute("aria-selected", "true");
+    await expect(statuses.getByRole("option", { name: /^Needs Attention\s*1$/ })).toBeVisible();
+    await expect(statuses.getByRole("option", { name: /^Invitation Pending\s*2$/ })).toBeVisible();
+    await expect(statuses.getByRole("option", { name: /^Sending Data\s*1$/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(statuses).toBeHidden();
 
     const lakeside = page.getByRole("row", { name: /Lakeside Park/ });
     await expect(lakeside).toContainText("Golf · Brgy. San Antonio");
@@ -288,25 +293,28 @@ test.describe("IT Enterprises list", () => {
     await expect(page.getByRole("row", { name: /Heritage Museum/ })).toContainText("Invitation expired");
   });
 
-  test("filters by chip and search, and sends an invitation again", async ({ page }) => {
+  test("filters by account status and search, and sends an invitation again", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const api = await openIt(page, "/it/enterprises");
 
     await page.getByRole("button", { name: "Show places that need attention" }).click();
     await expect(page).toHaveURL(/show=attention/);
-    await expect(page.getByRole("group", { name: "Show" }).getByRole("button", { name: /Needs attention/ })).toHaveAttribute("aria-pressed", "true");
+    const status = page.getByRole("combobox", { name: "Account Status" });
+    await expect(status).toContainText("Needs Attention");
     await expect(page.locator("tbody tr")).toHaveCount(1);
 
-    await page
-      .getByRole("group", { name: "Show" })
-      .getByRole("button", { name: /Invitation pending/ })
-      .click();
+    await status.click();
+    await page.getByRole("option", { name: /^Invitation Pending/ }).click();
+    await expect(page).toHaveURL(/show=pending/);
+    await expect(status).toContainText("Invitation Pending");
     await expect(page.locator("tbody tr")).toHaveCount(2);
     await page.getByRole("button", { name: "Send a new link to Heritage Museum" }).click();
     await expect.poll(() => api.posts.map((post) => post.path)).toContain("/accounts/museum/activation");
     await expect(page.getByText("A new sign-in link went to museum@example.test.")).toBeVisible();
 
-    await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^All/ }).click();
+    await status.click();
+    await page.getByRole("option", { name: /^All/ }).click();
+    await expect(page).not.toHaveURL(/show=/);
     await page.getByRole("searchbox", { name: "Search enterprises" }).fill("sports@example");
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await expect(page.locator("tbody tr")).toContainText("Municipal Sports Center");

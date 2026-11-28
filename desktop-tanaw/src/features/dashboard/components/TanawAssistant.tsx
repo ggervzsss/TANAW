@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent a
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { ArrowUpRight, Bot, Brain, Send, X } from "lucide-react";
 import { ASSISTANT_LAUNCHER_ID } from "../stores/assistant-store";
+import { clampPanelWidth, dragPanelWidth, keyPanelWidth, type DockSide } from "../utils/assistant-panel";
 import { DEFAULT_ML_SERVICE_BASE_URL, getEstablishmentHourly, getEstablishmentLive, getEstablishmentSummary, getMlServiceStatus } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
@@ -322,11 +323,19 @@ function maxPanelWidth() {
   return Math.max(PANEL_MIN_WIDTH, Math.round(limit));
 }
 
+/** The widest the panel may be right now: never past the Live Occupancy text, nor wider than the window. */
+function panelLimit() {
+  return Math.min(maxPanelWidth(), window.innerWidth);
+}
+
 /** Where the panel starts: just under the topbar. */
 function topbarBottom() {
   const topbar = document.querySelector<HTMLElement>(".enterprise-topbar");
   return topbar ? Math.max(0, Math.round(topbar.getBoundingClientRect().bottom)) : 72;
 }
+
+/** The window edge the panel docks against. The handle on its other edge resizes it. */
+const PANEL_SIDE: DockSide = "right";
 
 /**
  * TANAW Insights docks to the right edge and floats over the dashboard, so opening or widening it
@@ -337,14 +346,26 @@ function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduc
   const present = useIsPresent();
   const [width, setWidth] = useState(readPanelWidth);
   const [top, setTop] = useState(topbarBottom);
-  const [maxWidth, setMaxWidth] = useState(maxPanelWidth);
+  const [maxWidth, setMaxWidth] = useState(panelLimit);
   const [dragging, setDragging] = useState(false);
+  /** The drag under way: which pointer, and where it and the width started. */
+  const drag = useRef<{ pointerId: number; startX: number; startWidth: number; max: number } | null>(null);
   const shown = Math.min(width, maxWidth);
+
+  // The width is remembered once a drag ends, not on every step of it.
+  useEffect(() => {
+    if (dragging) return;
+    try {
+      localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(width));
+    } catch {
+      // The width still applies until the app closes.
+    }
+  }, [width, dragging]);
 
   useEffect(() => {
     const update = () => {
       setTop(topbarBottom());
-      setMaxWidth(maxPanelWidth());
+      setMaxWidth(panelLimit());
     };
     update();
     window.addEventListener("resize", update);
@@ -359,40 +380,45 @@ function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduc
   }, []);
 
   const commit = (next: number) => {
-    const limit = maxPanelWidth();
+    const limit = panelLimit();
     setMaxWidth(limit);
-    const clamped = Math.round(Math.max(PANEL_MIN_WIDTH, Math.min(limit, next)));
-    setWidth(clamped);
-    try {
-      localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(clamped));
-    } catch {
-      // The width still applies until the app closes.
-    }
+    setWidth(clampPanelWidth(next, PANEL_MIN_WIDTH, limit));
   };
 
+  // The handle keeps the pointer from pressing to release, so the drag carries on outside it, and
+  // the width moves by how far the pointer has moved: no jump when it is pressed slightly off the edge.
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || drag.current) return;
     event.preventDefault();
+    const max = panelLimit();
+    setMaxWidth(max);
+    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: shown, max };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
   };
-  const drag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragging) commit(window.innerWidth - event.clientX);
+  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    setWidth(dragPanelWidth({ side: PANEL_SIDE, startWidth: current.startWidth, startX: current.startX, clientX: event.clientX, min: PANEL_MIN_WIDTH, max: current.max }));
   };
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current || drag.current.pointerId !== event.pointerId) return;
+    drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     setDragging(false);
   };
   const onHandleKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const moves: Record<string, number> = { ArrowLeft: shown + PANEL_KEY_STEP, ArrowRight: shown - PANEL_KEY_STEP, Home: maxPanelWidth(), End: PANEL_MIN_WIDTH };
-    if (!(event.key in moves)) return;
+    const limit = panelLimit();
+    const next = keyPanelWidth({ key: event.key, side: PANEL_SIDE, width: shown, step: PANEL_KEY_STEP, min: PANEL_MIN_WIDTH, max: limit });
+    if (next === null) return;
     event.preventDefault();
-    commit(moves[event.key]);
+    commit(next);
   };
 
   return (
     <motion.aside
       id="tanaw-assistant-panel"
-      className={`design-card tanaw-assistant tanaw-assistant-dock${dragging ? "is-resizing" : ""}`}
+      className={`design-card tanaw-assistant tanaw-assistant-dock${dragging ? " is-resizing" : ""}`}
       aria-label="TANAW Insights"
       aria-hidden={!present}
       {...(!present ? { inert: "" } : {})}
@@ -412,9 +438,10 @@ function AssistantPanel({ children, reduceMotion }: { children: ReactNode; reduc
         aria-valuenow={shown}
         tabIndex={0}
         onPointerDown={startDrag}
-        onPointerMove={drag}
+        onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
         onDoubleClick={() => commit(PANEL_DEFAULT_WIDTH)}
         onKeyDown={onHandleKey}
       >

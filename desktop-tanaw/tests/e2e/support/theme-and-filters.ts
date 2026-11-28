@@ -126,7 +126,7 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await switchTheme(page, "dark");
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(page.locator(".report-origin-table")).toBeVisible();
-  await expect(page.getByLabel("System unique visitor count", { exact: true })).not.toHaveText("\u2026");
+  await expect(page.getByLabel("System visitor count", { exact: true })).not.toHaveText("\u2026");
   await auditDarkContrast(page, info, "create-reports", ".tanaw-reports-workspace");
   await page.screenshot({ path: info.outputPath("dark-create-reports.png"), fullPage: true });
   await page.locator(".report-day-picker > button").click();
@@ -159,24 +159,20 @@ export async function verifyThemeAndFilters(page: Page, info: TestInfo, download
   await expect(preview.locator(".var1-document")).toHaveCSS("color", "rgb(0, 0, 0)");
   await page.screenshot({ path: info.outputPath("dark-dot-preview.png"), fullPage: true });
   await page.keyboard.press("Escape");
-  await rows
-    .first()
-    .getByRole("button", { name: /^View / })
-    .click();
+  // A focused row opens with Enter; downloading happens inside the preview.
+  await rows.first().focus();
+  await page.keyboard.press("Enter");
   await expect(preview).toBeVisible();
-  await page.keyboard.press("Escape");
   if (downloads) {
     const downloaded = page.waitForEvent("download");
-    await rows
-      .first()
-      .getByRole("button", { name: /^Download / })
-      .click();
+    await preview.getByRole("button", { name: "Download PDF", exact: true }).click();
     expect((await downloaded).suggestedFilename()).toMatch(/\.pdf$/);
   }
+  await page.keyboard.press("Escape");
   await choose(page, "Filter reports by reporting period", "All Periods");
   await expect(rows).toHaveCount(original.length);
   const tones = await page.locator(".report-status").evaluateAll((nodes) => nodes.map((node) => ({ tone: node.getAttribute("data-tone"), bg: getComputedStyle(node).backgroundColor })));
-  for (const tone of ["draft", "submitted", "pending", "consolidated"]) expect(tones.some((item) => item.tone === tone)).toBe(true);
+  for (const tone of ["missing", "pending", "submitted", "consolidated"]) expect(tones.some((item) => item.tone === tone)).toBe(true);
   expect(new Set(tones.map((item) => item.bg)).size).toBe(4);
   expect(await page.evaluate(() => (window as unknown as { __filterPageIdentity: string }).__filterPageIdentity)).toBe("same-document");
   await page.getByRole("combobox", { name: "Filter reports by status" }).click();

@@ -97,10 +97,10 @@ function withoutMessages(detail: RequestDetail): Request {
   return summary as Request;
 }
 
-/** IT's actions on one request. Each updates the request in place and shows a toast. */
-export function useRequestActions(request: Request | null, options: { onDone?: (action: RequestAction) => void } = {}) {
+/** The mutation behind every action: it updates the request in place and shows a toast. */
+function useActionMutation(onDone?: (action: RequestAction) => void) {
   const queryClient = useQueryClient();
-  const mutation = useMutation({
+  return useMutation({
     mutationFn: ({ action, target }: { action: RequestAction; target: Request }) => runAction(target.id, action),
     onSuccess: (detail, { action, target }) => {
       queryClient.setQueryData(requestDetailQueryKey(target.id), detail);
@@ -110,7 +110,7 @@ export function useRequestActions(request: Request | null, options: { onDone?: (
       void queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
       const [title, text] = successToast(target, action);
       toast.success(toastBody(title, text));
-      options.onDone?.(action);
+      onDone?.(action);
     },
     onError: (failure, { action, target }) => {
       // A request someone else changed meanwhile: show its current state.
@@ -119,7 +119,11 @@ export function useRequestActions(request: Request | null, options: { onDone?: (
       toast.error(toastBody(failureTitles[action.kind], getApiErrorMessage(failure, "That change could not be saved. Try again.")));
     },
   });
+}
 
+/** IT's actions on one request. Each updates the request in place and shows a toast. */
+export function useRequestActions(request: Request | null, options: { onDone?: (action: RequestAction) => void } = {}) {
+  const mutation = useActionMutation(options.onDone);
   return {
     run: (action: RequestAction) => {
       if (!request || mutation.isPending) return;
@@ -130,6 +134,18 @@ export function useRequestActions(request: Request | null, options: { onDone?: (
 }
 
 export type RequestActionsApi = ReturnType<typeof useRequestActions>;
+
+/** Start on it from a request's row in the table: one request at a time. */
+export function useStartRequest() {
+  const mutation = useActionMutation();
+  return {
+    start: (request: Request) => {
+      if (mutation.isPending) return;
+      mutation.mutate({ action: { kind: "start" }, target: request });
+    },
+    startingId: mutation.isPending ? (mutation.variables?.target.id ?? null) : null,
+  };
+}
 
 /** The place's desktop app status, for the Details grid. */
 export function useEnterpriseAppHealth(enterpriseId: string | null | undefined) {

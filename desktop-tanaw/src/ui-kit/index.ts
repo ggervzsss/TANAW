@@ -33,3 +33,4 @@ export { usePageEnter } from "./lib/page-enter";
 export { hasVisualOverflow } from "./lib/overflow";
 export { useExclusivePopupDismissal } from "./lib/popup-dismissal";
 export { toSentenceCase } from "./lib/sentence-case";
+export { SKELETON_WAIT_MS, SkeletonScreenReveal, syncSkeletonSweep, useSkeletonReveal, useSkeletonScreen } from "./lib/skeleton";

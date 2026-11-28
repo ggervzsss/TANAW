@@ -12,6 +12,7 @@ import type { ReportLedgerRow } from "./report-ledger";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import { getCurrentReportingPeriod, getReportingPeriodSubmissionError } from "./reporting-calendar";
 import { correctionSource, isReopenedReport, isUploadRejected, reportReference } from "./report-lifecycle";
+import { reportingStatus } from "./report-status";
 
 export type PreparedReportCounts = {
   period: string;
@@ -131,6 +132,7 @@ export function buildLedgerRows({
   currentPeriod,
   pendingCounts,
   reportsHistory,
+  now = new Date(),
 }: {
   currentDemo: DemoBreakdown;
   currentOrigins: DailyOrigins;
@@ -139,6 +141,8 @@ export function buildLedgerRows({
   currentPeriod: SystemLogPeriod;
   pendingCounts: PreparedReportCounts[];
   reportsHistory: ReportRecord[];
+  /** When the statuses are worked out; a month turns Missing once its due date has passed. */
+  now?: Date;
 }): ReportLedgerRow[] {
   // A month whose refused report was reopened waits for the fixed report again.
   const reportedPeriods = new Set(reportsHistory.filter((report) => !isReopenedReport(report)).map((report) => reportingMonthKey(report.period ?? report.date)));
@@ -163,7 +167,7 @@ export function buildLedgerRows({
       },
       reportLabel: "Current Reporting Period",
       reportDescription: "Live workspace",
-      statusLabel: "Current Reporting Period",
+      statusLabel: "Pending",
     },
   ];
 
@@ -172,14 +176,15 @@ export function buildLedgerRows({
     if (isSameReportingMonth(counts.period, currentPeriod) || reportedPeriods.has(countsPeriodKey) || pendingPeriods.has(countsPeriodKey)) continue;
     pendingPeriods.add(countsPeriodKey);
     const corrects = correctionSource(reportsHistory, counts.period);
+    // Until the fix is edited, it starts from the refused report's origins.
+    const report = reportFromPendingCounts(corrects && !counts.origins ? { ...counts, origins: corrects.origins } : counts);
     rows.push({
       key: draftLedgerKey(counts.period),
       kind: "pending",
-      // Until the fix is edited, it starts from the refused report's origins.
-      report: reportFromPendingCounts(corrects && !counts.origins ? { ...counts, origins: corrects.origins } : counts),
-      reportLabel: corrects ? "Correction" : "Pending Submission",
+      report,
+      reportLabel: corrects ? "Correction" : "Report not sent",
       reportDescription: corrects ? `Correcting ${reportReference(corrects)}` : "Recorded establishment counts",
-      statusLabel: corrects ? "Being corrected" : "Pending Submission",
+      statusLabel: reportingStatus("pending", report, now),
     });
   }
 
@@ -190,17 +195,11 @@ export function buildLedgerRows({
       report,
       reportLabel: reportReference(report),
       reportDescription: historyDescription(report),
-      statusLabel: historyStatusLabel(report),
+      statusLabel: reportingStatus("history", report, now),
     })),
   );
 
   return sortReportLedgerRows(rows);
-}
-
-/** The status Reports History shows for a sent report. */
-export function historyStatusLabel(report: ReportRecord) {
-  if (isUploadRejected(report)) return "Not accepted";
-  return report.status;
 }
 
 /** The line under a report in Reports History: TANAW's reason for refusing it, else its upload state. */

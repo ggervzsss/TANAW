@@ -11,13 +11,25 @@ type ReportDraftActionsProps = {
   /** Shows the day whose origins need fixing, when that is what blocks the report. */
   fixDay?: { label: string; onShow: () => void } | null;
   onSubmitPrompt: () => void;
+  /** The button text: Submit Report in Create Reports, Submit Form in the form preview. */
+  label?: string;
 };
 
 /**
  * Submit Report and, under it, what still stands in the way. The reason stays beside the button
  * (not in a passing toast); pressing the button while it is blocked draws attention to it again.
+ * The form preview uses the same control, so both start the one submit flow.
  */
-export function ReportDraftActions({ isReadOnly, isPeriodChanging, metricsError, validationError, isLoadingCounts = false, fixDay = null, onSubmitPrompt }: ReportDraftActionsProps) {
+export function ReportDraftActions({
+  isReadOnly,
+  isPeriodChanging,
+  metricsError,
+  validationError,
+  isLoadingCounts = false,
+  fixDay = null,
+  onSubmitPrompt,
+  label = "Submit Report",
+}: ReportDraftActionsProps) {
   const warning = metricsError ?? validationError;
   const noteId = useId();
   // Each blocked press remounts the note, so it is announced and highlighted again.
@@ -38,8 +50,8 @@ export function ReportDraftActions({ isReadOnly, isPeriodChanging, metricsError,
         }}
         className="reports-button reports-primary report-submit-button"
       >
-        <Send size={14} />
-        Submit Report
+        <Send size={14} aria-hidden="true" />
+        {label}
       </button>
       {warning && (
         <div

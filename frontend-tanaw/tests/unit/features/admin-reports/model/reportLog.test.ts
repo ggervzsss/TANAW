@@ -63,6 +63,10 @@ describe("buildReportLog", () => {
     expect(events[1].detail).toBe("Maria Santos marked it ready for the city summary. Totals checked.");
     expect(events[2].detail).toBe("San Pedro Public Market sent RPT-2026-10-001.");
     expect(events.slice(1).every((event) => event.tone === "earlier")).toBe(true);
+
+    const draft = { ...finalReport, status: "Draft" } as FinalReport;
+    const draftEvents = buildReportLog(entryFor([intake]), "San Pedro Public Market", [], [draft]);
+    expect(draftEvents[0].detail).toBe("Included in the draft FR-2026-10, prepared by Jose Cruz.");
   });
 
   it("shows the passed due date for a missing month", () => {

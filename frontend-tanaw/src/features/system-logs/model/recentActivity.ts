@@ -308,7 +308,7 @@ export function reportMonthParams(period: string | null) {
 }
 
 /** The IT screens IT's activity links to. Literal paths, so they do not depend on route names. */
-const IT_PATHS = { overview: "/it/dashboard", requests: "/it/requests", enterprises: "/it/enterprises" } as const;
+const IT_PATHS = { requests: "/it/requests", enterprises: "/it/enterprises" } as const;
 
 export type ActivityField = { label: string; value: string; tone?: RecordStatusTone };
 export type ActivityLink = { label: string; to: string };
@@ -398,7 +398,7 @@ export function activityLinks(log: SystemLog, portal: "admin" | "it" = "admin"):
         : { label: "Open the request", to: `${IT_PATHS.requests}?request=${encodeURIComponent(requestId)}` },
     );
   }
-  if (kind === "monitoring") links.push(portal === "admin" ? { label: "Open the Dashboard", to: routes.admin.dashboard } : { label: "Open the Overview", to: IT_PATHS.overview });
+  if (kind === "monitoring") links.push(portal === "admin" ? { label: "Open the Dashboard", to: routes.admin.dashboard } : { label: "Open Enterprises", to: IT_PATHS.enterprises });
   if (portal === "admin" && kind === "reports") {
     const params = new URLSearchParams();
     const month = reportMonthParams(metaString(log, "period"));

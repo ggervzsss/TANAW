@@ -9,11 +9,10 @@ import { cn } from "../lib/cn";
  * - "split": a list beside a detail pane (title, filters, status line, then the two panes).
  * - "detail": one record (back link, photo and title with tags, four figures, a chart beside a list).
  * - "dashboard": the map and its insights, then two recent lists.
- * - "overview": four figures, then work lists in two columns.
  * - "settings": the General Settings frame (header band, section rail, a section).
  * - "help": the Help Center (title, search, categories beside the articles).
  */
-export type ViewSkeletonVariant = "page" | "list" | "split" | "detail" | "dashboard" | "overview" | "settings" | "help";
+export type ViewSkeletonVariant = "page" | "list" | "split" | "detail" | "dashboard" | "settings" | "help";
 
 export type ViewSkeletonProps = {
   /** Which page shape to sketch while its code or data loads; see ViewSkeletonVariant. */
@@ -24,7 +23,7 @@ export type ViewSkeletonProps = {
   lede?: 0 | 1 | 2;
   /** What sits at the right of the title: a status line, a large button, a pill picker or a field. */
   action?: "text" | "button" | "pill" | "field";
-  /** Figures in the strip under the title ("page" only; "detail" and "overview" always have four). */
+  /** Figures in the strip under the title ("page" only; "detail" always has four). */
   figures?: number;
   /** Tabs under the title ("page" only). */
   tabs?: number;
@@ -32,6 +31,10 @@ export type ViewSkeletonProps = {
   filters?: number;
   /** Whether the filter fields carry a label above them. */
   filterLabels?: boolean;
+  /** "fill": the filters share the row, the search taking the larger part. "compact": a fixed-width search and selects at the start of the row. */
+  filterWidths?: "fill" | "compact";
+  /** Whether a one-line count or result sits under the filters ("page" only). */
+  statusLine?: boolean;
   /** Rows in the list or table. */
   rows?: number;
   /** Announced to screen readers, for example "Loading TANAW workspace…". */
@@ -54,6 +57,8 @@ export function ViewSkeleton({
   tabs = 0,
   filters = 0,
   filterLabels = true,
+  filterWidths = "fill",
+  statusLine = true,
   rows,
   label = "Loading page",
   className,
@@ -67,23 +72,22 @@ export function ViewSkeleton({
             <PageHeading {...heading} />
             {figures > 0 && <FigureStrip count={figures} />}
             {tabs > 0 && <TabsOutline count={tabs} className={figures > 0 ? "mt-6" : undefined} />}
-            {filters > 0 && <FilterRow count={filters} labels={filterLabels} className={figures > 0 || tabs > 0 ? "mt-6" : undefined} />}
-            {filters > 0 && <StatusLine />}
-            <TableOutline rows={rows ?? 8} className={filters > 0 ? "mt-3" : tabs > 0 ? "mt-4" : figures > 0 ? "mt-6" : undefined} />
+            {filters > 0 && <FilterRow count={filters} labels={filterLabels} widths={filterWidths} className={figures > 0 || tabs > 0 ? "mt-6" : undefined} />}
+            {filters > 0 && statusLine && <StatusLine />}
+            <TableOutline rows={rows ?? 8} className={filters > 0 ? (statusLine ? "mt-3" : "mt-4") : tabs > 0 ? "mt-4" : figures > 0 ? "mt-6" : undefined} />
           </>
         )}
         {variant === "list" && <ListOutline rows={rows ?? 6} />}
         {variant === "split" && (
           <>
             <PageHeading {...heading} />
-            {filters > 0 && <FilterRow count={filters} labels={filterLabels} />}
+            {filters > 0 && <FilterRow count={filters} labels={filterLabels} widths={filterWidths} />}
             <StatusLine />
             <SplitOutline rows={rows ?? 5} />
           </>
         )}
         {variant === "detail" && <DetailOutline back={back} />}
         {variant === "dashboard" && <DashboardOutline lede={lede} />}
-        {variant === "overview" && <OverviewOutline lede={lede} />}
         {variant === "settings" && <SettingsOutline rows={rows ?? 3} />}
         {variant === "help" && <HelpOutline rows={rows ?? 6} />}
       </div>
@@ -172,13 +176,11 @@ function TabsOutline({ count, className }: { count: number; className?: string }
   );
 }
 
-/** The filter row: the search takes the larger share, then the selects; one column on phones. */
-function FilterRow({ count, labels, className }: { count: number; labels: boolean; className?: string }) {
+/** The filter row: the search takes the larger share (or a fixed width when compact), then the selects; one column on phones. */
+function FilterRow({ count, labels, widths = "fill", className }: { count: number; labels: boolean; widths?: "fill" | "compact"; className?: string }) {
+  const columns = widths === "compact" ? `minmax(0, 22rem)${count > 1 ? ` repeat(${count - 1}, minmax(0, 13rem))` : ""}` : `minmax(0, 1.6fr)${count > 1 ? ` repeat(${count - 1}, minmax(0, 1fr))` : ""}`;
   return (
-    <div
-      className={cn("grid grid-cols-(--filters) items-end gap-3 max-md:grid-cols-1", className)}
-      style={{ "--filters": `minmax(0, 1.6fr)${count > 1 ? ` repeat(${count - 1}, minmax(0, 1fr))` : ""}` } as CSSProperties}
-    >
+    <div className={cn("grid grid-cols-(--filters) items-end gap-3 max-md:grid-cols-1", className)} style={{ "--filters": columns } as CSSProperties}>
       {Array.from({ length: count }, (_, index) => (
         <div key={index} className={cn("min-w-0", index > 0 && "max-md:hidden")}>
           {labels && <Line box={cn("mb-2", SMALL_LINE)} bar="h-3 w-20" />}
@@ -437,36 +439,6 @@ function DashboardOutline({ lede }: { lede: 0 | 1 | 2 }) {
         ))}
       </div>
     </>
-  );
-}
-
-/** The IT Overview: four figures between hairlines, then work lists in two columns. */
-function OverviewOutline({ lede }: { lede: 0 | 1 | 2 }) {
-  return (
-    <div className="pb-4">
-      <PageHeading back={false} lede={lede} action="text" />
-      <div className="grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[920px]:grid-cols-2 max-sm:grid-cols-1 [&>div+div]:border-l [&>div+div]:border-(--tanaw-border-soft) max-sm:[&>div+div]:border-t max-sm:[&>div+div]:border-l-0">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="min-w-0 px-6 py-4.5 first:pl-0 last:pr-0 max-sm:px-0">
-            <Line box="h-5" bar="h-3.5 w-36 max-w-full" />
-            <Skeleton className="mt-2 h-9 w-16" />
-            <Line box={cn("mt-2", SMALL_LINE)} bar="h-3 w-32 max-w-full" />
-          </div>
-        ))}
-      </div>
-      <div className="mt-10 grid grid-cols-2 items-start gap-x-14 max-[920px]:grid-cols-1">
-        {[0, 1].map((column) => (
-          <div key={column} className="min-w-0 pb-11">
-            <div className="flex items-center justify-between gap-4">
-              <Line box="h-[23.4px]" bar="h-4.5 w-44" />
-              <Skeleton className="h-3.5 w-20" />
-            </div>
-            <Line box={cn("mt-1 mb-2", SMALL_LINE)} bar="h-3 w-64 max-w-full" />
-            <HairlineRows count={4} twoLines />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

@@ -20,7 +20,6 @@ import {
   ITDevLogPage,
   ITEnterpriseManagePage,
   ITEnterprisesPage,
-  ITOverviewPage,
   ITPersonnelPage,
   ITRequestsPage,
   ITSystemPage,
@@ -61,8 +60,7 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to={routes.it.dashboard} replace />} />
-          <Route path="dashboard" element={<ITOverviewPage />} />
+          <Route index element={<Navigate to={routes.it.requests} replace />} />
           <Route path="requests" element={<ITRequestsPage />} />
           <Route path="enterprises" element={<ITEnterprisesPage />} />
           <Route path="enterprises/:enterpriseId" element={<ITEnterpriseManagePage />} />
@@ -137,21 +135,22 @@ export function AppRouter() {
 }
 
 /**
- * Sends an old IT address to its new screen and keeps its query, so links such as
- * `/it/work-center?request=REQ-1` still open the right request. The old Work Center email view
- * now lives under System, and its alerts view on the Overview.
+ * Sends an old IT address to its new screen and keeps its query and hash, so links such as
+ * `/it/work-center?request=REQ-1` or `/it/dashboard?request=REQ-1` still open the right request.
+ * The old Work Center email view now lives under System, and its alerts view (connection
+ * problems, later on the retired Overview) under Enterprises.
  */
 function LegacyRedirect({ to }: { to: string }) {
-  const { search } = useLocation();
+  const { search, hash } = useLocation();
   const [path, targetQuery = ""] = to.split("?");
   const params = new URLSearchParams(search);
   const view = params.get("view");
   params.delete("view");
   if (view === "email") return <Navigate to="/it/system?tab=email" replace />;
-  if (view === "alerts") return <Navigate to={routes.it.dashboard} replace />;
+  if (view === "alerts") return <Navigate to={routes.it.enterprises} replace />;
   for (const [key, value] of new URLSearchParams(targetQuery)) params.set(key, value);
   const query = params.toString();
-  return <Navigate to={query ? `${path}?${query}` : path} replace />;
+  return <Navigate to={`${path}${query ? `?${query}` : ""}${hash}`} replace />;
 }
 
 const PORTAL_ROOTS = [routes.it.root, routes.admin.root, routes.staff.root];

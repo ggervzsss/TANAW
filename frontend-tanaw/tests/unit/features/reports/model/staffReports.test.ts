@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   activeStaffReportFilterCount,
   compareStaffReportRows,
+  consolidateButton,
+  consolidatedMessage,
+  draftReportNote,
   EMPTY_STAFF_REPORT_FILTERS,
   filterStaffReportRows,
   generateConfirmMessage,
   hasStaffReportFilters,
+  INCOMPLETE_SUBMISSIONS_MESSAGE,
+  INCOMPLETE_SUBMISSIONS_TITLE,
+  incompleteSubmissionsDetail,
+  openConsolidatedReport,
   parseStaffReportFilters,
   reminderButton,
   reminderFailedMessage,
@@ -182,25 +189,95 @@ describe("the page caption", () => {
 });
 
 describe("generating the consolidated report", () => {
-  it("waits while any received report is still being reviewed", () => {
+  const draft = { status: "Draft" as const };
+  const finalized = { status: "Finalized" as const };
+
+  it("counts the month's progress and is incomplete while any report is missing or being reviewed", () => {
     const rows = staffReportRows(enterprises, [report("a", "Pending Review"), report("b", "Pending Review"), report("c", "Ready to Consolidate")], october, afterDue);
     const progress = staffReportsProgress(rows);
-    expect(progress).toMatchObject({ received: 3, consolidated: 1, reviewing: 2, waiting: 2, readyReportIds: ["r-c"], canGenerate: false, generated: false });
+    expect(progress).toMatchObject({ enterprises: 5, received: 3, consolidated: 1, reviewing: 2, waiting: 2, readyReportIds: ["r-c"], complete: false });
   });
 
-  it("is ready once every received report is accepted, even when some enterprises have not sent one", () => {
-    const rows = staffReportRows(enterprises, [report("a", "Ready to Consolidate"), report("b", "Consolidated")], october, beforeDue);
+  it("is complete once every enterprise sent a report and every report is accepted", () => {
+    const rows = staffReportRows([enterprise("a", "Acacia Park"), enterprise("b", "Balon ni Lolo")], [report("a", "Ready to Consolidate"), report("b", "Consolidated")], october, afterDue);
+    expect(staffReportsProgress(rows)).toMatchObject({ complete: true, readyReportIds: ["r-a"], notSent: [] });
+    expect(staffReportsProgress(staffReportRows([enterprise("d", "Daisy Resort")], [], october, afterDue))).toMatchObject({ received: 0, complete: false });
+  });
+
+  it("can be generated once one report is accepted, warning first while the month is incomplete", () => {
+    const rows = staffReportRows(enterprises, [report("a", "Ready to Consolidate"), report("b", "Pending Review")], october, afterDue);
     const progress = staffReportsProgress(rows);
-    expect(progress).toMatchObject({ canGenerate: true, readyReportIds: ["r-a"] });
+    expect(consolidateButton(progress, undefined, "October 2026")).toEqual({ label: "Generate consolidated report", enabled: true, incomplete: true, reason: null });
     expect(progress.notSent.map((row) => row.enterpriseId)).toEqual(["c", "d", "e"]);
   });
 
-  it("has nothing to generate when every received report is already in a monthly report, or none arrived", () => {
-    const done = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [report("a", "Consolidated")], october, afterDue));
-    expect(done).toMatchObject({ canGenerate: false, generated: true });
+  it("stays disabled, with the reason, until a report is accepted", () => {
+    const reviewing = staffReportsProgress(staffReportRows(enterprises, [report("a", "Pending Review")], october, afterDue));
+    expect(consolidateButton(reviewing, undefined, "October 2026")).toMatchObject({ enabled: false, reason: "Accept at least one report to generate the consolidated report." });
+    const none = staffReportsProgress(staffReportRows(enterprises, [], october, afterDue));
+    expect(consolidateButton(none, undefined, "October 2026")).toMatchObject({ enabled: false, reason: "No reports have been sent for October 2026 yet." });
+  });
 
-    const none = staffReportsProgress(staffReportRows([enterprise("d", "Daisy Resort")], [], october, afterDue));
-    expect(none).toMatchObject({ received: 0, canGenerate: false, generated: false });
+  it("updates a draft while the month is incomplete, and finalizes it once the month is complete", () => {
+    const incomplete = staffReportsProgress(staffReportRows(enterprises, [report("a", "Consolidated"), report("b", "Ready to Consolidate")], october, afterDue));
+    expect(consolidateButton(incomplete, draft, "October 2026")).toEqual({ label: "Update draft consolidated report", enabled: true, incomplete: true, reason: null });
+
+    const nothingNew = staffReportsProgress(staffReportRows(enterprises, [report("a", "Consolidated"), report("b", "Pending Review")], october, afterDue));
+    expect(consolidateButton(nothingNew, draft, "October 2026")).toEqual({ label: "Update draft consolidated report", enabled: false, incomplete: true, reason: "Accept another enterprise's report to update the draft." });
+
+    const two = [enterprise("a", "Acacia Park"), enterprise("b", "Balon ni Lolo")];
+    const complete = staffReportsProgress(staffReportRows(two, [report("a", "Consolidated"), report("b", "Ready to Consolidate")], october, afterDue));
+    expect(consolidateButton(complete, draft, "October 2026")).toEqual({ label: "Generate consolidated report", enabled: true, incomplete: false, reason: null });
+
+    // An enterprise that never reported was deactivated: the draft is finalized with nothing new.
+    const allIn = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [report("a", "Consolidated")], october, afterDue));
+    expect(consolidateButton(allIn, draft, "October 2026")).toMatchObject({ label: "Generate consolidated report", enabled: true, incomplete: false });
+  });
+
+  it("cannot generate again once the month's report is final", () => {
+    const progress = staffReportsProgress(staffReportRows([enterprise("a", "Acacia Park")], [report("a", "Consolidated")], october, afterDue));
+    expect(consolidateButton(progress, finalized, "October 2026")).toEqual({ label: "Generate consolidated report", enabled: false, incomplete: false, reason: "The October 2026 consolidated report is final." });
+  });
+
+  it("finds the month's open consolidated report, skipping archived ones and other months", () => {
+    const reports = [
+      { id: "old", period: "October 2026", status: "Archived" as const },
+      { id: "sep", period: "September 2026", status: "Finalized" as const },
+      { id: "oct", period: "October 2026", status: "Draft" as const },
+    ];
+    expect(openConsolidatedReport(reports, october)?.id).toBe("oct");
+    expect(openConsolidatedReport(reports, { month: "August", year: 2026 })).toBeUndefined();
+  });
+
+  it("notes the month's draft and when it last changed", () => {
+    expect(draftReportNote("October 2026", { updatedAt: "2026-11-28T09:30:00+08:00", generatedOn: "2026-11-20" })).toBe("A draft consolidated report exists for October 2026, last updated Nov 28.");
+  });
+});
+
+describe("the consolidation confirmations", () => {
+  it("warns about incomplete submissions with the counts left out", () => {
+    expect(INCOMPLETE_SUBMISSIONS_TITLE).toBe("Incomplete Report Submissions");
+    expect(INCOMPLETE_SUBMISSIONS_MESSAGE).toBe("Some enterprises have not yet submitted their reports. Are you sure you want to proceed with the consolidation?");
+    const eleven = Array.from({ length: 11 }, (_, index) => enterprise(`e${index}`, `Enterprise ${index}`));
+    const reports = [
+      ...eleven.slice(0, 6).map((item) => report(item.id, "Ready to Consolidate")),
+      ...eleven.slice(6, 8).map((item) => report(item.id, "Pending Review")),
+    ];
+    const progress = staffReportsProgress(staffReportRows(eleven, reports, october, afterDue));
+    expect(incompleteSubmissionsDetail(progress)).toBe("3 of 11 enterprises have not sent a report. 2 sent reports are still waiting for your review and will not be included.");
+    expect(incompleteSubmissionsDetail({ enterprises: 4, notSent: [], reviewing: 1 })).toBe("1 sent report is still waiting for your review and will not be included.");
+    expect(incompleteSubmissionsDetail({ enterprises: 4, notSent: progress.notSent.slice(0, 1), reviewing: 0 })).toBe("1 of 4 enterprises has not sent a report.");
+  });
+
+  it("adds accepted reports to a draft, or finalizes it with nothing new", () => {
+    expect(generateConfirmMessage("October 2026", { readyReportIds: ["r-a"], notSent: [] }, true)).toBe("Add the 1 accepted report to the October 2026 draft and finalize the monthly report (VAR 2M).");
+    expect(generateConfirmMessage("October 2026", { readyReportIds: [], notSent: [] }, true)).toBe("Every report for October 2026 is in the draft. Finalize the monthly report (VAR 2M).");
+  });
+
+  it("says whether the result is a new draft, an updated draft or the final report", () => {
+    expect(consolidatedMessage("October 2026", "Draft", false)).toBe("A draft of the October 2026 consolidated report was saved.");
+    expect(consolidatedMessage("October 2026", "Draft", true)).toBe("The October 2026 draft consolidated report was updated.");
+    expect(consolidatedMessage("October 2026", "Finalized", true)).toBe("The October 2026 consolidated report was generated.");
   });
 });
 

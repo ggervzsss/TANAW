@@ -98,7 +98,7 @@ test("all settings tabs keep drafts, test real bridge requests and save only the
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page
     .getByRole("region", { name: "My Cameras" })
-    .getByRole("button", { name: /Dahua Camera/ })
+    .getByRole("button", { name: /^Dahua Camera/ })
     .click();
   await openSettings(page);
   await page.getByRole("tab", { name: "Display", exact: true }).click();

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import type { ReportRecord } from "../../../types/enterprise";
 import { routePaths } from "../../../app/router/routePaths";
 import { ReportListLoading } from "./DashboardSkeleton";
+import { useSkeletonReveal } from "../../../ui-kit/lib/skeleton";
+import { REPORTING_STATUS_TONE, isSubmittedStatus, reportingStatus } from "../../reports/model/report-status";
 
 type LedgerProps = {
   reports: ReportRecord[];
@@ -17,13 +19,15 @@ type LedgerProps = {
  * the latest report, so it never scrolls; "View all" opens every report in Reports.
  */
 export function SubmissionLedgerPreview({ reports, enterpriseName, loading = false, onPreviewReport }: LedgerProps) {
+  const reveal = useSkeletonReveal(loading);
   const entries = reports.slice(0, 1).map((report) => ({
     id: report.id,
     title: `Tourism Report, ${report.date}`,
     period: report.period ?? report.date,
-    sentTo: report.syncStatus === "pending" ? "Waiting to sync" : "LGU",
+    sentTo: report.syncStatus === "pending_cloud_sync" ? "Waiting to send" : "LGU",
     date: report.date,
-    status: report.status,
+    // The same four statuses as Reports History: Pending, Submitted, Missing or Consolidated.
+    status: reportingStatus("history", report),
     preview: () => onPreviewReport(report),
   }));
   return (
@@ -51,7 +55,7 @@ export function SubmissionLedgerPreview({ reports, enterpriseName, loading = fal
             <span>Date</span>
             <span>Status</span>
           </div>
-          <div className="dash-report-list" role="region" aria-label="Recent report list">
+          <div className={reveal ? `dash-report-list ${reveal}` : "dash-report-list"} role="region" aria-label="Recent report list">
             {entries.map((entry, index) => (
               <button
                 key={entry.id + index}
@@ -69,8 +73,8 @@ export function SubmissionLedgerPreview({ reports, enterpriseName, loading = fal
                 <span className="dash-report-cell">{entry.sentTo}</span>
                 <span className="dash-report-cell">{entry.date}</span>
                 <span className="dash-report-status">
-                  <span className="dash-badge">
-                    <Check size={13} aria-hidden="true" />
+                  <span className="dash-badge" data-tone={REPORTING_STATUS_TONE[entry.status]}>
+                    {isSubmittedStatus(entry.status) && <Check size={13} aria-hidden="true" />}
                     {entry.status}
                   </span>
                 </span>

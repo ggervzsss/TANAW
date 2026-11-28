@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from app.camera.rtsp_diagnosis import ConnectionFailureReason
 from app.camera.stream_candidates import (
     StreamProbe,
     StreamSelection,
@@ -94,3 +95,70 @@ def test_failure_reports_without_credentials():
     assert not result.ok
     assert result.stream_url is None
     assert "secret" not in result.message
+
+
+def probe_reasons(
+    reasons: dict[str, ConnectionFailureReason],
+) -> tuple[Callable[[str], StreamProbe], list[str]]:
+    calls: list[str] = []
+
+    def probe(url: str) -> StreamProbe:
+        plain = url.replace("admin:secret@", "")
+        calls.append(plain)
+        reason = reasons[plain]
+        return StreamProbe(False, f"{reason} at {url}", reason=reason)
+
+    return probe, calls
+
+
+def select_failing(
+    reasons: dict[str, ConnectionFailureReason],
+) -> tuple[StreamSelection, list[str]]:
+    probe, calls = probe_reasons(reasons)
+    result = select_stream(
+        brand="tenda", host=HOST, username="admin", password="secret", preferred=None, probe=probe
+    )
+    return result, calls
+
+
+TENDA = [
+    f"rtsp://{HOST}:554/ch=1?subtype=1",
+    f"rtsp://{HOST}:8554/profile1",
+    f"rtsp://{HOST}:554/ch=1&subtype=1",
+    f"rtsp://{HOST}:554/H264?ch=1&subtype=1",
+]
+
+
+def test_refused_login_stops_the_search_and_is_reported() -> None:
+    result, calls = select_failing({TENDA[0]: "auth_failed"})
+    assert calls == [TENDA[0]]
+    assert result.reason == "auth_failed"
+    assert "secret" not in result.message
+
+
+def test_a_camera_that_answered_outranks_an_unreachable_port() -> None:
+    reasons: dict[str, ConnectionFailureReason] = {
+        TENDA[0]: "stream_not_found",
+        TENDA[1]: "unreachable",
+        TENDA[2]: "stream_not_found",
+        TENDA[3]: "unreachable",
+    }
+    result, calls = select_failing(reasons)
+    assert calls == TENDA
+    assert result.reason == "stream_not_found"
+
+
+def test_every_address_unreachable_is_reported_as_unreachable() -> None:
+    result, _ = select_failing(dict.fromkeys(TENDA, "unreachable"))
+    assert not result.ok
+    assert result.reason == "unreachable"
+
+
+def test_a_working_stream_has_no_failure_reason() -> None:
+    result, _ = select("tapo", {f"rtsp://{HOST}/stream2": (1280, 720)})
+    assert result.ok and result.reason is None
+
+
+def test_probe_without_a_reason_is_reported_as_unknown() -> None:
+    result, _ = select("dahua", {})
+    assert result.reason == "unknown"

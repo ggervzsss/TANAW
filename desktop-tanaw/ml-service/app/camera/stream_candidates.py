@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
+from app.camera.rtsp_diagnosis import ConnectionFailureReason
 
 MIN_DETECTION_WIDTH = 640
 MAX_PREFERRED_WIDTH = 1920
@@ -37,6 +38,8 @@ class StreamProbe:
     message: str
     width: int | None = None
     height: int | None = None
+    # Why a failed probe failed, so the user is pointed at the right field.
+    reason: ConnectionFailureReason | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,17 @@ class StreamSelection:
     stream_url: str | None = None
     width: int | None = None
     height: int | None = None
+    reason: ConnectionFailureReason | None = None
+
+
+# A failure that says more about the camera wins over one that says less: a refused
+# login applies to every address, and an answer of any kind beats no answer at all.
+_REASON_PRIORITY: dict[ConnectionFailureReason, int] = {
+    "auth_failed": 3,
+    "unknown": 2,
+    "stream_not_found": 1,
+    "unreachable": 0,
+}
 
 
 def stream_candidates(brand: str, host: str, preferred: str | None = None) -> list[str]:
@@ -81,14 +95,19 @@ def select_stream(
 
     A sub-stream narrower than ``MIN_DETECTION_WIDTH`` is replaced by its main
     stream when that one works. If no stream has an ideal size, the first working
-    stream is still used rather than failing the connection.
+    stream is still used rather than failing the connection. When nothing works, the
+    most telling failure is reported; a refused login ends the search, since the same
+    credentials would be refused at every address.
     """
     fallback: StreamSelection | None = None
-    last_message = "Camera stream could not be opened."
+    failure: StreamSelection | None = None
     for candidate in stream_candidates(brand, host, preferred):
         result = _probe(candidate, username, password, probe)
         if not result.ok:
-            last_message = result.message
+            if failure is None or _priority(result) >= _priority(failure):
+                failure = result
+            if result.reason == "auth_failed":
+                break
             continue
         if _suitable(result):
             return result
@@ -100,7 +119,11 @@ def select_stream(
                 return upgraded
     if fallback is not None:
         return fallback
-    return StreamSelection(False, last_message)
+    return failure or StreamSelection(False, "Camera stream could not be opened.", reason="unknown")
+
+
+def _priority(result: StreamSelection) -> int:
+    return _REASON_PRIORITY[result.reason or "unknown"]
 
 
 def _probe(
@@ -113,6 +136,7 @@ def _probe(
         url if result.ok else None,
         result.width,
         result.height,
+        None if result.ok else (result.reason or "unknown"),
     )
 
 

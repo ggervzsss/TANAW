@@ -92,7 +92,6 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   expect(await page.locator(".report-create-card").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe(raised);
   await page.keyboard.press("Escape");
   await expect(calendar).toBeHidden();
-  await page.getByText("Report notes and audit trail", { exact: true }).click();
   const notes = page.getByPlaceholder("Add notes regarding events, closures, or demographic estimates...");
   await notes.fill("Updated report workspace notes");
   await expect(notes).toHaveValue("Updated report workspace notes");
@@ -104,7 +103,8 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(page.getByText("REP-202607", { exact: true }).first()).toBeVisible();
   await page.getByRole("combobox", { name: "Filter reports by status" }).click();
   await page.getByRole("option", { name: "Consolidated" }).click();
-  await page.getByRole("button", { name: "View REP-202607", exact: true }).click();
+  // The whole row opens the report; Reports History has no separate View or Download controls.
+  await page.locator("tbody tr").filter({ hasText: "REP-202607" }).click();
   const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
   await expect(preview).toBeVisible();
   await expect(preview).toHaveCSS("border-radius", "16px");

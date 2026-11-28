@@ -9,15 +9,12 @@ export function PerformanceStatus({ effectiveProfile, analyticsFps }: { effectiv
   const chosen = devicePerformanceLabel(profile);
   const name = profile === "auto" ? (running ? `Auto, using ${running}` : "Auto") : chosen;
   return (
-    <p className="flex shrink-0 items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+    <p className="camera-performance-status">
       <span>
-        Performance: <span className="font-semibold text-gray-700 dark:text-slate-200">{name}</span>
+        Performance: <span className="camera-performance-name">{name}</span>
         {analyticsFps ? ` (${analyticsFps.toFixed(1)} AI FPS)` : null}
       </span>
-      <Link
-        to={routePaths.enterpriseDeveloperSettings}
-        className="rounded font-semibold text-tanaw-ledger underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none dark:text-emerald-300"
-      >
+      <Link to={routePaths.enterpriseDeveloperSettings} className="camera-performance-change">
         Change
       </Link>
     </p>

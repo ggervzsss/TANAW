@@ -1,62 +1,438 @@
 /*
- * IT Requests list: open rows split by hairlines. A row tints on hover with soft 12px ends, the
- * chosen request takes the green tint (it glides between rows, see ITRequestList), and the
- * hairlines beside a tinted row step back so the tint reads as one shape.
+ * IT Requests table: an open table, not a box. Uppercase tracked column names sit over a hairline,
+ * rows are split by hairlines, and a row tints on hover with soft 12px ends (the hairlines beside
+ * a tinted row step back so the tint reads as one shape). The open request's row keeps the green
+ * selection tint.
  */
 
-.it-requests__row {
-  position: relative;
+.it-requests-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--tanaw-text);
+  font-size: 0.875rem;
+  text-align: left;
 }
 
-.it-requests__row::after {
-  content: "";
-  position: absolute;
-  inset-inline: 12px;
-  bottom: 0;
-  height: 1px;
-  background: var(--tanaw-border-soft);
-  pointer-events: none;
-  transition: opacity var(--tanaw-duration-fast) var(--ease-tanaw-out);
+/* One fixed height for the column names, so a pane that scrolls under them knows where they end. */
+.it-requests-table thead tr {
+  height: var(--it-requests-head);
 }
 
-.it-requests__row > button {
-  transition: background-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
+.it-requests-table thead th {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--tanaw-border);
+  color: var(--tanaw-label);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
-.it-requests__selection {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: var(--radius-tanaw-md);
-  background: var(--tanaw-row-selected);
+.it-requests-table tbody :is(th, td) {
+  padding: 0.875rem 0.75rem;
+  border-bottom: 1px solid var(--tanaw-border-soft);
+  font-weight: 400;
+  vertical-align: middle;
+  transition:
+    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
+    border-color var(--tanaw-duration-fast) var(--ease-tanaw-out);
 }
 
-.it-requests__row[data-selected]::after,
-.it-requests__row:has(+ .it-requests__row[data-selected])::after {
-  opacity: 0;
+.it-requests-table .it-requests-table__request {
+  min-width: 14rem;
+}
+
+.it-requests-table__cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.it-requests-table__title {
+  display: block;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.it-requests-table__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.375rem;
+  color: var(--tanaw-text-secondary);
+  font-size: 0.875rem;
+}
+
+.it-requests-table__meta-when,
+.it-requests-table__meta-code {
+  display: none;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.it-requests-table td.it-requests-table__place {
+  color: var(--tanaw-text-secondary);
+}
+
+.it-requests-table td.it-requests-table__received {
+  color: var(--tanaw-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.it-requests-table td.it-requests-table__status {
+  font-size: 0.875rem;
+}
+
+.it-requests-table td.it-requests-table__code {
+  color: var(--tanaw-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.it-requests-table .it-requests-table__action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The open request: green tint with soft ends, its title in green. */
+.it-requests-table tbody tr[data-selected] > * {
+  border-bottom-color: transparent;
+  background-color: var(--tanaw-row-selected);
+}
+
+.it-requests-table tbody tr:has(+ tr[data-selected]) > * {
+  border-bottom-color: transparent;
+}
+
+.it-requests-table tbody tr[data-selected] [data-row-primary] {
+  color: var(--tanaw-accent-ink);
+}
+
+/* Soft ends only on a tinted row, so the hairlines under the others stay straight. */
+.it-requests-table tbody tr:is([data-selected], :hover) > :first-child {
+  border-start-start-radius: 12px;
+  border-end-start-radius: 12px;
+}
+
+.it-requests-table tbody tr:is([data-selected], :hover) > :last-child {
+  border-start-end-radius: 12px;
+  border-end-end-radius: 12px;
 }
 
 @media (hover: hover) {
-  .it-requests__row:not([data-selected]) > button:hover {
+  .it-requests-table tbody tr:not([data-selected]):hover > * {
+    border-bottom-color: transparent;
     background-color: var(--tanaw-control-hover);
   }
 
-  .it-requests__row:has(> button:hover)::after,
-  .it-requests__row:has(+ .it-requests__row > button:hover)::after {
-    opacity: 0;
+  .it-requests-table tbody tr:has(+ tr:hover) > * {
+    border-bottom-color: transparent;
   }
 }
 
-/* A day heading sits on the page at rest; once rows scroll under it, it takes the page colour and a hairline. */
-.it-requests__day {
-  transition:
-    background-color var(--tanaw-duration-fast) var(--ease-tanaw-out),
-    box-shadow var(--tanaw-duration-fast) var(--ease-tanaw-out);
+/* Sharing the width with an open request: the request, its status and Start on it stay. */
+.it-requests-table[data-compact] :is(.it-requests-table__place, .it-requests-table__received, .it-requests-table__code) {
+  display: none;
 }
 
-.it-requests__day[data-stuck] {
-  background: var(--tanaw-page);
-  box-shadow: 0 1px 0 var(--tanaw-border-soft);
+.it-requests-table[data-compact] :is(.it-requests-table__meta-when, .it-requests-table__meta-code) {
+  display: inline-flex;
+}
+
+/* Tablets: the reference number joins the type under the title. */
+@media (max-width: 1100px) {
+  .it-requests-table .it-requests-table__code {
+    display: none;
+  }
+
+  .it-requests-table .it-requests-table__meta-code {
+    display: inline-flex;
+  }
+}
+
+/*
+ * Phones: each row stacks into a short record (type, time and reference number, then the title,
+ * the place, the status and Start on it across the width), still split by hairlines.
+ */
+@media (max-width: 639px) {
+  .it-requests-table,
+  .it-requests-table tbody {
+    display: block;
+  }
+
+  .it-requests-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .it-requests-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--tanaw-border-soft);
+  }
+
+  .it-requests-table tbody tr > :is(th, td) {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    text-align: left;
+  }
+
+  .it-requests-table .it-requests-table__meta {
+    order: -1;
+    margin-bottom: 0.125rem;
+  }
+
+  .it-requests-table :is(.it-requests-table__meta-when, .it-requests-table__meta-code) {
+    display: inline-flex;
+  }
+
+  .it-requests-table tbody :is(td.it-requests-table__received, td.it-requests-table__code) {
+    display: none;
+  }
+
+  .it-requests-table tbody td.it-requests-table__place {
+    margin-top: 0.125rem;
+  }
+
+  .it-requests-table tbody td.it-requests-table__status {
+    margin-top: 0.5rem;
+  }
+
+  .it-requests-table tbody td.it-requests-table__action {
+    width: auto;
+  }
+
+  .it-requests-table tbody td.it-requests-table__action:empty {
+    display: none;
+  }
+
+  .it-requests-table tbody td.it-requests-table__action > * {
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+}
+
+/*
+ * The table beside the open request. With nothing open the table takes the full width; opening a
+ * request narrows it and slides the request in on the right, and closing it gives the width back.
+ * The request stays in view while the table scrolls: it sticks under the top and scrolls on its own.
+ */
+.it-requests__split {
+  display: flex;
+  align-items: flex-start;
+}
+
+.it-requests__table-pane {
+  /* The height of the table's column names (see the table above). */
+  --it-requests-head: 2.625rem;
+
+  flex: 0 1 auto;
+  width: 100%;
+  min-width: 0;
+  transition: width 260ms var(--ease-tanaw-out);
+}
+
+.it-requests__split[data-open] .it-requests__table-pane {
+  width: max(26rem, 42%);
+}
+
+.it-requests__panel {
+  position: sticky;
+  top: 1.5rem;
+  flex: 1 1 0;
+  min-width: 0;
+  max-height: calc(100dvh - var(--tanaw-topbar-height) - 3rem);
+  margin-left: 0;
+  padding-inline: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-left: 1px solid transparent;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(12px);
+  transition:
+    opacity 140ms var(--ease-tanaw-out),
+    transform 260ms var(--ease-tanaw-out),
+    margin-left 260ms var(--ease-tanaw-out),
+    padding 260ms var(--ease-tanaw-out),
+    border-color 260ms var(--ease-tanaw-out),
+    visibility 0s linear 260ms;
+}
+
+.it-requests__split[data-open] .it-requests__panel {
+  margin-left: 1.5rem;
+  padding-inline: 2rem 0.75rem;
+  border-left-color: var(--tanaw-border-soft);
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 220ms var(--ease-tanaw-out) 60ms,
+    transform 260ms var(--ease-tanaw-out),
+    margin-left 260ms var(--ease-tanaw-out),
+    padding 260ms var(--ease-tanaw-out),
+    border-color 260ms var(--ease-tanaw-out),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-requests-table tbody :is(th, td),
+  .it-requests__table-pane,
+  .it-requests__panel,
+  .it-requests__split[data-open] .it-requests__panel {
+    transition: none;
+  }
+
+  .it-requests__panel {
+    transform: none;
+  }
+}
+
+/* Requests' scrollbars and the request's own scroll take the palette rather than the browser's grey. */
+.it-requests__panel {
+  scrollbar-color: var(--tanaw-border) transparent;
+  scrollbar-width: thin;
+}
+
+/*
+ * Wide windows taller than 600px: the page fits under the topbar (ITRequestsPage sets data-fit).
+ * The title and filters stay put; the table fills the rest of the height and scrolls inside itself
+ * under its column names, and the open request beside it scrolls on its own. An edge with more
+ * past it fades softly (data-more-above / data-more-below, from useScrollEdges): the foot over 3rem
+ * while rows wait below, and the top over 2rem once scrolled, just under the column names.
+ */
+@property --it-requests-above {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --it-requests-below {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+.it-requests__split[data-fit] {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.it-requests__split[data-fit] :is(.it-requests__table-pane, .it-requests__panel) {
+  --it-requests-above: 1;
+  --it-requests-below: 1;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--tanaw-border) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.it-requests__split[data-fit] :is(.it-requests__table-pane, .it-requests__panel)[data-more-above] {
+  --it-requests-above: 0;
+}
+
+.it-requests__split[data-fit] :is(.it-requests__table-pane, .it-requests__panel)[data-more-below] {
+  --it-requests-below: 0;
+}
+
+/*
+ * The table's scrollbar lane reaches 1.25rem past the table into the gutter beside it, 12px clear
+ * of the rows, so the table still ends in line with the filters above it. The request beside it
+ * keeps its distance from that lane.
+ */
+.it-requests__split[data-fit] .it-requests__table-pane {
+  width: calc(100% + 1.25rem);
+  margin-inline-end: -1.25rem;
+  padding-inline-end: 0.75rem;
+  scroll-padding-block: var(--it-requests-head) 3rem;
+  mask-image: linear-gradient(
+    to bottom,
+    #000 var(--it-requests-head),
+    rgb(0 0 0 / var(--it-requests-above)) var(--it-requests-head),
+    #000 calc(var(--it-requests-head) + 2rem),
+    #000 calc(100% - 3rem),
+    rgb(0 0 0 / var(--it-requests-below))
+  );
+  transition:
+    width 260ms var(--ease-tanaw-out),
+    --it-requests-above var(--tanaw-duration-base) var(--ease-tanaw-out),
+    --it-requests-below var(--tanaw-duration-base) var(--ease-tanaw-out);
+}
+
+/*
+ * The column names stay at the top of the table while it scrolls. Rows pass under them, so they
+ * carry the page's own colour and green wash, pinned where the page draws them (the page itself
+ * never scrolls here), and read as part of the page rather than a bar.
+ */
+.it-requests__split[data-fit] .it-requests-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--tanaw-page-bg);
+  background-image: var(--tanaw-top-wash), var(--tanaw-page-gradient);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-position: 0 var(--tanaw-topbar-height);
+  background-size:
+    100% 22rem,
+    100% calc(100dvh - var(--tanaw-topbar-height)),
+    100% calc(100dvh - var(--tanaw-topbar-height));
+}
+
+.it-requests__split[data-fit] .it-requests__panel {
+  position: relative;
+  top: auto;
+  max-height: none;
+  scroll-padding-block: 2rem 3rem;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / var(--it-requests-above)), #000 2rem, #000 calc(100% - 3rem), rgb(0 0 0 / var(--it-requests-below)));
+}
+
+.it-requests__split[data-fit][data-open] .it-requests__table-pane {
+  width: calc(max(26rem, 42%) + 1.25rem);
+}
+
+.it-requests__split[data-fit][data-open] .it-requests__panel {
+  margin-left: 2.75rem;
+  transition:
+    opacity 220ms var(--ease-tanaw-out) 60ms,
+    transform 260ms var(--ease-tanaw-out),
+    margin-left 260ms var(--ease-tanaw-out),
+    padding 260ms var(--ease-tanaw-out),
+    border-color 260ms var(--ease-tanaw-out),
+    visibility 0s,
+    --it-requests-above var(--tanaw-duration-base) var(--ease-tanaw-out),
+    --it-requests-below var(--tanaw-duration-base) var(--ease-tanaw-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-requests__split[data-fit] .it-requests__table-pane,
+  .it-requests__split[data-fit][data-open] .it-requests__panel {
+    transition: none;
+  }
 }
 
 /* The detail pane fades up a few pixels when another request opens. */

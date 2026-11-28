@@ -3,11 +3,12 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { CameraDialog } from "./CameraDialog";
 import type { Camera } from "../../../types/enterprise";
 import { CAMERA_IP_CONFLICT_MESSAGE } from "../utils/camera-ip-uniqueness";
+import { clearEditedFieldErrors } from "../utils/camera-connection-errors";
 import { useCameraManagement } from "../hooks/useCameraManagement";
 import { CameraAddModal } from "./CameraAddModal";
+import { useSkeletonReveal } from "../../../ui-kit";
 import { CameraList } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
-import { PerformanceStatus } from "./PerformanceStatus";
 
 type CameraManagementViewProps = {
   cameras: Camera[];
@@ -17,7 +18,6 @@ type CameraManagementViewProps = {
 
 export function CameraManagementView({ cameras, setCameras, storageKey }: CameraManagementViewProps) {
   const [deleting, setDeleting] = useState(false);
-  const [isCameraListCollapsed, setIsCameraListCollapsed] = useState(false);
   const {
     activeAction,
     activeCam,
@@ -64,6 +64,8 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     warnings,
   } = useCameraManagement({ cameras, setCameras, storageKey });
   const showingSettings = Boolean(isEditMode && activeCam && editForm);
+  // My Cameras' rows fade in where their placeholders stood, when the placeholders were seen.
+  const listReveal = useSkeletonReveal(camerasLoading && cameras.length === 0);
 
   return (
     <div className="camera-management flex h-full min-h-0 flex-col overflow-hidden font-sans">
@@ -82,7 +84,8 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           onSubmit={handleAddCamera}
           onChange={(values) => {
             setNewCam(values);
-            setCameraFormErrors({});
+            // Only the edited field's error goes; a refused login stays until the credentials change.
+            setCameraFormErrors((errors) => clearEditedFieldErrors(errors, newCam, values));
           }}
         />
       )}
@@ -134,13 +137,11 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             <h2>Camera Monitoring</h2>
             <p>Monitor live video, visitor counts, and camera health.</p>
           </div>
-          <PerformanceStatus effectiveProfile={health?.effective_processing_profile ?? null} analyticsFps={health?.analytics_fps ?? null} />
         </div>
       )}
 
       <div
         data-camera-view={showingSettings ? "settings" : "monitoring"}
-        data-camera-sidebar={isCameraListCollapsed ? "collapsed" : "expanded"}
         className="camera-workspace"
       >
         {!showingSettings && (
@@ -148,10 +149,10 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             cameras={cameras}
             activeCamId={activeCamId}
             cameraLimit={configuredCameraLimit}
-            collapsed={isCameraListCollapsed}
             loading={camerasLoading}
+            reveal={listReveal}
             onAdd={openAddModal}
-            onToggle={() => setIsCameraListCollapsed((current) => !current)}
+            onDelete={setCameraPendingDelete}
             onSelect={(cameraId) => {
               setActiveCamId(cameraId);
               setIsEditMode(false);

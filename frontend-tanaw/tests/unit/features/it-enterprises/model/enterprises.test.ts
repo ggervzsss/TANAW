@@ -7,16 +7,17 @@ import {
   appsNote,
   cameraCell,
   camerasNote,
-  chipCounts,
   dayWords,
   filterRows,
   joinEnterprises,
   matchesSearch,
   needsAttention,
-  parseChip,
+  parseStatusFilter,
   placeLine,
   registeredNote,
   resendLabel,
+  STATUS_FILTERS,
+  statusCounts,
   statusLine,
   summarizeEnterprises,
   timeAgo,
@@ -123,7 +124,7 @@ describe("joinEnterprises", () => {
   });
 });
 
-describe("chips and search", () => {
+describe("account status filter and search", () => {
   const rows = joinEnterprises(
     [
       account("ok", { enterpriseName: "Casa San Pedro", barangay: "Poblacion" }),
@@ -143,15 +144,15 @@ describe("chips and search", () => {
     ],
   );
 
-  it("counts each chip", () => {
-    expect(chipCounts(rows)).toEqual({ all: 7, attention: 2, pending: 2, sending: 2 });
+  it("counts each account status", () => {
+    expect(statusCounts(rows)).toEqual({ all: 7, attention: 2, pending: 2, sending: 2 });
   });
 
   it("never flags a closed place, an invited account or a deactivated one", () => {
     expect(rows.filter(needsAttention).map((item) => item.id)).toEqual(["cam", "late"]);
   });
 
-  it("filters by chip and by name, barangay or owner email", () => {
+  it("filters by account status and by name, barangay or owner email", () => {
     expect(filterRows(rows, "pending", "").map((item) => item.id)).toEqual(["expired", "invited"]);
     expect(filterRows(rows, "all", "poblacion").map((item) => item.id)).toEqual(["ok"]);
     expect(filterRows(rows, "all", "late@example").map((item) => item.id)).toEqual(["late"]);
@@ -159,10 +160,15 @@ describe("chips and search", () => {
     expect(matchesSearch(rows[0], "   ")).toBe(true);
   });
 
-  it("reads an unknown chip as All", () => {
-    expect(parseChip("attention")).toBe("attention");
-    expect(parseChip("nonsense")).toBe("all");
-    expect(parseChip(null)).toBe("all");
+  it("reads an unknown account status as All", () => {
+    expect(parseStatusFilter("attention")).toBe("attention");
+    expect(parseStatusFilter("nonsense")).toBe("all");
+    expect(parseStatusFilter(null)).toBe("all");
+  });
+
+  it("offers the four account statuses, All first", () => {
+    expect(STATUS_FILTERS.map((filter) => filter.label)).toEqual(["All", "Needs Attention", "Invitation Pending", "Sending Data"]);
+    expect(STATUS_FILTERS.map((filter) => filter.key)).toEqual(["all", "attention", "pending", "sending"]);
   });
 
   it("sums the three figures", () => {

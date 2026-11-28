@@ -29,6 +29,9 @@ function finalReport(id: string, period: string, status: FinalReport["status"], 
     totalExit: null,
     totalUnique: full.reduce((sum, source) => sum + source.unique, 0),
     enterpriseCount: full.length,
+    enterpriseTotal: full.length,
+    generatedAt: "2026-10-09T08:00:00+08:00",
+    updatedAt: "2026-10-09T08:00:00+08:00",
     sources: full,
   };
 }
@@ -128,5 +131,17 @@ describe("VAR 3M", () => {
     expect(form.period).toBe("January - December 2026");
     expect(form.notes[0]).toBe("No finalized monthly report (VAR 2M) for January, February, March, April, July, August, September, October, November and December.");
     expect(var3Years(reports)).toEqual([2026, 2025]);
+    // July's draft is left out, and the annual report says so.
+    expect(form.draftMonths).toEqual(["July"]);
+    expect(form.notes).toContain("July is still a draft and is not counted until it is final.");
+  });
+
+  it("names every month that is still a draft", () => {
+    const form = buildVar3(
+      [finalReport("oct", "October 2026", "Draft", [{ enterprise: "Plaza", unique: 5 }]), finalReport("nov", "November 2026", "Draft", [{ enterprise: "Plaza", unique: 5 }])],
+      2026,
+    );
+    expect(form.draftMonths).toEqual(["October", "November"]);
+    expect(form.notes).toContain("2 months (October and November) are still drafts and are not counted until they are final.");
   });
 });

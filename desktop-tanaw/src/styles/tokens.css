@@ -154,6 +154,9 @@
   --tanaw-neutral-bg: #f1f5f9;
   --tanaw-neutral-text: #334155;
   --tanaw-neutral-line: #e2e8f0;
+  /* A report TANAW received, before it is consolidated: teal, apart from the success green. */
+  --tanaw-submitted-bg: #ccfbf1;
+  --tanaw-submitted-text: #115e59;
 
   /* Status surfaces: large tinted areas (banners, panels) behind status content. */
   --tanaw-success-surface: #ecfdf5;
@@ -277,6 +280,8 @@
   --tanaw-neutral-bg: rgb(51 65 85 / 0.7);
   --tanaw-neutral-text: #f1f5f9;
   --tanaw-neutral-line: #475569;
+  --tanaw-submitted-bg: rgb(45 212 191 / 0.14);
+  --tanaw-submitted-text: #99f6e4;
 
   --tanaw-success-surface: rgb(6 78 59 / 0.28);
   --tanaw-warning-surface: rgb(120 74 15 / 0.24);

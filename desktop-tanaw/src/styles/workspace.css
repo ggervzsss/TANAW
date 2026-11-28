@@ -875,8 +875,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .overview-layout *,
-  .camera-settings *,
+  /* Skeletons keep their own reduced path (Skeleton.css): a still tint that waits before it shows. */
+  .overview-layout *:not(.design-skeleton, .tanaw-skeleton),
+  .camera-settings *:not(.tanaw-skeleton),
   .tanaw-assistant {
     animation: none !important;
     transition: none !important;
@@ -1163,8 +1164,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .overview-layout,
-  .overview-layout *,
+  .overview-layout:not(.tanaw-skeleton-screen),
+  .overview-layout *:not(.design-skeleton, .tanaw-skeleton),
   .enterprise-shell:has(.overview-layout) [data-topbar-navigation] {
     animation: none !important;
     transition: none !important;

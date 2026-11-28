@@ -1,22 +1,33 @@
 /*
- * Loading placeholders. A quiet block in the shape of what is loading, with one soft band of light
- * travelling across it, so a page reads as "on its way" instead of flashing a spinner.
+ * Loading placeholders. A quiet block in the shape of what is loading, tinted from the surface it
+ * sits on, with one slow band of light passing over the whole window.
  *
- * - Blocks fade in (they never pop), and a whole skeleton screen waits a beat before it appears so
- *   a fast load shows no placeholder flash at all.
- * - The sweep is long and eased, with a pause between passes, which reads calmer than a constant
- *   conveyor of light.
- * - Reduced motion keeps a slow, gentle breathe instead of the sweep.
+ * - One wave, not many: the band is a single gradient pinned to the window
+ *   (background-attachment: fixed), so every block lights up as the same band passes over it, left
+ *   to right, instead of each block shimmering on its own. syncSkeletonSweep() (ui-kit/lib/skeleton)
+ *   puts blocks that appear later on the same beat.
+ * - The sweep eases in and out, so the band lingers off screen between passes and crosses calmly.
+ * - Nothing flashes: a block waits --tanaw-skeleton-wait before it fades in, so a fast load goes
+ *   straight to content. A whole skeleton screen waits and fades as one, its blocks with it.
+ * - Content that replaces a skeleton the person saw fades and rises in (.tanaw-skeleton-reveal),
+ *   rather than popping. It ends with no transform or opacity left on the content.
+ * - Reduced motion: a still tint, no sweep and no pulse; blocks still wait, then appear at once.
  */
 :root {
-  --tanaw-skeleton-base: rgb(16 36 27 / 0.055);
-  --tanaw-skeleton-shine: rgb(16 36 27 / 0.1);
+  /* Ink at a whisper on the light surfaces, and a band of white light over it. */
+  --tanaw-skeleton-base: rgb(16 36 27 / 0.06);
+  --tanaw-skeleton-shine: rgb(255 255 255 / 0.62);
   --tanaw-skeleton-radius: 10px;
-  --tanaw-skeleton-duration: 1.8s;
+  --tanaw-skeleton-sweep: 1.8s;
+  --tanaw-skeleton-sweep-ease: cubic-bezier(0.45, 0, 0.55, 1);
+  /* Matches SKELETON_WAIT_MS in ui-kit/lib/skeleton.ts. */
+  --tanaw-skeleton-wait: 180ms;
+  --tanaw-skeleton-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .dark {
-  --tanaw-skeleton-base: rgb(226 232 240 / 0.055);
-  --tanaw-skeleton-shine: rgb(226 232 240 / 0.12);
+  /* The dark palette's border hue, quieter than a hairline, with a slightly brighter band. */
+  --tanaw-skeleton-base: rgb(174 188 201 / 0.08);
+  --tanaw-skeleton-shine: rgb(174 188 201 / 0.11);
 }
 
 /*
@@ -29,19 +40,23 @@
     display: block;
     border-radius: var(--tanaw-skeleton-radius);
     background-color: var(--tanaw-skeleton-base);
+    /*
+     * A band 60% of the window wide in an image twice the window's width. The keyframes carry it
+     * from just past the left edge to just past the right one.
+     */
     background-image: linear-gradient(
       100deg,
-      transparent 0%,
-      transparent 34%,
+      transparent 35%,
       var(--tanaw-skeleton-shine) 50%,
-      transparent 66%,
-      transparent 100%
+      transparent 65%
     );
+    background-attachment: fixed;
     background-repeat: no-repeat;
-    background-size: 240% 100%;
+    background-size: 200vw 100vh;
+    background-position: -130vw 0;
     animation:
-      tanaw-skeleton-enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
-      tanaw-skeleton-sweep var(--tanaw-skeleton-duration) cubic-bezier(0.45, 0, 0.25, 1) infinite;
+      tanaw-skeleton-fade 240ms var(--tanaw-skeleton-ease) var(--tanaw-skeleton-delay, var(--tanaw-skeleton-wait)) backwards,
+      tanaw-skeleton-sweep var(--tanaw-skeleton-sweep) var(--tanaw-skeleton-sweep-ease) infinite;
   }
 
   /* Round and pill shapes for avatars, icons and badges. */
@@ -66,55 +81,50 @@
   }
 
   /*
-   * A whole skeleton screen (a view or panel still loading). It waits 120ms before showing, so
-   * quick loads go straight to content, then fades up gently.
+   * A whole skeleton screen (a view or panel still loading). It waits, then fades in as one; its
+   * blocks skip their own wait so the screen never appears in pieces.
    */
   .tanaw-skeleton-screen {
-    animation: tanaw-skeleton-screen-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms backwards;
+    --tanaw-skeleton-delay: 0ms;
+    animation: tanaw-skeleton-fade 240ms var(--tanaw-skeleton-ease) var(--tanaw-skeleton-wait) backwards;
+  }
+
+  /* Content arriving in place of a skeleton the person saw (useSkeletonReveal). */
+  .tanaw-skeleton-reveal {
+    animation: tanaw-skeleton-reveal 220ms var(--tanaw-skeleton-ease) backwards;
   }
 
   @media (prefers-reduced-motion: reduce) {
     .tanaw-skeleton,
     .design-skeleton {
       background-image: none;
-      background-color: var(--tanaw-skeleton-shine);
-      animation: tanaw-skeleton-breathe 2.4s ease-in-out infinite;
+      animation: tanaw-skeleton-fade 1ms var(--tanaw-skeleton-delay, var(--tanaw-skeleton-wait)) backwards;
     }
     .tanaw-skeleton-screen {
-      animation: tanaw-skeleton-enter 1ms 120ms backwards;
+      animation: tanaw-skeleton-fade 1ms var(--tanaw-skeleton-wait) backwards;
+    }
+    .tanaw-skeleton-reveal {
+      animation: tanaw-skeleton-fade 160ms ease-out backwards;
     }
   }
 }
 
 @keyframes tanaw-skeleton-sweep {
-  0% {
-    background-position: 130% 0;
+  from {
+    background-position: -130vw 0;
   }
-  72%,
-  100% {
-    background-position: -130% 0;
+  to {
+    background-position: 30vw 0;
   }
 }
-@keyframes tanaw-skeleton-enter {
+@keyframes tanaw-skeleton-fade {
   from {
     opacity: 0;
   }
-  to {
-    opacity: 1;
-  }
 }
-@keyframes tanaw-skeleton-screen-in {
+@keyframes tanaw-skeleton-reveal {
   from {
     opacity: 0;
     transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes tanaw-skeleton-breathe {
-  50% {
-    opacity: 0.6;
   }
 }

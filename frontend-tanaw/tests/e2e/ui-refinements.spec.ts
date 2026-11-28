@@ -31,6 +31,9 @@ const finalReport = {
   totalExit: 571,
   totalUnique: 377,
   enterpriseCount: 1,
+  enterpriseTotal: 1,
+  generatedAt: "2026-10-09T08:00:00+08:00",
+  updatedAt: "2026-10-09T08:00:00+08:00",
   sources: [{ id: "source-1", enterpriseProfileId: "archie", attractionCode: "799", enterprise: "Archie's Event Place", code: "SAMPLE-REP-2605-01", unique: 377, entry: 598, exit: 571 }],
 };
 

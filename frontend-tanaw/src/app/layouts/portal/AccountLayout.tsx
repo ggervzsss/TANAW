@@ -50,7 +50,11 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const windowScrolls = "max-[920px]:overflow-x-clip max-[920px]:overflow-y-visible";
   const mainClassName =
     "it-portal-main tanaw-portal-content flex-1 overflow-y-auto max-[920px]:overflow-x-clip max-[920px]:overflow-y-visible px-[clamp(1.5rem,4vw,4.5rem)] pt-9 pb-14 text-[15px] transition-colors duration-200 max-sm:pt-5 max-sm:pr-[max(1rem,env(safe-area-inset-right))] max-sm:pb-[calc(2rem+env(safe-area-inset-bottom))] max-sm:pl-[max(1rem,env(safe-area-inset-left))]";
-  const mainContentClassName = "mx-auto w-full max-w-420";
+  // A page that marks an element data-fit-viewport fits under the topbar: main and the content
+  // column become flex columns the page can fill, so the page scrolls its own panes instead
+  // (IT Requests on wide windows). Every other page is unchanged.
+  const fitViewport = "has-data-fit-viewport:flex has-data-fit-viewport:flex-col";
+  const mainContentClassName = `mx-auto w-full max-w-420 ${fitViewport} has-data-fit-viewport:min-h-0 has-data-fit-viewport:flex-1`;
   // A new page fades up into place; moving between settings sections is left to the settings page.
   usePageEnter(mainRef, isSettings ? "settings" : pathname, { rise: isSettings ? 0 : 4 });
   const scrollStateKey = useMemo(() => createPageStateKey({ portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" }, pathname, "scroll"), [pathname, role, user?.id, user?.role]);
@@ -137,14 +141,14 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     <section className={sectionClassName}>
       <div className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${windowScrolls}`}>
         <PortalTopbar role={role} resolvedTheme={theme.resolvedTheme} theme={theme.theme} onThemeChange={theme.selectTheme} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} data-page-scroller className={isSettings ? `tanaw-settings-page overflow-auto ${windowScrolls}` : mainClassName}>
+        <main ref={mainRef} data-page-scroller className={isSettings ? `tanaw-settings-page overflow-auto ${windowScrolls}` : `${mainClassName} ${fitViewport} has-data-fit-viewport:pb-6`}>
           {isSettings ? (
             outlet
           ) : (
             <div className={mainContentClassName}>
               {title && <h1 className={titleClassName}>{title}</h1>}
               {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (
-                <Navigate to={routes.it.dashboard} replace />
+                <Navigate to={routes.it.requests} replace />
               ) : (
                 <PageHeaderProvider setHeader={registerPageHeader}>{outlet}</PageHeaderProvider>
               )}

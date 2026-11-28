@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { CameraFormValues } from "../../../../../../src/features/camera/types/camera";
+import type { CameraFormErrors } from "../../../../../../src/features/camera/utils/camera-form-validation";
 import { CameraAddModal } from "../../../../../../src/features/camera/components/CameraAddModal";
 
 vi.mock("../../../../../../src/components/ModalPortal", () => ({
@@ -72,9 +73,27 @@ describe("CameraAddModal", () => {
     expect(markup).toContain("Unable to connect to this camera");
     expect(markup).not.toContain("rtsp://");
   });
+
+  it("shows a refused login under the password and marks both credentials invalid, leaving the IP address alone", () => {
+    const markup = render(values({ cameraHost: "192.168.1.9", username: "admin", password: "wrong" }), { credentials: "The camera refused this username or password." });
+    const passwordError = markup.indexOf('id="camera-password-error"');
+    expect(passwordError).toBeGreaterThan(markup.indexOf('id="camera-password"'));
+    expect(markup.slice(passwordError)).toContain("The camera refused this username or password.");
+    expect(markup).toMatch(/id="camera-username"[^>]*aria-invalid="true"/);
+    expect(markup).toMatch(/id="camera-password"[^>]*aria-invalid="true"/);
+    expect(markup).toMatch(/id="camera-ip-host"[^>]*aria-invalid="false"/);
+    expect(markup).not.toContain("camera-ip-host-error");
+  });
+
+  it("shows a failure that is no single field's fault as a form-level alert", () => {
+    const markup = render(values({ cameraHost: "192.168.1.9" }), { connection: "The camera could not be reached. Check its IP address, username, and password." });
+    expect(markup).toMatch(/class="camera-settings-error camera-add-connection-error" role="alert" tabindex="-1">The camera could not be reached/);
+    expect(markup).toMatch(/id="camera-ip-host"[^>]*aria-invalid="false"/);
+    expect(markup).not.toContain('aria-invalid="true"');
+  });
 });
 
-function render(newCam: CameraFormValues, errors: Partial<Record<keyof CameraFormValues, string>>, duplicateIpError?: string) {
+function render(newCam: CameraFormValues, errors: CameraFormErrors, duplicateIpError?: string) {
   return renderToStaticMarkup(
     <CameraAddModal newCam={newCam} errors={errors} duplicateIpError={duplicateIpError} isValidating={false} onChange={() => undefined} onClose={() => undefined} onSubmit={() => undefined} />,
   );

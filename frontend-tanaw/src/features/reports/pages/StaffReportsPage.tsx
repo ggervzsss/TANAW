@@ -1,5 +1,6 @@
+import { FileClock, Info } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { Button, MonthPicker, PortalPageHeader, type PickerMonth } from "@/shared/ui-kit";
 import { EnterpriseReportDialog } from "../components/EnterpriseReportDialog";
@@ -11,10 +12,15 @@ import { useStaffReports } from "../hooks/useStaffReports";
 import { currentReportingMonth, monthIndexOf } from "../model/reportStatuses";
 import { formatReportingMonth, monthKey, parseMonthKey, reportingMonth, reportingMonthOptions, type ReportingMonth } from "../model/reportingMonth";
 import {
+  consolidateButton,
+  draftReportNote,
   EMPTY_STAFF_REPORT_FILTERS,
   filterStaffReportRows,
   generateConfirmMessage,
   hasStaffReportFilters,
+  INCOMPLETE_SUBMISSIONS_MESSAGE,
+  INCOMPLETE_SUBMISSIONS_TITLE,
+  incompleteSubmissionsDetail,
   parseStaffReportFilters,
   staffReportFilterParams,
   staffReportsCaption,
@@ -52,8 +58,10 @@ export function StaffReportsPage() {
   const reportId = params.get("report");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const data = useStaffReports(month, today);
-  const { progress } = data;
+  const { progress, consolidatedReport } = data;
   const monthLabel = formatReportingMonth(month);
+  const button = consolidateButton(progress, consolidatedReport, monthLabel);
+  const draft = consolidatedReport?.status === "Draft" ? consolidatedReport : undefined;
   const openReport = reportId ? data.reports.find((report) => report.id === reportId) : undefined;
   const visibleRows = filterStaffReportRows(data.rows, filters);
   const filtered = hasStaffReportFilters(filters);
@@ -71,7 +79,11 @@ export function StaffReportsPage() {
   const closeReport = () => updateParams({ report: null });
   const changeFilters = (patch: Partial<StaffReportFilters>) => updateParams(staffReportFilterParams({ ...filters, ...patch }));
   const clearFilters = () => updateParams(staffReportFilterParams(EMPTY_STAFF_REPORT_FILTERS));
-  const canGenerate = progress.canGenerate && !data.isLoading && !data.isError;
+  const ready = !data.isLoading && !data.isError;
+  const canGenerate = button.enabled && ready;
+  // A quiet line under the caption: the month's draft, and why Generate cannot be pressed.
+  const hasNote = ready && Boolean(draft || button.reason);
+  const reportLink = (report: { id: string; period: string }) => `${routes.staff.consolidatedReports}?year=${/\d{4}/.exec(report.period)?.[0] ?? String(month.year)}&report=${encodeURIComponent(report.id)}`;
 
   return (
     <>
@@ -93,13 +105,28 @@ export function StaffReportsPage() {
             />
             {/* On a phone, Generate rides in a bar along the foot of the screen once it can be pressed (reports.css). */}
             <div className="tanaw-staff-generate" data-ready={canGenerate || undefined}>
-              <Button disabled={!canGenerate} loading={data.generate.isPending} onClick={() => setIsConfirmOpen(true)}>
-                Generate consolidated report
+              <Button disabled={!canGenerate} loading={data.generate.isPending} aria-describedby={hasNote ? "staff-generate-note" : undefined} onClick={() => setIsConfirmOpen(true)}>
+                {button.label}
               </Button>
             </div>
           </div>
         }
-      />
+      >
+        {hasNote && (
+          <p id="staff-generate-note" className="tanaw-staff-generate-note">
+            {draft ? <FileClock size={16} aria-hidden="true" /> : <Info size={16} aria-hidden="true" />}
+            <span>
+              {[draft ? draftReportNote(monthLabel, draft) : null, button.reason].filter(Boolean).join(" ")}
+              {consolidatedReport && (
+                <>
+                  {" "}
+                  <Link to={reportLink(consolidatedReport)}>{draft ? "View draft" : "View report"}</Link>
+                </>
+              )}
+            </span>
+          </p>
+        )}
+      </PortalPageHeader>
 
       <StaffReportsFilters rows={data.rows} filters={filters} onChange={changeFilters} />
 
@@ -144,19 +171,18 @@ export function StaffReportsPage() {
       )}
 
       {isConfirmOpen && (
+        // An incomplete month warns first and gives a Draft; a complete month gives the final report.
         <ReportActionConfirmDialog
-          title="Generate consolidated report?"
-          message={generateConfirmMessage(monthLabel, progress)}
-          confirmLabel="Generate report"
-          pendingLabel="Generating…"
+          {...(button.incomplete
+            ? { title: INCOMPLETE_SUBMISSIONS_TITLE, message: INCOMPLETE_SUBMISSIONS_MESSAGE, detail: incompleteSubmissionsDetail(progress), confirmLabel: "Proceed", pendingLabel: "Consolidating…" }
+            : { title: "Generate consolidated report?", message: generateConfirmMessage(monthLabel, progress, Boolean(draft)), confirmLabel: "Generate report", pendingLabel: "Generating…" })}
           isPending={data.generate.isPending}
           onCancel={() => setIsConfirmOpen(false)}
           onConfirm={() =>
             data.generate.mutate(undefined, {
               onSuccess: (finalReport) => {
                 setIsConfirmOpen(false);
-                const year = /\d{4}/.exec(finalReport.period)?.[0] ?? String(month.year);
-                navigate(`${routes.staff.consolidatedReports}?year=${year}&report=${encodeURIComponent(finalReport.id)}`);
+                navigate(reportLink(finalReport));
               },
             })
           }

@@ -158,7 +158,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.getByRole("heading", { name: "Monthly DOT Visitor Report" })).toBeVisible();
     await expect(page.getByText("Report Workspace", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("tab", { name: "Create Reports" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
+    await expect(page.getByRole("status", { name: "System visitor count" })).toHaveText("617");
     // TANAW fills This City for the day; it is not editable.
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("617");
     await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("300");
@@ -167,7 +167,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(page.locator(".report-origin-table tfoot")).toContainText("617");
     // No day needs confirming: until other origins are entered, all its visitors are This City.
     await expect(page.getByRole("button", { name: "All from This City", exact: true })).toHaveCount(0);
-    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toBeVisible();
+    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toHaveCount(0);
     await expect(page.locator(".report-information")).toHaveCSS("display", "grid");
     const visitor = (await page.locator(".report-visitor-card").boundingBox())!;
     const steps = (await page.locator(".report-next-steps").boundingBox())!;
@@ -201,26 +201,10 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await page.screenshot({ path: testInfo.outputPath("reports-review-1440.png") });
     await preview.getByRole("button", { name: "Fit to Page", exact: true }).click();
     await expect.poll(async () => Number(await canvas.getAttribute("data-report-zoom"))).toBeLessThan(initialZoom);
-    const exportPath = testInfo.outputPath("official-var1.pdf");
-    await application.evaluate(({ BrowserWindow }, savePath) => {
-      const window = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().startsWith("tanaw-app://desktop"));
-      window!.webContents.session.once("will-download", (_event, item) => item.setSavePath(savePath));
-    }, exportPath);
-    await preview.getByRole("button", { name: "Download PDF", exact: true }).click();
-    await expect.poll(async () => (await stat(exportPath).catch(() => null))?.size ?? 0).toBeGreaterThan(1000);
-    expect((await readFile(exportPath, "utf8")).startsWith("%PDF-1.4")).toBe(true);
-    await page.evaluate(() => {
-      window.print = () => {
-        Object.assign(window, { __var1PrintRequested: true });
-      };
-    });
-    await preview.getByRole("button", { name: "Print", exact: true }).click();
-    expect(await page.evaluate(() => (window as unknown as { __var1PrintRequested?: boolean }).__var1PrintRequested)).toBe(true);
-    const printed = await application.evaluate(async ({ BrowserWindow }) => {
-      const window = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().startsWith("tanaw-app://desktop"));
-      return (await window!.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })).toString("base64");
-    });
-    await writeFile(testInfo.outputPath("native-print-var1.pdf"), Buffer.from(printed, "base64"));
+    // The draft being created is submitted from its form; a sent report is printed or downloaded.
+    await expect(preview.getByRole("button", { name: "Submit Form", exact: true })).toBeVisible();
+    await expect(preview.getByRole("button", { name: "Download PDF", exact: true })).toHaveCount(0);
+    await expect(preview.getByRole("button", { name: "Print", exact: true })).toHaveCount(0);
     await preview.getByRole("button", { name: "Close preview", exact: true }).click();
     await expect(page.getByRole("button", { name: "Review Report Form", exact: true })).toBeFocused();
     await page.getByRole("tab", { name: "Reports History" }).click();
@@ -242,7 +226,7 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     await expect(preview.locator(".var1-document-information dd").first()).toHaveText("October 2026");
     await page.keyboard.press("Escape");
     await openReportMonth(page, "October 2026");
-    await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("617");
+    await expect(page.getByRole("status", { name: "System visitor count" })).toHaveText("617");
     await expect(page.getByRole("button", { name: /Selected day: October 1, 2026/ })).toBeVisible();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("5");
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("612");
@@ -271,6 +255,31 @@ test("renders the Figma Create Reports arrangement in the actual desktop rendere
     const reviewAfterSubmission = (await page.getByRole("button", { name: "Review Report Form", exact: true }).boundingBox())!;
     expect(reviewAfterSubmission).toEqual(reviewBeforeSubmission);
     expect((await submittedInformation.boundingBox())!.y).toBeLessThan(reviewAfterSubmission.y);
+    // The sent report's form offers Print and Download PDF in place of Submit Form.
+    await page.getByRole("button", { name: "Review Report Form", exact: true }).click();
+    await expect(preview).toBeVisible();
+    await expect(preview.getByRole("button", { name: "Submit Form", exact: true })).toHaveCount(0);
+    const exportPath = testInfo.outputPath("official-var1.pdf");
+    await application.evaluate(({ BrowserWindow }, savePath) => {
+      const window = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().startsWith("tanaw-app://desktop"));
+      window!.webContents.session.once("will-download", (_event, item) => item.setSavePath(savePath));
+    }, exportPath);
+    await preview.getByRole("button", { name: "Download PDF", exact: true }).click();
+    await expect.poll(async () => (await stat(exportPath).catch(() => null))?.size ?? 0).toBeGreaterThan(1000);
+    expect((await readFile(exportPath, "utf8")).startsWith("%PDF-1.4")).toBe(true);
+    await page.evaluate(() => {
+      window.print = () => {
+        Object.assign(window, { __var1PrintRequested: true });
+      };
+    });
+    await preview.getByRole("button", { name: "Print", exact: true }).click();
+    expect(await page.evaluate(() => (window as unknown as { __var1PrintRequested?: boolean }).__var1PrintRequested)).toBe(true);
+    const printed = await application.evaluate(async ({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().startsWith("tanaw-app://desktop"));
+      return (await window!.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })).toString("base64");
+    });
+    await writeFile(testInfo.outputPath("native-print-var1.pdf"), Buffer.from(printed, "base64"));
+    await preview.getByRole("button", { name: "Close preview", exact: true }).click();
     expect(JSON.stringify(records.slice(0, 3))).toBe(originalRecords);
   } finally {
     if (application) await application.close();

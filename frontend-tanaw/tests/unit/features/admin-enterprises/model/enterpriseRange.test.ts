@@ -110,8 +110,8 @@ describe("trend period", () => {
     expect(trendTitle("hourly", pastDay, today)).toBe("Trend on Nov 3");
     expect(trendTitle("daily", lastWeek, today)).toBe("Daily Trend");
     expect(trendSource("hourly", pastDay, today)).toBe("Most visitors inside at once in each hour on Nov 3.");
-    expect(trendSource("daily", lastWeek, today)).toBe("Estimated visitors on each day in the last 7 days.");
-    expect(trendSource("daily", october, today)).toBe("Estimated visitors on each day, Oct 27 – 31, 2026. Camera history covers the last 30 days only.");
+    expect(trendSource("daily", lastWeek, today)).toBe("Visitors on each day in the last 7 days.");
+    expect(trendSource("daily", october, today)).toBe("Visitors on each day, Oct 27 – 31, 2026. Camera history covers the last 30 days only.");
     expect(trendSource("monthly", thisYear, today)).toBe("Visitors stated in each submitted monthly report in 2026 so far.");
   });
 

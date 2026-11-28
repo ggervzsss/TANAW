@@ -8,6 +8,7 @@ import { useScrollableList } from "../hooks/useScrollableList";
 import type { CameraStatusMarks } from "../utils/camera-status";
 import { isCameraCounting } from "../utils/establishment";
 import { LocationListLoading } from "./DashboardSkeleton";
+import { useSkeletonReveal } from "../../../ui-kit/lib/skeleton";
 
 type LocationsProps = {
   cameras: Camera[];
@@ -24,6 +25,7 @@ export function MonitoredLocations({ cameras, live, loading, marks, formatSince 
   const navigate = useNavigate();
   const location = useLocation();
   const list = useScrollableList<HTMLUListElement>(`${cameras.length}:${loading}:${cameras.filter((camera) => !isCameraCounting(camera.id, live)).length}`);
+  const reveal = useSkeletonReveal(loading);
 
   const report = (camera: Camera, since: string | null) => {
     const ticketDraft: TicketDraftPrefill = {
@@ -46,7 +48,7 @@ export function MonitoredLocations({ cameras, live, loading, marks, formatSince 
       ) : cameras.length === 0 ? (
         <p className="dash-locations-empty">Add a camera in Camera Setup to start counting visitors.</p>
       ) : (
-        <ul ref={list.ref} className="dash-location-list" aria-label="Cameras" {...list.listProps}>
+        <ul ref={list.ref} className={reveal ? `dash-location-list ${reveal}` : "dash-location-list"} aria-label="Cameras" {...list.listProps}>
           {cameras.map((camera) => {
             const counting = isCameraCounting(camera.id, live);
             const down = live !== null && !counting;

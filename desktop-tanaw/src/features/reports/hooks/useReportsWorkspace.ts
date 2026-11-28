@@ -2,8 +2,7 @@ import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "r
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getMlServiceStatus, recordLocalReportSubmission, reopenLocalReportSubmission } from "../../camera/services/ml-service";
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
-import { downloadDotReportPdf } from "../utils/pdf";
-import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
+import { isSameReportingMonth } from "../utils/reporting-period";
 import { notifySuccess, notifyWarning } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatReportAttraction } from "../../../utils/attractions";
@@ -16,7 +15,6 @@ import {
   historyLedgerKey,
   metricsFromReport,
   upsertReport,
-  validateDemographicAllocation,
   validateReportDraft,
   reopenReportErrorMessage,
   reportFromLocalSubmission,
@@ -132,26 +130,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
       period: report.period ?? report.date,
       reportId: report.id,
     });
-  const handleDownloadReport = (report: ReportRecord) => {
-    const metrics = metricsFromReport(report);
-    const reportDemo = report.demo ?? emptyDemo();
-    const error = validateDemographicAllocation(metrics, reportDemo);
-    if (error) {
-      notifyWarning(error);
-      handlePreviewReport(report);
-      return;
-    }
-    downloadDotReportPdf({
-      enterpriseName,
-      reportId: report.id,
-      period: formatReportingPeriodLabel(report.period ?? report.date),
-      metrics,
-      demo: reportDemo,
-      origins: report.origins,
-      notes: report.notes ?? "",
-      attractionType: report.status === "Draft" ? currentAttractionType : report.attractionType,
-    });
-  };
   const openSubmitDialog = () => {
     setSubmitIssue(null);
     setShowConfirm(true);
@@ -324,7 +302,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     displayedMetrics,
     enterpriseName,
     executeSubmit,
-    handleDownloadReport,
     handlePreviewReport,
     handleSelectPeriod,
     hasDailyOrigins,

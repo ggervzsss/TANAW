@@ -1,6 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { Check, FileText, Landmark, Menu, LockKeyhole, MapPin } from "lucide-react";
-import { Skeleton } from "../../../ui-kit";
+import { Skeleton, useSkeletonReveal } from "../../../ui-kit";
 import type { DailyOrigins, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import type { SystemTimeFormat } from "../../../utils/date-time";
 import { getDemographicAllocationStatus } from "../utils/demographics";
@@ -90,6 +90,8 @@ export function ReportDraftPanel({
   const submitted = Boolean(activeReport && ["Submitted", "Consolidated"].includes(activeReport.status));
   const waitingForUpload = activeReport?.syncStatus === "pending_cloud_sync";
   const uploadRejected = activeReport?.syncStatus === "upload_rejected";
+  // The count and the visitor figures fade in where their placeholders stood, when those were seen.
+  const reveal = useSkeletonReveal(isPeriodChanging);
   // The submit dialog closes onto a panel whose Submit button is gone; focus its new status.
   useEffect(() => {
     if (!statusAnnouncement) return;
@@ -108,14 +110,7 @@ export function ReportDraftPanel({
   ];
   return (
     <section ref={panelRef} className="report-create-card" aria-label="Monthly DOT Visitor Report" aria-busy={isPeriodChanging}>
-      <ReportLifecycleBanner
-        lifecycle={lifecycle}
-        reports={reports}
-        reopeningReportId={reopeningReportId}
-        reopenIssue={reopenIssue}
-        onCorrect={onCorrect}
-        onAskForHelp={onAskForHelp}
-      />
+      <ReportLifecycleBanner lifecycle={lifecycle} reports={reports} reopeningReportId={reopeningReportId} reopenIssue={reopenIssue} onCorrect={onCorrect} onAskForHelp={onAskForHelp} />
       <ReportsNeedingAction reports={reportsAwaitingAction} onOpen={onOpenReportMonth} />
       <div className="report-information">
         <div className="report-information-left">
@@ -158,19 +153,19 @@ export function ReportDraftPanel({
         <div className="report-system-count" role="group" aria-label="Visitor counted by TANAW">
           <div>
             <h3>Visitor counted by TANAW</h3>
-            <output aria-label="System unique visitor count" aria-busy={isPeriodChanging}>
+            <output aria-label="System visitor count" aria-busy={isPeriodChanging}>
               {isPeriodChanging ? (
                 <>
                   <Skeleton className="report-count-skeleton" />
                   <span className="sr-only">Loading</span>
                 </>
               ) : metrics.counting || activeReport ? (
-                metrics.unique.toLocaleString()
+                <span className={reveal}>{metrics.unique.toLocaleString()}</span>
               ) : (
                 "—"
               )}
             </output>
-            <p>Unique Visitor</p>
+            <p>Visitors</p>
           </div>
           <div className="report-readonly">
             <strong>
@@ -196,6 +191,11 @@ export function ReportDraftPanel({
             isReadOnly={isReadOnly || isPeriodChanging}
             setOrigins={setOrigins}
           />
+          {/* Notes and the audit trail stay open under the table; nothing in them is required. */}
+          <section className="report-supporting" aria-label="Report notes and audit trail">
+            <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
+            <ReportAuditTrail activeReport={activeReport} />
+          </section>
         </section>
         <aside className="report-next-steps" aria-label="Next Steps">
           <h3>
@@ -228,16 +228,6 @@ export function ReportDraftPanel({
             />
           </div>
         </aside>
-      </div>
-      {/* Supporting workflows stay behind one disclosure so the form fits one screen. */}
-      <div className="report-supporting-controls">
-        <details>
-          <summary>Report notes and audit trail</summary>
-          <div className="report-supporting-content">
-            <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
-            <ReportAuditTrail activeReport={activeReport} />
-          </div>
-        </details>
       </div>
     </section>
   );

@@ -15,7 +15,7 @@ import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import type { DashboardRange } from "../types/dashboard";
 import { isSingleDay, rangeBounds } from "../utils/dashboard-range";
 
-type Snapshot = { key: string; summary: EstablishmentSummary; live: EstablishmentLive; hourly: EstablishmentHourly | null; updatedAt: number };
+type Snapshot = { key: string; summary: EstablishmentSummary; live: EstablishmentLive; hourly: EstablishmentHourly | null };
 
 /** Live and period counts from the local service. `enabled` is false while sample data is showing. */
 export function useEstablishmentAnalytics(cameras: Camera[], range: DashboardRange, enabled = true) {
@@ -48,7 +48,7 @@ export function useEstablishmentAnalytics(cameras: Camera[], range: DashboardRan
           throw new Error("Camera data belongs to a different establishment. Reconnect the local service.");
         }
         if (!disposed) {
-          setSnapshot({ key, summary, live, hourly, updatedAt: Date.now() });
+          setSnapshot({ key, summary, live, hourly });
           setError(null);
         }
       } catch (issue) {
@@ -73,7 +73,6 @@ export function useEstablishmentAnalytics(cameras: Camera[], range: DashboardRan
     summary: current?.summary ?? null,
     live: current?.live ?? null,
     hourly: current?.hourly ?? null,
-    updatedAt: current?.updatedAt ?? null,
     error,
     loading: !current && !error,
   };

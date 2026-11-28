@@ -2,24 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   approveBlockedReason,
   areaAndCamera,
+  activeFilterCount,
   buildTimeline,
-  countNotPickedUp,
   defaultFilters,
   desktopAppStatus,
   filterItRequests,
   filtersToParams,
   findSelectedRequest,
+  formatReceived,
   formatWhen,
-  groupByDay,
   handledByLabel,
   itEnterpriseLink,
   moveOptions,
-  notPickedUpLabel,
-  ownerFilterOptions,
   ownerShort,
   parseFilters,
   quickReplies,
   requestActions,
+  requestProgress,
   requestState,
   stateLabels,
   statusNote,
@@ -93,41 +92,42 @@ const sample = [
 describe("IT request filters", () => {
   it("reads the filters from the address and falls back to the defaults", () => {
     expect(parseFilters(new URLSearchParams(""))).toEqual(defaultFilters);
-    expect(parseFilters(new URLSearchParams("q=gate&type=account-change&status=resolved&owner=me"))).toEqual({ query: "gate", type: "Account change", status: "resolved", owner: "me" });
+    // The retired Handled by filter (`owner`) still loads, and is ignored.
+    expect(parseFilters(new URLSearchParams("q=gate&type=account-change&status=resolved&owner=me"))).toEqual({ query: "gate", type: "Account change", status: "resolved" });
     expect(parseFilters(new URLSearchParams("type=nope&status=nope&owner="))).toEqual(defaultFilters);
   });
 
-  it("writes only the filters that differ from the defaults and keeps the selected request", () => {
-    const params = filtersToParams({ ...defaultFilters, type: "Sign-in help", owner: "it-carlo" }, new URLSearchParams("request=r1&q=old"));
-    expect(params.toString()).toBe("request=r1&type=sign-in&owner=it-carlo");
+  it("writes only the filters that differ from the defaults, keeps the selected request and drops the retired owner", () => {
+    const params = filtersToParams({ ...defaultFilters, type: "Sign-in help" }, new URLSearchParams("request=r1&q=old&owner=it-carlo"));
+    expect(params.toString()).toBe("request=r1&type=sign-in");
     expect(filtersToParams(defaultFilters, new URLSearchParams("status=all")).toString()).toBe("");
   });
 
-  it("shows open requests by default, newest first", () => {
-    expect(filterItRequests(sample, defaultFilters, ME.id).map((item) => item.id)).toEqual(["carlo", "waiting", "mine"]);
+  it("counts the filters that differ from the default view", () => {
+    expect(activeFilterCount(defaultFilters)).toBe(0);
+    expect(activeFilterCount({ ...defaultFilters, query: "  " })).toBe(0);
+    expect(activeFilterCount({ query: "gate", type: "Other", status: "all" })).toBe(3);
   });
 
-  it("filters by status, type, owner and search", () => {
-    const ids = (filters: Partial<typeof defaultFilters>) => filterItRequests(sample, { ...defaultFilters, ...filters }, ME.id).map((item) => item.id);
+  it("shows open requests by default, newest first", () => {
+    expect(filterItRequests(sample, defaultFilters).map((item) => item.id)).toEqual(["carlo", "waiting", "mine"]);
+  });
+
+  it("lists open requests before closed ones, each newest first", () => {
+    const reopened = request({ id: "old-open", code: "REQ-000100", createdAt: "2026-11-20T01:00:00Z" });
+    expect(filterItRequests([...sample, reopened], { ...defaultFilters, status: "all" }).map((item) => item.id)).toEqual(["carlo", "waiting", "mine", "old-open", "resolved", "approved"]);
+  });
+
+  it("filters by status, type and search", () => {
+    const ids = (filters: Partial<typeof defaultFilters>) => filterItRequests(sample, { ...defaultFilters, ...filters }).map((item) => item.id);
     expect(ids({ status: "not-picked-up" })).toEqual(["waiting"]);
     expect(ids({ status: "in-progress" })).toEqual(["carlo", "mine"]);
     expect(ids({ status: "resolved" })).toEqual(["resolved"]);
     expect(ids({ status: "approved" })).toEqual(["approved"]);
     expect(ids({ status: "all" })).toHaveLength(5);
     expect(ids({ status: "all", type: "Account change" })).toEqual(["approved"]);
-    expect(ids({ status: "all", owner: "me" })).toEqual(["mine", "approved"]);
-    expect(ids({ status: "all", owner: "it-carlo" })).toEqual(["carlo", "resolved"]);
     expect(ids({ status: "all", query: "req-000146" })).toEqual(["resolved"]);
     expect(ids({ status: "all", query: "lolo uweng" })).toHaveLength(5);
-  });
-
-  it("offers Anyone, Me and each other IT person seen on requests", () => {
-    expect(ownerFilterOptions(sample, ME.id)).toEqual([
-      ["anyone", "Anyone"],
-      ["me", "Me"],
-      ["it-carlo", "Carlo Mendoza"],
-    ]);
-    expect(ownerFilterOptions([], ME.id, "it-gone").at(-1)).toEqual(["it-gone", "Another IT person"]);
   });
 
   it("finds the selected request by ID or reference number", () => {
@@ -142,10 +142,11 @@ describe("IT request status", () => {
     expect(sample.map((item) => stateLabels[requestState(item)])).toEqual(["Not picked up", "In progress", "In progress", "Resolved", "Approved"]);
   });
 
-  it("counts requests nobody has picked up", () => {
-    expect(countNotPickedUp(sample)).toBe(1);
-    expect(notPickedUpLabel(1)).toBe("1 not picked up yet");
-    expect(notPickedUpLabel(0)).toBe("Every request is picked up");
+  it("says each row's progress and who has it", () => {
+    expect(requestProgress(sample[0], ME)).toEqual({ state: "not-picked-up", label: "Not picked up yet", owner: "" });
+    expect(requestProgress(sample[1], ME)).toEqual({ state: "in-progress", label: "In progress", owner: "You" });
+    expect(requestProgress(sample[2], ME)).toEqual({ state: "in-progress", label: "In progress", owner: "Carlo Mendoza" });
+    expect(requestProgress(sample[3], ME)).toEqual({ state: "resolved", label: "Resolved", owner: "Carlo Mendoza" });
   });
 
   it("names who handles a request", () => {
@@ -212,13 +213,11 @@ describe("IT request actions", () => {
 });
 
 describe("IT request days and timeline", () => {
-  it("groups by day: Today, Yesterday, then the date", () => {
-    const groups = groupByDay(filterItRequests(sample, { ...defaultFilters, status: "all" }, ME.id), NOW, "d MMM yyyy");
-    expect(groups.map((group) => [group.label, group.requests.length])).toEqual([
-      ["Today", 3],
-      ["Yesterday", 1],
-      ["21 Nov 2026", 1],
-    ]);
+  it("says when a request arrived: the time today, Yesterday, then the date and time", () => {
+    expect(formatReceived("2026-11-23T05:40:00Z", NOW, "d MMM yyyy", "12-hour")).toBe("1:40 PM");
+    expect(formatReceived("2026-11-22T02:05:00Z", NOW, "d MMM yyyy", "12-hour")).toBe("Yesterday, 10:05 AM");
+    expect(formatReceived("2026-11-21T01:15:00Z", NOW, "yyyy-MM-dd", "24-hour")).toBe("2026-11-21, 09:15");
+    expect(formatReceived(null, NOW, "d MMM yyyy", "12-hour")).toBe("Date unavailable");
   });
 
   it("formats when something happened", () => {

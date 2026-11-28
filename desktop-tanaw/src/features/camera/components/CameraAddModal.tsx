@@ -1,9 +1,10 @@
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CameraDialog } from "./CameraDialog";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CAMERA_BRANDS, updateCameraConnection } from "../utils/camera-connection";
 import type { CameraFormValues } from "../types/camera";
-import { validateCameraForm } from "../utils/camera-form-validation";
+import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
+import { cameraErrorFocusTarget, type CameraErrorFocusTarget } from "../utils/camera-connection-errors";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { CameraConnectionFields } from "./CameraConnectionFields";
 import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraModeDescription } from "../utils/camera-mode";
@@ -11,7 +12,7 @@ import { CAMERA_MODE_LABEL, CAMERA_MODE_OPTIONS, CAMERA_PLACEMENT_NOTE, cameraMo
 type CameraAddModalProps = {
   newCam: CameraFormValues;
   isValidating: boolean;
-  errors: Partial<Record<keyof CameraFormValues, string>>;
+  errors: CameraFormErrors;
   duplicateIpError?: string;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -23,7 +24,17 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
   const [discard, setDiscard] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const formErrors = validateCameraForm(newCam);
-  const shownErrors = { ...(submitted ? formErrors : {}), ...errors };
+  const shownErrors: CameraFormErrors = { ...(submitted ? formErrors : {}), ...errors };
+  const passwordError = shownErrors.password ?? shownErrors.credentials;
+  const formRef = useRef<HTMLFormElement>(null);
+  const previousErrors = useRef(errors);
+  useEffect(() => {
+    // After a failed attempt, focus the field to fix; clearing an error as the user types moves nothing.
+    const added = Object.keys(errors).some((key) => !(key in previousErrors.current));
+    previousErrors.current = errors;
+    const target = cameraErrorFocusTarget(errors);
+    if (added && target && step === "connection") formRef.current?.querySelector<HTMLElement>(FOCUS_SELECTORS[target])?.focus();
+  }, [errors, step]);
   const requestClose = () => {
     if (isValidating) return;
     if (JSON.stringify(newCam) !== initial.current) setDiscard(true);
@@ -64,7 +75,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
           </>
         }
       >
-        <form id="camera-add-form" onSubmit={submit} noValidate>
+        <form id="camera-add-form" ref={formRef} onSubmit={submit} noValidate>
           <div hidden={step !== "information"}>
             <Field id="camera-name" label="Camera Name" required error={shownErrors.name}>
               <input
@@ -126,17 +137,23 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 autoComplete="username"
                 required
                 aria-required="true"
-                aria-invalid={Boolean(shownErrors.username)}
+                aria-invalid={Boolean(shownErrors.username || shownErrors.credentials)}
+                aria-describedby={shownErrors.username ? "camera-username-error" : shownErrors.credentials ? "camera-password-error" : undefined}
                 value={newCam.username}
                 readOnly={isValidating}
                 onChange={(event) => onChange({ ...newCam, username: event.target.value })}
               />
             </Field>
-            <Field id="camera-password" label="Camera Password" required error={shownErrors.password}>
-              <PasswordVisibilityInput id="camera-password" variant="modal" autoComplete="new-password" ariaRequired
-                hasError={Boolean(shownErrors.password)} readOnly={isValidating} value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} />
+            <Field id="camera-password" label="Camera Password" required error={passwordError}>
+              <PasswordVisibilityInput id="camera-password" variant="modal" autoComplete="new-password" ariaRequired ariaDescribedBy={passwordError ? "camera-password-error" : undefined}
+                hasError={Boolean(passwordError)} readOnly={isValidating} value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} />
             </Field>
             <p className="design-note">The camera is added only after its connection is verified. Credentials are kept in the desktop's secure credential store.</p>
+            {shownErrors.connection && (
+              <p className="camera-settings-error camera-add-connection-error" role="alert" tabIndex={-1}>
+                {shownErrors.connection}
+              </p>
+            )}
           </div>
         </form>
       </CameraDialog>
@@ -163,6 +180,14 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
     </>
   );
 }
+const FOCUS_SELECTORS: Record<CameraErrorFocusTarget, string> = {
+  cameraHost: ".camera-add-address input",
+  rtsp: ".camera-add-address input",
+  username: "#camera-username",
+  password: "#camera-password",
+  connection: ".camera-add-connection-error",
+};
+
 function Field({ id, label, required, error, children }: { id?: string; label: string; required?: boolean; error?: string; children: ReactNode }) {
   return (
     <div className="settings-field">
@@ -172,7 +197,7 @@ function Field({ id, label, required, error, children }: { id?: string; label: s
       </label>
       {children}
       {error && (
-        <p className="camera-field-error" role="alert">
+        <p id={id ? `${id}-error` : undefined} className="camera-field-error" role="alert">
           {error}
         </p>
       )}

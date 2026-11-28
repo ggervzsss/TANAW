@@ -116,9 +116,6 @@ test("Camera Setup works in Electron and draft connection tests never overwrite 
       window?.maximize();
       window?.show();
     });
-    await page.getByRole("button", { name: "Collapse configured cameras" }).click();
-    await expect(page.getByRole("img", { name: "1 configured camera" })).toBeVisible();
-    await page.getByRole("button", { name: "Expand configured cameras" }).click();
     await expect(page.getByRole("button", { name: /Tapo Camera/, pressed: true })).toBeVisible();
     await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
     await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("camera-preview-surface"))).toBe(true);

@@ -224,6 +224,8 @@ class CameraTestResponse(BaseModel):
     stream_url: str | None = None
     width: int | None = None
     height: int | None = None
+    # Set when the test failed: unreachable, auth_failed, stream_not_found, or unknown.
+    reason: Literal["unreachable", "auth_failed", "stream_not_found", "unknown"] | None = None
 
 
 class HealthResponse(BaseModel):

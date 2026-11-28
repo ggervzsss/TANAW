@@ -332,7 +332,7 @@ test("Admin filters the registered enterprises and opens one enterprise's detail
   await picker.getByRole("button", { name: "Last 7 days" }).click();
   await picker.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(new RegExp(`range=last7&from=${isoDay(6)}&to=${isoDay(0)}`));
-  await expect(detailFigures).toContainText("estimated unique visitors in the last 7 days");
+  await expect(detailFigures).toContainText("unique visitors in the last 7 days");
   await expect(detailFigures).toContainText("17,540");
   await expect(detailFigures).toContainText("From camera counts");
   await expect(detailFigures.getByText("Now", { exact: true })).toHaveCount(2);
@@ -353,7 +353,7 @@ test("Admin filters the registered enterprises and opens one enterprise's detail
   await picker.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(/range=month&from=/);
   await expect(page.getByRole("button", { name: lastMonthName, exact: true })).toBeVisible();
-  await expect(detailFigures).toContainText(`estimated unique visitors in ${lastMonthName}`);
+  await expect(detailFigures).toContainText(`unique visitors in ${lastMonthName}`);
   await expect(detailFigures).toContainText("259,600");
   await expect(detailFigures).toContainText("From the monthly report");
   await page.getByRole("radio", { name: "Monthly" }).click();
@@ -379,7 +379,7 @@ test("Enterprise Details shows a past day from the address, within the camera hi
   const figures = page.locator("dl").first();
   await expect(page.getByRole("heading", { level: 2, name: `Trend on ${day}` })).toBeVisible();
   await expect(page.getByText(`Busiest: 3 PM · 77 visitors inside at peak. Most visitors inside at once in each hour on ${day}.`)).toBeVisible();
-  await expect(figures).toContainText(`estimated unique visitors on ${day}`);
+  await expect(figures).toContainText(`unique visitors on ${day}`);
   await expect(figures).toContainText("17,540");
   await expect(figures).toContainText("Busiest hour");
   await expect(figures).toContainText("3 PM");

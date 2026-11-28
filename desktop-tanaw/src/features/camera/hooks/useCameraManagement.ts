@@ -3,6 +3,7 @@ import type { Camera } from "../../../types/enterprise";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
 import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
+import { cameraConnectionFailureErrors } from "../utils/camera-connection-errors";
 import { isCameraPreviewReady } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
@@ -363,17 +364,21 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     }
 
     let chosenStream = newCameraNode.rtsp;
+    let connectionErrors: CameraFormErrors | null = null;
     try {
       const result = await testCameraConnection(mlBaseUrl, newCameraNode, storageKey);
-      if (!result.ok) throw new Error(result.message);
-      chosenStream = result.stream_url || chosenStream;
+      if (result.ok) chosenStream = result.stream_url || chosenStream;
+      else connectionErrors = cameraConnectionFailureErrors(result, newCameraNode.cameraBrand);
     } catch (error) {
+      connectionErrors = { connection: toErrorMessage(error) };
+    }
+    if (connectionErrors) {
       try {
         await deleteCameraCredential(storageKey, newCameraNode.id);
       } catch {
         // The connection error remains the actionable failure for the user.
       }
-      setCameraFormErrors({ rtsp: toErrorMessage(error) });
+      setCameraFormErrors(connectionErrors);
       setIsValidating(false);
       return;
     }
@@ -385,7 +390,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
     } catch (error) {
       await deleteCameraCredential(storageKey, newCameraNode.id).catch(() => undefined);
-      setCameraFormErrors({ rtsp: toErrorMessage(error) });
+      setCameraFormErrors({ connection: toErrorMessage(error) });
       setIsValidating(false);
       return;
     }
@@ -417,7 +422,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
         return next;
       });
       removeCameraRuntimeState(cameraId);
-      setActiveCamId(updated[0]?.id ?? null);
+      // Deleting another camera from its row keeps the one being watched; deleting the watched one moves to the first left.
+      setActiveCamId((current) => (current !== cameraId && updated.some((camera) => camera.id === current) ? current : (updated[0]?.id ?? null)));
       setIsEditMode(false);
       setCameraPendingDelete(null);
       notifySuccess("Camera removed.");

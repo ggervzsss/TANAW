@@ -1,55 +1,55 @@
 import { Building2, ChevronRight, Plus } from "lucide-react";
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
+import { Alert, Button, EmptyState, PortalPageHeader, SearchField, Select, Skeleton, cn, openRowFromClick } from "@/shared/ui-kit";
 import { RegisterEnterpriseDialog } from "../components/RegisterEnterpriseDialog";
 import { StateText } from "../components/StateText";
 import { toneText } from "../components/tones";
 import { useResendInvitation } from "../hooks/useEnterpriseActions";
 import { useDisplayFormats, useEnterpriseRows } from "../hooks/useEnterpriseRows";
 import {
-  CHIPS,
+  STATUS_FILTERS,
   accountCell,
   appCell,
   appsNote,
   cameraCell,
   camerasNote,
-  chipCounts,
   filterRows,
-  parseChip,
+  parseStatusFilter,
   placeLine,
   registeredNote,
   resendLabel,
+  statusCounts,
   summarizeEnterprises,
-  type ChipKey,
   type DisplayFormats,
   type EnterpriseFigures,
   type EnterpriseRow,
+  type StatusFilter,
 } from "../model/enterprises";
 import { manageEnterprisePath } from "../model/paths";
 import "../itEnterprises.css";
 
-/** The chosen chip's tint glides to the next choice instead of jumping. */
-const GLIDE = { type: "tween", duration: 0.24, ease: [0.2, 0.8, 0.2, 1] } as const;
-
 /*
  * IT Enterprises (/it/enterprises): every enterprise account with its sign-in state, desktop app and
- * cameras. ?show=attention|pending|sending picks a chip, ?q= searches, and ?register=1 opens the
- * Register enterprise dialog.
+ * cameras. ?show=attention|pending|sending picks the Account Status filter (All when absent), ?q=
+ * searches, and ?register=1 opens the Register enterprise dialog.
  */
 export function ITEnterprisesPage() {
   const [params, setParams] = useSearchParams();
-  const chip = parseChip(params.get("show"));
+  const status = parseStatusFilter(params.get("show"));
   const query = params.get("q") ?? "";
   const registerOpen = params.get("register") === "1";
   const formats = useDisplayFormats();
   const { rows, isLoading, isError, healthFailed, refetch } = useEnterpriseRows();
-  const reduceMotion = useReducedMotion();
 
-  const counts = useMemo(() => chipCounts(rows), [rows]);
   const figures = useMemo(() => summarizeEnterprises(rows), [rows]);
-  const visible = useMemo(() => filterRows(rows, chip, query), [rows, chip, query]);
+  const visible = useMemo(() => filterRows(rows, status, query), [rows, status, query]);
+  // Each option shows how many enterprises it holds once they have loaded.
+  const statusOptions = useMemo(() => {
+    const counts = statusCounts(rows);
+    return STATUS_FILTERS.map((item) => ({ value: item.key, label: item.label, meta: isLoading ? undefined : counts[item.key].toLocaleString("en-US") }));
+  }, [rows, isLoading]);
 
   const setParam = (changes: Record<string, string | null>) => {
     setParams(
@@ -64,7 +64,7 @@ export function ITEnterprisesPage() {
       { replace: true },
     );
   };
-  const showChip = (key: ChipKey) => setParam({ show: key === "all" ? null : key });
+  const showStatus = (key: StatusFilter) => setParam({ show: key === "all" ? null : key });
 
   return (
     <div className="it-enterprises w-full">
@@ -100,43 +100,15 @@ export function ITEnterprisesPage() {
             </p>
           )}
 
-          <div className="mt-5.5 flex flex-wrap items-end gap-x-6 gap-y-4">
-            <div className="min-w-0 flex-[1_1_20rem] max-sm:basis-full sm:max-w-104">
-              <label htmlFor="it-enterprise-search" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
+          {/* Search and Account Status share one row; phones stack them full width. */}
+          <div className="mt-5.5 flex flex-wrap items-end gap-x-4 gap-y-4">
+            <div className="min-w-0 flex-[1_1_20rem] max-sm:basis-full sm:max-w-96">
+              <label htmlFor="it-enterprise-search" className="mb-2 block text-[0.8125rem] font-semibold text-(--tanaw-text-secondary)">
                 Search
               </label>
               <SearchField id="it-enterprise-search" value={query} onChange={(value) => setParam({ q: value || null })} placeholder="Enterprise, barangay or owner email" label="Search enterprises" />
             </div>
-            <div className="min-w-0 max-sm:w-full">
-              <span id="it-enterprise-show" className="mb-1.5 block text-[13px] font-medium text-(--tanaw-text-secondary)">
-                Show
-              </span>
-              <LayoutGroup id="it-enterprise-show">
-                <div role="group" aria-labelledby="it-enterprise-show" className="ite-chips flex min-h-11 flex-wrap items-center gap-1">
-                  {CHIPS.map((item) => {
-                    const on = chip === item.key;
-                    return (
-                      <button
-                        key={item.key}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => showChip(item.key)}
-                        className={cn(
-                          "rounded-tanaw-md ease-tanaw-out relative inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-2 px-3.5 whitespace-nowrap pointer-coarse:min-h-11 text-sm font-medium transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100",
-                          on ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text) hover:bg-(--tanaw-control-hover)",
-                        )}
-                      >
-                        {on && <motion.span layoutId="ite-chip-highlight" aria-hidden="true" className="ite-chip-highlight" transition={reduceMotion ? { duration: 0 } : GLIDE} />}
-                        <span className="relative">{item.label}</span>{" "}
-                        <span className={cn("relative font-semibold tabular-nums", on ? "text-(--tanaw-accent-ink)" : "text-(--tanaw-text-muted)")}>
-                          {isLoading ? "–" : counts[item.key].toLocaleString("en-US")}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </LayoutGroup>
-            </div>
+            <Select label="Account Status" value={status} onChange={(value) => showStatus(parseStatusFilter(value))} options={statusOptions} className="w-56 max-sm:w-full" />
           </div>
 
           <p role="status" className="sr-only">

@@ -92,52 +92,27 @@ export const helpArticles: HelpArticle[] = [
     relatedArticleIds: ["staff-submit-reports"],
   },
   {
-    id: "it-overview",
-    title: "Start the day from Overview",
-    summary: "See what needs IT right now: requests nobody has picked up, places and cameras that stopped sending data, accounts waiting, and emails that did not arrive.",
-    roles: ["it"],
-    category: "Overview",
-    keywords: ["overview", "dashboard", "not picked up", "not sending data", "cameras not counting", "accounts waiting"],
-    recommended: true,
-    sections: [
-      {
-        heading: "Read the four figures",
-        paragraphs: ["Overview opens when you sign in. The figures count the requests not picked up, the places not sending data, the cameras not counting, and the accounts waiting on an invitation or an email change approval."],
-      },
-      {
-        heading: "Act from each list",
-        steps: [
-          "Under Requests waiting for IT, select Start on it to take a request. It is then yours, and the sender sees who is handling it.",
-          "Under Connection problems, select Check to open that enterprise's Connection tab.",
-          "Under Accounts waiting, select Send again, Send a new link or Review.",
-          "Under Emails that did not arrive, select Try again.",
-          "Each list links to its full screen when you need more than the list shows.",
-        ],
-      },
-    ],
-    relatedArticleIds: ["it-requests", "it-enterprises"],
-  },
-  {
     id: "it-requests",
     title: "Handle a request in Requests",
     summary: "Pick up a request with Start on it, reply to the sender, approve or decline an account change, and resolve, reopen or move a request.",
     roles: ["it"],
     category: "Requests",
-    keywords: ["request", "start on it", "not picked up", "account change", "reply", "resolve", "reopen", "move"],
+    keywords: ["request", "requests waiting for IT", "start on it", "not picked up", "account change", "reply", "resolve", "reopen", "move"],
+    recommended: true,
     commonIssue: true,
     sections: [
       {
         heading: "Find the request",
         steps: [
-          "Open Requests in the top bar. The amber count beside it is the number of open requests nobody has picked up.",
-          "Search, or filter by Type, Status and Handled by. Status shows Open requests first; choose Not picked up to see the ones waiting for IT.",
-          "Select a request to see its details, the conversation and its updates beside the list.",
+          "Requests opens when you sign in. The amber count beside it in the top bar is the number of open requests nobody has picked up.",
+          "Search, or filter by Type and Status. Status shows Open requests first; choose Not picked up to see the ones waiting for IT. Select Clear filters to see every request again.",
+          "Select a row to open the request's details, the conversation and its updates beside the table. Select Close, or press Escape, to give the table its full width again.",
         ],
       },
       {
         heading: "Take and answer it",
         steps: [
-          "Select Start on it. Replying, resolving or moving a request nobody has picked up also makes it yours.",
+          "Select Start on it on the request's row, or in its details. It is then yours, and the sender sees who is handling it. Replying, resolving or moving a request nobody has picked up also makes it yours.",
           "Write a reply or choose a quick reply, then select Send reply, or Send and mark resolved when the problem is fixed.",
           "Select Mark resolved, Reopen or Move to another type when the request needs it.",
         ],
@@ -147,7 +122,7 @@ export const helpArticles: HelpArticle[] = [
         paragraphs: ["An account change shows what the value is now and what was asked for. Select Approve change to apply it, or Decline to keep the old value; write the reason in the reply first. A new email address must be verified before you can approve it."],
       },
     ],
-    relatedArticleIds: ["it-overview", "it-enterprises"],
+    relatedArticleIds: ["it-enterprises", "it-personnel"],
   },
   {
     id: "it-enterprises",
@@ -179,7 +154,7 @@ export const helpArticles: HelpArticle[] = [
         ],
       },
     ],
-    relatedArticleIds: ["it-overview", "it-account-troubleshooting"],
+    relatedArticleIds: ["it-requests", "it-account-troubleshooting"],
   },
   {
     id: "it-personnel",

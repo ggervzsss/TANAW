@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetSta
 import { CircleDot, Wifi, ScanLine, List, Wrench, Video, X, Pencil, Info } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { DesignSwitch } from "../../../components/DesignSwitch";
-import { SkeletonText } from "../../../ui-kit";
+import { SkeletonText, cn, useSkeletonReveal } from "../../../ui-kit";
 import { useCameraMorph } from "../hooks/useCameraMorph";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CAMERA_BRANDS, updateCameraConnection, validateCameraConnection } from "../utils/camera-connection";
@@ -21,6 +21,8 @@ import { getMlCameraStates, getMlHealth, getMlServiceStatus, testCameraConnectio
 import type { CameraPreviewPanelProps } from "./CameraPreviewPanel";
 import type { Camera, OpenSpaceSettings } from "../../../types/enterprise";
 import { notifyError, notifyWarning } from "../../toasts/services/toast-service";
+import type { CameraFormErrors } from "../utils/camera-form-validation";
+import { cameraConnectionFailureErrors, cameraErrorFocusTarget, clearEditedFieldErrors } from "../utils/camera-connection-errors";
 
 const tabs = [
   { id: "information", label: "Information", icon: CircleDot },
@@ -66,8 +68,16 @@ export function CameraSettingsPanel(props: Props) {
   const [testing, setTesting] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<string[] | null>(null);
+  // The diagnostics result fades in where its placeholder lines stood, when they were seen.
+  const diagnosticsReveal = useSkeletonReveal(diagnosing && !diagnosticResult);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [validation, setValidation] = useState<string | null>(null);
+  // A failed connection test that belongs to one field: the IP or stream address, or the login.
+  const [connectionErrors, setConnectionErrors] = useState<CameraFormErrors>({});
+  const changeConnection = (next: Camera) => {
+    setConnectionErrors((errors) => clearEditedFieldErrors(errors, editForm, next));
+    onEditFormChange(next);
+  };
   const busy = props.isSaving || saving || reconnecting || testing || diagnosing || props.isStopping;
   const dirty = JSON.stringify(editForm) !== initial.current || JSON.stringify(display) !== JSON.stringify(initialDisplay.current) || countingEnabled !== initialCounting.current;
   const cameraLabel = `CAM-${String(activeCam.id).padStart(3, "0")}`;
@@ -196,12 +206,22 @@ export function CameraSettingsPanel(props: Props) {
     }
     setTesting(true);
     setFeedback(null);
+    setConnectionErrors({});
     try {
       const status = await getMlServiceStatus();
       const result = await testCameraConnection(status.baseUrl, editForm, storageKey, { draft: true });
       // Keep the stream address that answered; it is saved with the other changes.
       if (result.ok && result.stream_url && result.stream_url !== editForm.rtsp) onEditFormChange({ ...editForm, rtsp: result.stream_url });
-      setFeedback({ error: !result.ok, message: result.ok ? "Camera connection verified with these settings. Changes have not been saved." : result.message });
+      const errors = result.ok ? {} : cameraConnectionFailureErrors(result, editForm.cameraBrand);
+      if (errors.connection || result.ok) {
+        setFeedback({ error: !result.ok, message: result.ok ? "Camera connection verified with these settings. Changes have not been saved." : (errors.connection ?? result.message) });
+      } else {
+        setConnectionErrors(errors);
+        const target = cameraErrorFocusTarget(errors);
+        requestAnimationFrame(() =>
+          document.querySelector<HTMLElement>(target === "password" ? "#settings-camera-password" : '#camera-panel-connection input[aria-invalid="true"]')?.focus(),
+        );
+      }
     } catch (issue) {
       setFeedback({ error: true, message: messageOf(issue) });
     } finally {
@@ -310,6 +330,7 @@ export function CameraSettingsPanel(props: Props) {
               onClick={() => {
                 setTab(id);
                 setFeedback(null);
+                setConnectionErrors({});
               }}
               onKeyDown={(event) => {
                 const next =
@@ -414,7 +435,13 @@ export function CameraSettingsPanel(props: Props) {
                   {videoStatus}
                 </span>
               </p>
-              <CameraConnectionFields value={editForm} hostError={props.cameraIpError} readOnly={busy} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
+              <CameraConnectionFields
+                value={editForm}
+                hostError={props.cameraIpError ?? connectionErrors.cameraHost}
+                streamError={connectionErrors.rtsp}
+                readOnly={busy}
+                onChange={(connection) => changeConnection({ ...editForm, ...connection })}
+              />
               <Field label="Camera Username" htmlFor="settings-username">
                 <input
                   id="settings-username"
@@ -422,12 +449,15 @@ export function CameraSettingsPanel(props: Props) {
                   value={editForm.username ?? ""}
                   readOnly={busy}
                   placeholder="Enter camera username"
-                  onChange={(event) => onEditFormChange({ ...editForm, username: event.target.value })}
+                  aria-invalid={Boolean(connectionErrors.credentials)}
+                  aria-describedby={connectionErrors.credentials ? "settings-camera-password-error" : undefined}
+                  onChange={(event) => changeConnection({ ...editForm, username: event.target.value })}
                 />
               </Field>
-              <Field label="Camera Password" htmlFor="settings-camera-password">
+              <Field label="Camera Password" htmlFor="settings-camera-password" error={connectionErrors.credentials}>
                 <PasswordVisibilityInput id="settings-camera-password" variant="modal" autoComplete="new-password" readOnly={busy}
-                  value={editForm.password ?? ""} placeholder="Enter new password (optional)" onChange={(password) => onEditFormChange({ ...editForm, password })} />
+                  hasError={Boolean(connectionErrors.credentials)} ariaDescribedBy={connectionErrors.credentials ? "settings-camera-password-error" : undefined}
+                  value={editForm.password ?? ""} placeholder="Enter new password (optional)" onChange={(password) => changeConnection({ ...editForm, password })} />
                 {hasStoredPassword && <small>Password configured. Leave blank to keep it unchanged.</small>}
               </Field>
               <button className="design-button full-width" type="button" disabled={busy || props.isTesting} onClick={() => void testConnection()}>
@@ -509,7 +539,7 @@ export function CameraSettingsPanel(props: Props) {
                 </div>
               )}
               {diagnosticResult && (
-                <ul className="camera-diagnostics" aria-label="Camera diagnostics">
+                <ul className={cn("camera-diagnostics", diagnosticsReveal)} aria-label="Camera diagnostics">
                   {diagnosticResult.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
@@ -709,7 +739,7 @@ function SectionHeading({ title, description }: { title: string; description: st
     </header>
   );
 }
-function Field({ label, required, children, htmlFor }: { label: string; required?: boolean; children: ReactNode; htmlFor?: string }) {
+function Field({ label, required, children, htmlFor, error }: { label: string; required?: boolean; children: ReactNode; htmlFor?: string; error?: string }) {
   return (
     <div className="settings-field">
       <label htmlFor={htmlFor}>
@@ -717,6 +747,11 @@ function Field({ label, required, children, htmlFor }: { label: string; required
         {required && <em aria-hidden="true"> *</em>}
       </label>
       {children}
+      {error && (
+        <p id={htmlFor ? `${htmlFor}-error` : undefined} className="camera-field-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

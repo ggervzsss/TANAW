@@ -39,6 +39,6 @@ describe("IT notification destinations", () => {
   it("opens account changes, email problems and offline places where IT handles them", () => {
     expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }))).toBe("/it/requests");
     expect(getBackendNotificationTargetPath("it", notification({ sourceType: "email.delivery", sourceId: "email-1", recipientRole: "it" }))).toBe("/it/system?tab=email");
-    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.offline", sourceId: "e:2026-11-23", recipientRole: "it" }))).toBe("/it/dashboard");
+    expect(getBackendNotificationTargetPath("it", notification({ sourceType: "enterprise.offline", sourceId: "e:2026-11-23", recipientRole: "it" }))).toBe("/it/enterprises");
   });
 });

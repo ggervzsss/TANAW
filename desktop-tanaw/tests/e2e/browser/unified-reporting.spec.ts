@@ -178,9 +178,11 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await page.getByRole("tab", { name: "Create Reports", exact: true }).click();
     await expect(page.getByRole("button", { name: /Selected day: November/ })).toBeVisible();
     await openReportMonth(page, "October 2026");
-    await expect(page.getByText("Report notes and audit trail", { exact: true })).toBeVisible();
+    // Notes and the audit trail sit open under Visitor Details; there is nothing to expand.
+    await expect(page.getByRole("region", { name: "Report notes and audit trail" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Report notes, Optional", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Establishment counting basis" })).toHaveCount(0);
-    await expect(page.getByRole("status", { name: "System unique visitor count" })).toHaveText("2");
+    await expect(page.getByRole("status", { name: "System visitor count" })).toHaveText("2");
     // TANAW fills This City; visitors entered for other origins are deducted from it.
     await expect(page.getByRole("button", { name: /Selected day: October 10, 2026/ })).toBeVisible();
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("2");
@@ -188,7 +190,7 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect(page.getByLabel("This City Male", { exact: true })).toHaveText("1");
     await expect(page.getByLabel("This City Female", { exact: true })).toHaveText("1");
     // A day needs nothing confirmed: until other origins are entered, all its visitors are This City.
-    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toBeVisible();
+    await expect(page.getByText("All visitors count as This City unless you enter other origins.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeEnabled();
     await page.getByRole("textbox", { name: "Other City Male", exact: true }).fill("1");
     await expect(page.getByLabel("This City Total", { exact: true })).toHaveText("1");
@@ -222,7 +224,7 @@ for (const mode of ["open_space", "entrance_exit", "mixed"] as const) {
     await expect(page.getByText("Open Space reporting is not available")).toHaveCount(0);
     const savedRow = page.locator("tbody tr").filter({ hasText: String(state.getSaved()!.report_id) });
     await page.getByRole("tab", { name: "Reports History", exact: true }).click();
-    await savedRow.getByRole("button", { name: /View/ }).click();
+    await savedRow.click();
     const preview = page.getByRole("dialog", { name: "Review Report Form", exact: true });
     await expect(preview.getByText("411 - Parks", { exact: true })).toBeVisible();
     // The form shows the report alone, without the counting basis or camera evidence.
@@ -264,7 +266,7 @@ test("a submitted month is complete and offers no way to submit it again", async
   await page.getByRole("tab", { name: "Reports History", exact: true }).click();
   await expect(page.locator("tbody tr").filter({ hasText: "October 2026" })).toHaveCount(1);
   await expect(page.locator("tbody tr").filter({ hasText: "October 2026" })).toContainText("REP-FIXTURE");
-  await expect(page.locator("tbody tr").filter({ hasText: "Pending Submission" })).toHaveCount(0);
+  await expect(page.locator("tbody tr").filter({ hasText: "October 2026" }).locator(".report-status")).toHaveText("Submitted");
   expect(state.submissions).toHaveLength(0);
   expect(state.uploads).toHaveLength(0);
 });

@@ -129,10 +129,14 @@ export function ReportsSkeleton({ label = "Loading reports" }: { label?: string 
                   </tfoot>
                 </table>
               </div>
-              <div className="report-day-actions">
-                <p>
-                  <SkeletonLine width="22rem" />
-                </p>
+              {/* The optional notes field that sits open under the table. */}
+              <div className="report-supporting">
+                <div className="report-notes">
+                  <div className="report-notes-skeleton-label">
+                    <SkeletonLine width="4.5rem" />
+                  </div>
+                  <Skeleton className="report-notes-skeleton" />
+                </div>
               </div>
             </section>
             <aside className="report-next-steps">
@@ -152,12 +156,6 @@ export function ReportsSkeleton({ label = "Loading reports" }: { label?: string 
                 <Skeleton className="h-11 w-full rounded-xl" />
               </div>
             </aside>
-          </div>
-          {/* As tall as the "Report notes and audit trail" summary, the only line left under the form. */}
-          <div className="report-supporting-controls">
-            <div className="py-1">
-              <SkeletonLine width="13rem" />
-            </div>
           </div>
         </section>
       </div>

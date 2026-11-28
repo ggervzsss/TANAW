@@ -1,4 +1,4 @@
 export { ITRequestDetail } from "./ITRequestDetail";
-export { ITRequestList } from "./ITRequestList";
+export { ITRequestTable } from "./ITRequestTable";
 export { MoveRequestMenu } from "./MoveRequestMenu";
 export { ReplyComposer } from "./ReplyComposer";

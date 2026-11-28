@@ -149,6 +149,9 @@ describe("printing a report PDF", () => {
       totalExit: null,
       totalUnique: 120,
       enterpriseCount: 1,
+      enterpriseTotal: 1,
+      generatedAt: "2026-10-09T08:00:00+08:00",
+      updatedAt: "2026-10-09T08:00:00+08:00",
       sources: [{ id: "a", enterprise: "Plaza", enterpriseProfileId: "plaza", attractionCode: "411", code: "REP-1", unique: 120, entry: null, exit: null }],
     };
     printFinalReportPdf(report);

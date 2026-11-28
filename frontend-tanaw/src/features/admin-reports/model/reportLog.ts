@@ -95,7 +95,8 @@ export function buildReportLog(entry: ReportMonthEntry, enterpriseName: string, 
       at: at.getTime() + 86_399_999,
       when: formatShortDate(at),
       title: "Added to city summary",
-      detail: `Included in ${summary.id}, prepared by ${summary.preparedBy}.`,
+      // A draft summary is not final yet: it still waits for other enterprises' reports.
+      detail: `Included in ${summary.status === "Draft" ? "the draft " : ""}${summary.id}, prepared by ${summary.preparedBy}.`,
     });
   }
 

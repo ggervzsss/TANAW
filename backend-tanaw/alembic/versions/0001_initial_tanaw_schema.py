@@ -148,6 +148,7 @@ def upgrade() -> None:
         sa.Column("total_exit", sa.Integer(), nullable=True),
         sa.Column("total_unique", sa.Integer(), nullable=False),
         sa.Column("enterprise_count", sa.Integer(), nullable=False),
+        sa.Column("enterprise_total", sa.Integer(), nullable=False),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -162,6 +163,14 @@ def upgrade() -> None:
     op.create_index(op.f("ix_final_reports_period"), "final_reports", ["period"], unique=False)
     op.create_index(
         op.f("ix_final_reports_report_code"), "final_reports", ["report_code"], unique=True
+    )
+    op.create_index(
+        "uq_final_reports_open_period",
+        "final_reports",
+        ["period"],
+        unique=True,
+        postgresql_where=sa.text("status <> 'Archived'"),
+        sqlite_where=sa.text("status <> 'Archived'"),
     )
     op.execute("CREATE SEQUENCE operational_alert_code_sequence START WITH 1")
     op.create_table(
@@ -1706,6 +1715,12 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_operational_alerts_alert_code"), table_name="operational_alerts")
     op.drop_table("operational_alerts")
     op.execute("DROP SEQUENCE operational_alert_code_sequence")
+    op.drop_index(
+        "uq_final_reports_open_period",
+        table_name="final_reports",
+        postgresql_where=sa.text("status <> 'Archived'"),
+        sqlite_where=sa.text("status <> 'Archived'"),
+    )
     op.drop_index(op.f("ix_final_reports_report_code"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_period"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_generated_on"), table_name="final_reports")

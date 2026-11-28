@@ -27,7 +27,8 @@ describe("CameraLiveMetrics", () => {
     };
     const activeCam: Camera = { ...camera, analysisMode: "open_space", openSpace: null };
     const markup = renderToStaticMarkup(<CameraLiveMetrics activeCam={activeCam} area={area} runtimeReady counts={EMPTY_ML_COUNTS} health={{ estimated_unique_count: 99 } as MlHealth} />);
-    expect(markup).toContain("Unique Visitors");
+    expect(markup).toContain(">Visitors</h5>");
+    expect(markup).not.toContain("Unique Visitors");
     expect(markup).toContain(">7</div>");
     expect(markup).not.toContain(">99</div>");
     expect(markup).not.toContain("Tracking gaps");
@@ -35,6 +36,14 @@ describe("CameraLiveMetrics", () => {
     const unavailable = renderToStaticMarkup(<CameraLiveMetrics activeCam={activeCam} area={{ ...area, unique_visitors: null, unique_visitors_available: false }} runtimeReady counts={EMPTY_ML_COUNTS} health={null} />);
     expect(unavailable).toContain("Identification unavailable");
     expect(unavailable).not.toContain(">0</div>");
+  });
+  it("puts a footer such as the performance line at the foot of the panel, after the counts", () => {
+    const markup = renderToStaticMarkup(
+      <CameraLiveMetrics activeCam={camera} runtimeReady counts={EMPTY_ML_COUNTS} health={null} footer={<span>Performance: Auto</span>} />,
+    );
+    expect(markup).toMatch(/<footer class="camera-metrics-footer"><span>Performance: Auto<\/span><\/footer><\/section>$/);
+    expect(markup.indexOf(">Visitors</h5>")).toBeLessThan(markup.indexOf("Performance: Auto"));
+    expect(renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady counts={EMPTY_ML_COUNTS} health={null} />)).not.toContain("camera-metrics-footer");
   });
   it.each([
     { occupancy: 0, entry: 500, exit: 500, visitors: 400, tone: "calm" },
@@ -69,7 +78,8 @@ describe("CameraLiveMetrics", () => {
     expect(loading).toContain('aria-busy="true"');
     expect(loading).toContain("tanaw-skeleton");
     expect(loading).not.toContain("—");
-    expect(loading).toContain("Establishment Occupancy");
+    expect(loading).toContain("Live Occupancy");
+    expect(loading).toContain('aria-label="About live occupancy"');
 
     const loaded = renderToStaticMarkup(<CameraLiveMetrics activeCam={camera} runtimeReady loading counts={{ ...counts, occupancy: 4 }} health={null} />);
     expect(loaded).toContain(">4</div>");

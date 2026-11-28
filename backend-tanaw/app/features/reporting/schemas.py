@@ -162,20 +162,58 @@ class FinalReportSummary(BaseModel):
     title: str
     period: str
     generatedOn: str
+    generatedAt: datetime = Field(description="When the report was first generated.")
+    updatedAt: datetime = Field(
+        description="When the report last changed: reports added to a draft, finalized or archived."
+    )
     preparedBy: str
     preparedRole: str
-    status: FinalReportStatus
+    status: FinalReportStatus = Field(
+        description=(
+            "Draft while some enterprises have not sent their report or some sent reports await "
+            "review; Finalized once every expected enterprise's report is included."
+        )
+    )
     archivedFromStatus: FinalReportArchivedFromStatus | None = None
     totalEntry: int | None
     totalExit: int | None
     totalUnique: int
-    enterpriseCount: int
+    enterpriseCount: int = Field(description="Enterprises whose reports are included.")
+    enterpriseTotal: int = Field(
+        description=(
+            "Enterprises expected to report for the month when the report was last generated: the "
+            "active enterprises plus any other enterprise that sent a report for the month."
+        )
+    )
     sources: list[FinalReportSourceSummary]
 
 
 class FinalReportCreate(BaseModel):
-    reportIds: list[str] = Field(min_length=1, max_length=500)
+    """Consolidates a month's accepted reports. With no consolidated report for the month yet, this
+    creates one; with a Draft, it adds the given reports to it. The result is Finalized when every
+    expected enterprise's report is included, and a Draft otherwise."""
+
+    reportIds: list[str] = Field(
+        default_factory=list,
+        max_length=500,
+        description="Accepted (Ready to Consolidate) reports to include; may be empty with period.",
+    )
     preparedBy: str = Field(min_length=1, max_length=120)
+    period: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=120,
+        description=(
+            "The reporting month, for example October 2026. Required when reportIds is empty, to "
+            "finalize a month's draft that has nothing new to add."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_reports_or_period(self) -> FinalReportCreate:
+        if not self.reportIds and self.period is None:
+            raise ValueError("Choose at least one accepted report or the reporting month.")
+        return self
 
     @field_validator("reportIds")
     @classmethod

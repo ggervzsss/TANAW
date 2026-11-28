@@ -4,7 +4,18 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Sequence, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Sequence,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -117,7 +128,20 @@ FINAL_REPORT_CODE_SEQUENCE = Sequence("final_report_code_sequence", start=1)
 
 
 class FinalReport(Base):
+    """A month's consolidated report (VAR 2M). It is a Draft while some enterprises have not sent
+    their report or some sent reports still await review, and becomes Finalized once the month is
+    complete. A month has at most one consolidated report that is not archived."""
+
     __tablename__ = "final_reports"
+    __table_args__ = (
+        Index(
+            "uq_final_reports_open_period",
+            "period",
+            unique=True,
+            postgresql_where=text("status <> 'Archived'"),
+            sqlite_where=text("status <> 'Archived'"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     report_code: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
@@ -136,6 +160,9 @@ class FinalReport(Base):
     total_exit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_unique: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enterprise_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Enterprises expected to report for the month when the report was last generated: the active
+    # enterprises plus any other enterprise that sent a report for the month.
+    enterprise_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

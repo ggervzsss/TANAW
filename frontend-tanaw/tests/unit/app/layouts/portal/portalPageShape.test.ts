@@ -4,9 +4,8 @@ import { portalPageShape } from "@/app/layouts/portal/portalPageShape";
 describe("portal page skeleton shapes", () => {
   it("sketches each page in its own layout", () => {
     expect(portalPageShape("/admin/dashboard").variant).toBe("dashboard");
-    expect(portalPageShape("/it/dashboard").variant).toBe("overview");
     expect(portalPageShape("/admin/requests").variant).toBe("split");
-    expect(portalPageShape("/it/requests").variant).toBe("split");
+    expect(portalPageShape("/it/requests")).toMatchObject({ variant: "page", filters: 3, filterWidths: "compact", statusLine: false });
     expect(portalPageShape("/it/notifications").variant).toBe("list");
     expect(portalPageShape("/staff/notifications").variant).toBe("list");
   });

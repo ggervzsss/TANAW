@@ -11,6 +11,7 @@ os.environ.setdefault(
 
 import cv2
 
+from app.camera.rtsp_diagnosis import FAILURE_MESSAGES, diagnose_rtsp
 from app.camera.stream_candidates import StreamProbe
 
 OPEN_TIMEOUT_MS = 5000
@@ -49,14 +50,15 @@ def probe_stream(stream_url: str, attempts: int = 8) -> StreamProbe:
         capture = open_capture(stream_url)
     except Exception:
         return StreamProbe(
-            False, "Unable to open the camera stream. Check the camera connection and try again."
+            False,
+            "Unable to open the camera stream. Check the camera connection and try again.",
+            reason="unknown",
         )
     try:
         if not capture.isOpened():
-            return StreamProbe(
-                False,
-                "The camera could not be reached. Check its IP address, username, and password.",
-            )
+            # OpenCV cannot say why; ask the camera so the user is sent to the right field.
+            reason = diagnose_rtsp(stream_url)
+            return StreamProbe(False, FAILURE_MESSAGES[reason], reason=reason)
 
         for _ in range(attempts):
             ok, frame = capture.read()
@@ -66,7 +68,9 @@ def probe_stream(stream_url: str, attempts: int = 8) -> StreamProbe:
             time.sleep(0.15)
 
         return StreamProbe(
-            False, "Camera stream opened, but no frames were readable within the timeout."
+            False,
+            "Camera stream opened, but no frames were readable within the timeout.",
+            reason="unknown",
         )
     finally:
         capture.release()

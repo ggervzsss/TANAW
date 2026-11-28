@@ -38,7 +38,6 @@ export function DashboardSkeleton({ label = "Loading dashboard", className }: { 
                   </small>
                 </div>
                 <span className="design-skeleton dash-figure-skeleton" />
-                <span className="design-skeleton dash-note-skeleton" />
               </div>
             ))}
           </div>
@@ -52,7 +51,6 @@ export function DashboardSkeleton({ label = "Loading dashboard", className }: { 
                 </div>
                 <span className="design-skeleton dash-line-skeleton" />
               </div>
-              <span className="design-skeleton dash-readout-skeleton" />
             </div>
             <TrafficChartLoading />
           </div>
@@ -94,8 +92,8 @@ export function TrafficChartLoading({ label }: { label?: string }) {
   return (
     <div className="dash-chart-loading" aria-busy={label ? true : undefined} aria-label={label}>
       <div className="dash-chart-skeleton">
-        {[38, 52, 64, 72, 86, 100, 80].map((height, index) => (
-          <span key={height} className="design-skeleton" style={{ height: `${height}%`, animationDelay: `0ms, ${index * 80}ms` }} />
+        {[38, 52, 64, 72, 86, 100, 80].map((height) => (
+          <span key={height} className="design-skeleton" style={{ height: `${height}%` }} />
         ))}
       </div>
       <div className="dash-chart-foot">

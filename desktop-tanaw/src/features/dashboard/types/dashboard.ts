@@ -17,8 +17,6 @@ export type TrafficPoint = {
   /** The most visitors inside at once during the period; null when no camera covered it. */
   occupancy: number | null;
   usual: UsualValue | null;
-  /** A period of today that has not happened yet. */
-  later?: boolean;
 };
 
 /** What a period usually looks like, from the same weekday in earlier weeks. */

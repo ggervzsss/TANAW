@@ -20,6 +20,31 @@ export function getReportingPeriodSubmissionError(period: string, now = new Date
   return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
 }
 
+/**
+ * Reports for a month are due on this day of the following month: October's report is due
+ * November 10. The LGU portal uses the same day.
+ */
+export const REPORT_DUE_DAY = 10;
+
+/** The day a month's report is due, or null for a label that is not "Month YYYY". */
+function reportingPeriodDueDate(period: string): CalendarDate | null {
+  const periodEnd = reportingPeriodEndDate(period);
+  if (!periodEnd) return null;
+  return { ...addCalendarDays(periodEnd, 1), day: REPORT_DUE_DAY };
+}
+
+/** "Nov 10, 2026" for October 2026. */
+export function formatReportingPeriodDueDate(period: string) {
+  const due = reportingPeriodDueDate(period);
+  return due ? formatCalendarDate(due) : null;
+}
+
+/** Whether the month's due date has passed: true from the day after it, in Philippine time. */
+export function isReportingPeriodOverdue(period: string, now = new Date()) {
+  const due = reportingPeriodDueDate(period);
+  return due ? calendarDateKey(reportingDate(now)) > calendarDateKey(due) : false;
+}
+
 function reportingPeriodEndDate(value: string): CalendarDate | null {
   const normalizedValue = value.trim();
   const monthYearMatch = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/.exec(normalizedValue);

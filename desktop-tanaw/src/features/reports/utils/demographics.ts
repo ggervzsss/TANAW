@@ -69,9 +69,9 @@ export function getDemographicAllocationStatus(demo: DemoBreakdown, uniqueCap: n
   ) {
     validationMessage = "The optional city allocation cannot exceed its saved province total.";
   } else if (excess > 0) {
-    validationMessage = "Demographic totals cannot exceed the unique visitor count.";
+    validationMessage = "Demographic totals cannot exceed the visitor count.";
   } else if (remaining > 0) {
-    validationMessage = `Allocate all unique visitors before finalizing this report. Remaining to allocate: ${remaining.toLocaleString()}.`;
+    validationMessage = `Allocate all visitors before finalizing this report. Remaining to allocate: ${remaining.toLocaleString()}.`;
   }
 
   return {

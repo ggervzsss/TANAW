@@ -2879,12 +2879,25 @@ export interface components {
             /** Type */
             type?: string | null;
         };
-        /** FinalReportCreate */
+        /**
+         * FinalReportCreate
+         * @description Consolidates a month's accepted reports. With no consolidated report for the month yet, this
+         *     creates one; with a Draft, it adds the given reports to it. The result is Finalized when every
+         *     expected enterprise's report is included, and a Draft otherwise.
+         */
         FinalReportCreate: {
+            /**
+             * Period
+             * @description The reporting month, for example October 2026. Required when reportIds is empty, to finalize a month's draft that has nothing new to add.
+             */
+            period?: string | null;
             /** Preparedby */
             preparedBy: string;
-            /** Reportids */
-            reportIds: string[];
+            /**
+             * Reportids
+             * @description Accepted (Ready to Consolidate) reports to include; may be empty with period.
+             */
+            reportIds?: string[];
         };
         /** FinalReportSourceSummary */
         FinalReportSourceSummary: {
@@ -2922,8 +2935,22 @@ export interface components {
         FinalReportSummary: {
             /** Archivedfromstatus */
             archivedFromStatus?: ("Draft" | "Finalized") | null;
-            /** Enterprisecount */
+            /**
+             * Enterprisecount
+             * @description Enterprises whose reports are included.
+             */
             enterpriseCount: number;
+            /**
+             * Enterprisetotal
+             * @description Enterprises expected to report for the month when the report was last generated: the active enterprises plus any other enterprise that sent a report for the month.
+             */
+            enterpriseTotal: number;
+            /**
+             * Generatedat
+             * Format: date-time
+             * @description When the report was first generated.
+             */
+            generatedAt: string;
             /** Generatedon */
             generatedOn: string;
             /** Id */
@@ -2938,6 +2965,7 @@ export interface components {
             sources: components["schemas"]["FinalReportSourceSummary"][];
             /**
              * Status
+             * @description Draft while some enterprises have not sent their report or some sent reports await review; Finalized once every expected enterprise's report is included.
              * @enum {string}
              */
             status: "Draft" | "Finalized" | "Archived";
@@ -2949,6 +2977,12 @@ export interface components {
             totalExit: number | null;
             /** Totalunique */
             totalUnique: number;
+            /**
+             * Updatedat
+             * Format: date-time
+             * @description When the report last changed: reports added to a draft, finalized or archived.
+             */
+            updatedAt: string;
         };
         /** ForgotPasswordRequest */
         ForgotPasswordRequest: {

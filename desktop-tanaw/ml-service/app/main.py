@@ -162,6 +162,7 @@ def test_camera(payload: CameraTestRequest, request: Request) -> CameraTestRespo
         stream_url=result.stream_url,
         width=result.width,
         height=result.height,
+        reason=result.reason,
     )
 
 

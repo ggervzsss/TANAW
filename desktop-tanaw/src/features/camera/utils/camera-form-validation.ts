@@ -3,7 +3,12 @@ import type { CameraFormValues } from "../types/camera";
 import { validateCameraConnection } from "./camera-connection";
 import { isValidIpv4 } from "./rtsp";
 
-export type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
+/**
+ * Errors keyed by form field, plus two that belong to no single field: `credentials`
+ * (the camera refused the username and password pair; shown under the password) and
+ * `connection` (a failure shown above the dialog's buttons).
+ */
+export type CameraFormErrors = Partial<Record<keyof CameraFormValues | "credentials" | "connection", string>>;
 
 export function validateCameraForm(values: CameraFormValues): CameraFormErrors {
   const errors: CameraFormErrors = {};

@@ -26,7 +26,8 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
     payload: saved.payload,
     demographics: { thisProvMale: 1, thisProvFemale: 1, otherProvMale: 0, otherProvFemale: 0, foreignMale: 0, foreignFemale: 0 },
   };
-  let final = {
+  // Riverside Museum has not sent its October report, so consolidating October gives a Draft.
+  const final = {
     id: "CON-OCT-2026-0001",
     title: "Citywide Tourism Aggregation",
     period: saved.period,
@@ -35,10 +36,25 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
     preparedRole: "Staff Processing Division",
     status: "Draft",
     enterpriseCount: 1,
+    enterpriseTotal: 2,
+    generatedAt: "2026-11-24T10:00:00+08:00",
+    updatedAt: "2026-11-24T10:00:00+08:00",
     totalEntry: null,
     totalExit: null,
     totalUnique: 2,
     sources: [{ id: intake.id, enterpriseProfileId: "park-profile", attractionCode: "411", enterprise: "Park", code: intake.code, unique: 2, entry: null, exit: null, demographics: intake.demographics, counting: saved.counting }],
+  };
+  // A finalized September, so the annual report has a month to add up.
+  const september = {
+    ...final,
+    id: "CON-SEP-2026-0001",
+    period: "September 2026",
+    generatedOn: "2026-10-12",
+    status: "Finalized",
+    enterpriseTotal: 1,
+    generatedAt: "2026-10-12T10:00:00+08:00",
+    updatedAt: "2026-10-12T10:00:00+08:00",
+    sources: [{ ...final.sources[0], id: "source-september" }],
   };
   let generated = false;
   let generations = 0;
@@ -68,18 +84,13 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
     }
     if (path.endsWith("/reports/intake")) return route.fulfill({ json: [intake] });
     if (path.endsWith("/reports/final") && route.request().method() === "POST") {
-      expect(route.request().postDataJSON().reportIds).toEqual(["source-one"]);
+      expect(route.request().postDataJSON()).toEqual({ reportIds: ["source-one"], preparedBy: "Staff Reviewer", period: "October 2026" });
       generations += 1;
       generated = true;
       intake.status = "Consolidated";
       return route.fulfill({ json: final });
     }
-    if (path.endsWith(`/reports/final/${final.id}/status`)) {
-      expect(route.request().postDataJSON()).toEqual({ status: "Finalized" });
-      final = { ...final, status: "Finalized" };
-      return route.fulfill({ json: final });
-    }
-    if (path.endsWith("/reports/final")) return route.fulfill({ json: generated ? [final] : [] });
+    if (path.endsWith("/reports/final")) return route.fulfill({ json: generated ? [final, september] : [september] });
     return route.fulfill({ json: [] });
   });
 
@@ -88,6 +99,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(page.getByText("Reports for October 2026, due November 10. Accept each submitted report, then generate the consolidated report.")).toBeVisible();
   const generate = page.getByRole("button", { name: "Generate consolidated report", exact: true });
   await expect(generate).toBeDisabled();
+  await expect(page.getByText("Accept at least one report to generate the consolidated report.")).toBeVisible();
   await page.getByRole("combobox", { name: "Submission" }).click();
   await expect(page.getByRole("option", { name: "Missing", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -135,14 +147,22 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(intakeDialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await intakeDialog.getByRole("button", { name: "Close report" }).click();
 
+  // Riverside Museum has not sent a report, so Generate warns first and makes a Draft.
   await expect(generate).toBeEnabled();
   await generate.click();
-  const confirm = page.getByRole("dialog", { name: "Generate consolidated report?" });
-  await expect(confirm).toContainText("Combine the 1 accepted report into the October 2026 monthly report (VAR 2M). 1 enterprise has not sent a report and will not be included.");
-  await confirm.getByRole("button", { name: "Generate report", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Incomplete Report Submissions" });
+  await expect(confirm).toContainText("Some enterprises have not yet submitted their reports. Are you sure you want to proceed with the consolidation?");
+  await expect(confirm).toContainText("1 of 2 enterprises has not sent a report.");
+  await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(confirm).toBeHidden();
+  expect(generations).toBe(0);
+  await generate.click();
+  await confirm.getByRole("button", { name: "Proceed", exact: true }).click();
 
   await expect(page).toHaveURL(/\/staff\/consolidated-reports\?year=2026&report=CON-OCT-2026-0001$/);
   const monthlyDialog = page.getByRole("dialog", { name: "Monthly report (VAR 2M)" });
+  await expect(monthlyDialog.getByText("Draft — not final", { exact: true })).toBeVisible();
+  await expect(monthlyDialog.getByText(/^This draft includes 1 of 2 enterprises/)).toBeVisible();
   const monthlyTable = monthlyDialog.getByRole("table", { name: "VAR 2M October 2026" });
   await expect(monthlyTable.getByRole("rowheader", { name: "Park" })).toBeVisible();
   await expect(monthlyTable.getByRole("cell", { name: "411", exact: true })).toBeVisible();
@@ -152,15 +172,17 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await page.screenshot({ path: testInfo.outputPath("staff-unified-consolidated-light.png"), animations: "disabled" });
   await expect(monthlyDialog.getByRole("button", { name: "Download PDF" })).toBeVisible();
   await expect(monthlyDialog.getByRole("button", { name: "Print", exact: true })).toBeVisible();
-  await monthlyDialog.getByRole("button", { name: "Finalize monthly report" }).click();
-  await expect(monthlyDialog.getByRole("button", { name: "Finalize monthly report" })).toHaveCount(0);
+  // A draft is finalized from Reports once every report is in, not from here.
+  await expect(monthlyDialog.getByRole("button", { name: /Finalize/ })).toHaveCount(0);
   await monthlyDialog.getByRole("button", { name: "Close report" }).click();
   await expect(page).toHaveURL(/\/staff\/consolidated-reports\?year=2026$/);
 
   const monthlyRow = page.getByRole("table", { name: "Monthly reports for 2026" }).getByRole("row", { name: /October 2026/ });
   await expect(monthlyRow).toContainText(final.id);
   await expect(monthlyRow).toContainText("1 of 2");
-  await expect(monthlyRow.getByText("Consolidated", { exact: true })).toBeVisible();
+  await expect(monthlyRow.getByText("Draft", { exact: true })).toBeVisible();
+  const septemberRow = page.getByRole("table", { name: "Monthly reports for 2026" }).getByRole("row", { name: /September 2026/ });
+  await expect(septemberRow.getByText("Consolidated", { exact: true })).toBeVisible();
   await expect(monthlyRow.getByRole("button", { name: "View the October 2026 report" })).toBeVisible();
   await expect(monthlyRow.getByRole("button", { name: /PDF/ })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("consolidated-reports-light.png"), animations: "disabled" });
@@ -168,7 +190,9 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await page.getByRole("tab", { name: "Annual (VAR 3M)" }).click();
   await expect(page).toHaveURL(/tab=annual/);
   const annualRow = page.getByRole("table", { name: "Annual reports" }).getByRole("row", { name: /2026/ });
+  // Only finalized September counts; the October draft is left out until it is final.
   await expect(annualRow).toContainText("1 of 12");
+  await expect(annualRow).toContainText("1 draft not counted");
   await expect(annualRow.getByText("Waiting", { exact: true })).toBeVisible();
   await expect(annualRow.getByRole("button", { name: /PDF/ })).toHaveCount(0);
   await annualRow.getByRole("button", { name: "View the 2026 annual report" }).click();
@@ -179,6 +203,7 @@ test("Staff reviews, accepts and consolidates the frozen Open Space establishmen
   await expect(annualDialog.getByRole("combobox", { name: "Report year" })).toHaveCount(0);
   await expect(annualDialog.getByText(/months finalized/)).toHaveCount(0);
   await expect(annualDialog.getByRole("button", { name: "Print", exact: true })).toBeVisible();
-  await expect(annualDialog.getByRole("row", { name: /^October/ })).toContainText("2");
+  await expect(annualDialog.getByRole("row", { name: /^September/ })).toContainText("2");
+  await expect(annualDialog.getByText("October is still a draft and is not counted until it is final.")).toBeVisible();
   expect(generations).toBe(1);
 });

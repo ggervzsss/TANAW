@@ -3,15 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/app/hooks/useOperationalSync";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalFinalReports, useOperationalReports } from "@/app/hooks/useOperationalSync";
 import { createFinalReport, listReportEnterprises, notifyEnterprise, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, IntakeReport, ReportEnterprise } from "@/shared/types";
 import { formatShortDate, reportDueDate } from "../model/reportStatuses";
 import { formatReportingMonth, type ReportingMonth } from "../model/reportingMonth";
-import { reminderFailedMessage, reminderSentMessage, staffReminder, staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
+import { consolidatedMessage, openConsolidatedReport, reminderFailedMessage, reminderSentMessage, staffReminder, staffReportRows, staffReportsProgress, type StaffReportRow } from "../model/staffReports";
 
 const EMPTY_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_REPORTS: IntakeReport[] = [];
+const EMPTY_FINAL_REPORTS: FinalReport[] = [];
 
 export const reportEnterprisesQueryKey = ["report-enterprises"];
 
@@ -23,14 +24,19 @@ export function apiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-/** Enterprise reports for one month, with the accept, reminder and generate actions. */
+/**
+ * Enterprise reports for one month, with the accept, reminder and generate actions, and the month's
+ * consolidated report (a Draft or the final report) if there is one.
+ */
 export function useStaffReports(month: ReportingMonth, today: Date) {
   const queryClient = useQueryClient();
   const preparedBy = useAuthStore((state) => state.user?.displayName) ?? "LGU Staff";
   const enterprisesQuery = useQuery({ queryKey: reportEnterprisesQueryKey, queryFn: listReportEnterprises });
   const reportsQuery = useOperationalReports();
+  const finalReportsQuery = useOperationalFinalReports();
   const enterprises = enterprisesQuery.data ?? EMPTY_ENTERPRISES;
   const reports = reportsQuery.data ?? EMPTY_REPORTS;
+  const consolidatedReport = openConsolidatedReport(finalReportsQuery.data ?? EMPTY_FINAL_REPORTS, month);
   const rows = useMemo(() => staffReportRows(enterprises, reports, month, today), [enterprises, reports, month, today]);
   const progress = useMemo(() => staffReportsProgress(rows), [rows]);
   const [remindedIds, setRemindedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -46,15 +52,18 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
     onError: (error) => toast.error(apiErrorMessage(error, "The report could not be updated. Refresh the list and try again.")),
   });
 
+  // Generating adds the accepted reports to the month's draft, or starts one. With nothing new to
+  // add (a draft whose month is now complete), the month alone lets the draft be finalized.
   const generate = useMutation({
-    mutationFn: () => createFinalReport({ reportIds: progress.readyReportIds, preparedBy }),
-    onSuccess: (finalReport) => {
+    mutationFn: () => createFinalReport({ reportIds: progress.readyReportIds, preparedBy, period: monthLabel }),
+    onMutate: () => ({ hadDraft: consolidatedReport?.status === "Draft" }),
+    onSuccess: (finalReport, _, context) => {
       const sourceIds = new Set(finalReport.sources.map((source) => source.id));
       queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current) => current?.map((report) => (sourceIds.has(report.id) ? { ...report, status: "Consolidated" } : report)));
       queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current) => (current ? [finalReport, ...current.filter((report) => report.id !== finalReport.id)] : current));
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
-      toast.success(`The ${finalReport.period} consolidated report was generated.`);
+      toast.success(consolidatedMessage(finalReport.period, finalReport.status, context.hadDraft));
     },
     onError: (error) => toast.error(apiErrorMessage(error, "The consolidated report could not be generated. Refresh the list and try again.")),
   });
@@ -87,8 +96,9 @@ export function useStaffReports(month: ReportingMonth, today: Date) {
     reports,
     rows,
     progress,
-    isLoading: enterprisesQuery.isLoading || reportsQuery.isLoading,
-    isError: enterprisesQuery.isError || reportsQuery.isError,
+    consolidatedReport,
+    isLoading: enterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
+    isError: enterprisesQuery.isError || reportsQuery.isError || finalReportsQuery.isError,
     accept,
     generate,
     remind,

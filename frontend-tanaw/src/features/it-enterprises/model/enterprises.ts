@@ -4,8 +4,9 @@ import type { AccountSummary } from "@/shared/types";
 import { formatPhilippineDate, formatPhilippineTime, type SystemDateFormat, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 /*
- * The IT Enterprises list: each enterprise account joined with its desktop app health, the "Show"
- * chips, the three figures and the text of each table cell. Pure functions, so they are unit-tested.
+ * The IT Enterprises list: each enterprise account joined with its desktop app health, the Account
+ * Status filter, the three figures and the text of each table cell. Pure functions, so they are
+ * unit-tested.
  */
 
 /** The account fields the backend sends that the shared AccountSummary type does not list yet. */
@@ -32,17 +33,18 @@ export type EnterpriseRow = {
   health: EnterpriseHealth | null;
 };
 
-export type ChipKey = "all" | "attention" | "pending" | "sending";
+/** The Account Status filter. Its key is the ?show= value; "all" leaves the param off. */
+export type StatusFilter = "all" | "attention" | "pending" | "sending";
 
-export const CHIPS: readonly { key: ChipKey; label: string }[] = [
+export const STATUS_FILTERS: readonly { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "attention", label: "Needs attention" },
-  { key: "pending", label: "Invitation pending" },
-  { key: "sending", label: "Sending data" },
+  { key: "attention", label: "Needs Attention" },
+  { key: "pending", label: "Invitation Pending" },
+  { key: "sending", label: "Sending Data" },
 ];
 
-export function parseChip(value: string | null): ChipKey {
-  return CHIPS.find((chip) => chip.key === value)?.key ?? "all";
+export function parseStatusFilter(value: string | null): StatusFilter {
+  return STATUS_FILTERS.find((filter) => filter.key === value)?.key ?? "all";
 }
 
 /** Deactivated, active, or waiting on an invitation that is still open or has expired. */
@@ -104,14 +106,14 @@ export function isSendingData(row: EnterpriseRow) {
   return row.accountState === "active" && row.health?.app.status === "online" && !needsAttention(row);
 }
 
-const chipTests: Record<ChipKey, (row: EnterpriseRow) => boolean> = {
+const statusTests: Record<StatusFilter, (row: EnterpriseRow) => boolean> = {
   all: () => true,
   attention: needsAttention,
   pending: isInvitationPending,
   sending: isSendingData,
 };
 
-export function chipCounts(rows: readonly EnterpriseRow[]): Record<ChipKey, number> {
+export function statusCounts(rows: readonly EnterpriseRow[]): Record<StatusFilter, number> {
   return {
     all: rows.length,
     attention: rows.filter(needsAttention).length,
@@ -128,8 +130,8 @@ export function matchesSearch(row: EnterpriseRow, query: string) {
   return words.every((word) => haystack.includes(word));
 }
 
-export function filterRows(rows: readonly EnterpriseRow[], chip: ChipKey, query: string) {
-  return rows.filter((row) => chipTests[chip](row) && matchesSearch(row, query));
+export function filterRows(rows: readonly EnterpriseRow[], status: StatusFilter, query: string) {
+  return rows.filter((row) => statusTests[status](row) && matchesSearch(row, query));
 }
 
 export type EnterpriseFigures = {

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Download, Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { ReportPopover } from "./ReportPopover";
-import { Skeleton } from "../../../ui-kit";
+import { Skeleton, useSkeletonReveal } from "../../../ui-kit";
 import type { ReportRecord } from "../../../types/enterprise";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
@@ -11,6 +11,8 @@ import { formatReportingPeriodLabel, reportingMonthKey } from "../utils/reportin
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { uploadStatusLabel } from "../model/report-workspace";
 import { isReopenedReport, isUploadRejected, reportReference } from "../model/report-lifecycle";
+import { REPORTING_STATUSES, REPORTING_STATUS_TONE, isSubmittedStatus } from "../model/report-status";
+import { formatReportingPeriodDueDate } from "../model/reporting-calendar";
 
 export type { ReportLedgerRow } from "../model/report-ledger";
 type Props = {
@@ -18,15 +20,15 @@ type Props = {
   ledgerRows: ReportLedgerRow[];
   /** True while the first reporting periods load; rows show placeholders instead of "none yet". */
   isLoading?: boolean;
-  onDownloadReport: (report: ReportRecord) => void;
   onPreviewReport: (report: ReportRecord) => void;
   onSelectReport: (row: ReportLedgerRow) => void;
 };
 
 const SKELETON_ROWS = 3;
-const SKELETON_WIDTHS = ["72%", "64%", "40%", "70%", "66%", "48%", "56%"];
+const SKELETON_WIDTHS = ["72%", "64%", "40%", "70%", "66%", "48%"];
+const COLUMN_WIDTHS = [17, 18, 16, 17, 16, 11, 5];
 
-export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = false, onDownloadReport, onPreviewReport, onSelectReport }: Props) {
+export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = false, onPreviewReport, onSelectReport }: Props) {
   const openReport = (row: ReportLedgerRow) => {
     onSelectReport(row);
     onPreviewReport(row.report);
@@ -36,7 +38,6 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
   const [periodFilter, setPeriodFilter] = useState("year");
   const [statusFilter, setStatusFilter] = useState("All");
   const thisYear = new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Manila" }).format(new Date());
-  const statuses = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.statusLabel))).sort(), [ledgerRows]);
   const periods = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.report.period ?? row.report.date))), [ledgerRows]);
   const filteredRows = useMemo(
     () =>
@@ -49,6 +50,8 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
       }),
     [ledgerRows, periodFilter, statusFilter, thisYear, searchQuery],
   );
+  // The reports fade in where their placeholder rows stood, when those rows were seen.
+  const reveal = useSkeletonReveal(isLoading && !filteredRows.length);
 
   return (
     <section className="report-ledger" aria-label="Report history">
@@ -79,7 +82,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
           <SelectDropdown
             value={statusFilter}
             onChange={setStatusFilter}
-            options={[["All", "All Statuses"], ...statuses.map((status) => [status, status] as const)]}
+            options={[["All", "All Statuses"], ...REPORTING_STATUSES.map((status) => [status, status] as const)]}
             ariaLabel="Filter reports by status"
             menuClassName="reports-dropdown-menu"
             restoreFocusOnTab
@@ -96,17 +99,20 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
       <div className="report-history-table-scroll" tabIndex={0} role="region" aria-label="Report history table">
         <table>
           <colgroup>
-            {[16, 17, 16, 14, 16, 10, 11].map((width, index) => (
+            {COLUMN_WIDTHS.map((width, index) => (
               <col key={index} style={{ width: `${width}%` }} />
             ))}
           </colgroup>
           <thead>
             <tr>
-              {["Report ID", "Reporting Period", "Visitor Counted", "Status", "Date Submitted", "Time", "Actions"].map((title) => (
+              {["Report ID", "Reporting Period", "Visitor Counted", "Status", "Date Submitted", "Time"].map((title) => (
                 <th key={title} scope="col">
                   {title}
                 </th>
               ))}
+              <th scope="col">
+                <span className="sr-only">Open</span>
+              </th>
             </tr>
           </thead>
           <tbody key={`${periodFilter}:${statusFilter}:${searchQuery}`} className="report-history-results">
@@ -116,10 +122,11 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
               return (
                 <tr
                   key={row.key}
+                  className={reveal}
                   role="button"
                   tabIndex={0}
                   aria-selected={activeLedgerKey === row.key}
-                  aria-label={`${row.reportLabel}, ${formatReportingPeriodLabel(report.period ?? report.date)}`}
+                  aria-label={`${row.reportLabel}, ${formatReportingPeriodLabel(report.period ?? report.date)}, ${row.statusLabel}`}
                   onClick={(event) => {
                     if ((event.target as Element).closest("button, a, input, select, textarea, summary")) return;
                     openReport(row);
@@ -137,50 +144,24 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
                   <td>{formatReportingPeriodLabel(report.period ?? report.date)}</td>
                   <td className="report-history-count">{report.unique.toLocaleString()}</td>
                   <td>
-                    <span className="report-status" data-tone={statusTone(row)}>
+                    <span className="report-status" data-tone={REPORTING_STATUS_TONE[row.statusLabel]}>
                       {row.statusLabel}
                     </span>
                     {/* TANAW's reason stays with the report it refused. */}
                     {row.kind === "history" && statusReason(report) ? (
                       <ExpandableText primary={statusReason(report)!} ariaLabel="reason" className="report-status-reason" />
+                    ) : report.syncStatus && report.syncStatus !== "synced" ? (
+                      <span className="report-upload-state" data-state={report.syncStatus}>
+                        {uploadStatusLabel(report.syncStatus)}
+                      </span>
                     ) : (
-                      report.syncStatus &&
-                      report.syncStatus !== "synced" && (
-                        <span className="report-upload-state" data-state={report.syncStatus}>
-                          {uploadStatusLabel(report.syncStatus)}
-                        </span>
-                      )
+                      dueNote(row) && <span className="report-upload-state">{dueNote(row)}</span>
                     )}
                   </td>
                   <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { dateStyle: "medium" }) : "—"}</td>
                   <td>{submitted ? formatPhilippineDateTime(submitted, timeFormat, { timeStyle: "short" }) : "—"}</td>
-                  <td>
-                    <div className="report-history-actions">
-                      <button
-                        type="button"
-                        className="report-view-action"
-                        aria-label={`View ${row.reportLabel}`}
-                        title="View report"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openReport(row);
-                        }}
-                      >
-                        View
-                      </button>
-                      <button
-                        type="button"
-                        className="report-download-action"
-                        aria-label={`Download ${row.reportLabel}`}
-                        title="Download PDF"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDownloadReport(report);
-                        }}
-                      >
-                        <Download size={16} aria-hidden="true" />
-                      </button>
-                    </div>
+                  <td className="report-history-open" aria-hidden="true">
+                    <ChevronRight />
                   </td>
                 </tr>
               );
@@ -189,14 +170,14 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
               isLoading &&
               Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={`loading-${row}`} className="report-history-skeleton-row">
-                  {SKELETON_WIDTHS.map((width, column) => (
+                  {[...SKELETON_WIDTHS, null].map((width, column) => (
                     <td key={column}>
                       {row === 0 && column === 0 && (
                         <span className="sr-only" role="status">
                           Loading reports…
                         </span>
                       )}
-                      <Skeleton className="report-history-skeleton" style={{ width }} />
+                      {width && <Skeleton className="report-history-skeleton" style={{ width }} />}
                     </td>
                   ))}
                 </tr>
@@ -215,12 +196,12 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, isLoading = fal
   );
 }
 
-function statusTone(row: ReportLedgerRow) {
-  if (row.kind === "history" && isUploadRejected(row.report)) return "rejected";
-  if (row.kind === "pending" || row.statusLabel === "Pending Submission") return "pending";
-  if (row.report.status === "Submitted") return "submitted";
-  if (row.report.status === "Consolidated") return "consolidated";
-  return "draft";
+/** When a month not submitted yet is due ("Due Dec 10, 2026"), or was ("Was due Nov 10, 2026"). */
+function dueNote(row: ReportLedgerRow) {
+  if (isSubmittedStatus(row.statusLabel)) return null;
+  const due = formatReportingPeriodDueDate(row.report.period ?? row.report.date);
+  if (!due) return null;
+  return row.statusLabel === "Missing" ? `Was due ${due}` : `Due ${due}`;
 }
 
 /** Why TANAW refused a report, and that a fixed report replaced it. */

@@ -7,7 +7,6 @@ export const routes = {
   it: {
     root: "/it",
     generalSettings: "/it/settings",
-    dashboard: "/it/dashboard",
     requests: "/it/requests",
     enterprises: "/it/enterprises",
     enterpriseManage: "/it/enterprises/:enterpriseId",
@@ -66,6 +65,8 @@ export function itSystemPath(tab: "activity" | "email" | "settings") {
 /** Old portal addresses kept as redirects, so bookmarks and notification links still land on the new screens. */
 export const legacyPortalRedirects = {
   it: [
+    // The IT Overview was retired; Requests is IT's first screen now.
+    ["dashboard", routes.it.requests],
     ["work-center", routes.it.requests],
     ["enterprise-accounts", routes.it.enterprises],
     ["lgu-accounts", routes.it.personnel],

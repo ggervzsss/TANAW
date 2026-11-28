@@ -31,10 +31,11 @@ describe("Help Center knowledge base", () => {
   it("describes the redesigned IT screens and not the retired ones", () => {
     const it = articlesForRole(helpArticles, "it");
     const ids = it.map((article) => article.id);
-    expect(ids).toEqual(expect.arrayContaining(["it-overview", "it-requests", "it-enterprises", "it-personnel", "it-system-settings", "it-system-activity"]));
+    expect(ids).not.toContain("it-overview");
+    expect(ids).toEqual(expect.arrayContaining(["it-requests", "it-enterprises", "it-personnel", "it-system-settings", "it-system-activity"]));
     const text = JSON.stringify(it);
-    for (const retired of ["Work Center", "System Settings", "Technical Issue Notifications", "System Activity"]) expect(text).not.toContain(retired);
-    for (const screen of ["Overview", "Start on it", "Manage", "LGU Personnel", "Activity", "Email log", "Settings"]) expect(text).toContain(screen);
+    for (const retired of ["Work Center", "System Settings", "Technical Issue Notifications", "System Activity", "Overview", "Handled by"]) expect(text).not.toContain(retired);
+    for (const screen of ["Requests opens when you sign in", "Start on it", "Manage", "LGU Personnel", "Activity", "Email log", "Settings"]) expect(text).toContain(screen);
   });
 
   it("only links related articles that the same role can open", () => {

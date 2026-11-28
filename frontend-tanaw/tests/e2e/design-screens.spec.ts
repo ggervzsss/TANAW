@@ -9,6 +9,9 @@ type Theme = "light" | "dark";
 
 const telemetrySummary = {
   enterpriseCount: 7,
+  enterpriseTotal: 7,
+  generatedAt: "2026-10-09T08:00:00+08:00",
+  updatedAt: "2026-10-09T08:00:00+08:00",
   onlineGateways: 2,
   delayedGateways: 1,
   offlineGateways: 4,
@@ -23,7 +26,7 @@ const telemetrySummary = {
 
 const pages: Record<Role, string[]> = {
   admin: ["dashboard", "enterprises", "reports", "activity", "requests", "notifications", "settings/profile", "help"],
-  it: ["dashboard", "requests", "enterprises", "personnel", "system", "system?tab=email", "system?tab=settings", "settings/security", "settings/appearance", "help"],
+  it: ["requests", "enterprises", "personnel", "system", "system?tab=email", "system?tab=settings", "settings/security", "settings/appearance", "help"],
   staff: ["reports", "consolidated-reports", "notifications", "settings/profile", "help"],
 };
 

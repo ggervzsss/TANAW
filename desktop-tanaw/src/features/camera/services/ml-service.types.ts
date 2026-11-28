@@ -412,7 +412,11 @@ export type CameraTestResult = {
   stream_url?: string | null;
   width?: number | null;
   height?: number | null;
+  /** Why a failed test failed; absent when it passed or the service could not tell. */
+  reason?: CameraConnectionFailureReason | null;
 };
+
+export type CameraConnectionFailureReason = "unreachable" | "auth_failed" | "stream_not_found" | "unknown";
 
 export type MlServiceErrorCode =
   | "service_unavailable"

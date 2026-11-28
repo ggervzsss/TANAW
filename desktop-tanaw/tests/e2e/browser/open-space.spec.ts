@@ -277,7 +277,7 @@ test("shows one establishment dashboard for an Open Space-only setup", async ({ 
   await page.goto("/#/enterprise/cameras");
   const metrics = page.locator("section").filter({ has: page.getByRole("heading", { name: "Live Metrics", exact: true }) });
   await expect(metrics.getByText("Live Occupancy", { exact: true }).locator("../..").getByText("3", { exact: true })).toBeVisible();
-  await expect(metrics.getByText("Unique Visitors", { exact: true }).locator("../..").getByText("7", { exact: true })).toBeVisible();
+  await expect(metrics.getByText("Visitors", { exact: true }).locator("../..").getByText("7", { exact: true })).toBeVisible();
   await expect(metrics.getByText("Tracking gaps", { exact: true })).toHaveCount(0);
   await expect(metrics.getByText(/dwell|in monitored area/i)).toHaveCount(0);
   await metrics.screenshot({ path: testInfo.outputPath("open-space-live-metrics.png") });

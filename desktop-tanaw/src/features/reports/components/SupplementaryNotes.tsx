@@ -10,7 +10,11 @@ export function SupplementaryNotes({ isReadOnly, notes, setNotes }: Supplementar
   const id = useId();
   return (
     <div className="report-notes">
-      <label htmlFor={id}>Supplementary Data</label>
+      {/* On screen it reads "Optional" under the visitor table; screen readers hear "Report notes, Optional". */}
+      <label htmlFor={id}>
+        <span className="sr-only">Report notes, </span>
+        Optional
+      </label>
       <textarea
         id={id}
         value={notes}

@@ -192,19 +192,27 @@ describe("TANAW's review state and refused reports", () => {
       reopenedAt: "2026-11-06T00:00:00Z",
       origins: { "2026-10-10": origins(1) },
     };
-    const rows = buildLedgerRows({
-      currentDemo: emptyDemo(),
-      currentOrigins: {},
-      currentMetrics: { entries: null, exits: null, peak: null, unique: 0 },
-      currentNotes: "",
-      currentPeriod: "November 2026",
-      pendingCounts: [{ period: "October 2026", reportId: "PENDING-2026-10", entries: 2, exits: 2, peakOccupancy: 1, uniqueCount: 2, counting }],
-      reportsHistory: [reopened],
-    });
-    const october = rows.filter((row) => row.report.period === "October 2026");
+    const ledger = (now: Date) =>
+      buildLedgerRows({
+        currentDemo: emptyDemo(),
+        currentOrigins: {},
+        currentMetrics: { entries: null, exits: null, peak: null, unique: 0 },
+        currentNotes: "",
+        currentPeriod: "November 2026",
+        pendingCounts: [{ period: "October 2026", reportId: "PENDING-2026-10", entries: 2, exits: 2, peakOccupancy: 1, uniqueCount: 2, counting }],
+        reportsHistory: [reopened],
+        now,
+      });
+    // October's report is due November 10: Pending until then, Missing after.
+    const beforeDue = ledger(new Date("2026-11-06T04:00:00Z")).filter((row) => row.report.period === "October 2026");
+    expect(beforeDue.map((row) => [row.kind, row.statusLabel])).toEqual([
+      ["pending", "Pending"],
+      ["history", "Pending"],
+    ]);
+    const october = ledger(new Date("2026-11-28T04:00:00Z")).filter((row) => row.report.period === "October 2026");
     expect(october.map((row) => [row.kind, row.statusLabel])).toEqual([
-      ["pending", "Being corrected"],
-      ["history", "Not accepted"],
+      ["pending", "Missing"],
+      ["history", "Missing"],
     ]);
     expect(october[0].report.origins).toEqual(reopened.origins);
     expect(october[1].reportDescription).toBe("Not accepted by TANAW: Too many foreign visitors.");

@@ -114,7 +114,7 @@ test("the whole account menu row responds at either edge in both themes", async 
 test("integrates IT settings and help routes with browser history at enlarged text", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await mockPortal(page, "it");
-  await page.goto("/it/dashboard");
+  await page.goto("/it/requests");
   await expect(page.locator("html")).toHaveCSS("font-size", "20px");
   await expect(page.getByRole("button", { name: /Switch to .* mode/ })).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "Open account menu" });
@@ -140,7 +140,7 @@ test("integrates IT settings and help routes with browser history at enlarged te
   await expect(page.getByRole("button", { name: "System Settings" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Requests", exact: true })).toHaveCount(0);
   await page.goBack();
-  await expect(page).toHaveURL(/\/it\/dashboard$/);
+  await expect(page).toHaveURL(/\/it\/requests$/);
   await page.goForward();
   await expect(page).toHaveURL(/\/it\/settings\/profile$/);
   await page.getByRole("button", { name: "Appearance" }).click();
@@ -155,7 +155,7 @@ test("integrates IT settings and help routes with browser history at enlarged te
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("[data-topbar-theme]")).toHaveAttribute("data-topbar-theme", "dark");
   await page.getByRole("button", { name: "Back from General Settings" }).click();
-  await expect(page).toHaveURL(/\/it\/dashboard$/);
+  await expect(page).toHaveURL(/\/it\/requests$/);
   await page.getByRole("button", { name: "Open account menu" }).click();
   await page.getByRole("button", { name: "Help Center" }).click();
   await expect(page).toHaveURL(/\/it\/help$/);

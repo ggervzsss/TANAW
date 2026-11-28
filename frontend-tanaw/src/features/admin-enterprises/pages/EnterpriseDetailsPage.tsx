@@ -404,12 +404,12 @@ function Figures({
     <dl className="mt-6 grid grid-cols-4 border-y border-(--tanaw-border-soft) max-[1100px]:grid-cols-2">
       <Figure index={0} title="Cameras" sub="online right now" now={!live} value={camerasValue} valueClass={camerasShort ? "text-(--tanaw-st-missing)" : undefined} note={camerasNote} noteClass={camerasShort || camera.state === "offline" ? "font-semibold text-(--tanaw-st-missing)" : undefined} />
       {total === null ? (
-        <Figure index={1} title="Visitors today" sub="estimated unique visitors" value={visitorsValue} note={visitorsNote} />
+        <Figure index={1} title="Visitors today" sub="unique visitors" value={visitorsValue} note={visitorsNote} />
       ) : (
         <Figure
           index={1}
           title="Visitors"
-          sub={`estimated unique visitors ${phrase}`}
+          sub={`unique visitors ${phrase}`}
           value={total === "loading" ? <Skeleton className="h-8.5 w-28" label="Loading visitors" /> : total === "error" || total.value === null ? "—" : formatCount(total.value)}
           note={total === "loading" ? null : total === "error" ? "Visitor totals could not be loaded" : total.note}
         />

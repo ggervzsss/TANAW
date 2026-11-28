@@ -24,6 +24,7 @@ from app.features.accounts.models import (
     EnterpriseProfile,
 )
 from app.features.realtime.models import RealtimeOutbox
+from app.features.reporting import final_reports as final_reports_module
 from app.features.reporting import router as reporting_router
 from app.features.reporting.counting import snapshot_digest
 from app.features.reporting.errors import (
@@ -35,6 +36,7 @@ from app.features.reporting.final_reports import (
     create_final_report,
     list_final_reports,
     to_final_report_summary,
+    update_final_report_status,
 )
 from app.features.reporting.intake import (
     ingest_report_submission,
@@ -49,6 +51,7 @@ from app.features.reporting.models import (
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     FinalReportCreate,
+    FinalReportStatusUpdate,
     FinalReportSummary,
     IntakeReportSummary,
     ReportStatusUpdate,
@@ -95,6 +98,19 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
             AsyncMock(return_value=None),
         )
         yield runtime
+
+
+@pytest.fixture
+def enterprise_roster(monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    """The active enterprises a month's consolidated report waits for. The shared test database
+    may hold other active enterprises, so tests that check Draft and Finalized name their own."""
+    roster: set[str] = set()
+
+    async def active_enterprise_ids(_db: AsyncSession) -> set[str]:
+        return set(roster)
+
+    monkeypatch.setattr(final_reports_module, "active_enterprise_ids", active_enterprise_ids)
+    return roster
 
 
 async def _clean_rows(runtime: PostgresRuntime) -> None:
@@ -285,12 +301,13 @@ async def _consolidate(
     report_ids: list[str],
     *,
     prepared_by: str,
+    period: str | None = None,
 ) -> FinalReportSummary:
     async with runtime.sessions() as db:
         try:
             report = await create_final_report(
                 db,
-                FinalReportCreate(reportIds=report_ids, preparedBy=prepared_by),
+                FinalReportCreate(reportIds=report_ids, preparedBy=prepared_by, period=period),
             )
             assert report is not None
             await db.commit()
@@ -664,7 +681,7 @@ async def test_source_cannot_be_added_to_a_second_final_report(
         duplicate_final = FinalReport(
             report_code=f"CON-TEST-{uuid4().hex[:12]}",
             title="Database uniqueness verification",
-            period="June 2026",
+            period="June 2026 source constraint",
             generated_on=datetime.now(UTC),
             prepared_by=f"{TEST_PREPARED_BY_PREFIX} Direct Constraint",
             prepared_role="Staff Processing Division",
@@ -794,13 +811,16 @@ async def test_concurrent_disjoint_final_reports_receive_unique_codes(
     enterprises = [
         await _create_enterprise(postgres_runtime, label=f"code-{index}") for index in range(2)
     ]
+    # Different months: a month's consolidations all go into its one report.
     reports = [
         await _ready_report(
             postgres_runtime,
             enterprise,
-            _submission(f"REP-CODE-{index}", "June 2026"),
+            _submission(f"REP-CODE-{index}", period),
         )
-        for index, enterprise in enumerate(enterprises)
+        for index, (enterprise, period) in enumerate(
+            zip(enterprises, ["June 2026", "May 2026"], strict=True)
+        )
     ]
 
     finals = await asyncio.gather(
@@ -814,7 +834,258 @@ async def test_concurrent_disjoint_final_reports_receive_unique_codes(
         ]
     )
     assert len({report.id for report in finals}) == 2
-    assert all(report.id.startswith("CON-JUN-2026-") for report in finals)
+    assert sorted(report.id[:12] for report in finals) == ["CON-JUN-2026", "CON-MAY-2026"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_consolidations_of_one_month_add_to_one_report(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    enterprises = [
+        await _create_enterprise(postgres_runtime, label=f"month-race-{index}")
+        for index in range(3)
+    ]
+    enterprise_roster.update(enterprise.id for enterprise in enterprises)
+    reports = [
+        await _ready_report(
+            postgres_runtime,
+            enterprise,
+            _submission(f"REP-MONTH-RACE-{index}", "June 2026"),
+        )
+        for index, enterprise in enumerate(enterprises[:2])
+    ]
+
+    finals = await asyncio.gather(
+        *[
+            _consolidate(
+                postgres_runtime,
+                [report.id],
+                prepared_by=f"{TEST_PREPARED_BY_PREFIX} Month Race {index}",
+            )
+            for index, report in enumerate(reports)
+        ]
+    )
+
+    assert len({report.id for report in finals}) == 1
+    latest = max(finals, key=lambda report: len(report.sources))
+    assert {source.id for source in latest.sources} == {report.id for report in reports}
+    assert latest.status == "Draft"
+    assert (latest.enterpriseCount, latest.enterpriseTotal) == (2, 3)
+
+
+@pytest.mark.asyncio
+async def test_incomplete_month_consolidates_into_a_draft(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    accepted_enterprise = await _create_enterprise(postgres_runtime, label="draft-accepted")
+    pending_enterprise = await _create_enterprise(postgres_runtime, label="draft-pending")
+    silent_enterprise = await _create_enterprise(postgres_runtime, label="draft-silent")
+    enterprise_roster.update({accepted_enterprise.id, pending_enterprise.id, silent_enterprise.id})
+    accepted = await _ready_report(
+        postgres_runtime,
+        accepted_enterprise,
+        _submission("REP-DRAFT-001", "June 2026", unique_count=6),
+    )
+    pending = await _ingest(
+        postgres_runtime,
+        pending_enterprise,
+        _submission("REP-DRAFT-002", "June 2026", unique_count=9),
+    )
+
+    draft = await _consolidate(
+        postgres_runtime, [accepted.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} Draft"
+    )
+
+    assert draft.status == "Draft"
+    assert (draft.enterpriseCount, draft.enterpriseTotal) == (1, 3)
+    assert draft.totalUnique == 6
+    assert draft.generatedAt <= draft.updatedAt
+    async with postgres_runtime.sessions() as db:
+        stored_accepted = await db.get(EnterpriseReportSubmission, accepted.id)
+        stored_pending = await db.get(EnterpriseReportSubmission, pending.id)
+        assert stored_accepted is not None and stored_accepted.review_status == "Consolidated"
+        assert stored_pending is not None and stored_pending.review_status == "Pending Review"
+
+
+@pytest.mark.asyncio
+async def test_draft_takes_newly_accepted_reports_and_finalizes_when_complete(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    enterprises = [
+        await _create_enterprise(postgres_runtime, label=f"draft-update-{index}")
+        for index in range(3)
+    ]
+    enterprise_roster.update(enterprise.id for enterprise in enterprises)
+    first = await _ready_report(
+        postgres_runtime,
+        enterprises[0],
+        _submission("REP-UPDATE-001", "June 2026", unique_count=6),
+    )
+    draft = await _consolidate(
+        postgres_runtime, [first.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} Update"
+    )
+    assert draft.status == "Draft"
+
+    second = await _ready_report(
+        postgres_runtime,
+        enterprises[1],
+        _submission("REP-UPDATE-002", "June 2026", unique_count=9),
+    )
+    updated = await _consolidate(
+        postgres_runtime, [second.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} Update Again"
+    )
+    assert updated.id == draft.id
+    assert updated.status == "Draft"
+    assert (updated.enterpriseCount, updated.enterpriseTotal) == (2, 3)
+    assert updated.totalUnique == 15
+    assert {source.id for source in updated.sources} == {first.id, second.id}
+    assert updated.generatedAt == draft.generatedAt
+    assert updated.updatedAt >= draft.updatedAt
+    # The draft keeps the staff member who first generated it.
+    assert updated.preparedBy == draft.preparedBy
+
+    third = await _ready_report(
+        postgres_runtime,
+        enterprises[2],
+        _submission("REP-UPDATE-003", "June 2026", unique_count=4),
+    )
+    final = await _consolidate(
+        postgres_runtime, [third.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} Finalize"
+    )
+    assert final.id == draft.id
+    assert final.status == "Finalized"
+    assert (final.enterpriseCount, final.enterpriseTotal) == (3, 3)
+    assert final.totalUnique == 19
+
+    with pytest.raises(ReportAlreadyConsolidatedError, match="already final"):
+        await _consolidate(
+            postgres_runtime,
+            [],
+            prepared_by=f"{TEST_PREPARED_BY_PREFIX} Too Late",
+            period="June 2026",
+        )
+
+
+@pytest.mark.asyncio
+async def test_complete_month_is_finalized_at_once(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    enterprises = [
+        await _create_enterprise(postgres_runtime, label=f"complete-{index}") for index in range(2)
+    ]
+    enterprise_roster.update(enterprise.id for enterprise in enterprises)
+    reports = [
+        await _ready_report(
+            postgres_runtime, enterprise, _submission(f"REP-COMPLETE-{index}", "June 2026")
+        )
+        for index, enterprise in enumerate(enterprises)
+    ]
+
+    final = await _consolidate(
+        postgres_runtime,
+        [report.id for report in reports],
+        prepared_by=f"{TEST_PREPARED_BY_PREFIX} Complete",
+    )
+
+    assert final.status == "Finalized"
+    assert (final.enterpriseCount, final.enterpriseTotal) == (2, 2)
+
+
+@pytest.mark.asyncio
+async def test_draft_is_finalized_by_month_when_nothing_is_left_to_add(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    reporting = await _create_enterprise(postgres_runtime, label="by-month-reporting")
+    closed = await _create_enterprise(postgres_runtime, label="by-month-closed")
+    enterprise_roster.update({reporting.id, closed.id})
+    report = await _ready_report(
+        postgres_runtime, reporting, _submission("REP-BY-MONTH-001", "June 2026")
+    )
+    draft = await _consolidate(
+        postgres_runtime, [report.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} By Month"
+    )
+    assert draft.status == "Draft"
+
+    # The enterprise that never reported is deactivated, so the month is now complete.
+    enterprise_roster.discard(closed.id)
+    final = await _consolidate(
+        postgres_runtime,
+        [],
+        prepared_by=f"{TEST_PREPARED_BY_PREFIX} By Month Final",
+        period="June 2026",
+    )
+    assert final.id == draft.id
+    assert final.status == "Finalized"
+    assert (final.enterpriseCount, final.enterpriseTotal) == (1, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_month_keeps_one_open_consolidated_report(
+    postgres_runtime: PostgresRuntime,
+    enterprise_roster: set[str],
+) -> None:
+    enterprises = [
+        await _create_enterprise(postgres_runtime, label=f"one-open-{index}") for index in range(3)
+    ]
+    enterprise_roster.update(enterprise.id for enterprise in enterprises)
+    first = await _ready_report(
+        postgres_runtime, enterprises[0], _submission("REP-ONE-OPEN-001", "June 2026")
+    )
+    draft = await _consolidate(
+        postgres_runtime, [first.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} One Open"
+    )
+
+    async with postgres_runtime.sessions() as db:
+        archived = await update_final_report_status(
+            db, draft.id, FinalReportStatusUpdate(status="Archived")
+        )
+        assert archived is not None and archived.status == "Archived"
+        await db.commit()
+
+    second = await _ready_report(
+        postgres_runtime, enterprises[1], _submission("REP-ONE-OPEN-002", "June 2026")
+    )
+    replacement = await _consolidate(
+        postgres_runtime, [second.id], prepared_by=f"{TEST_PREPARED_BY_PREFIX} One Open Again"
+    )
+    assert replacement.id != draft.id
+    assert replacement.status == "Draft"
+
+    async with postgres_runtime.sessions() as db:
+        with pytest.raises(InvalidReportWorkflowError, match="already has a consolidated report"):
+            await update_final_report_status(db, draft.id, FinalReportStatusUpdate(status="Draft"))
+        await db.rollback()
+
+    async with postgres_runtime.sessions() as db:
+        with pytest.raises(InvalidReportWorkflowError, match="generating it again from Reports"):
+            await update_final_report_status(
+                db, replacement.id, FinalReportStatusUpdate(status="Finalized")
+            )
+        await db.rollback()
+
+    async with postgres_runtime.sessions() as db:
+        db.add(
+            FinalReport(
+                report_code=f"CON-TEST-{uuid4().hex[:12]}",
+                title="Open period uniqueness verification",
+                period="June 2026",
+                generated_on=datetime.now(UTC),
+                prepared_by=f"{TEST_PREPARED_BY_PREFIX} Open Period Constraint",
+                prepared_role="Staff Processing Division",
+                status="Draft",
+                total_unique=0,
+                enterprise_count=0,
+                enterprise_total=0,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db.flush()
+        await db.rollback()
 
 
 @pytest.mark.asyncio

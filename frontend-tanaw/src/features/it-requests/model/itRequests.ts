@@ -1,7 +1,7 @@
 import { compareNewestFirst, philippineDayKey, requestPlace } from "@/features/alerts-monitor/model";
 import type { EnterpriseHealth } from "@/shared/services/enterpriseHealth";
 import { REQUEST_GROUPS, type AccountChange, type Request, type RequestDetail, type RequestGroup } from "@/shared/services/requests";
-import { formatPhilippineDate, formatPhilippineDateAndTime, formatPhilippineTime, type SystemDateFormat, type SystemTimeFormat } from "@/shared/utils/dateTime";
+import { formatPhilippineDateAndTime, formatPhilippineTime, type SystemDateFormat, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 /*
  * IT Requests (`/it/requests`): help and approval requests from enterprises and the sign-in page.
@@ -13,18 +13,17 @@ export const REQUEST_PARAM = "request";
 export const SEARCH_PARAM = "q";
 export const TYPE_PARAM = "type";
 export const STATUS_PARAM = "status";
-export const OWNER_PARAM = "owner";
+/** The retired Handled by filter. Old addresses with it still load; it is ignored and dropped. */
+export const RETIRED_OWNER_PARAM = "owner";
 
 // Filters
 
 export type StatusFilter = "open" | "not-picked-up" | "in-progress" | "resolved" | "approved" | "all";
 export type TypeFilter = "all" | RequestGroup;
-/** "anyone", "me", or an IT person's account ID. */
-export type OwnerFilter = string;
 
-export type ItRequestFilters = { query: string; type: TypeFilter; status: StatusFilter; owner: OwnerFilter };
+export type ItRequestFilters = { query: string; type: TypeFilter; status: StatusFilter };
 
-export const defaultFilters: ItRequestFilters = { query: "", type: "all", status: "open", owner: "anyone" };
+export const defaultFilters: ItRequestFilters = { query: "", type: "all", status: "open" };
 
 export const statusFilterOptions: ReadonlyArray<readonly [StatusFilter, string]> = [
   ["open", "Open"],
@@ -54,35 +53,31 @@ export function typeFromSlug(slug: string | null): TypeFilter {
   return REQUEST_GROUPS.find((group) => TYPE_SLUGS[group] === slug) ?? "all";
 }
 
-/** The filters in the address; anything unknown falls back to the default. */
+/** The filters in the address; anything unknown (or retired, such as `owner`) falls back to the default. */
 export function parseFilters(params: URLSearchParams): ItRequestFilters {
   const status = params.get(STATUS_PARAM);
-  const owner = params.get(OWNER_PARAM)?.trim();
   return {
     query: params.get(SEARCH_PARAM) ?? "",
     type: typeFromSlug(params.get(TYPE_PARAM)),
     status: statusFilterOptions.some(([value]) => value === status) ? (status as StatusFilter) : defaultFilters.status,
-    owner: owner || defaultFilters.owner,
   };
 }
 
-/** The address with these filters, keeping other parameters (such as the selected request). Defaults are left out. */
+/** The address with these filters, keeping other parameters (such as the selected request). Defaults and retired filters are left out. */
 export function filtersToParams(filters: ItRequestFilters, current: URLSearchParams) {
   const next = new URLSearchParams(current);
   const set = (key: string, value: string, fallback: string) => (value && value !== fallback ? next.set(key, value) : next.delete(key));
   set(SEARCH_PARAM, filters.query, "");
   set(TYPE_PARAM, typeSlug(filters.type), "all");
   set(STATUS_PARAM, filters.status, defaultFilters.status);
-  set(OWNER_PARAM, filters.owner, defaultFilters.owner);
+  next.delete(RETIRED_OWNER_PARAM);
   return next;
 }
 
-export function hasActiveFilters(filters: ItRequestFilters) {
-  return filters.query.trim() !== "" || filters.type !== "all" || filters.status !== "all" || filters.owner !== "anyone";
+/** How many filters differ from the default view (a search counts as one). */
+export function activeFilterCount(filters: ItRequestFilters) {
+  return [filters.query.trim() !== "", filters.type !== defaultFilters.type, filters.status !== defaultFilters.status].filter(Boolean).length;
 }
-
-/** "Clear filters" shows every request. */
-export const clearedFilters: ItRequestFilters = { query: "", type: "all", status: "all", owner: "anyone" };
 
 // Status
 
@@ -125,17 +120,16 @@ export const stateDotClass: Record<RequestState, string> = {
   resolved: "bg-(--tanaw-text-secondary)",
 };
 
+/** A row's progress: "Not picked up yet", or the status and who has it ("In progress" and "You"). */
+export function requestProgress(request: Pick<Request, "status" | "handledBy">, viewer: Viewer): { state: RequestState; label: string; owner: string } {
+  const state = requestState(request);
+  return { state, label: state === "not-picked-up" ? "Not picked up yet" : stateLabels[state], owner: ownerShort(request, viewer) };
+}
+
 export function matchesStatus(request: Pick<Request, "status" | "handledBy">, status: StatusFilter) {
   if (status === "all") return true;
   if (status === "open") return isOpenRequest(request);
   return requestState(request) === status;
-}
-
-export function matchesOwner(request: Pick<Request, "handledBy">, owner: OwnerFilter, meId: string | null) {
-  if (owner === "anyone") return true;
-  const handlerId = request.handledBy?.accountId ?? null;
-  if (owner === "me") return Boolean(meId) && handlerId === meId;
-  return handlerId === owner;
 }
 
 export function matchesQuery(request: Request, query: string) {
@@ -144,38 +138,16 @@ export function matchesQuery(request: Request, query: string) {
   return [request.title, request.code, requestPlace(request), request.requesterName, request.enterpriseName ?? "", request.group, request.description].join(" ").toLowerCase().includes(needle);
 }
 
-/** The requests these filters show, newest first. */
-export function filterItRequests(requests: readonly Request[], filters: ItRequestFilters, meId: string | null) {
+/** Open requests before closed ones, each newest first. */
+export function compareOpenThenNewest(left: Request, right: Request) {
+  return Number(isOpenRequest(right)) - Number(isOpenRequest(left)) || compareNewestFirst(left, right);
+}
+
+/** The requests these filters show: open first, then newest first. */
+export function filterItRequests(requests: readonly Request[], filters: ItRequestFilters) {
   return requests
-    .filter(
-      (request) =>
-        (filters.type === "all" || request.group === filters.type) && matchesStatus(request, filters.status) && matchesOwner(request, filters.owner, meId) && matchesQuery(request, filters.query),
-    )
-    .sort(compareNewestFirst);
-}
-
-/** Handled by: Anyone, Me, then each other IT person seen handling a request, by name. */
-export function ownerFilterOptions(requests: readonly Request[], meId: string | null, selected: OwnerFilter = "anyone"): Array<readonly [string, string]> {
-  const people = new Map<string, string>();
-  for (const request of requests) {
-    const handler = request.handledBy;
-    if (handler && handler.accountId !== meId && !people.has(handler.accountId)) people.set(handler.accountId, handler.name);
-  }
-  const options: Array<readonly [string, string]> = [["anyone", "Anyone"], ["me", "Me"], ...[...people.entries()].sort((left, right) => left[1].localeCompare(right[1]))];
-  if (!options.some(([value]) => value === selected)) options.push([selected, "Another IT person"]);
-  return options;
-}
-
-export function countNotPickedUp(requests: readonly Pick<Request, "status" | "handledBy">[]) {
-  return requests.filter(isNotPickedUp).length;
-}
-
-export function notPickedUpLabel(count: number) {
-  return count === 0 ? "Every request is picked up" : `${count} not picked up yet`;
-}
-
-export function listSummary(count: number) {
-  return `${count} ${count === 1 ? "request" : "requests"}, newest first.`;
+    .filter((request) => (filters.type === "all" || request.group === filters.type) && matchesStatus(request, filters.status) && matchesQuery(request, filters.query))
+    .sort(compareOpenThenNewest);
 }
 
 /** The selected request from `?request=` (ID or reference number). */
@@ -186,28 +158,6 @@ export function findSelectedRequest(requests: readonly Request[], params: URLSea
 
 // Days and times
 
-export type RequestDayGroup = { key: string; label: string; requests: Request[] };
-
-/** Requests under day headings: Today, Yesterday, then the date in the system date format. */
-export function groupByDay(requests: readonly Request[], now: Date, dateFormat: SystemDateFormat): RequestDayGroup[] {
-  const today = philippineDayKey(now);
-  const yesterday = philippineDayKey(new Date(now.getTime() - 86_400_000));
-  const groups = new Map<string, RequestDayGroup>();
-  for (const request of requests) {
-    const date = new Date(request.createdAt);
-    const valid = !Number.isNaN(date.getTime());
-    const key = valid ? philippineDayKey(date) : "undated";
-    let group = groups.get(key);
-    if (!group) {
-      const label = !valid ? "Date unavailable" : key === today ? "Today" : key === yesterday ? "Yesterday" : formatPhilippineDate(date, dateFormat);
-      group = { key, label, requests: [] };
-      groups.set(key, group);
-    }
-    group.requests.push(request);
-  }
-  return [...groups.values()];
-}
-
 /** "Just now", "3:15 PM" today, or the date and time on other days. */
 export function formatWhen(value: string | null | undefined, now: Date, dateFormat: SystemDateFormat, timeFormat: SystemTimeFormat) {
   if (!value) return "";
@@ -216,6 +166,16 @@ export function formatWhen(value: string | null | undefined, now: Date, dateForm
   const age = now.getTime() - date.getTime();
   if (age >= 0 && age < 60_000) return "Just now";
   if (philippineDayKey(date) === philippineDayKey(now)) return formatPhilippineTime(date, timeFormat);
+  return formatPhilippineDateAndTime(date, dateFormat, timeFormat);
+}
+
+/** When a request arrived, for its row: "3:15 PM" today, "Yesterday, 3:15 PM", then the date and time. */
+export function formatReceived(value: string | null | undefined, now: Date, dateFormat: SystemDateFormat, timeFormat: SystemTimeFormat) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Date unavailable";
+  const day = philippineDayKey(date);
+  if (day === philippineDayKey(now)) return formatPhilippineTime(date, timeFormat);
+  if (day === philippineDayKey(new Date(now.getTime() - 86_400_000))) return `Yesterday, ${formatPhilippineTime(date, timeFormat)}`;
   return formatPhilippineDateAndTime(date, dateFormat, timeFormat);
 }
 

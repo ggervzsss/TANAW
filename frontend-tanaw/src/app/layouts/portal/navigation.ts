@@ -52,7 +52,6 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
     },
   ],
   it: [
-    { id: "dashboard", label: "Overview", path: routes.it.dashboard, icon: LayoutDashboard },
     { id: "requests", label: "Requests", path: routes.it.requests, icon: Inbox },
     { id: "enterprises", label: "Enterprises", path: routes.it.enterprises, icon: Building2 },
     { id: "personnel", label: "LGU Personnel", path: routes.it.personnel, icon: Users },

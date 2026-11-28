@@ -96,7 +96,7 @@ test("recovers camera hydration after service startup and restores live updates 
   };
   const emit = (payload: unknown) => page.evaluate((detail) => window.dispatchEvent(new CustomEvent("e2e-ml-live-event", { detail })), payload);
   await emit(envelope);
-  const performance = page.locator(".camera-page-heading").getByText(/11\.7 AI FPS/);
+  const performance = page.locator(".camera-metrics-footer").getByText(/11\.7 AI FPS/);
   await expect(performance).toBeVisible({ timeout: 1000 });
   const box = page.locator('[data-track-id="7"]');
   await expect(box).toBeVisible();
@@ -337,7 +337,7 @@ test("sets up Tapo, Tenda and custom RTSP cameras from the IP address alone", as
   expect(writes.at(-1)?.cameras[2]?.rtsp).toBe("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
   expect(writes.at(-1)?.cameras[0]?.rtsp).toBe("rtsp://192.168.1.20/stream2");
   expect(JSON.stringify(writes)).not.toContain("device-password");
-  await page.getByRole("button", { name: /New Tenda CH3/ }).click();
+  await page.getByRole("button", { name: /^New Tenda CH3/ }).click();
   await page.getByRole("button", { name: "Edit configuration" }).click();
   await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Camera IP Address", exact: true })).toHaveValue("192.168.1.21");

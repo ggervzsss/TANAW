@@ -205,8 +205,15 @@ export function var2mPdfPages(form: Var2mForm): PdfPage[] {
   });
 }
 
-export function finishVarPdfPages(pages: PdfPage[], reference = "") {
-  pages.forEach((page, index) => pageFooter(page, index, pages.length, reference));
+/**
+ * Adds the footer to each page. A draft also carries `draft` in the top margin and its footer,
+ * outside the official DOT grid, so a printed draft is never taken for the final report.
+ */
+export function finishVarPdfPages(pages: PdfPage[], reference = "", options: { draft?: string } = {}) {
+  pages.forEach((page, index) => {
+    pageFooter(page, index, pages.length, options.draft ? `${reference}${reference ? " - " : ""}${options.draft}` : reference);
+    if (options.draft) pdfText(page, options.draft, VAR_PAGE.width - VAR_PAGE.margin - 260, VAR_PAGE.height - 22, 9, { bold: true, align: "right", width: 260 });
+  });
   return pages.map((page) => page.join("\n"));
 }
 

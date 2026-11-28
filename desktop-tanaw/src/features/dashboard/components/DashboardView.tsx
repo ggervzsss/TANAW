@@ -1,7 +1,12 @@
 import { FlaskConical } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Camera, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import { useNavigate } from "react-router-dom";
+import { routePaths } from "../../../app/router/routePaths";
 import { DotFormModal } from "../../reports/components/DotFormModal";
+import { ReportDraftActions } from "../../reports/components/ReportDraftActions";
+import { isSubmittedStatus, reportingStatus } from "../../reports/model/report-status";
+import { sentReportBlocker } from "../../reports/model/report-preview";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import { useAuthStore } from "../../login/stores/auth-store";
@@ -11,16 +16,13 @@ import { sampleDashboard } from "../sample/sample-dashboard";
 import { useEstablishmentAnalytics } from "../hooks/useEstablishmentAnalytics";
 import { useUsualBaseline } from "../hooks/useUsualBaseline";
 import { useCameraStatusTimes } from "../hooks/useCameraStatusTimes";
-import { joinNames } from "../utils/camera-status";
-import { isCameraCounting } from "../utils/establishment";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
-import type { TrafficPoint } from "../types/dashboard";
 import { useAssistantStore } from "../stores/assistant-store";
 import type { DashboardRange } from "../types/dashboard";
 import { assistantFilter, businessDate, dayStartMs, isSingleDay, presetRange, rangeLength, rangePhrase, weekdayName } from "../utils/dashboard-range";
 import { emptyDemo, metricsFromReport } from "../utils/reportLedger";
 import { loadLocalReportLedger } from "../services/report-ledger";
-import { BUCKET_HOURS, busiestIndex, dailyTraffic, dayChangeFromUsual, describeChange, hourlyTraffic, rangeChangeFromBefore } from "../utils/traffic";
+import { BUCKET_HOURS, busiestIndex, dailyTraffic, dayChangeFromUsual, describeChange, hourlyTraffic, rangeChangeFromBefore, todaySoFar } from "../utils/traffic";
 import { DashboardHeader } from "./DashboardHeader";
 import { EstablishmentMetrics } from "./EstablishmentMetrics";
 import { MonitoredLocations } from "./MonitoredLocations";
@@ -28,7 +30,17 @@ import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
 import { VisitorTrafficChart } from "./VisitorTrafficChart";
 import "../dashboard.css";
 
-type DotPreviewState = { attractionType?: string; enterpriseId: string | null | undefined; demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
+type DotPreviewState = {
+  attractionType?: string;
+  enterpriseId: string | null | undefined;
+  demo: DemoBreakdown;
+  metrics: Metrics;
+  notes: string;
+  period: SystemLogPeriod;
+  reportId: string;
+  /** Submit Form, with what blocks it, until TANAW holds the report; then null (Print and Download PDF). */
+  submit: { blocker: string | null } | null;
+};
 
 /** The clock, refreshed each minute so "today" and the period in progress stay current. */
 function useMinuteClock() {
@@ -69,7 +81,6 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const hourly = sample ? sample.hourly : real.hourly;
   const usualHours = sample ? sample.usualHours : realUsual.usualHours;
   const usualDays = sample ? sample.usualDays : realUsual.usualDays;
-  const updatedAt = sample ? now : real.updatedAt;
   const error = sample ? null : real.error;
   const loading = sample ? false : real.loading;
   const { timeFormat } = useSystemDisplayPreferences();
@@ -81,6 +92,7 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const reportsLoading = !sample && ledger === null && ledgerError === null;
   const [preview, setPreview] = useState<DotPreviewState | null>(null);
+  const navigate = useNavigate();
   usePersistentIssue({ id: "dashboard-report-previews", message: ledgerError, title: "Report previews unavailable", tone: "warning" });
 
   const refreshReports = useCallback(() => loadLocalReportLedger(enterpriseId), [enterpriseId]);
@@ -123,16 +135,8 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const points = useMemo(() => {
     if (!single) return dailyTraffic(summary, usualDays, range, rangeLength(range) > 8);
     if (elapsedHours === null) return hourlyTraffic(hourly, usualHours, timeFormat);
-    // Today is live: every period so far is on the chart, a period with no entries reads as zero
-    // (a flat bar and the line at the floor), and the period in progress carries the occupancy the
-    // cameras read right now. Periods that have not started show what usually comes, not gaps.
-    const nowBucket = Math.floor(elapsedHours / BUCKET_HOURS) * BUCKET_HOURS;
-    return hourlyTraffic(hourly, usualHours, timeFormat, Math.floor(elapsedHours)).map((point) => {
-      const start = Number(point.key.slice(1));
-      if (start > elapsedHours) return { ...point, later: true };
-      const occupancy = start === nowBucket && liveOccupancy !== null ? liveOccupancy : (point.occupancy ?? 0);
-      return { ...point, entries: point.entries ?? 0, occupancy, later: false };
-    });
+    // Today is live: the chart runs to the period under way and never into hours still to come.
+    return todaySoFar(hourlyTraffic(hourly, usualHours, timeFormat, Math.floor(elapsedHours)), elapsedHours, liveOccupancy);
   }, [single, hourly, usualHours, timeFormat, summary, usualDays, range, elapsedHours, liveOccupancy]);
   const busiest = busiestIndex(points);
   const changePercent = single ? dayChangeFromUsual(points, elapsedHours) : rangeChangeFromBefore(summary, usualDays, range, today);
@@ -144,27 +148,6 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
   const todayStart = dayStartMs(today);
   const timeOf = (at: number) => formatPhilippineDateTime(at, timeFormat, { timeStyle: "short" });
   const formatSince = (at: number) => (at >= todayStart ? timeOf(at) : formatPhilippineDateTime(at, timeFormat, { dateStyle: "medium" }));
-  // Cameras not counting now, and since when today, for the captions that say what totals leave out.
-  const stopped = live ? cameras.filter((camera) => !isCameraCounting(camera.id, live)) : [];
-  const stoppedNames = joinNames(stopped.map((camera) => camera.name));
-  const outageTimes = stopped.map((camera) => marks[String(camera.id)]).filter((mark) => mark && !mark.counting).map((mark) => mark.since);
-  const outageSince = outageTimes.length ? Math.max(todayStart, Math.min(...outageTimes)) : null;
-  const affectsRange = stopped.length > 0 && range.to === today;
-  const cameraWord = stopped.length > 1 ? "cameras" : "camera";
-  const outageNote = affectsRange ? `${stoppedNames} not counted${outageSince !== null ? ` since ${timeOf(outageSince)}` : ""}` : null;
-  const footnote = !affectsRange
-    ? null
-    : outageSince !== null
-      ? `Counts after ${timeOf(outageSince)} today leave out the ${stoppedNames} ${cameraWord}.`
-      : `Counts leave out the ${stoppedNames} ${cameraWord}.`;
-  const partialNote = (point: TrafficPoint) => {
-    if (!affectsRange) return null;
-    if (!single) return point.key === today ? `Leaves out the ${stoppedNames}` : null;
-    if (!isToday) return null;
-    const periodEnd = todayStart + (Number(point.key.slice(1)) + BUCKET_HOURS) * 3_600_000;
-    return outageSince === null || periodEnd > outageSince ? `Leaves out the ${stoppedNames}` : null;
-  };
-  const updatedLabel = updatedAt === null || now - updatedAt < 60_000 ? "a few seconds ago" : timeOf(updatedAt);
 
   return (
     <div className="overview-layout dash">
@@ -178,7 +161,19 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
             notes={preview.notes}
             period={preview.period}
             reportId={preview.reportId}
-            validationMessage={getDemographicAllocationStatus(preview.demo, preview.metrics.unique).validationMessage}
+            validationMessage={!preview.submit ? getDemographicAllocationStatus(preview.demo, preview.metrics.unique).validationMessage : null}
+            actions={
+              preview.submit && (
+                <ReportDraftActions
+                  label="Submit Form"
+                  isReadOnly={false}
+                  isPeriodChanging={false}
+                  metricsError={null}
+                  validationError={preview.submit.blocker}
+                  onSubmitPrompt={() => navigate(routePaths.enterpriseReports)}
+                />
+              )
+            }
             onClose={() => setPreview(null)}
           />
         )}
@@ -206,13 +201,9 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
             cameras={cameras}
             summary={summary}
             live={live}
-            points={points}
-            change={{ text: changeText, percent: changePercent }}
             range={range}
             today={today}
             loading={loading}
-            outageNote={outageNote}
-            updatedLabel={updatedLabel}
           />
         </div>
         <div className="dash-split">
@@ -222,8 +213,6 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
             summary={chartSummary}
             inProgressKey={inProgressKey}
             isLive={isToday}
-            partialNote={partialNote}
-            footnote={footnote}
             loading={loading}
             unavailable={Boolean(error)}
           />
@@ -236,7 +225,17 @@ export function DashboardView({ enterpriseName, cameras: liveCameras = [] }: { e
           reports={reports}
           loading={reportsLoading}
           onPreviewReport={(report) =>
-            setPreview({ enterpriseId, attractionType: report.attractionType, demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id })
+            setPreview({
+              enterpriseId,
+              attractionType: report.attractionType,
+              demo: report.demo ?? emptyDemo(),
+              metrics: metricsFromReport(report),
+              notes: report.notes ?? "",
+              period: report.period ?? report.date,
+              reportId: report.id,
+              // Print and Download PDF wait until TANAW holds the report.
+              submit: isSubmittedStatus(reportingStatus("history", report)) ? null : { blocker: sentReportBlocker(report) },
+            })
           }
         />
       </div>

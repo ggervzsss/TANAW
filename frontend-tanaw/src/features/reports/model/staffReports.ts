@@ -1,4 +1,4 @@
-import type { IntakeReport, ReportEnterprise } from "@/shared/types";
+import type { FinalReport, IntakeReport, ReportEnterprise } from "@/shared/types";
 import {
   formatShortDate,
   MONTH_NAMES,
@@ -10,7 +10,7 @@ import {
   type ReviewStatus,
   type SubmissionStatus,
 } from "./reportStatuses";
-import { formatReportingMonth, intakeReportMonth, sameMonth, type ReportingMonth } from "./reportingMonth";
+import { formatReportingMonth, intakeReportMonth, parseApiDate, parseReportingPeriod, sameMonth, type ReportingMonth } from "./reportingMonth";
 
 /*
  * The Staff Reports screen: one row per registered enterprise for the chosen month, and what the
@@ -195,6 +195,8 @@ export function staffReminder(row: Pick<StaffReportRow, "submission">, monthLabe
 // Progress and generation -------------------------------------------------------------------------
 
 export type StaffReportsProgress = {
+  /** Enterprises listed for the month: the registered ones plus any other that reported. */
+  enterprises: number;
   /** Reports sent: waiting for staff, accepted or consolidated. */
   received: number;
   consolidated: number;
@@ -206,31 +208,27 @@ export type StaffReportsProgress = {
   readyReportIds: string[];
   /** Enterprises that have not sent a report yet. */
   notSent: StaffReportRow[];
-  /** Every received report is accepted and at least one is not in a monthly report yet. */
-  canGenerate: boolean;
-  /** Every received report is already in a monthly report. */
-  generated: boolean;
+  /**
+   * Every enterprise sent its report and every report is accepted, so the consolidated report is
+   * final. Otherwise generating makes (or updates) a Draft.
+   */
+  complete: boolean;
 };
 
-/**
- * Enterprises that have not sent a report do not block generation; the backend builds the monthly
- * report from the accepted reports it is given.
- */
 export function staffReportsProgress(rows: readonly StaffReportRow[]): StaffReportsProgress {
   const received = rows.filter((row) => row.report);
   const count = (status: ReviewStatus) => rows.filter((row) => row.review === status).length;
-  const consolidated = count("Consolidated");
-  const readyReportIds = received.flatMap((row) => (row.report?.status === "Ready to Consolidate" ? [row.report.id] : []));
-  const allAccepted = received.length > 0 && consolidated === received.length;
+  const reviewing = count("Reviewing");
+  const notSent = rows.filter((row) => !row.report);
   return {
+    enterprises: rows.length,
     received: received.length,
-    consolidated,
-    reviewing: count("Reviewing"),
+    consolidated: count("Consolidated"),
+    reviewing,
     waiting: count("Waiting"),
-    readyReportIds,
-    notSent: rows.filter((row) => !row.report),
-    canGenerate: allAccepted && readyReportIds.length > 0,
-    generated: allAccepted && readyReportIds.length === 0,
+    readyReportIds: received.flatMap((row) => (row.report?.status === "Ready to Consolidate" ? [row.report.id] : [])),
+    notSent,
+    complete: received.length > 0 && notSent.length === 0 && reviewing === 0,
   };
 }
 
@@ -244,13 +242,81 @@ export function staffReportsCaption(month: ReportingMonth) {
   return `Reports for ${formatReportingMonth(month)}, due ${MONTH_NAMES[due.getMonth()]} ${due.getDate()}${dueYear}. Accept each submitted report, then generate the consolidated report.`;
 }
 
+/** The month's consolidated report that is not archived: a Draft or the final report. */
+export function openConsolidatedReport<T extends Pick<FinalReport, "period" | "status">>(reports: readonly T[], month: ReportingMonth): T | undefined {
+  return reports.find((report) => report.status !== "Archived" && sameMonth(parseReportingPeriod(report.period), month));
+}
+
+export const GENERATE_LABEL = "Generate consolidated report";
+export const UPDATE_DRAFT_LABEL = "Update draft consolidated report";
+
+export type ConsolidateButton = {
+  label: typeof GENERATE_LABEL | typeof UPDATE_DRAFT_LABEL;
+  enabled: boolean;
+  /** The month is not complete, so pressing warns first and the result is a Draft. */
+  incomplete: boolean;
+  /** Why the button cannot be pressed; null when it can. */
+  reason: string | null;
+};
+
 /**
- * The Generate confirmation: "Combine the 3 accepted reports into the October 2026 monthly report
- * (VAR 2M). 1 enterprise has not sent a report and will not be included."
+ * The Generate button. It works once at least one report is accepted, complete month or not: an
+ * incomplete month gives a Draft that later accepted reports are added to, and the month's report
+ * becomes final once every enterprise's report is in. A draft whose month is now complete (an
+ * enterprise that never reported was deactivated) can be finalized with nothing new to add.
  */
-export function generateConfirmMessage(monthLabel: string, progress: Pick<StaffReportsProgress, "readyReportIds" | "notSent">) {
+export function consolidateButton(progress: Pick<StaffReportsProgress, "readyReportIds" | "complete" | "received">, existing: Pick<FinalReport, "status"> | undefined, monthLabel: string): ConsolidateButton {
+  const draft = existing?.status === "Draft";
+  const label = draft && !progress.complete ? UPDATE_DRAFT_LABEL : GENERATE_LABEL;
+  const incomplete = !progress.complete;
+  if (existing?.status === "Finalized") return { label: GENERATE_LABEL, enabled: false, incomplete, reason: `The ${monthLabel} consolidated report is final.` };
+  if (progress.readyReportIds.length > 0 || (draft && progress.complete)) return { label, enabled: true, incomplete, reason: null };
+  if (draft) return { label, enabled: false, incomplete, reason: "Accept another enterprise's report to update the draft." };
+  return { label, enabled: false, incomplete, reason: progress.received ? "Accept at least one report to generate the consolidated report." : `No reports have been sent for ${monthLabel} yet.` };
+}
+
+/** "A draft consolidated report exists for October 2026, last updated Nov 28." */
+export function draftReportNote(monthLabel: string, draft: Pick<FinalReport, "updatedAt" | "generatedOn">) {
+  const updated = parseApiDate(draft.updatedAt) ?? parseApiDate(draft.generatedOn);
+  return `A draft consolidated report exists for ${monthLabel}${updated ? `, last updated ${formatShortDate(updated)}` : ""}.`;
+}
+
+/** The fixed warning before consolidating an incomplete month. */
+export const INCOMPLETE_SUBMISSIONS_TITLE = "Incomplete Report Submissions";
+export const INCOMPLETE_SUBMISSIONS_MESSAGE = "Some enterprises have not yet submitted their reports. Are you sure you want to proceed with the consolidation?";
+
+/**
+ * What an incomplete consolidation leaves out: "3 of 11 enterprises have not sent a report. 2 sent
+ * reports are still waiting for your review and will not be included."
+ */
+export function incompleteSubmissionsDetail(progress: Pick<StaffReportsProgress, "enterprises" | "notSent" | "reviewing">) {
+  const notSent = progress.notSent.length;
+  const reviewing = progress.reviewing;
+  return [
+    notSent ? `${notSent} of ${progress.enterprises} ${progress.enterprises === 1 ? "enterprise" : "enterprises"} ${notSent === 1 ? "has" : "have"} not sent a report.` : "",
+    reviewing ? `${reviewing} sent ${reviewing === 1 ? "report is" : "reports are"} still waiting for your review and will not be included.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * The Generate confirmation for a complete month: "Combine the 3 accepted reports into the October
+ * 2026 monthly report (VAR 2M)." With a draft, the accepted reports are added to it. Enterprises
+ * that have not sent a report are named, though a complete month has none.
+ */
+export function generateConfirmMessage(monthLabel: string, progress: Pick<StaffReportsProgress, "readyReportIds" | "notSent">, draft = false) {
   const accepted = progress.readyReportIds.length;
   const notSent = progress.notSent.length;
   const missing = notSent ? ` ${notSent} ${notSent === 1 ? "enterprise has" : "enterprises have"} not sent a report and will not be included.` : "";
-  return `Combine the ${accepted} accepted ${accepted === 1 ? "report" : "reports"} into the ${monthLabel} monthly report (VAR 2M).${missing}`;
+  const reports = `${accepted} accepted ${accepted === 1 ? "report" : "reports"}`;
+  if (draft && accepted === 0) return `Every report for ${monthLabel} is in the draft. Finalize the monthly report (VAR 2M).${missing}`;
+  if (draft) return `Add the ${reports} to the ${monthLabel} draft and finalize the monthly report (VAR 2M).${missing}`;
+  return `Combine the ${reports} into the ${monthLabel} monthly report (VAR 2M).${missing}`;
+}
+
+/** The toast after generating: a new draft, an updated draft, or the final report. */
+export function consolidatedMessage(period: string, status: FinalReport["status"], hadDraft: boolean) {
+  if (status !== "Draft") return `The ${period} consolidated report was generated.`;
+  return hadDraft ? `The ${period} draft consolidated report was updated.` : `A draft of the ${period} consolidated report was saved.`;
 }

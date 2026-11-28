@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const webPortals = [
-  { role: "it", path: "/it/dashboard", label: "IT Portal" },
+  { role: "it", path: "/it/requests", label: "IT Portal" },
   { role: "admin", path: "/admin/requests", label: "Admin Portal" },
   { role: "staff", path: "/staff/reports", label: "Staff Portal" },
 ] as const;

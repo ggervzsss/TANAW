@@ -173,7 +173,8 @@ test("matches the dashboard arrangement and keeps periods, assistant, navigation
   await expect(segment("occupancy")).toContainText("current visitor inside");
   await expect(segment("peak")).toContainText("highest visitor record");
   await expect(segment("peak").getByText("18", { exact: true })).toBeVisible();
-  await expect(segment("peak")).toContainText("From 2 to 4 PM");
+  // The figures carry no caption under them; which period peaked reads in Visitor Traffic.
+  await expect(segment("peak")).not.toContainText("From 2 to 4 PM");
   await expect(page.getByRole("heading", { name: "Visitor Traffic", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Monitored Locations", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recent Reports", exact: true })).toBeVisible();

@@ -30,12 +30,10 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
   if (!actions.canReply) {
     return (
       <section aria-labelledby={headingId} className="mt-4 border-t border-(--tanaw-border-soft) pt-5">
-        <h3 id={headingId} className="text-base font-[650]">
+        <h3 id={headingId} className="text-[1.0625rem] font-[650]">
           Reply to {senderName(request)}
         </h3>
-        <p className="mt-1 text-[0.84375rem] text-(--tanaw-text-secondary)">
-          {actions.canReopen ? "This request is resolved. Reopen it to reply." : "This change is decided, so the conversation is closed."}
-        </p>
+        <p className="mt-1 text-sm text-(--tanaw-text-secondary)">{actions.canReopen ? "This request is resolved. Reopen it to reply." : "This change is decided, so the conversation is closed."}</p>
       </section>
     );
   }
@@ -49,14 +47,14 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
     // On narrow screens the reply stays docked at the bottom while the request scrolls under it.
     <>
       <section ref={dockRef} aria-labelledby={headingId} className="it-requests__composer mt-4 border-t border-(--tanaw-border-soft) pt-5">
-        <h3 id={headingId} className="text-base font-[650] max-[980px]:text-sm">
+        <h3 id={headingId} className="text-[1.0625rem] font-[650] max-[980px]:text-sm">
           Reply to {senderName(request)}
         </h3>
-        <p id={hintId} className="mt-1 text-[0.84375rem] text-(--tanaw-text-secondary) max-[980px]:sr-only">
+        <p id={hintId} className="mt-1 text-sm text-(--tanaw-text-secondary) max-[980px]:sr-only">
           {replyHint(request)}
         </p>
 
-        <p id={quickLabelId} className="mt-3 text-[13px] font-medium text-(--tanaw-text-secondary) max-[980px]:sr-only">
+        <p id={quickLabelId} className="mt-3 text-sm font-medium text-(--tanaw-text-secondary) max-[980px]:sr-only">
           Quick replies
         </p>
         <div role="group" aria-labelledby={quickLabelId} className="it-requests__quick mt-1.5 flex flex-wrap gap-2">
@@ -69,7 +67,7 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
                 aria-pressed={pressed}
                 onClick={() => onDraftChange(reply.text)}
                 className={cn(
-                  "group rounded-tanaw-md ease-tanaw-out inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 px-3.5 text-[0.84375rem] font-medium whitespace-nowrap transition-[background-color,color,translate,scale] duration-200 hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:translate-y-0 active:scale-[0.97] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 pointer-coarse:min-h-11",
+                  "group rounded-tanaw-md ease-tanaw-out inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 px-3.5 text-sm font-medium whitespace-nowrap transition-[background-color,color,translate,scale] duration-200 hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--tanaw-focus-ring) active:translate-y-0 active:scale-[0.97] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 pointer-coarse:min-h-11",
                   pressed ? "bg-(--tanaw-selected-bg) font-semibold text-(--tanaw-accent-ink)" : "bg-(--tanaw-control-bg) text-(--tanaw-text) hover:bg-(--tanaw-control-bg-hover)",
                 )}
               >
@@ -80,7 +78,7 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
           })}
         </div>
 
-        <label htmlFor={fieldId} className="mt-4 block text-[13px] font-medium text-(--tanaw-text-secondary) max-[980px]:sr-only">
+        <label htmlFor={fieldId} className="mt-4 block text-sm font-medium text-(--tanaw-text-secondary) max-[980px]:sr-only">
           Your reply
         </label>
         <Textarea
@@ -91,7 +89,7 @@ export function ReplyComposer({ request, draft, onDraftChange, pending, onSend }
           placeholder="Write what you found or what they should do next."
           aria-describedby={hintId}
           onChange={(event) => onDraftChange(event.target.value)}
-          className="mt-1.5 min-h-24 max-[980px]:mt-2.5 max-[980px]:max-h-36 max-[980px]:min-h-12 max-[980px]:text-base max-[980px]:field-sizing-content"
+          className="mt-1.5 min-h-24 max-[980px]:mt-2.5 max-[980px]:field-sizing-content max-[980px]:max-h-36 max-[980px]:min-h-12 max-[980px]:text-base"
         />
         <div className="mt-2.5 flex flex-wrap items-center gap-3 max-sm:gap-2 max-sm:*:flex-auto">
           <Button

@@ -1,5 +1,6 @@
+import type { ReactNode } from "react";
 import { Activity, AlertTriangle, LogIn, LogOut, Users, type LucideIcon } from "lucide-react";
-import { Skeleton, Tooltip } from "../../../ui-kit";
+import { Skeleton, Tooltip, cn, useSkeletonReveal } from "../../../ui-kit";
 import type { Camera } from "../../../types/enterprise";
 import type { MlAreaState, MlCounts, MlHealth } from "../services/ml-service";
 import { CameraMetricsLineField } from "./CameraMetricsLineField";
@@ -12,9 +13,11 @@ type CameraLiveMetricsProps = {
   area?: MlAreaState | null;
   counts: MlCounts;
   health: MlHealth | null;
+  /** A quiet line under the counts, such as this computer's performance profile. */
+  footer?: ReactNode;
 };
 
-export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, area, counts, health }: CameraLiveMetricsProps) {
+export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, area, counts, health, footer }: CameraLiveMetricsProps) {
   const openSpace = activeCam.analysisMode === "open_space";
   const occupancy = openSpace
     ? (runtimeReady && area?.available ? area.presence : null)
@@ -39,7 +42,7 @@ export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, ar
           <div className="camera-metrics-grid" data-mode="open-space">
             <Metric loading={loading} icon={Users} label="Live Occupancy" value={occupancy} detail="People in this zone"
               unavailable="Live observations unavailable" tone="occupancy" tooltip="People currently observed inside this camera’s monitored zone." />
-            <Metric loading={loading} icon={Users} label="Unique Visitors" value={visitors} detail="Estimated today in this zone"
+            <Metric loading={loading} icon={Users} label="Visitors" value={visitors} detail="Estimated today in this zone"
               unavailable="Identification unavailable" tone="visitors"
               tooltip="Estimated distinct visitors observed in this zone today. Repeat matches count once, and uncertain identities are excluded." />
           </div>
@@ -52,9 +55,9 @@ export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, ar
               tooltip="Visitors counted after crossing this camera’s configured entry line." />
             <Metric loading={loading} icon={LogOut} label="Exit" value={exit} tone="exit"
               tooltip="Visitors counted after crossing this camera’s configured exit line." />
-            <Metric loading={loading} icon={Users} label="Establishment Occupancy" value={occupancy} detail="People inside"
+            <Metric loading={loading} icon={Users} label="Live Occupancy" value={occupancy} detail="People inside"
               tone="occupancy" tooltip="People inside, counted across all Entry / Exit cameras. The Dashboard also adds people in Open Space areas." />
-            <Metric loading={loading} icon={Users} label="Estimated Visitors" value={visitors}
+            <Metric loading={loading} icon={Users} label="Visitors" value={visitors}
               tone="visitors" tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded." />
           </div>
           {pendingUniqueEntries > 0 && (
@@ -66,6 +69,7 @@ export function CameraLiveMetrics({ activeCam, runtimeReady, loading = false, ar
         </>
       )}
       <CameraMetricsLineField tone={ambienceTone} />
+      {footer && <footer className="camera-metrics-footer">{footer}</footer>}
     </section>
   );
 }
@@ -118,6 +122,8 @@ type MetricProps = {
 function Metric({ detail, icon: Icon, label, loading = false, tone, tooltip, unavailable = "Unavailable", value }: MetricProps) {
   const available = isMetricNumber(value);
   const placeholder = loading && !available;
+  // The figure fades in where its placeholder stood, when the placeholder was seen.
+  const reveal = useSkeletonReveal(placeholder);
   return (
     <div className="camera-metric" data-tone={tone}>
       <div className="camera-metric-label">
@@ -133,8 +139,8 @@ function Metric({ detail, icon: Icon, label, loading = false, tone, tooltip, una
         </>
       ) : (
         <>
-          {(detail || !available) && <p>{available ? detail : unavailable}</p>}
-          <div className="camera-metric-value" aria-hidden={!available}>{available ? value.toLocaleString("en-PH") : "—"}</div>
+          {(detail || !available) && <p className={reveal}>{available ? detail : unavailable}</p>}
+          <div className={cn("camera-metric-value", reveal)} aria-hidden={!available}>{available ? value.toLocaleString("en-PH") : "—"}</div>
         </>
       )}
     </div>

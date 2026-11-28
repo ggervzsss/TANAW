@@ -14,7 +14,6 @@
   --dash-soft-strong: rgb(5 91 37 / 0.12);
   --dash-alert: #b42318;
   --dash-alert-soft: #fef3f2;
-  --dash-up: #067647;
   /* Entries by period: one green that deepens with the count, so the busiest period is Civic Green. */
   --dash-shade-1: #c3e2cd;
   --dash-shade-2: #93c9a4;
@@ -49,7 +48,6 @@
   --dash-soft-strong: rgb(110 231 183 / 0.14);
   --dash-alert: #f97066;
   --dash-alert-soft: rgb(249 112 102 / 0.09);
-  --dash-up: #6ee7b7;
   /* On the dark page the busiest period reads brightest. */
   --dash-shade-1: #1f4936;
   --dash-shade-2: #286041;
@@ -97,7 +95,7 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 /* The green-washed band runs edge to edge behind the title and figures. A spread shadow carries it
    past the content width without widening the scroll area; the clip keeps it to the band's height. */
 /* The hero stacks above the sections after it, so the date picker that opens from it is never
-   painted under the chart readout, the camera list or any other layer that follows. */
+   painted under the chart, the camera list or any other layer that follows. */
 .dash-hero {
   position: relative;
   z-index: 3;
@@ -607,41 +605,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   background: var(--dash-alert);
 }
 
-.dash-figure-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 14px;
-  font-size: 15px;
-  line-height: 22px;
-  color: var(--tanaw-text-secondary);
-}
-.dash-figure-note + .dash-figure-note {
-  margin-top: 4px;
-}
-.dash-note-alert {
-  color: var(--dash-alert);
-  font-weight: 600;
-}
-.dash-note-up {
-  color: var(--dash-up);
-  font-weight: 600;
-}
-.dash-figure-note svg {
-  flex: none;
-  margin-top: 3.5px;
-}
-.dash-figure-note .dash-dot {
-  margin-top: 6.5px;
-}
-.dash-note-down {
-  color: var(--dash-alert);
-  font-weight: 600;
-}
-.dash-note-muted {
-  color: var(--tanaw-text-muted);
-}
-
 .dash-dot {
   display: inline-block;
   flex: none;
@@ -698,58 +661,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 
 .dash-traffic {
   min-width: 0;
-}
-
-.dash-readout {
-  min-height: 0;
-  margin: 28px 0 20px;
-}
-.dash-readout-when {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tanaw-text-secondary);
-}
-.dash-readout-value {
-  margin-top: 4px;
-  font-size: 54px;
-  line-height: 62px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-.dash-readout-value span {
-  margin-left: 10px;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--tanaw-text-muted);
-}
-
-.dash-tag {
-  padding: 1px 10px;
-  border: 1px solid var(--dash-gold);
-  border-radius: 999px;
-  color: var(--dash-gold-ink);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-
-.dash-cmp {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tanaw-text-secondary);
-}
-.dash-cmp-up {
-  color: var(--dash-up);
-}
-.dash-cmp-down {
-  color: var(--dash-alert);
 }
 
 .dash-plot {
@@ -878,24 +789,19 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   fill-opacity: 0.6;
 }
 
-/* Pointing at the chart dims every bar, tick and dot but the ones being read. */
-.dash-plot-area:hover .dash-bar:not(.dash-bar-selected),
-.dash-plot:focus-visible .dash-bar:not(.dash-bar-selected) {
+/* While a period is pointed at or keyed, every other bar and dot dims. */
+.dash-plot-active .dash-bar:not(.dash-bar-selected) {
   opacity: 0.32;
 }
-.dash-plot-area:hover .dash-udot:not(.dash-udot-on),
-.dash-plot:focus-visible .dash-udot:not(.dash-udot-on) {
+.dash-plot-active .dash-udot:not(.dash-udot-on) {
   opacity: 0.5;
 }
 
+/* The strips that catch the pointer; the chart reads on hover and has nothing to click. */
 .dash-hit {
   position: absolute;
   top: 0;
   bottom: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
 }
 
 .dash-peak-tag {
@@ -1279,6 +1185,19 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
   background: rgb(110 231 183 / 0.12);
   color: #6ee7b7;
 }
+/* The Reports History tints: Consolidated keeps the green above. */
+:is(.dash-badge, .dark .dash-badge)[data-tone="submitted"] {
+  background: var(--tanaw-submitted-bg);
+  color: var(--tanaw-submitted-text);
+}
+:is(.dash-badge, .dark .dash-badge)[data-tone="pending"] {
+  background: var(--tanaw-warning-bg);
+  color: var(--tanaw-warning-text);
+}
+:is(.dash-badge, .dark .dash-badge)[data-tone="missing"] {
+  background: var(--tanaw-danger-bg);
+  color: var(--tanaw-danger-text);
+}
 
 .dash-report-empty {
   margin-top: 24px;
@@ -1289,7 +1208,7 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 /* ---------- Motion ---------- */
 
 .dash-figure {
-  animation: dash-rise 600ms var(--dash-ease-out) both;
+  animation: dash-rise 600ms var(--dash-ease-out) backwards;
 }
 .dash-figure:nth-child(2) {
   animation-delay: 60ms;
@@ -1359,7 +1278,8 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dash *,
+  /* Skeletons keep their own reduced path: a still tint that still waits before it shows. */
+  .dash *:not(.design-skeleton, .tanaw-skeleton),
   .dash *::before,
   .dash *::after {
     animation-duration: 0.01ms !important;
@@ -1427,10 +1347,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
     font-size: 48px;
     line-height: 56px;
   }
-  .dash-readout-value {
-    font-size: 40px;
-    line-height: 48px;
-  }
   .dash-legend {
     gap: 12px 18px;
   }
@@ -1472,14 +1388,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 }
 
 /* ---------- Sparse days and sample data ---------- */
-
-.dash-readout-none {
-  color: var(--tanaw-text-muted);
-  font-size: 24px;
-  line-height: 44px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
 
 /* Sample data: a compact note beside the date control, so it costs the page no height. */
 .dash-sample-note {
@@ -1527,28 +1435,15 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 }
 
 /* ---------- Loading ----------
- * Skeletons hold the exact shape of what is coming, with a soft shimmer, so nothing jumps when the
- * counts arrive; real content then fades in once.
+ * Skeletons hold the exact shape of what is coming, so nothing jumps when the counts arrive. The
+ * tint, the shimmer, the wait before they show and the fade of the content that replaces them are
+ * the app-wide ones (src/ui-kit/components/Skeleton.css, useSkeletonReveal).
  */
-.dash {
-  --dash-skeleton: rgb(16 36 27 / 0.06);
-  --dash-skeleton-shine: rgb(16 36 27 / 0.11);
-}
-.dark .dash {
-  --dash-skeleton: rgb(226 232 240 / 0.06);
-  --dash-skeleton-shine: rgb(226 232 240 / 0.12);
-}
-/* The shimmer itself is the app-wide one (src/ui-kit/components/Skeleton.css). */
 .dash .design-skeleton {
   display: block;
 }
 .dash .dash-figure-skeleton {
   width: 58%;
-}
-.dash .dash-note-skeleton {
-  width: 72%;
-  height: 16px;
-  margin-top: 18px;
 }
 .dash .dash-line-skeleton {
   width: 100%;
@@ -1557,11 +1452,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 }
 .dash .dash-line-skeleton-sm {
   height: 12px;
-}
-.dash .dash-readout-skeleton {
-  width: 260px;
-  height: 96px;
-  margin: 28px 0 20px;
 }
 /* The bars stand on the plot's baseline, with the room the period labels take kept under it. */
 .dash-chart-loading .dash-chart-skeleton {
@@ -1589,30 +1479,6 @@ html.dark .enterprise-shell .enterprise-content:has(.dash) {
 .dash .dash-report-loading .dash-report-icon {
   width: 44px;
   height: 44px;
-}
-.dash-read-note {
-  margin-left: 6px;
-  font-weight: 400;
-  font-size: 14px;
-  color: var(--tanaw-text-muted);
-}
-
-/* Content arrives once, softly. */
-.dash-figure-value,
-.dash-figure-note,
-.dash-chart-body,
-.dash-location-list,
-.dash-report-list {
-  animation: dash-fade 360ms var(--dash-ease-out) both;
-}
-
-@keyframes dash-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
 }
 .dash-badge {
   white-space: nowrap;
@@ -1731,7 +1597,7 @@ html .enterprise-shell .enterprise-content:has(.dash) {
 /* ---- Figures */
 .dash-figures {
   gap: 40px;
-  padding: 0 0 18px;
+  padding: 0 0 24px;
 }
 .dash-figure-name {
   font-size: 20px;
@@ -1757,20 +1623,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
 }
 .dash-meter {
   margin: 0 0 0 16px;
-}
-.dash-figure-note {
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 20px;
-}
-.dash-figure-note svg {
-  margin-top: 2.5px;
-}
-.dash-figure-note .dash-dot {
-  margin-top: 5.5px;
-}
-.dash .dash-note-skeleton {
-  margin-top: 12px;
 }
 
 /* ---- Visitor Traffic on the left, Monitored Locations on the right. At least as tall as the chart
@@ -1807,63 +1659,14 @@ html .enterprise-shell .enterprise-content:has(.dash) {
 .dash-traffic-head .dash-section-head {
   min-width: 0;
 }
-/* The readout keeps one height for every period, so pointing along the chart never resizes the plot. */
-.dash-traffic-head .dash-readout {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  max-width: 62%;
-  height: 86px;
-  margin: 0;
-  text-align: right;
-  animation: dash-fade 360ms var(--dash-ease-out) both;
-}
-.dash-readout-when {
-  height: 24px;
-  font-size: 14px;
-}
-.dash-readout-value {
-  margin-top: 2px;
-  font-size: 36px;
-  line-height: 40px;
-}
-.dash-readout-value span {
-  margin-left: 8px;
-  font-size: 15px;
-}
-.dash-readout-none {
-  font-size: 22px;
-  line-height: 40px;
-}
-.dash-cmp {
-  justify-content: flex-end;
-  height: 20px;
-  font-size: 14px;
-}
-.dash-traffic-head .dash-cmp {
-  flex-wrap: nowrap;
-  max-width: 100%;
-  white-space: nowrap;
-}
-.dash-traffic-head .dash-read-note {
-  overflow: hidden;
-  min-width: 0;
-  text-overflow: ellipsis;
-}
-.dash .dash-readout-skeleton {
-  width: 200px;
-  height: 80px;
-  margin: 0;
-}
-/* The gap keeps the value bubble over the tallest bar clear of the readout above it. */
+/* The plot starts right under the title and summary; the axis titles keep clear of the summary. */
 .dash-chart-body,
 .dash-chart-loading {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 /* The plot never shrinks under its hour labels; past that the page scrolls instead. */
 .dash-plot {
@@ -2071,7 +1874,7 @@ html .enterprise-shell .enterprise-content:has(.dash) {
     height: 40px;
   }
   .dash-figures {
-    padding-bottom: 14px;
+    padding-bottom: 18px;
   }
   .dash-figure-name {
     font-size: 18px;
@@ -2087,11 +1890,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
     font-size: 46px;
     line-height: 50px;
   }
-  .dash-figure-note {
-    margin-top: 6px;
-    font-size: 13px;
-    line-height: 18px;
-  }
   .dash-split {
     padding-top: 14px;
   }
@@ -2102,16 +1900,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   .dash-section-sub {
     font-size: 14px;
     line-height: 20px;
-  }
-  .dash-readout-value {
-    font-size: 30px;
-    line-height: 34px;
-  }
-  .dash-readout-none {
-    line-height: 34px;
-  }
-  .dash-traffic-head .dash-readout {
-    height: 80px;
   }
   .dash-reports {
     max-height: 200px;
@@ -2140,16 +1928,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
     height: 42px;
     font-size: 38px;
     line-height: 42px;
-  }
-  .dash-readout-value {
-    font-size: 28px;
-    line-height: 32px;
-  }
-  .dash-readout-none {
-    line-height: 32px;
-  }
-  .dash-traffic-head .dash-readout {
-    height: 78px;
   }
 }
 
@@ -2227,20 +2005,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   .dash-legend {
     gap: 10px 18px;
   }
-  .dash-traffic-head .dash-readout {
-    align-items: flex-start;
-    max-width: 100%;
-    height: auto;
-    text-align: left;
-  }
-  /* Narrow rooms: entries and occupancy take a line each instead of running off the page. */
-  .dash-readout-metrics {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-  .dash-cmp {
-    justify-content: flex-start;
-  }
   .dash-report-columns {
     display: none;
   }
@@ -2304,27 +2068,6 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   }
 }
 
-/* The readout names both figures of the period: entries (bars) and occupancy (line). */
-.dash-readout-metrics {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 4px 28px;
-}
-.dash-readout-metrics .dash-readout-value {
-  display: inline-flex;
-  align-items: baseline;
-  white-space: nowrap;
-}
-.dash-readout-metrics .dash-key {
-  align-self: center;
-  margin-right: 10px;
-}
-.dash-readout-occupancy {
-  color: var(--tanaw-text);
-}
-
-
 /* The occupancy line's shape glides to each new reading instead of jumping. */
 .dash-uline,
 .dash-uline-halo {
@@ -2366,12 +2109,11 @@ html .enterprise-shell .enterprise-content:has(.dash) {
     0 0 4px var(--dash-page),
     0 0 8px var(--dash-page),
     0 0 12px var(--dash-page);
-  opacity: 0;
   pointer-events: none;
+  animation: dash-fade 160ms var(--dash-ease) both;
   transition:
     left 220ms var(--dash-ease-out),
-    top 220ms var(--dash-ease-out),
-    opacity 160ms var(--dash-ease);
+    top 220ms var(--dash-ease-out);
 }
 .dash-hover > span {
   display: flex;
@@ -2391,9 +2133,29 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   width: 10px;
   height: 10px;
 }
-.dash-plot-area:hover .dash-hover,
-.dash-plot:focus-visible .dash-hover {
-  opacity: 1;
+/* The label's first line names the period. */
+.dash-hover .dash-hover-when {
+  color: var(--tanaw-text);
+  font-weight: 600;
+}
+.dash-hover-when em {
+  color: var(--dash-gold-ink);
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Today gains a period as each one starts: the axis labels and the Busiest tag glide to their new
+   places with the bars, and the new period's bar grows up from the baseline. */
+.dash-x-labels span {
+  transition: left 500ms var(--dash-ease-out);
+}
+.dash-peak-tag {
+  transition:
+    left 500ms var(--dash-ease-out),
+    top 500ms var(--dash-ease-out);
+}
+.dash-bar-live {
+  animation: dash-grow 500ms var(--dash-ease-out) both;
 }
 
 /* Entries, with its three shades, reads as one legend group. */
@@ -2420,6 +2182,9 @@ html .enterprise-shell .enterprise-content:has(.dash) {
   .dash-uline-halo,
   .dash-hover {
     transition: none;
+  }
+  .dash-hover {
+    animation: none;
   }
 }
 
